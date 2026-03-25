@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { clipUrl, type HotPoint, type LlmAnalysis } from "../api";
+  import { clipUrl, type HotPoint, type KeyMoment } from "../api";
 
   let {
     hotPoints,
@@ -67,6 +67,8 @@
   ];
 
   let expandedClip = $state<number | null>(null);
+  let videoElements: Record<number, HTMLVideoElement> = {};
+  let activeMoment = $state<Record<number, number | null>>({});
 
   function formatDuration(seconds: number): string {
     const h = Math.floor(seconds / 3600);
@@ -74,8 +76,23 @@
     return h > 0 ? `${h}h${m.toString().padStart(2, "0")}` : `${m}min`;
   }
 
+  function formatTime(seconds: number): string {
+    const m = Math.floor(seconds / 60);
+    const s = Math.floor(seconds % 60);
+    return `${m}:${s.toString().padStart(2, "0")}`;
+  }
+
   function toggleClip(index: number) {
     expandedClip = expandedClip === index ? null : index;
+  }
+
+  function seekTo(clipIndex: number, time: number, momentIndex: number) {
+    const video = videoElements[clipIndex];
+    if (video) {
+      video.currentTime = time;
+      video.play();
+    }
+    activeMoment[clipIndex] = momentIndex;
   }
 
   function scoreLabel(score: number): { text: string; class: string } {
@@ -117,6 +134,7 @@
     {#each hotPoints as point, i}
       {@const displayScore = point.final_score ?? point.score}
       {@const label = scoreLabel(displayScore)}
+      {@const moments = point.llm?.key_moments ?? []}
       <div
         class="bg-zinc-800/50 border border-zinc-700/50 rounded-xl overflow-hidden hover:border-purple-500/30 transition-colors"
       >
@@ -161,6 +179,11 @@
             </span>
           </div>
 
+          <!-- Summary line -->
+          {#if point.llm?.summary}
+            <p class="text-sm text-zinc-400 mb-3 line-clamp-2">{point.llm.summary}</p>
+          {/if}
+
           <!-- Compact signal bars -->
           <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
             {#each SIGNALS as signal}
@@ -180,26 +203,51 @@
         <!-- Expanded detail view -->
         {#if expandedClip === i}
           <div class="border-t border-zinc-700/50">
-            <!-- Video player -->
+            <!-- Video player with timeline markers -->
             {#if point.clip_filename}
               <div class="p-4 bg-black/30">
                 <video
+                  bind:this={videoElements[i]}
                   controls
                   class="w-full rounded-lg max-h-[400px]"
                   src={clipUrl(jobId, point.clip_filename)}
                 >
                   <track kind="captions" />
                 </video>
+
+                <!-- Key moments timeline (goto buttons) -->
+                {#if moments.length > 0}
+                  <div class="mt-3 flex flex-wrap gap-2">
+                    {#each moments as moment, mi}
+                      <button
+                        class="text-xs px-3 py-1.5 rounded-lg transition-colors cursor-pointer
+                          {activeMoment[i] === mi
+                            ? 'bg-purple-500/30 text-purple-300 border border-purple-500/50'
+                            : 'bg-zinc-700/40 text-zinc-300 border border-zinc-600/30 hover:bg-zinc-700/60 hover:text-white'}"
+                        onclick={() => seekTo(i, moment.time, mi)}
+                        title={moment.description}
+                      >
+                        <span class="font-mono text-zinc-500 mr-1">{formatTime(moment.time)}</span>
+                        {moment.label}
+                      </button>
+                    {/each}
+                  </div>
+                {/if}
               </div>
             {/if}
 
-            <!-- LLM Analysis -->
-            {#if point.llm && (point.llm.summary || point.llm.transcript)}
+            <!-- Narrative + LLM Analysis -->
+            {#if point.llm}
               <div class="p-5 border-b border-zinc-700/50 space-y-3">
-                {#if point.llm.summary}
-                  <p class="text-sm text-zinc-200">{point.llm.summary}</p>
+                <!-- Narrative (the "film" of the clip) -->
+                {#if point.llm.narrative}
+                  <div>
+                    <h4 class="text-xs font-semibold text-zinc-500 uppercase tracking-wide mb-2">Recit du clip</h4>
+                    <p class="text-sm text-zinc-200 leading-relaxed">{point.llm.narrative}</p>
+                  </div>
                 {/if}
 
+                <!-- Tags -->
                 <div class="flex flex-wrap gap-2 text-xs">
                   {#if point.llm.category}
                     {@const cat = categoryStyle(point.llm.category)}
@@ -222,6 +270,32 @@
                   {/if}
                 </div>
 
+                <!-- Key moments detail list -->
+                {#if moments.length > 0}
+                  <details class="text-xs">
+                    <summary class="text-zinc-500 cursor-pointer hover:text-zinc-300">
+                      Moments cles ({moments.length})
+                    </summary>
+                    <div class="mt-2 space-y-2">
+                      {#each moments as moment, mi}
+                        <button
+                          class="w-full text-left flex gap-3 p-2 rounded-lg hover:bg-zinc-700/30 transition-colors cursor-pointer"
+                          onclick={() => seekTo(i, moment.time, mi)}
+                        >
+                          <span class="font-mono text-purple-400 shrink-0">{formatTime(moment.time)}</span>
+                          <div>
+                            <span class="text-zinc-200 font-medium">{moment.label}</span>
+                            {#if moment.description}
+                              <p class="text-zinc-500 mt-0.5">{moment.description}</p>
+                            {/if}
+                          </div>
+                        </button>
+                      {/each}
+                    </div>
+                  </details>
+                {/if}
+
+                <!-- Transcript -->
                 {#if point.llm.transcript}
                   <details class="text-xs">
                     <summary class="text-zinc-500 cursor-pointer hover:text-zinc-300">Transcription</summary>
@@ -252,24 +326,29 @@
               </p>
 
               <!-- Detailed signal breakdown -->
-              <div class="space-y-3">
-                {#each SIGNALS as signal}
-                  {@const value = point.signals[signal.key]}
-                  <div>
-                    <div class="flex items-center justify-between mb-1">
-                      <span class="text-sm font-medium {signal.bgColor}">{signal.label}</span>
-                      <span class="text-sm font-mono text-zinc-300">{Math.round(value * 100)}%</span>
+              <details class="text-sm">
+                <summary class="text-zinc-500 cursor-pointer hover:text-zinc-300 text-xs">
+                  Detail des signaux audio
+                </summary>
+                <div class="space-y-3 mt-3">
+                  {#each SIGNALS as signal}
+                    {@const value = point.signals[signal.key]}
+                    <div>
+                      <div class="flex items-center justify-between mb-1">
+                        <span class="text-sm font-medium {signal.bgColor}">{signal.label}</span>
+                        <span class="text-sm font-mono text-zinc-300">{Math.round(value * 100)}%</span>
+                      </div>
+                      <div class="w-full bg-zinc-700/30 rounded-full h-2 overflow-hidden mb-1">
+                        <div
+                          class="{signal.color} h-full rounded-full"
+                          style="width: {Math.round(value * 100)}%"
+                        ></div>
+                      </div>
+                      <p class="text-xs text-zinc-600">{signal.description}</p>
                     </div>
-                    <div class="w-full bg-zinc-700/30 rounded-full h-2 overflow-hidden mb-1">
-                      <div
-                        class="{signal.color} h-full rounded-full"
-                        style="width: {Math.round(value * 100)}%"
-                      ></div>
-                    </div>
-                    <p class="text-xs text-zinc-600">{signal.description}</p>
-                  </div>
-                {/each}
-              </div>
+                  {/each}
+                </div>
+              </details>
             </div>
           </div>
         {/if}

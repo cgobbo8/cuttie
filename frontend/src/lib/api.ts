@@ -9,6 +9,12 @@ export interface SignalBreakdown {
   chat_speed: number;
 }
 
+export interface KeyMoment {
+  time: number;
+  label: string;
+  description: string;
+}
+
 export interface LlmAnalysis {
   transcript: string;
   speech_rate: number;
@@ -16,6 +22,8 @@ export interface LlmAnalysis {
   virality_score: number;
   summary: string;
   is_clipable: boolean;
+  key_moments: KeyMoment[];
+  narrative: string;
 }
 
 export interface HotPoint {

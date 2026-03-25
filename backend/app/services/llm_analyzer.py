@@ -234,15 +234,24 @@ def analyze_single_clip(
     hp: HotPoint,
     vod_meta: dict,
     chat_messages: list[dict] | None = None,
+    pre_transcript: tuple[str, float] | None = None,
 ) -> None:
-    """Full analysis pipeline for a single clip."""
+    """Full analysis pipeline for a single clip.
+
+    If pre_transcript is provided (from triage), skips Whisper transcription.
+    """
     clip_path = os.path.join(CLIPS_DIR, job_id, hp.clip_filename)
     vod_title = vod_meta.get("title", "")
     vod_game = vod_meta.get("game", "")
 
-    # Step 1: Whisper transcription
-    logger.info(f"  [1/4] Whisper transcription...")
-    transcript, speech_rate, segment_times = transcribe_clip(clip_path)
+    # Step 1: Whisper transcription (skip if pre-computed from triage)
+    segment_times: list[float] = []
+    if pre_transcript:
+        transcript, speech_rate = pre_transcript
+        logger.info(f"  [1/4] Whisper skipped (reusing triage transcript)")
+    else:
+        logger.info(f"  [1/4] Whisper transcription...")
+        transcript, speech_rate, segment_times = transcribe_clip(clip_path)
 
     # Step 2: Extract frames (denser for better timestamp precision)
     logger.info(f"  [2/4] Frame extraction...")
@@ -299,8 +308,13 @@ def analyze_hot_points(
     vod_meta: dict,
     max_analyze: int = 20,
     chat_messages: list[dict] | None = None,
+    transcripts: dict[int, tuple[str, float]] | None = None,
 ) -> None:
-    """Run full analysis on hot points with clips in parallel, then re-rank."""
+    """Run full analysis on hot points with clips in parallel, then re-rank.
+
+    If transcripts dict is provided (from triage), reuses them to skip Whisper.
+    Keys are hot_point indices matching to_analyze ordering.
+    """
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
     # Collect clips to analyze
@@ -317,10 +331,17 @@ def analyze_hot_points(
 
     total = len(to_analyze)
     logger.info(f"Analyzing {total} clips with {MAX_LLM_WORKERS} parallel workers")
+    if transcripts:
+        logger.info(f"  ({len(transcripts)} pre-computed transcripts from triage)")
 
     def _analyze_one(item: tuple[int, HotPoint]) -> None:
         idx, hp = item
-        analyze_single_clip(job_id, idx + 1, hp, vod_meta, chat_messages=chat_messages)
+        pre_transcript = transcripts.get(idx) if transcripts else None
+        analyze_single_clip(
+            job_id, idx + 1, hp, vod_meta,
+            chat_messages=chat_messages,
+            pre_transcript=pre_transcript,
+        )
 
     with ThreadPoolExecutor(max_workers=MAX_LLM_WORKERS) as executor:
         futures = {}

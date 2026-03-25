@@ -43,6 +43,7 @@ export type JobStatus =
   | "ANALYZING_AUDIO"
   | "ANALYZING_CHAT"
   | "SCORING"
+  | "TRIAGE"
   | "CLIPPING"
   | "TRANSCRIBING"
   | "LLM_ANALYSIS"

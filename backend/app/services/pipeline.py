@@ -12,6 +12,7 @@ from app.services.db import get_job, update_job
 from app.services.downloader import download_audio, download_chat
 from app.services.llm_analyzer import analyze_hot_points
 from app.services.scorer import compute_scores
+from app.services.triage import run_triage
 
 logger = logging.getLogger(__name__)
 
@@ -41,9 +42,11 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
         stream_date = job.stream_date if job else ""
 
         chat_messages: list[dict] = []
+        audio_path: str | None = None
+        triage_transcripts: dict[int, tuple[str, float]] = {}
 
-        # Steps 1-5: Download + Analysis (skip if resuming from later step)
-        if not resume_from or resume_from in ("DOWNLOADING_AUDIO", "DOWNLOADING_CHAT", "ANALYZING_AUDIO", "ANALYZING_CHAT", "SCORING"):
+        # Steps 1-6: Download + Analysis + Triage (skip if resuming from later step)
+        if not resume_from or resume_from in ("DOWNLOADING_AUDIO", "DOWNLOADING_CHAT", "ANALYZING_AUDIO", "ANALYZING_CHAT", "SCORING", "TRIAGE"):
             # 1 & 2. Download audio + chat in parallel (both I/O bound)
             update_job(job_id, status="DOWNLOADING_AUDIO", progress="Downloading audio + chat...")
             with ThreadPoolExecutor(max_workers=2) as dl_pool:
@@ -78,23 +81,38 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
             update_job(job_id, status="ANALYZING_CHAT", progress="Analyzing chat activity...")
             chat_features = analyze_chat(chat_messages, duration)
 
-            # 5. Score and find peaks
+            # 5. Score and find peaks — get top 50 candidates for triage
             update_job(job_id, status="SCORING", progress="Computing scores and finding hot points...")
-            hot_points = compute_scores(audio_features, chat_features, total_duration=duration)
+            hot_points = compute_scores(audio_features, chat_features, total_duration=duration, top_n=50)
 
-            # 6. Save hot points to DB
+            # 6. Save initial hot points to DB
             update_job(job_id, hot_points=hot_points)
 
-        # Step 7: Clipping (skip if resuming from transcription or later)
+            # 7. LLM triage: transcribe 50 candidates, LLM scores, keep top 20
+            vod_meta = {
+                "title": vod_title or "",
+                "game": vod_game or "",
+                "streamer": streamer or "",
+                "view_count": view_count or 0,
+                "stream_date": stream_date or "",
+                "duration": duration,
+            }
+            hot_points, triage_transcripts = run_triage(
+                job_id, audio_path, hot_points, duration,
+                chat_messages, vod_meta,
+                candidates_n=50, keep_n=20,
+            )
+
+        # Step 8: Clipping (skip if resuming from transcription or later)
         if not resume_from or resume_from in ("CLIPPING",):
             update_job(job_id, status="CLIPPING", progress="Downloading video clips...", error=None)
             if hot_points is None:
                 raise RuntimeError("No hot points available for clipping")
             extract_clips(job_id, url, hot_points, duration)
 
-        # Step 8: Whisper + Vision + LLM analysis
+        # Step 9: Vision + LLM full analysis (reuses triage transcripts)
         if not resume_from or resume_from in ("CLIPPING", "TRANSCRIBING", "LLM_ANALYSIS"):
-            update_job(job_id, status="TRANSCRIBING", progress="Transcription et analyse IA des clips...", error=None)
+            update_job(job_id, status="LLM_ANALYSIS", progress="Analyse IA des clips (vision + synthese)...", error=None)
             if hot_points is None:
                 raise RuntimeError("No hot points available for analysis")
 
@@ -110,7 +128,11 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
                 "stream_date": stream_date or "",
                 "duration": duration,
             }
-            analyze_hot_points(job_id, hot_points, vod_meta, chat_messages=chat_messages)
+            analyze_hot_points(
+                job_id, hot_points, vod_meta,
+                chat_messages=chat_messages,
+                transcripts=triage_transcripts,
+            )
 
         # 9. Done
         update_job(job_id, status="DONE", progress="Analysis complete!", error=None)

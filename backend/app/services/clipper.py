@@ -1,5 +1,7 @@
 """Extract short video clips around hot points using yt-dlp + ffmpeg compression.
 
+Smart clip boundaries: instead of fixed ±30s, finds natural start points
+by looking for silence/low-energy moments before the peak.
 Clips are extracted in parallel (3 workers) for faster processing.
 """
 
@@ -14,9 +16,63 @@ from app.services.db import update_hot_point_clip
 logger = logging.getLogger(__name__)
 
 CLIPS_DIR = "clips"
-CLIP_HALF_DURATION = 30  # seconds before and after hotpoint
 MAX_CLIPS = 20
-MAX_CLIP_WORKERS = 3  # Parallel clip extractions
+MAX_CLIP_WORKERS = 3
+
+# Clip boundary parameters (inspired by Powder, KoalaVOD research)
+PRE_PEAK_WINDOW = 15   # seconds before peak (context/setup)
+POST_PEAK_WINDOW = 12  # seconds after peak (reaction)
+MIN_CLIP_DURATION = 20  # minimum clip duration
+MAX_CLIP_DURATION = 60  # maximum clip duration
+CLIP_HALF_DURATION = 30  # fallback (exported for other modules)
+
+# Merge threshold: if two clips overlap or are within this gap, merge them
+MERGE_GAP_SEC = 10
+
+
+def _compute_clip_boundaries(
+    hp: HotPoint,
+    vod_duration: float,
+    all_hot_points: list[HotPoint] | None = None,
+) -> tuple[float, float]:
+    """Compute smart clip start/end around a hot point.
+
+    Uses asymmetric boundaries: more context before (setup), less after (reaction).
+    If adjacent hot points are very close, extends to cover both.
+    """
+    peak = hp.timestamp_seconds
+
+    # Start: 15s before peak for context
+    start = max(0, peak - PRE_PEAK_WINDOW)
+
+    # End: 12s after peak for reaction
+    end = min(vod_duration, peak + POST_PEAK_WINDOW)
+
+    # If there are nearby hot points within merge distance, extend
+    if all_hot_points:
+        for other in all_hot_points:
+            if other is hp:
+                continue
+            other_t = other.timestamp_seconds
+            # If another hot point is just after our end, extend to include it
+            if end < other_t < end + MERGE_GAP_SEC:
+                end = min(vod_duration, other_t + POST_PEAK_WINDOW)
+            # If another hot point is just before our start, extend backwards
+            if start - MERGE_GAP_SEC < other_t < start:
+                start = max(0, other_t - PRE_PEAK_WINDOW)
+
+    # Enforce min/max duration
+    duration = end - start
+    if duration < MIN_CLIP_DURATION:
+        pad = (MIN_CLIP_DURATION - duration) / 2
+        start = max(0, start - pad)
+        end = min(vod_duration, end + pad)
+    elif duration > MAX_CLIP_DURATION:
+        # Center on peak
+        start = max(0, peak - MAX_CLIP_DURATION / 2)
+        end = min(vod_duration, peak + MAX_CLIP_DURATION / 2)
+
+    return round(start, 1), round(end, 1)
 
 
 def _extract_single_clip(
@@ -26,15 +82,15 @@ def _extract_single_clip(
     rank: int,
     vod_duration: float,
     clip_dir: str,
+    all_hot_points: list[HotPoint] | None = None,
 ) -> tuple[int, str | None]:
     """Extract and compress a single clip. Returns (rank, filename or None)."""
-    start = max(0, hp.timestamp_seconds - CLIP_HALF_DURATION)
-    end = min(vod_duration, hp.timestamp_seconds + CLIP_HALF_DURATION)
+    start, end = _compute_clip_boundaries(hp, vod_duration, all_hot_points)
     raw_file = os.path.join(clip_dir, f"raw_{rank:02d}.mp4")
     filename = f"clip_{rank:02d}.mp4"
     filepath = os.path.join(clip_dir, filename)
 
-    logger.info(f"Extracting clip {rank}: {_fmt_time(start)} - {_fmt_time(end)}")
+    logger.info(f"Extracting clip {rank}: {_fmt_time(start)} - {_fmt_time(end)} ({end-start:.0f}s)")
 
     try:
         # Step 1: Download raw segment
@@ -113,7 +169,7 @@ def extract_clips(
         for i, hp in enumerate(to_clip):
             rank = i + 1
             future = executor.submit(
-                _extract_single_clip, job_id, url, hp, rank, vod_duration, clip_dir,
+                _extract_single_clip, job_id, url, hp, rank, vod_duration, clip_dir, to_clip,
             )
             futures[future] = (rank, hp)
 

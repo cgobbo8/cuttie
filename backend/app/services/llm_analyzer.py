@@ -15,7 +15,7 @@ import subprocess
 from openai import OpenAI
 
 from app.models.schemas import HotPoint, KeyMoment, LlmAnalysis
-from app.services.db import save_hot_points
+from app.services.db import save_hot_points, update_job
 from app.services.frame_extractor import extract_frames
 from app.services.vision_analyzer import analyze_clip_frames
 
@@ -327,6 +327,7 @@ def analyze_hot_points(
             try:
                 future.result()
                 logger.info(f"Clip {done}/{total} done: {hp.timestamp_display}")
+                update_job(job_id, progress=f"Analyse IA : {done}/{total} clips ({hp.timestamp_display})")
             except Exception as e:
                 logger.error(f"Analysis failed for clip at {hp.timestamp_display}: {e}")
 

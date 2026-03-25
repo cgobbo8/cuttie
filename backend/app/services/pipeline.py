@@ -34,6 +34,7 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
         hot_points = list(job.hot_points) if job and job.hot_points else None
         duration = job.vod_duration_seconds if job else 0
         vod_title = job.vod_title if job else ""
+        vod_game = job.vod_game if job else ""
 
         # Steps 1-5: Download + Analysis (skip if resuming from later step)
         if not resume_from or resume_from in ("DOWNLOADING_AUDIO", "DOWNLOADING_CHAT", "ANALYZING_AUDIO", "ANALYZING_CHAT", "SCORING"):
@@ -42,9 +43,11 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
             audio_path, metadata = download_audio(url, output_dir)
             duration = metadata.get("duration", 0)
             vod_title = metadata.get("title", "")
+            vod_game = metadata.get("game", "")
             update_job(
                 job_id,
                 vod_title=vod_title,
+                vod_game=vod_game,
                 vod_duration_seconds=duration,
             )
 
@@ -84,7 +87,7 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
             if resume_from:
                 _reattach_clips(job_id, hot_points)
 
-            analyze_hot_points(job_id, hot_points, vod_title or "")
+            analyze_hot_points(job_id, hot_points, vod_title or "", vod_game or "")
 
         # 9. Done
         update_job(job_id, status="DONE", progress="Analysis complete!", error=None)

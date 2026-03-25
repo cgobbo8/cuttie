@@ -64,4 +64,5 @@ class JobResponse(BaseModel):
     hot_points: list[HotPoint] | None = None
     error: str | None = None
     vod_title: str | None = None
+    vod_game: str | None = None
     vod_duration_seconds: float | None = None

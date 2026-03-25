@@ -51,9 +51,14 @@ def init_db() -> None:
         CREATE INDEX IF NOT EXISTS idx_hot_points_job ON hot_points(job_id);
     """)
     # Migrations: add columns if they don't exist (for existing DBs)
-    for col, col_type in [("llm_json", "TEXT"), ("final_score", "REAL")]:
+    migrations = [
+        ("hot_points", "llm_json", "TEXT"),
+        ("hot_points", "final_score", "REAL"),
+        ("jobs", "vod_game", "TEXT"),
+    ]
+    for table, col, col_type in migrations:
         try:
-            conn.execute(f"ALTER TABLE hot_points ADD COLUMN {col} {col_type}")
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {col_type}")
             conn.commit()
         except sqlite3.OperationalError:
             pass  # Column already exists
@@ -163,6 +168,7 @@ def get_job(job_id: str) -> JobResponse | None:
         hot_points=hot_points,
         error=row["error"],
         vod_title=row["vod_title"],
+        vod_game=row["vod_game"] if "vod_game" in row.keys() else None,
         vod_duration_seconds=row["vod_duration_seconds"],
     )
 

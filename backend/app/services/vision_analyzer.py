@@ -38,6 +38,7 @@ def analyze_clip_frames(
     frames: list[dict],
     transcript: str,
     vod_title: str,
+    vod_game: str = "",
 ) -> list[dict]:
     """Analyze frames from a single clip with GPT-4o vision.
 
@@ -57,9 +58,9 @@ def analyze_clip_frames(
 
     # If we have more than MAX_FRAMES_PER_CALL, split into batches
     if len(selected) > MAX_FRAMES_PER_CALL:
-        return _analyze_in_batches(selected, transcript, vod_title)
+        return _analyze_in_batches(selected, transcript, vod_title, vod_game)
 
-    return _analyze_batch(selected, transcript, vod_title)
+    return _analyze_batch(selected, transcript, vod_title, vod_game)
 
 
 def _subsample_frames(frames: list[dict], max_count: int) -> list[dict]:
@@ -78,6 +79,7 @@ def _analyze_batch(
     frames: list[dict],
     transcript: str,
     vod_title: str,
+    vod_game: str = "",
 ) -> list[dict]:
     """Send a batch of frames to GPT-4o vision for analysis."""
     client = _get_client()
@@ -104,23 +106,25 @@ def _analyze_batch(
     if not content_parts:
         return []
 
-    prompt = f"""Tu analyses un clip de stream Twitch "{vod_title}".
+    game_ctx = f' (jeu: {vod_game})' if vod_game else ''
 
-Les images sont des captures du clip, chacune labelisée avec son timestamp (en secondes dans le clip).
+    prompt = f"""Analyse ce clip de stream Twitch "{vod_title}"{game_ctx}.
 
-**Transcription du clip :**
-{transcript if transcript else "(pas de parole)"}
+Chaque image est une capture du clip avec son timestamp exact en secondes. Les images sont espacées de ~2s.
 
-En combinant ce que tu VOIS dans les images et ce que tu LIS dans la transcription, identifie les **moments clés** du clip.
+**Transcription :**
+{transcript if transcript else "(silence)"}
 
-Pour chaque moment clé, indique :
-- "time": le timestamp en secondes (un des timestamps des images fournies)
-- "label": un titre court (5-8 mots max) décrivant l'action
-- "description": ce qui se passe visuellement ET contextuellement (1-2 phrases)
+Identifie 3-6 **moments clés** où il se passe quelque chose de visuellement distinct (changement de scène, action, réaction du streamer, événement in-game).
 
-Retourne un JSON array. Identifie entre 3 et 6 moments clés. Privilégie les changements visuels importants, les moments d'émotion, les actions marquantes.
+IMPORTANT pour "time": utilise EXACTEMENT un des timestamps affichés sur les images. Ne pas inventer de timestamp intermédiaire.
 
-Retourne UNIQUEMENT le JSON array, sans markdown ni explication."""
+Pour chaque moment:
+- "time": float, un timestamp EXACT d'une des images fournies
+- "label": titre court (5-8 mots), en français{", référençant le gameplay de " + vod_game if vod_game else ""}
+- "description": 1 phrase, ce qui se passe visuellement
+
+JSON array uniquement."""
 
     content_parts.insert(0, {"type": "text", "text": prompt})
 
@@ -140,12 +144,17 @@ Retourne UNIQUEMENT le JSON array, sans markdown ni explication."""
         if not isinstance(moments, list):
             moments = [moments]
 
-        # Validate and clean
+        # Validate, clean, and snap timestamps to nearest actual frame
+        frame_times = [f["time"] for f in frames]
         clean_moments = []
         for m in moments:
             if isinstance(m, dict) and "time" in m and "label" in m:
+                t = float(m["time"])
+                # Snap to nearest actual frame timestamp
+                if frame_times:
+                    t = min(frame_times, key=lambda ft: abs(ft - t))
                 clean_moments.append({
-                    "time": float(m["time"]),
+                    "time": t,
                     "label": str(m["label"]),
                     "description": str(m.get("description", "")),
                 })
@@ -162,6 +171,7 @@ def _analyze_in_batches(
     frames: list[dict],
     transcript: str,
     vod_title: str,
+    vod_game: str = "",
 ) -> list[dict]:
     """Split frames into batches and merge results."""
     mid = len(frames) // 2
@@ -170,7 +180,7 @@ def _analyze_in_batches(
 
     all_moments = []
     for batch in [batch1, batch2]:
-        moments = _analyze_batch(batch, transcript, vod_title)
+        moments = _analyze_batch(batch, transcript, vod_title, vod_game)
         all_moments.extend(moments)
 
     # Deduplicate moments that are too close in time

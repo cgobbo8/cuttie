@@ -13,8 +13,8 @@ import subprocess
 logger = logging.getLogger(__name__)
 
 FRAMES_DIR = "frames"
-MIN_FRAME_GAP = 2.0  # Minimum seconds between extracted frames
-REGULAR_INTERVAL = 3.0  # Interval for gap-filling frames
+MIN_FRAME_GAP = 1.5  # Minimum seconds between extracted frames
+REGULAR_INTERVAL = 2.0  # Interval for gap-filling frames
 
 
 def extract_frames(

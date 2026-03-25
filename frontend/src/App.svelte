@@ -90,6 +90,7 @@
       <HotPoints
         hotPoints={results.hot_points}
         vodTitle={results.vod_title || "VOD"}
+        vodGame={results.vod_game || ""}
         vodDuration={results.vod_duration_seconds || 0}
         jobId={results.job_id}
       />

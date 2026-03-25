@@ -26,10 +26,21 @@ def download_audio(url: str, output_dir: str) -> tuple[str, dict]:
         info = ydl.extract_info(url, download=True)
 
     audio_path = os.path.join(output_dir, "audio.wav")
+    # Extract game name from chapters (Twitch puts game changes as chapters)
+    game = ""
+    chapters = info.get("chapters") or []
+    if chapters:
+        # Use the most common chapter title (= the main game)
+        from collections import Counter
+        game_counts = Counter(c.get("title", "") for c in chapters if c.get("title"))
+        if game_counts:
+            game = game_counts.most_common(1)[0][0]
+
     metadata = {
         "title": info.get("title", "Unknown"),
         "duration": info.get("duration", 0),
         "id": info.get("id", ""),
+        "game": game,
     }
     return audio_path, metadata
 

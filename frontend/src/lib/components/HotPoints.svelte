@@ -4,11 +4,13 @@
   let {
     hotPoints,
     vodTitle,
+    vodGame,
     vodDuration,
     jobId,
   }: {
     hotPoints: HotPoint[];
     vodTitle: string;
+    vodGame: string;
     vodDuration: number;
     jobId: string;
   } = $props();
@@ -118,6 +120,13 @@
   function categoryStyle(cat: string) {
     return CATEGORY_STYLES[cat] || { label: cat, bg: "bg-zinc-500/20", text: "text-zinc-400" };
   }
+
+  // Only show signals that have non-zero values across all hot points
+  let activeSignals = $derived(
+    SIGNALS.filter((signal) =>
+      hotPoints.some((hp) => hp.signals[signal.key] > 0.01)
+    )
+  );
 </script>
 
 <div class="w-full max-w-4xl mx-auto">
@@ -126,6 +135,9 @@
     <h2 class="text-2xl font-bold text-white mb-2">{vodTitle}</h2>
     <p class="text-zinc-400">
       {hotPoints.length} moments forts detectes sur {formatDuration(vodDuration)}
+      {#if vodGame}
+        <span class="text-zinc-500">— {vodGame}</span>
+      {/if}
     </p>
   </div>
 
@@ -186,7 +198,7 @@
 
           <!-- Compact signal bars -->
           <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
-            {#each SIGNALS as signal}
+            {#each activeSignals as signal}
               <div class="flex items-center gap-2">
                 <span class="text-xs text-zinc-500 w-16 text-right">{signal.label}</span>
                 <div class="flex-1 bg-zinc-700/30 rounded-full h-1.5 overflow-hidden">
@@ -331,7 +343,7 @@
                   Detail des signaux audio
                 </summary>
                 <div class="space-y-3 mt-3">
-                  {#each SIGNALS as signal}
+                  {#each activeSignals as signal}
                     {@const value = point.signals[signal.key]}
                     <div>
                       <div class="flex items-center justify-between mb-1">

@@ -3,8 +3,8 @@
 Pipeline per clip:
 1. Whisper transcription (get text + segment timestamps)
 2. Frame extraction (at segment timestamps + regular intervals)
-3. Vision analysis (GPT-4.1 with frames → key moments)
-4. Synthesis (GPT-4.1: transcript + vision → category, virality, narrative)
+3. Vision analysis (GPT-5.4 with frames → key moments with precise timestamps)
+4. Synthesis (GPT-5.4: transcript + vision → category, virality, summary, narrative)
 """
 
 import json
@@ -97,44 +97,43 @@ def synthesize_analysis(
     score: float,
     timestamp_display: str,
     vod_title: str,
+    vod_game: str,
 ) -> LlmAnalysis:
-    """Final synthesis: combine transcript + vision moments into full analysis.
-
-    Uses GPT-4.1 for best intelligence on categorization and narrative.
-    """
+    """Final synthesis: combine transcript + vision moments into full analysis."""
     client = _get_client()
 
     moments_text = ""
     if key_moments:
-        moments_text = "\n**Moments clés visuels identifiés :**\n"
+        moments_text = "\n**Moments clés identifiés par analyse visuelle :**\n"
         for m in key_moments:
-            moments_text += f"- [{m['time']:.0f}s] {m['label']}: {m.get('description', '')}\n"
+            moments_text += f"- [{m['time']:.1f}s] {m['label']}: {m.get('description', '')}\n"
 
-    prompt = f"""Tu es un expert en contenu viral pour Twitch/YouTube. Analyse cet extrait d'un stream Twitch en combinant la transcription audio ET l'analyse visuelle.
+    game_ctx = f"\n**Jeu:** {vod_game}" if vod_game else ""
 
-**Stream:** {vod_title}
-**Timestamp dans le VOD:** {timestamp_display}
-**Score heuristique audio:** {score:.0%}
-**Debit de parole:** {speech_rate:.1f} mots/seconde
+    prompt = f"""Tu es un expert en contenu viral pour Twitch/YouTube. Analyse cet extrait de stream.
+
+**Stream:** {vod_title}{game_ctx}
+**Timestamp:** {timestamp_display}
+**Score audio:** {score:.0%}
+**Debit:** {speech_rate:.1f} mots/s
 
 **Transcription:**
-{transcript if transcript else "(pas de parole détectée)"}
+{transcript if transcript else "(silence / pas de parole)"}
 {moments_text}
-
-Retourne un JSON avec ces champs:
+Retourne un JSON:
 - "category": parmi "fun", "rage", "clutch", "skill", "fail", "emotional", "reaction", "storytelling", "awkward", "hype"
-- "virality_score": 0 à 1 (potentiel viral réel, sois exigeant: 0.8+ = moment gold, 0.5+ = bon clip, <0.3 = pas intéressant)
-- "summary": description courte (1-2 phrases) de ce qui se passe, en français
-- "is_clipable": true si ça marche seul comme clip
-- "narrative": un récit fluide de ce qui se passe dans le clip, seconde par seconde, en combinant ce qui est dit ET ce qui est vu. 3-5 phrases vivantes, en français. C'est le "film" du clip.
+- "virality_score": 0 à 1 (sois exigeant : 0.8+ = gold, 0.5+ = bon, <0.3 = bof)
+- "summary": UNE SEULE phrase punch de 10-15 mots max, style titre de clip YouTube/TikTok. Doit donner envie de cliquer. En français.
+- "is_clipable": true si compréhensible seul
+- "narrative": récit fluide du clip (3-5 phrases), ce qui se passe seconde par seconde en combinant audio + visuels{", en mentionnant le gameplay de " + vod_game if vod_game else ""}. En français.
 
-Retourne UNIQUEMENT le JSON, sans markdown."""
+JSON uniquement, pas de markdown."""
 
     try:
         response = client.chat.completions.create(
             model="gpt-5.4",
             messages=[{"role": "user", "content": prompt}],
-            temperature=0.3,
+            temperature=0.4,
             max_completion_tokens=600,
         )
 
@@ -152,9 +151,7 @@ Retourne UNIQUEMENT le JSON, sans markdown."""
             summary=data.get("summary", ""),
             is_clipable=bool(data.get("is_clipable", True)),
             narrative=data.get("narrative", ""),
-            key_moments=[
-                KeyMoment(**m) for m in key_moments
-            ] if key_moments else [],
+            key_moments=[KeyMoment(**m) for m in key_moments] if key_moments else [],
         )
 
     except Exception as e:
@@ -162,9 +159,7 @@ Retourne UNIQUEMENT le JSON, sans markdown."""
         return LlmAnalysis(
             transcript=transcript,
             speech_rate=round(speech_rate, 2),
-            key_moments=[
-                KeyMoment(**m) for m in key_moments
-            ] if key_moments else [],
+            key_moments=[KeyMoment(**m) for m in key_moments] if key_moments else [],
         )
 
 
@@ -173,25 +168,26 @@ def analyze_single_clip(
     clip_index: int,
     hp: HotPoint,
     vod_title: str,
+    vod_game: str,
 ) -> None:
-    """Full analysis pipeline for a single clip: Whisper → Frames → Vision → Synthesis."""
+    """Full analysis pipeline for a single clip."""
     clip_path = os.path.join(CLIPS_DIR, job_id, hp.clip_filename)
 
     # Step 1: Whisper transcription
     logger.info(f"  [1/4] Whisper transcription...")
     transcript, speech_rate, segment_times = transcribe_clip(clip_path)
 
-    # Step 2: Extract frames
+    # Step 2: Extract frames (denser for better timestamp precision)
     logger.info(f"  [2/4] Frame extraction...")
     frames = extract_frames(clip_path, job_id, clip_index, segment_times)
 
-    # Step 3: Vision analysis (key moments from frames)
+    # Step 3: Vision analysis
     key_moments: list[dict] = []
     if frames:
         logger.info(f"  [3/4] Vision analysis ({len(frames)} frames)...")
-        key_moments = analyze_clip_frames(frames, transcript, vod_title)
+        key_moments = analyze_clip_frames(frames, transcript, vod_title, vod_game)
     else:
-        logger.info(f"  [3/4] Vision analysis skipped (no frames)")
+        logger.info(f"  [3/4] Vision skipped (no frames)")
 
     # Step 4: Final synthesis
     logger.info(f"  [4/4] Synthesis...")
@@ -202,6 +198,7 @@ def analyze_single_clip(
         score=hp.score,
         timestamp_display=hp.timestamp_display,
         vod_title=vod_title,
+        vod_game=vod_game,
     )
 
     hp.llm = llm
@@ -210,8 +207,8 @@ def analyze_single_clip(
     )
 
     logger.info(
-        f"  → category={llm.category}, virality={llm.virality_score:.0%}, "
-        f"final={hp.final_score:.0%}, moments={len(llm.key_moments)}"
+        f"  → {llm.category} | viral={llm.virality_score:.0%} | "
+        f"final={hp.final_score:.0%} | {len(llm.key_moments)} moments"
     )
 
 
@@ -219,9 +216,10 @@ def analyze_hot_points(
     job_id: str,
     hot_points: list[HotPoint],
     vod_title: str,
+    vod_game: str = "",
     max_analyze: int = 20,
 ) -> None:
-    """Run full analysis (Whisper + Vision + LLM) on hot points with clips, then re-rank."""
+    """Run full analysis on hot points with clips, then re-rank."""
     analyzed = 0
 
     for i, hp in enumerate(hot_points):
@@ -239,10 +237,9 @@ def analyze_hot_points(
         logger.info(f"Analyzing clip {analyzed}/{min(max_analyze, len(hot_points))}: {hp.timestamp_display}")
 
         try:
-            analyze_single_clip(job_id, i + 1, hp, vod_title)
+            analyze_single_clip(job_id, i + 1, hp, vod_title, vod_game)
         except Exception as e:
             logger.error(f"Analysis failed for clip at {hp.timestamp_display}: {e}")
-            # Continue with next clip instead of failing everything
 
     # Re-sort by final_score
     hot_points.sort(
@@ -252,4 +249,4 @@ def analyze_hot_points(
 
     # Persist re-ranked hot points
     save_hot_points(job_id, hot_points)
-    logger.info(f"Analysis complete: {analyzed} clips analyzed, hot points re-ranked")
+    logger.info(f"Analysis complete: {analyzed} clips analyzed, re-ranked")

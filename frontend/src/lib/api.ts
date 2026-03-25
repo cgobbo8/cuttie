@@ -56,6 +56,7 @@ export interface JobResponse {
   hot_points: HotPoint[] | null;
   error: string | null;
   vod_title: string | null;
+  vod_game: string | null;
   vod_duration_seconds: number | null;
 }
 

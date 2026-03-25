@@ -18,7 +18,8 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
-PANNS_SR = 32000
+# PANNs works fine at 16kHz (half the memory, same quality for our classes)
+PANNS_SR = 16000
 
 # AudioSet class indices
 _SPEECH_CLASSES = {
@@ -54,13 +55,35 @@ _GAME_AUDIO_CLASSES = {
 _model = None
 
 
+def _get_device() -> str:
+    """Pick the best available torch device for PANNs inference."""
+    import torch
+    if torch.backends.mps.is_available():
+        return "mps"
+    if torch.cuda.is_available():
+        return "cuda"
+    return "cpu"
+
+
 def _get_model():
     global _model
     if _model is None:
+        import torch
         from panns_inference import AudioTagging
-        logger.info("Loading PANNs CNN14 model...")
-        _model = AudioTagging(checkpoint_path=None, device="cpu")
-        logger.info("PANNs CNN14 loaded")
+
+        device = _get_device()
+        logger.info(f"Loading PANNs CNN14 model on {device}...")
+
+        # Load on CPU first (PANNs only supports cpu/cuda natively)
+        at = AudioTagging(checkpoint_path=None, device="cpu")
+
+        # Move model to MPS/CUDA if available
+        if device != "cpu":
+            at.model.to(device)
+            at.device = device
+
+        _model = at
+        logger.info(f"PANNs CNN14 loaded on {device}")
     return _model
 
 
@@ -86,7 +109,7 @@ def _compute_window_scores(probs: np.ndarray) -> dict:
 def classify_audio(
     filepath: str,
     window_sec: float = 5.0,
-    hop_sec: float = 2.5,
+    hop_sec: float = 5.0,
 ) -> list[dict]:
     """Classify audio events per window using PANNs CNN14.
 

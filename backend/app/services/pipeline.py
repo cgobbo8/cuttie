@@ -3,6 +3,7 @@
 import logging
 import os
 import shutil
+from concurrent.futures import ThreadPoolExecutor
 
 from app.services.audio_analyzer import analyze_audio
 from app.services.chat_analyzer import analyze_chat
@@ -43,9 +44,15 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
 
         # Steps 1-5: Download + Analysis (skip if resuming from later step)
         if not resume_from or resume_from in ("DOWNLOADING_AUDIO", "DOWNLOADING_CHAT", "ANALYZING_AUDIO", "ANALYZING_CHAT", "SCORING"):
-            # 1. Download audio
-            update_job(job_id, status="DOWNLOADING_AUDIO", progress="Downloading audio from VOD...")
-            audio_path, metadata = download_audio(url, output_dir)
+            # 1 & 2. Download audio + chat in parallel (both I/O bound)
+            update_job(job_id, status="DOWNLOADING_AUDIO", progress="Downloading audio + chat...")
+            with ThreadPoolExecutor(max_workers=2) as dl_pool:
+                audio_future = dl_pool.submit(download_audio, url, output_dir)
+                chat_future = dl_pool.submit(download_chat, url)
+
+                audio_path, metadata = audio_future.result()
+                chat_messages = chat_future.result()
+
             duration = metadata.get("duration", 0)
             vod_title = metadata.get("title", "")
             vod_game = metadata.get("game", "")
@@ -61,10 +68,6 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
                 view_count=view_count,
                 stream_date=stream_date,
             )
-
-            # 2. Download chat
-            update_job(job_id, status="DOWNLOADING_CHAT", progress="Downloading chat messages...")
-            chat_messages = download_chat(url)
             logger.info(f"Downloaded {len(chat_messages)} chat messages")
 
             # 3. Analyze audio

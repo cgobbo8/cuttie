@@ -282,6 +282,9 @@ def analyze_single_clip(
     )
 
 
+MAX_LLM_WORKERS = 3  # Parallel clip analyses (API-bound, not CPU-bound)
+
+
 def analyze_hot_points(
     job_id: str,
     hot_points: list[HotPoint],
@@ -289,27 +292,43 @@ def analyze_hot_points(
     max_analyze: int = 20,
     chat_messages: list[dict] | None = None,
 ) -> None:
-    """Run full analysis on hot points with clips, then re-rank."""
-    analyzed = 0
+    """Run full analysis on hot points with clips in parallel, then re-rank."""
+    from concurrent.futures import ThreadPoolExecutor, as_completed
 
+    # Collect clips to analyze
+    to_analyze: list[tuple[int, HotPoint]] = []
     for i, hp in enumerate(hot_points):
         if not hp.clip_filename:
             continue
-
         clip_path = os.path.join(CLIPS_DIR, job_id, hp.clip_filename)
         if not os.path.isfile(clip_path):
             continue
-
-        if analyzed >= max_analyze:
+        to_analyze.append((i, hp))
+        if len(to_analyze) >= max_analyze:
             break
 
-        analyzed += 1
-        logger.info(f"Analyzing clip {analyzed}/{min(max_analyze, len(hot_points))}: {hp.timestamp_display}")
+    total = len(to_analyze)
+    logger.info(f"Analyzing {total} clips with {MAX_LLM_WORKERS} parallel workers")
 
-        try:
-            analyze_single_clip(job_id, i + 1, hp, vod_meta, chat_messages=chat_messages)
-        except Exception as e:
-            logger.error(f"Analysis failed for clip at {hp.timestamp_display}: {e}")
+    def _analyze_one(item: tuple[int, HotPoint]) -> None:
+        idx, hp = item
+        analyze_single_clip(job_id, idx + 1, hp, vod_meta, chat_messages=chat_messages)
+
+    with ThreadPoolExecutor(max_workers=MAX_LLM_WORKERS) as executor:
+        futures = {}
+        for item in to_analyze:
+            future = executor.submit(_analyze_one, item)
+            futures[future] = item
+
+        done = 0
+        for future in as_completed(futures):
+            idx, hp = futures[future]
+            done += 1
+            try:
+                future.result()
+                logger.info(f"Clip {done}/{total} done: {hp.timestamp_display}")
+            except Exception as e:
+                logger.error(f"Analysis failed for clip at {hp.timestamp_display}: {e}")
 
     # Re-sort by final_score
     hot_points.sort(

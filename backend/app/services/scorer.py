@@ -2,35 +2,38 @@
 
 Combines normalized audio and chat signals into a single score per window,
 then detects peaks with minimum distance between them.
+
+Improvements over v1:
+- Score smoothing (Gaussian) before peak detection for cleaner peaks
+- Chat burst and emote density as additional signals
+- Signal agreement bonus (when audio + chat both spike)
 """
 
 import numpy as np
+from scipy.ndimage import gaussian_filter1d
 from scipy.signal import find_peaks
 
 from app.models.schemas import HotPoint, SignalBreakdown
 
 # Default weights for composite score
 WEIGHTS = {
-    "rms": 0.25,
-    "chat_speed": 0.25,
-    "flux": 0.20,
-    "pitch_var": 0.15,
-    "centroid": 0.10,
-    "zcr": 0.05,
-}
-
-# If pitch is unavailable (skipped for long VODs), redistribute its weight
-WEIGHTS_NO_PITCH = {
-    "rms": 0.30,
-    "chat_speed": 0.30,
-    "flux": 0.20,
-    "pitch_var": 0.0,
-    "centroid": 0.10,
-    "zcr": 0.10,
+    "rms": 0.20,
+    "chat_speed": 0.20,
+    "flux": 0.15,
+    "pitch_var": 0.12,
+    "centroid": 0.08,
+    "zcr": 0.03,
+    # New chat signals
+    "chat_burst": 0.10,
+    "emote_density": 0.07,
+    "caps_ratio": 0.05,
 }
 
 # Minimum distance between peaks in seconds
 MIN_PEAK_DISTANCE_SEC = 60.0
+
+# Smoothing sigma (in windows). ~3 windows = 7.5s smoothing at 2.5s hop
+SMOOTH_SIGMA = 2.5
 
 
 def seconds_to_display(s: float) -> str:
@@ -41,7 +44,6 @@ def seconds_to_display(s: float) -> str:
 
 def _normalize(arr: np.ndarray) -> np.ndarray:
     """Min-max normalize to [0, 1], handling NaN and edge cases."""
-    # Replace NaN with 0 before normalizing
     clean = np.nan_to_num(arr, nan=0.0)
     mn = np.min(clean)
     mx = np.max(clean)
@@ -57,18 +59,7 @@ def compute_scores(
     top_n: int = 20,
     hop_sec: float = 2.5,
 ) -> list[HotPoint]:
-    """Compute composite scores and detect peak hot points.
-
-    Args:
-        audio_features: List of dicts with time, rms, centroid, zcr, flux, pitch_var
-        chat_features: List of dicts with time, chat_speed
-        total_duration: VOD duration in seconds
-        top_n: Maximum number of hot points to return
-        hop_sec: Hop between windows in seconds (for peak distance calculation)
-
-    Returns:
-        List of HotPoint sorted by score descending
-    """
+    """Compute composite scores and detect peak hot points."""
     if not audio_features:
         return []
 
@@ -82,17 +73,28 @@ def compute_scores(
     flux = np.array([w["flux"] for w in audio_features])
     pitch_var = np.array([w["pitch_var"] for w in audio_features])
 
-    # Build chat speed array aligned to audio time grid
+    # Build chat arrays aligned to audio time grid
     chat_speed = np.zeros(n)
+    chat_burst = np.zeros(n)
+    emote_density = np.zeros(n)
+    caps_ratio = np.zeros(n)
+
     if chat_features:
         chat_times_arr = np.array([c["time"] for c in chat_features])
-        chat_speeds_arr = np.array([c["chat_speed"] for c in chat_features])
+        chat_arrays = {
+            "chat_speed": np.array([c["chat_speed"] for c in chat_features]),
+            "chat_burst": np.array([c.get("chat_burst", 0) for c in chat_features]),
+            "emote_density": np.array([c.get("emote_density", 0) for c in chat_features]),
+            "caps_ratio": np.array([c.get("caps_ratio", 0) for c in chat_features]),
+        }
         for i, t in enumerate(times):
-            # Find nearest chat window (within hop_sec tolerance)
             diffs = np.abs(chat_times_arr - t)
             nearest = np.argmin(diffs)
             if diffs[nearest] < hop_sec:
-                chat_speed[i] = chat_speeds_arr[nearest]
+                chat_speed[i] = chat_arrays["chat_speed"][nearest]
+                chat_burst[i] = chat_arrays["chat_burst"][nearest]
+                emote_density[i] = chat_arrays["emote_density"][nearest]
+                caps_ratio[i] = chat_arrays["caps_ratio"][nearest]
 
     # Normalize all signals to [0, 1]
     norm = {
@@ -102,36 +104,43 @@ def compute_scores(
         "pitch_var": _normalize(pitch_var),
         "centroid": _normalize(centroid),
         "zcr": _normalize(zcr),
+        "chat_burst": _normalize(chat_burst),
+        "emote_density": _normalize(emote_density),
+        "caps_ratio": _normalize(caps_ratio),
     }
-
-    # Check if pitch was actually computed (all NaN means it was skipped)
-    has_pitch = not np.all(np.isnan(pitch_var))
-    weights = WEIGHTS if has_pitch else WEIGHTS_NO_PITCH
 
     # Compute composite score
     score = np.zeros(n)
-    for signal_name, weight in weights.items():
+    for signal_name, weight in WEIGHTS.items():
         score += weight * norm[signal_name]
 
-    # Find peaks with minimum distance
+    # Signal agreement bonus: when audio AND chat both spike, boost score
+    audio_combined = (norm["rms"] + norm["flux"]) / 2
+    chat_combined = norm["chat_speed"]
+    agreement = audio_combined * chat_combined  # high only when both high
+    score += 0.15 * _normalize(agreement)
+
+    # Smooth score curve for cleaner peak detection
+    score_smooth = gaussian_filter1d(score, sigma=SMOOTH_SIGMA)
+
+    # Find peaks on smoothed curve with minimum distance
     min_distance = max(1, int(MIN_PEAK_DISTANCE_SEC / hop_sec))
-    peak_indices, properties = find_peaks(score, distance=min_distance, prominence=0.05)
+    peak_indices, _ = find_peaks(score_smooth, distance=min_distance, prominence=0.05)
 
     if len(peak_indices) == 0:
-        # Fallback: just take the top scoring windows
-        peak_indices = np.argsort(score)[::-1][:top_n]
+        peak_indices = np.argsort(score_smooth)[::-1][:top_n]
 
-    # Sort by score descending and take top N
-    sorted_peaks = sorted(peak_indices, key=lambda i: score[i], reverse=True)[:top_n]
+    # Sort by smoothed score descending and take top N
+    sorted_peaks = sorted(peak_indices, key=lambda i: score_smooth[i], reverse=True)[:top_n]
 
-    # Build HotPoint objects
+    # Build HotPoint objects (use raw score for display, smoothed for ranking)
     hot_points = []
     for idx in sorted_peaks:
         hot_points.append(
             HotPoint(
                 timestamp_seconds=round(float(times[idx]), 1),
                 timestamp_display=seconds_to_display(times[idx]),
-                score=round(float(score[idx]), 3),
+                score=round(float(score_smooth[idx]), 3),
                 signals=SignalBreakdown(
                     rms=round(float(norm["rms"][idx]), 3),
                     spectral_flux=round(float(norm["flux"][idx]), 3),

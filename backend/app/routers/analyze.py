@@ -26,12 +26,12 @@ async def analyze_vod(req: AnalyzeRequest, bg: BackgroundTasks) -> dict:
 
 
 @router.get("/jobs")
-async def get_all_jobs() -> list[dict]:
+def get_all_jobs() -> list[dict]:
     return list_jobs()
 
 
 @router.get("/jobs/{job_id}")
-async def get_job_status(job_id: str) -> JobResponse:
+def get_job_status(job_id: str) -> JobResponse:
     job = get_job(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
@@ -72,7 +72,7 @@ async def retry_job(job_id: str, bg: BackgroundTasks) -> dict:
 
 
 @router.get("/clips/{job_id}/{filename}")
-async def get_clip(job_id: str, filename: str) -> FileResponse:
+def get_clip(job_id: str, filename: str) -> FileResponse:
     import os
     filepath = os.path.join(CLIPS_DIR, job_id, filename)
     if not os.path.isfile(filepath):

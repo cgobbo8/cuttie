@@ -32,6 +32,8 @@ EDGE_PERSISTENCE_RATIO = 0.5
 
 # Snap to frame edge if within this fraction of frame dimension
 SNAP_MARGIN = 0.08
+# Inner crop offset (pixels) to avoid capturing thin border artifacts
+INNER_CROP = 5
 
 # Hough line detection params
 HOUGH_THRESHOLD = 30
@@ -99,23 +101,32 @@ def _detect_face(clip_path: str) -> tuple[int, int, int, int, int, int] | None:
         detector.close()
 
 
-def _build_persistent_edges(clip_path: str, frame_w: int, frame_h: int) -> np.ndarray:
-    """Build a map of edges that persist across many frames (= structural elements like overlay borders)."""
-    cap = cv2.VideoCapture(clip_path)
-    total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+def _build_persistent_edges(clip_paths: list[str], frame_w: int, frame_h: int) -> np.ndarray:
+    """Build a map of edges that persist across many frames from multiple clips.
 
+    Using multiple clips makes overlay borders even more persistent while
+    game content (which varies per clip) gets washed out.
+    """
     edge_sum = np.zeros((frame_h, frame_w), dtype=np.float32)
-    for i in range(N_FRAMES_EDGES):
-        pos = int(total * (i + 1) / (N_FRAMES_EDGES + 1))
-        cap.set(cv2.CAP_PROP_POS_FRAMES, pos)
-        ret, frame = cap.read()
-        if ret:
-            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            edges = cv2.Canny(gray, 50, 150)
-            edge_sum += edges.astype(np.float32)
-    cap.release()
+    total_sampled = 0
 
-    threshold = N_FRAMES_EDGES * 255 * EDGE_PERSISTENCE_RATIO
+    frames_per_clip = max(4, N_FRAMES_EDGES // len(clip_paths))
+    for clip_path in clip_paths:
+        cap = cv2.VideoCapture(clip_path)
+        total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+
+        for i in range(frames_per_clip):
+            pos = int(total * (i + 1) / (frames_per_clip + 1))
+            cap.set(cv2.CAP_PROP_POS_FRAMES, pos)
+            ret, frame = cap.read()
+            if ret:
+                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                edges = cv2.Canny(gray, 50, 150)
+                edge_sum += edges.astype(np.float32)
+                total_sampled += 1
+        cap.release()
+
+    threshold = total_sampled * 255 * EDGE_PERSISTENCE_RATIO
     return ((edge_sum > threshold) * 255).astype(np.uint8)
 
 
@@ -203,11 +214,20 @@ def _find_overlay_rect(
     if bottom_edge > frame_h * (1 - SNAP_MARGIN):
         bottom_edge = frame_h
 
+    # Inner crop: shrink by a few pixels to avoid thin border artifacts
+    left_edge += INNER_CROP
+    top_edge += INNER_CROP
+    right_edge -= INNER_CROP
+    bottom_edge -= INNER_CROP
+
     return left_edge, top_edge, right_edge - left_edge, bottom_edge - top_edge
 
 
-def detect_facecam(clip_path: str) -> dict | None:
-    """Detect the facecam overlay region in a clip.
+def detect_facecam(clip_path: str, extra_clips: list[str] | None = None) -> dict | None:
+    """Detect the facecam overlay region using one or more clips.
+
+    The overlay is a static element, so using multiple clips makes detection
+    more robust: overlay borders persist while game content washes out.
 
     Returns dict with keys: x, y, w, h (pixel coords in clip resolution)
     or None if no face found.
@@ -220,11 +240,16 @@ def detect_facecam(clip_path: str) -> dict | None:
     fx, fy, fw, fh, frame_w, frame_h = face
     logger.info(f"Face detected: ({fx},{fy}) {fw}x{fh} in {frame_w}x{frame_h}")
 
-    persistent = _build_persistent_edges(clip_path, frame_w, frame_h)
+    # Use multiple clips for edge persistence if available
+    all_clips = [clip_path]
+    if extra_clips:
+        all_clips.extend(extra_clips)
+
+    persistent = _build_persistent_edges(all_clips, frame_w, frame_h)
     x, y, w, h = _find_overlay_rect(persistent, fx, fy, fw, fh, frame_w, frame_h)
 
     result = {"x": x, "y": y, "w": w, "h": h}
     logger.info(
-        f"Facecam overlay detected: {w}x{h} at ({x},{y})"
+        f"Facecam overlay detected: {w}x{h} at ({x},{y}) [from {len(all_clips)} clips]"
     )
     return result

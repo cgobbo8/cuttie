@@ -8,17 +8,19 @@ import logging
 import os
 import subprocess
 
+import cv2
+import numpy as np
 from openai import OpenAI
 
 logger = logging.getLogger(__name__)
 
+# Font
+FONT_NAME = "Luckiest Guy"
+FONTS_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "assets", "fonts")
+
 # Style constants
-FONT_NAME = "Arial Black"
-FONT_SIZE = 16  # will be scaled to vertical resolution
-PRIMARY_COLOR = "&H00FFFFFF"   # white (active word)
 OUTLINE_COLOR = "&H00000000"  # black outline
 BACK_COLOR = "&H80000000"     # semi-transparent black shadow
-HIGHLIGHT_COLOR = "&H0000FFFF"  # yellow (current word)
 
 
 def _get_client() -> OpenAI:
@@ -68,6 +70,11 @@ def transcribe_with_words(clip_path: str) -> tuple[str, float, list[dict]]:
                     "end": w.end,
                 })
 
+        # Fix French accents, apostrophes, word boundaries
+        if words:
+            words = _rewrite_words_with_llm(words)
+            text = " ".join(w["word"] for w in words)
+
         duration = words[-1]["end"] if words else 0.0
         word_count = len(text.split())
         speech_rate = word_count / duration if duration > 0 else 0.0
@@ -80,6 +87,141 @@ def transcribe_with_words(clip_path: str) -> tuple[str, float, list[dict]]:
     finally:
         if os.path.isfile(audio_path):
             os.remove(audio_path)
+
+
+def extract_dominant_color(clip_path: str) -> tuple[int, int, int]:
+    """Extract the dominant color from a clip using k-means on sampled frames.
+    Returns (R, G, B).
+    """
+    cap = cv2.VideoCapture(clip_path)
+    total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+
+    pixels = []
+    for pos in [0.2, 0.5, 0.8]:
+        cap.set(cv2.CAP_PROP_POS_FRAMES, int(total * pos))
+        ret, frame = cap.read()
+        if ret:
+            small = cv2.resize(frame, (64, 36))
+            pixels.append(small.reshape(-1, 3))
+    cap.release()
+
+    if not pixels:
+        return (100, 100, 200)  # fallback blue
+
+    all_pixels = np.vstack(pixels).astype(np.float32)
+    criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 10, 1.0)
+    _, labels, centers = cv2.kmeans(all_pixels, 5, None, criteria, 3, cv2.KMEANS_PP_CENTERS)
+
+    # Pick the largest cluster
+    counts = np.bincount(labels.flatten())
+    dominant_idx = np.argmax(counts)
+    bgr = centers[dominant_idx]
+    r, g, b = int(bgr[2]), int(bgr[1]), int(bgr[0])
+
+    # Ensure the color is reasonably saturated (not too dark/gray)
+    brightness = (r + g + b) / 3
+    if brightness < 40:
+        r, g, b = max(r, 60), max(g, 60), max(b, 100)
+
+    logger.info(f"Dominant color: RGB({r},{g},{b})")
+    return r, g, b
+
+
+def _rgb_to_ass_color(r: int, g: int, b: int) -> str:
+    """Convert RGB to ASS color format (&HBBGGRR with alpha 00)."""
+    return f"&H00{b:02X}{g:02X}{r:02X}"
+
+
+def _tint_white(r: int, g: int, b: int, strength: float = 0.15) -> tuple[int, int, int]:
+    """Tint white slightly toward the given color."""
+    return (
+        int(255 * (1 - strength) + r * strength),
+        int(255 * (1 - strength) + g * strength),
+        int(255 * (1 - strength) + b * strength),
+    )
+
+
+def _rewrite_words_with_llm(words: list[dict]) -> list[dict]:
+    """Fix Whisper transcription issues using a fast LLM.
+
+    Whisper often drops accents, apostrophes, and splits words incorrectly
+    in French (e.g. "Bon jour l ami" instead of "Bonjour l'ami").
+
+    Sends raw text to LLM, gets corrected text, then re-aligns word timestamps
+    using character-position mapping.
+    """
+    if not words:
+        return words
+
+    raw_text = " ".join(w["word"].strip() for w in words)
+    if not raw_text.strip():
+        return words
+
+    client = _get_client()
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            temperature=0,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "Tu es un correcteur de sous-titres français. "
+                        "Corrige l'orthographe, les accents, les apostrophes et les mots mal découpés. "
+                        "Ne change PAS le sens ni n'ajoute/supprime de mots. "
+                        "Retourne UNIQUEMENT le texte corrigé, rien d'autre."
+                    ),
+                },
+                {"role": "user", "content": raw_text},
+            ],
+        )
+        corrected = response.choices[0].message.content.strip()
+    except Exception as e:
+        logger.warning(f"LLM subtitle rewriting failed, using raw: {e}")
+        return words
+
+    # Re-align corrected words to original timestamps via character-position mapping
+    corrected_words = corrected.split()
+    if not corrected_words:
+        return words
+
+    # Build character→word index mapping for original text
+    orig_chars = []  # for each char position in raw_text, which word index
+    for i, w in enumerate(words):
+        word = w["word"].strip()
+        for _ in word:
+            orig_chars.append(i)
+        if i < len(words) - 1:
+            orig_chars.append(i)  # space
+
+    # Build character ranges for corrected words
+    result = []
+    char_pos = 0
+    for cw in corrected_words:
+        # Find this word's character range in the original text
+        # Use proportional mapping based on character position
+        start_ratio = char_pos / max(len(corrected), 1)
+        end_ratio = (char_pos + len(cw)) / max(len(corrected), 1)
+
+        orig_start_idx = int(start_ratio * len(orig_chars))
+        orig_end_idx = int(end_ratio * len(orig_chars)) - 1
+
+        orig_start_idx = max(0, min(orig_start_idx, len(orig_chars) - 1))
+        orig_end_idx = max(0, min(orig_end_idx, len(orig_chars) - 1))
+
+        first_word_idx = orig_chars[orig_start_idx]
+        last_word_idx = orig_chars[orig_end_idx]
+
+        result.append({
+            "word": cw,
+            "start": words[first_word_idx]["start"],
+            "end": words[last_word_idx]["end"],
+        })
+
+        char_pos += len(cw) + 1  # +1 for space
+
+    logger.info(f"Subtitle rewrite: {len(words)} words -> {len(result)} words")
+    return result
 
 
 def _format_ass_time(seconds: float) -> str:
@@ -113,13 +255,27 @@ def _chunk_words(words: list[dict], max_words: int = 4, max_duration: float = 3.
     return chunks
 
 
-def generate_ass(words: list[dict], output_path: str, video_width: int = 1080, video_height: int = 1920) -> str:
+def generate_ass(
+    words: list[dict],
+    output_path: str,
+    video_width: int = 1080,
+    video_height: int = 1920,
+    dominant_color: tuple[int, int, int] = (100, 100, 200),
+) -> str:
     """Generate ASS subtitle file with word-by-word highlighting.
 
-    Words appear in chunks. The active word is highlighted in yellow,
-    others in white. Positioned in lower third of the screen.
+    Words appear in chunks. The active word is highlighted (white tinted toward
+    dominant color), unfilled text uses the dominant color. Positioned near bottom.
     """
-    font_size = max(16, video_width // 20)
+    font_size = max(16, video_width // 14)
+
+    # Colors: highlight = tinted white, base = dominant color
+    dr, dg, db = dominant_color
+    tr, tg, tb = _tint_white(dr, dg, db, 0.15)
+    highlight_color = _rgb_to_ass_color(tr, tg, tb)
+    base_color = _rgb_to_ass_color(dr, dg, db)
+
+    margin_v = 80
 
     header = f"""[Script Info]
 Title: Cuttie Subtitles
@@ -131,8 +287,8 @@ ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Default,{FONT_NAME},{font_size},{PRIMARY_COLOR},&H000000FF,{OUTLINE_COLOR},{BACK_COLOR},-1,0,0,0,100,100,0,0,1,3,1,2,40,40,200,1
-Style: Highlight,{FONT_NAME},{font_size},{HIGHLIGHT_COLOR},&H000000FF,{OUTLINE_COLOR},{BACK_COLOR},-1,0,0,0,100,100,0,0,1,3,1,2,40,40,200,1
+Style: Default,{FONT_NAME},{font_size},{highlight_color},{base_color},{OUTLINE_COLOR},{BACK_COLOR},-1,0,0,0,100,100,0,0,1,4,2,2,40,40,{margin_v},1
+Style: Highlight,{FONT_NAME},{font_size},{highlight_color},{base_color},{OUTLINE_COLOR},{BACK_COLOR},-1,0,0,0,100,100,0,0,1,4,2,2,40,40,{margin_v},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -151,9 +307,9 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         # Using ASS \kf (smooth fill) tags for karaoke effect
         parts = []
         for w in chunk:
-            # Duration in centiseconds for this word
-            word_dur_cs = int((w["end"] - w["start"]) * 100)
-            parts.append(f"{{\\kf{word_dur_cs}}}{w['word']}")
+            # Duration in centiseconds for this word (clamp to 0)
+            word_dur_cs = max(0, int((w["end"] - w["start"]) * 100))
+            parts.append(f"{{\\kf{word_dur_cs}}}{w['word'].upper()}")
 
         text = " ".join(parts)
         events.append(

@@ -19,7 +19,12 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from app.models.schemas import HotPoint
 from app.services.db import update_job
 from app.services.facecam_detector import detect_facecam
-from app.services.subtitle_generator import generate_ass, transcribe_with_words
+from app.services.subtitle_generator import (
+    FONTS_DIR,
+    extract_dominant_color,
+    generate_ass,
+    transcribe_with_words,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -28,10 +33,13 @@ OUTPUT_WIDTH = 1080
 OUTPUT_HEIGHT = 1920
 MAX_VERTICAL_WORKERS = 2
 
-# Layout: game takes top portion, facecam takes bottom
-# Ratio: ~65% game, ~35% facecam
-GAME_RATIO = 0.65
-FACECAM_RATIO = 0.35
+# Layout ratios
+GAME_HEIGHT_RATIO = 0.70   # game footage = 70% of output height
+GAME_MARGIN_BOTTOM = 60    # blurred band at bottom
+CAM_SIZE = 560             # facecam size in output pixels (at 1080w)
+CAM_MARGIN_TOP = 40        # facecam margin from top
+CAM_BORDER_RADIUS = 20     # rounded corners on facecam
+BLUR_SIGMA = 40            # background blur strength
 
 
 def _build_filtergraph(
@@ -44,58 +52,80 @@ def _build_filtergraph(
 
     Layout (1080x1920):
     ┌──────────────┐
+    │  (blurred    │
+    │   background)│
+    │  ┌────────┐  │
+    │  │ facecam │  │  floating, top center
+    │  └────────┘  │
     │              │
-    │   Game crop  │  ~65% = 1248px
-    │   (center)   │
-    │              │
-    ├──────────────┤
-    │   Facecam    │  ~35% = 672px
-    │   (scaled)   │
+    │ ┌──────────┐ │
+    │ │          │ │
+    │ │  game    │ │  ~60% height, centered bottom
+    │ │  (sharp) │ │
+    │ │          │ │
+    │ └──────────┘ │
     └──────────────┘
     """
-    game_h = int(OUTPUT_HEIGHT * GAME_RATIO)
-    cam_h = OUTPUT_HEIGHT - game_h
+    ow, oh = OUTPUT_WIDTH, OUTPUT_HEIGHT
+    game_h = int(oh * GAME_HEIGHT_RATIO)
 
-    # Game crop: take center strip of the frame, excluding facecam area
-    # Crop a 16:9-ish region from center, then scale to output width × game_h
-    # Target aspect ratio for game section
-    game_aspect = OUTPUT_WIDTH / game_h
+    # Game crop: crop center of source to fit output width at game_h
+    game_aspect = ow / game_h
     crop_h = input_h
     crop_w = int(crop_h * game_aspect)
     if crop_w > input_w:
         crop_w = input_w
         crop_h = int(crop_w / game_aspect)
-
-    # Center the crop
     crop_x = (input_w - crop_w) // 2
     crop_y = (input_h - crop_h) // 2
 
+    # Game position: centered, with margin at bottom for blurred band
+    game_y = oh - game_h - GAME_MARGIN_BOTTOM
+
     # Facecam crop coords
     cx, cy, cw, ch = facecam["x"], facecam["y"], facecam["w"], facecam["h"]
+    # Facecam position: top center
+    cam_x = (ow - CAM_SIZE) // 2
+    cam_y = CAM_MARGIN_TOP
 
     filters = [
-        # Split input into two streams
-        f"[0:v]split=2[game_in][cam_in]",
-        # Game: crop center, scale to top section
-        f"[game_in]crop={crop_w}:{crop_h}:{crop_x}:{crop_y},scale={OUTPUT_WIDTH}:{game_h}[game]",
-        # Facecam: crop, scale to bottom section (maintain aspect, pad if needed)
-        f"[cam_in]crop={cw}:{ch}:{cx}:{cy},scale={OUTPUT_WIDTH}:{cam_h}:force_original_aspect_ratio=decrease,pad={OUTPUT_WIDTH}:{cam_h}:(ow-iw)/2:(oh-ih)/2:black[cam]",
-        # Stack vertically
-        f"[game][cam]vstack=inputs=2[stacked]",
+        # Split input into 3 streams: background, game, facecam
+        f"[0:v]split=3[bg_in][game_in][cam_in]",
+
+        # Background: scale to fill 9:16 (crop center), heavy blur + darken
+        f"[bg_in]scale={ow}:{oh}:force_original_aspect_ratio=increase,"
+        f"crop={ow}:{oh},gblur=sigma={BLUR_SIGMA},eq=brightness=-0.1[bg]",
+
+        # Game: crop center, scale to output width × game_h
+        f"[game_in]crop={crop_w}:{crop_h}:{crop_x}:{crop_y},"
+        f"scale={ow}:{game_h}[game]",
+
+        # Facecam: crop, scale, rounded corners via alpha mask
+        f"[cam_in]crop={cw}:{ch}:{cx}:{cy},"
+        f"scale={CAM_SIZE}:-1,"
+        f"format=yuva420p,"
+        f"geq=lum='p(X,Y)':cb='p(X,Y)':cr='p(X,Y)':"
+        f"a='if(gt(pow(max(0\\,{CAM_BORDER_RADIUS}-min(X\\,W-1-X))\\,2)"
+        f"+pow(max(0\\,{CAM_BORDER_RADIUS}-min(Y\\,H-1-Y))\\,2)"
+        f"\\,{CAM_BORDER_RADIUS}*{CAM_BORDER_RADIUS})\\,0\\,255)'"
+        f"[cam]",
+
+        # Overlay game on background
+        f"[bg][game]overlay=0:{game_y}[with_game]",
+
+        # Overlay facecam on top (centered horizontally)
+        f"[with_game][cam]overlay={cam_x}:{cam_y}[composed]",
     ]
 
     if ass_path:
-        # Burn subtitles (escape path for FFmpeg)
         escaped_path = ass_path.replace("\\", "/").replace(":", "\\:")
-        filters.append(f"[stacked]ass='{escaped_path}'[out]")
-        output_label = "[out]"
+        fonts_dir = os.path.abspath(FONTS_DIR).replace("\\", "/").replace(":", "\\:")
+        filters.append(f"[composed]ass='{escaped_path}':fontsdir='{fonts_dir}'[out]")
     else:
-        output_label = "[stacked]"
-        # Rename for output mapping
-        filters[-1] = filters[-1].replace("[stacked]", "[out]")
-        output_label = "[out]"
+        # Rename last output
+        filters[-1] = filters[-1].replace("[composed]", "[out]")
 
-    return ";".join(filters), output_label
+    return ";".join(filters), "[out]"
 
 
 def generate_vertical_clip(
@@ -162,23 +192,22 @@ def generate_vertical_clips(
     """
     clip_dir = os.path.join(CLIPS_DIR, job_id)
 
-    # Find first valid clip to detect facecam
-    first_clip = None
+    # Collect all valid clip paths
+    all_clip_paths = []
     for hp in hot_points:
         if hp.clip_filename:
             path = os.path.join(clip_dir, hp.clip_filename)
             if os.path.isfile(path):
-                first_clip = path
-                break
+                all_clip_paths.append(path)
 
-    if not first_clip:
+    if not all_clip_paths:
         logger.warning("No clips found for vertical generation")
         return
 
-    # Detect facecam once (static overlay)
+    # Detect facecam using multiple clips for robustness (overlay is static)
     logger.info("Detecting facecam position...")
     update_job(job_id, progress="Generation verticale : detection facecam...")
-    facecam = detect_facecam(first_clip)
+    facecam = detect_facecam(all_clip_paths[0], extra_clips=all_clip_paths[1:])
 
     if not facecam:
         logger.warning("No facecam detected, using fallback (bottom-right 25%)")
@@ -212,13 +241,16 @@ def generate_vertical_clips(
     def _process_one(item: tuple) -> tuple[HotPoint, str | None]:
         hp, clip_path, vertical_path, vertical_name = item
 
+        # Extract dominant color for subtitle styling
+        dominant = extract_dominant_color(clip_path)
+
         # Transcribe for subtitles
         _, _, words = transcribe_with_words(clip_path)
 
         ass_path = None
         if words:
             ass_path = vertical_path.replace(".mp4", ".ass")
-            generate_ass(words, ass_path, OUTPUT_WIDTH, OUTPUT_HEIGHT)
+            generate_ass(words, ass_path, OUTPUT_WIDTH, OUTPUT_HEIGHT, dominant)
 
         ok = generate_vertical_clip(clip_path, vertical_path, facecam, ass_path)
 

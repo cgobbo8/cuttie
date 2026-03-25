@@ -44,6 +44,7 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
 
         chat_messages: list[dict] = []
         audio_path: str | None = None
+        audio_features: list[dict] = []
         triage_transcripts: dict[int, tuple[str, float]] = {}
 
         # Steps 1-6: Download + Analysis + Triage (skip if resuming from later step)
@@ -117,7 +118,7 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
             update_job(job_id, status="CLIPPING", progress="Downloading video clips...", error=None)
             if hot_points is None:
                 raise RuntimeError("No hot points available for clipping")
-            extract_clips(job_id, url, hot_points, duration)
+            extract_clips(job_id, url, hot_points, duration, audio_features=audio_features)
 
         # Step 9: Vision + LLM full analysis (reuses triage transcripts)
         if not resume_from or resume_from in ("CLIPPING", "TRANSCRIBING", "LLM_ANALYSIS"):

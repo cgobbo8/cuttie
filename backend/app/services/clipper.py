@@ -1,14 +1,16 @@
 """Extract short video clips around hot points using yt-dlp + ffmpeg compression.
 
-Smart clip boundaries: instead of fixed ±30s, finds natural start points
-by looking for silence/low-energy moments before the peak.
-Clips are extracted in parallel (3 workers) for faster processing.
+Dynamic clip boundaries: uses the RMS energy curve to find natural IN/OUT points.
+- IN: scan backwards from peak to find a quiet moment (natural scene start)
+- OUT: extend forward while the streamer is still reacting (don't cut mid-dialogue)
 """
 
 import logging
 import os
 import subprocess
 from concurrent.futures import ThreadPoolExecutor, as_completed
+
+import numpy as np
 
 from app.models.schemas import HotPoint
 from app.services.db import update_hot_point_clip
@@ -19,56 +21,175 @@ CLIPS_DIR = "clips"
 MAX_CLIPS = 20
 MAX_CLIP_WORKERS = 3
 
-# Clip boundary parameters (inspired by Powder, KoalaVOD research)
-PRE_PEAK_WINDOW = 20   # seconds before peak (context/setup)
-POST_PEAK_WINDOW = 15  # seconds after peak (reaction)
-MIN_CLIP_DURATION = 30  # minimum clip duration
-MAX_CLIP_DURATION = 60  # maximum clip duration
+# Default boundaries (used as starting point for dynamic adjustment)
+PRE_PEAK_WINDOW = 20   # default seconds before peak
+POST_PEAK_WINDOW = 15  # default seconds after peak
+
+# Hard limits for dynamic extension
+MAX_PRE_PEAK = 25      # never start more than 25s before peak
+MAX_POST_PEAK = 25     # never extend more than 25s after peak
+MIN_CLIP_DURATION = 30
+MAX_CLIP_DURATION = 60
 CLIP_HALF_DURATION = 30  # fallback (exported for other modules)
 
 # Merge threshold: if two clips overlap or are within this gap, merge them
 MERGE_GAP_SEC = 10
+
+# RMS threshold: fraction above baseline to consider "active"
+# e.g., 0.3 means 30% above median RMS = still active
+ACTIVITY_THRESHOLD_FACTOR = 0.3
+
+# Number of consecutive quiet windows to confirm "calm" for OUT point
+CALM_CONFIRM_WINDOWS = 2
+
+
+def _build_rms_lookup(audio_features: list[dict] | None) -> tuple[np.ndarray, np.ndarray, float, float]:
+    """Build RMS arrays and compute baseline/threshold from audio features.
+
+    Returns (times, rms_values, baseline, activity_threshold).
+    """
+    if not audio_features:
+        return np.array([]), np.array([]), 0.0, 0.0
+
+    times = np.array([w["time"] for w in audio_features])
+    rms = np.array([w["rms"] for w in audio_features])
+
+    baseline = float(np.median(rms))
+    ceiling = float(np.percentile(rms, 85))
+    threshold = baseline + ACTIVITY_THRESHOLD_FACTOR * (ceiling - baseline)
+
+    return times, rms, baseline, threshold
+
+
+def _get_rms_at(time: float, rms_times: np.ndarray, rms_values: np.ndarray) -> float:
+    """Get RMS value at a given timestamp (nearest window)."""
+    if len(rms_times) == 0:
+        return 0.0
+    idx = np.argmin(np.abs(rms_times - time))
+    return float(rms_values[idx])
+
+
+def _find_dynamic_start(
+    peak: float,
+    rms_times: np.ndarray,
+    rms_values: np.ndarray,
+    threshold: float,
+    vod_duration: float,
+) -> float:
+    """Find a natural IN point by scanning backwards for a quiet moment.
+
+    Logic: from the default start (PRE_PEAK_WINDOW before peak), scan backwards.
+    If it's already quiet at default start, use it.
+    If it's active, look further back for a quiet spot (up to MAX_PRE_PEAK).
+    """
+    default_start = max(0, peak - PRE_PEAK_WINDOW)
+    earliest_start = max(0, peak - MAX_PRE_PEAK)
+
+    if len(rms_times) == 0:
+        return default_start
+
+    # Check if default start is already quiet
+    rms_at_default = _get_rms_at(default_start, rms_times, rms_values)
+    if rms_at_default < threshold:
+        return default_start
+
+    # Default start is in the middle of activity — scan backwards for quiet
+    hop = rms_times[1] - rms_times[0] if len(rms_times) > 1 else 2.5
+    t = default_start - hop
+    while t >= earliest_start:
+        rms_val = _get_rms_at(t, rms_times, rms_values)
+        if rms_val < threshold:
+            return max(0, t)
+        t -= hop
+
+    # No quiet spot found — use max pre-peak
+    return earliest_start
+
+
+def _find_dynamic_end(
+    peak: float,
+    rms_times: np.ndarray,
+    rms_values: np.ndarray,
+    threshold: float,
+    vod_duration: float,
+) -> float:
+    """Find a natural OUT point by extending while there's still activity.
+
+    Logic: from the default end (POST_PEAK_WINDOW after peak), check if still active.
+    If quiet, stop there. If still active (streamer reacting), extend until calm.
+    Requires CALM_CONFIRM_WINDOWS consecutive quiet windows to confirm end.
+    """
+    default_end = min(vod_duration, peak + POST_PEAK_WINDOW)
+    latest_end = min(vod_duration, peak + MAX_POST_PEAK)
+
+    if len(rms_times) == 0:
+        return default_end
+
+    # Check if default end is already quiet
+    rms_at_default = _get_rms_at(default_end, rms_times, rms_values)
+    if rms_at_default < threshold:
+        return default_end
+
+    # Still active at default end — extend until calm
+    hop = rms_times[1] - rms_times[0] if len(rms_times) > 1 else 2.5
+    calm_count = 0
+    t = default_end + hop
+    while t <= latest_end:
+        rms_val = _get_rms_at(t, rms_times, rms_values)
+        if rms_val < threshold:
+            calm_count += 1
+            if calm_count >= CALM_CONFIRM_WINDOWS:
+                return min(vod_duration, t)
+        else:
+            calm_count = 0
+        t += hop
+
+    # Hit max — stop here
+    return latest_end
 
 
 def _compute_clip_boundaries(
     hp: HotPoint,
     vod_duration: float,
     all_hot_points: list[HotPoint] | None = None,
+    rms_times: np.ndarray | None = None,
+    rms_values: np.ndarray | None = None,
+    rms_threshold: float = 0.0,
 ) -> tuple[float, float]:
-    """Compute smart clip start/end around a hot point.
+    """Compute dynamic clip start/end around a hot point.
 
-    Uses asymmetric boundaries: more context before (setup), less after (reaction).
-    If adjacent hot points are very close, extends to cover both.
+    Uses RMS energy to find natural IN/OUT points, then applies merge logic
+    for nearby hot points, and enforces min/max duration.
     """
     peak = hp.timestamp_seconds
 
-    # Start: 15s before peak for context
-    start = max(0, peak - PRE_PEAK_WINDOW)
+    # Step 1: Dynamic boundaries based on RMS
+    if rms_times is not None and len(rms_times) > 0:
+        start = _find_dynamic_start(peak, rms_times, rms_values, rms_threshold, vod_duration)
+        end = _find_dynamic_end(peak, rms_times, rms_values, rms_threshold, vod_duration)
+    else:
+        # Fallback to fixed boundaries
+        start = max(0, peak - PRE_PEAK_WINDOW)
+        end = min(vod_duration, peak + POST_PEAK_WINDOW)
 
-    # End: 12s after peak for reaction
-    end = min(vod_duration, peak + POST_PEAK_WINDOW)
-
-    # If there are nearby hot points within merge distance, extend
+    # Step 2: Merge nearby hot points
     if all_hot_points:
         for other in all_hot_points:
             if other is hp:
                 continue
             other_t = other.timestamp_seconds
-            # If another hot point is just after our end, extend to include it
             if end < other_t < end + MERGE_GAP_SEC:
                 end = min(vod_duration, other_t + POST_PEAK_WINDOW)
-            # If another hot point is just before our start, extend backwards
             if start - MERGE_GAP_SEC < other_t < start:
                 start = max(0, other_t - PRE_PEAK_WINDOW)
 
-    # Enforce min/max duration
+    # Step 3: Enforce min/max duration
     duration = end - start
     if duration < MIN_CLIP_DURATION:
         pad = (MIN_CLIP_DURATION - duration) / 2
         start = max(0, start - pad)
         end = min(vod_duration, end + pad)
     elif duration > MAX_CLIP_DURATION:
-        # Center on peak
         start = max(0, peak - MAX_CLIP_DURATION / 2)
         end = min(vod_duration, peak + MAX_CLIP_DURATION / 2)
 
@@ -83,9 +204,15 @@ def _extract_single_clip(
     vod_duration: float,
     clip_dir: str,
     all_hot_points: list[HotPoint] | None = None,
+    rms_times: np.ndarray | None = None,
+    rms_values: np.ndarray | None = None,
+    rms_threshold: float = 0.0,
 ) -> tuple[int, str | None]:
     """Extract and compress a single clip. Returns (rank, filename or None)."""
-    start, end = _compute_clip_boundaries(hp, vod_duration, all_hot_points)
+    start, end = _compute_clip_boundaries(
+        hp, vod_duration, all_hot_points,
+        rms_times, rms_values, rms_threshold,
+    )
     raw_file = os.path.join(clip_dir, f"raw_{rank:02d}.mp4")
     filename = f"clip_{rank:02d}.mp4"
     filepath = os.path.join(clip_dir, filename)
@@ -93,7 +220,6 @@ def _extract_single_clip(
     logger.info(f"Extracting clip {rank}: {_fmt_time(start)} - {_fmt_time(end)} ({end-start:.0f}s)")
 
     try:
-        # Step 1: Download raw segment
         subprocess.run(
             [
                 "yt-dlp",
@@ -114,7 +240,6 @@ def _extract_single_clip(
             logger.warning(f"Clip {rank}: raw file not created")
             return rank, None
 
-        # Step 2: Compress to 480p preview
         subprocess.run(
             [
                 "ffmpeg", "-y",
@@ -132,7 +257,6 @@ def _extract_single_clip(
             text=True,
         )
 
-        # Remove raw file
         if os.path.isfile(raw_file):
             os.remove(raw_file)
 
@@ -157,10 +281,17 @@ def extract_clips(
     url: str,
     hot_points: list[HotPoint],
     vod_duration: float,
+    audio_features: list[dict] | None = None,
 ) -> None:
-    """Download and compress video segments around each hot point (parallel)."""
+    """Download and compress video segments around each hot point (parallel).
+
+    If audio_features are provided, uses RMS for dynamic clip boundaries.
+    """
     clip_dir = os.path.join(CLIPS_DIR, job_id)
     os.makedirs(clip_dir, exist_ok=True)
+
+    # Build RMS lookup for dynamic boundaries
+    rms_times, rms_values, _, rms_threshold = _build_rms_lookup(audio_features)
 
     to_clip = hot_points[:MAX_CLIPS]
 
@@ -170,6 +301,7 @@ def extract_clips(
             rank = i + 1
             future = executor.submit(
                 _extract_single_clip, job_id, url, hp, rank, vod_duration, clip_dir, to_clip,
+                rms_times, rms_values, rms_threshold,
             )
             futures[future] = (rank, hp)
 

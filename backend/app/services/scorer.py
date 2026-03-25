@@ -15,7 +15,8 @@ from scipy.signal import find_peaks
 
 from app.models.schemas import HotPoint, SignalBreakdown
 
-# Default weights for composite score
+# Default weights for composite score (base signals, total = 1.0)
+# Bonus signals (agreement, classification, sentiment) are multiplicative, not additive
 WEIGHTS = {
     "rms": 0.18,
     "chat_speed": 0.18,
@@ -148,17 +149,20 @@ def compute_scores(
     for signal_name, weight in WEIGHTS.items():
         score += weight * norm[signal_name]
 
-    # Signal agreement bonus: when audio AND chat both spike, boost score
+    # ── Multiplicative modifiers (boost peaks, don't inflate baseline) ──
+
+    # Signal agreement: when audio AND chat both spike, multiply score
     audio_combined = (norm["rms"] + norm["flux"]) / 2
     chat_combined = norm["chat_speed"]
     agreement = audio_combined * chat_combined  # high only when both high
-    score += 0.15 * _normalize(agreement)
+    # Boost up to 1.3x when both signals agree
+    score *= 1.0 + 0.3 * _normalize(agreement)
 
-    # Semantic sentiment bonus (additive, never penalizes)
+    # Semantic sentiment: boost when chat shows strong sentiment
     norm_sentiment = _normalize(sentiment_intensity)
     has_sentiment = np.any(sentiment_intensity > 0.05)
     if has_sentiment:
-        score += 0.10 * norm_sentiment
+        score *= 1.0 + 0.15 * norm_sentiment
 
     # Audio classification signals (PANNs CNN14)
     has_classification = np.any(speech_presence > 0.05)
@@ -168,16 +172,16 @@ def compute_scores(
         norm_game = _normalize(game_audio)
 
         # Boost: loud + streamer speaking = streamer is reacting
-        # speech_presence modulates RMS: high RMS + high speech = excited voice
         voice_energy = norm_speech * norm["rms"]
-        score += 0.10 * _normalize(voice_energy)
+        score *= 1.0 + 0.15 * _normalize(voice_energy)
 
         # Strong boost: vocal excitement (laughter, screaming) — rare but gold
-        score += 0.12 * norm_excite
+        # Additive here is OK because it's genuinely rare and should spike
+        score += 0.10 * norm_excite
 
         # Dampen: loud game audio without speech = just game noise
         game_only = np.clip(norm_game - norm_speech, 0, 1)
-        score -= 0.05 * game_only
+        score *= 1.0 - 0.15 * game_only
 
     # Smooth score curve for cleaner peak detection
     score_smooth = gaussian_filter1d(score, sigma=SMOOTH_SIGMA)

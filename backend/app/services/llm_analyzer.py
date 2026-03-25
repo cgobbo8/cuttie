@@ -181,13 +181,15 @@ Note sur le chat : ce streamer a une petite communauté. Le chat mélange des vi
 **Score audio:** {score:.0%}
 **Debit:** {speech_rate:.1f} mots/s
 
-**Transcription:**
+**Transcription :**
 {transcript if transcript else "(silence / pas de parole)"}
 {moments_text}{chat_section}
 
+Hiérarchie des sources : en cas de contradiction entre les sources, la transcription (ce que dit le streamer) prime sur les visuels pour déterminer l'émotion et la catégorie. Les visuels servent à comprendre le contexte gameplay.
+
 Retourne un JSON:
 - "category": parmi "fun", "rage", "clutch", "skill", "fail", "emotional", "reaction", "storytelling", "awkward", "hype"
-- "virality_score": 0 à 1 (sois exigeant : 0.8+ = gold, 0.5+ = bon, <0.3 = bof). Indicateurs forts de viralité : chat qui s'emballe, vie basse + clutch, kill streaks, gros dégâts, loot rare, réaction intense du streamer.
+- "virality_score": 0 à 1 (sois exigeant : 0.8+ = gold, 0.5+ = bon, <0.3 = bof). Les réactions intenses du streamer sont virales, qu'elles soient positives ou négatives.
 - "summary": UNE SEULE phrase punch de 10-15 mots max, style titre de clip YouTube/TikTok. Doit donner envie de cliquer. En français.
 - "is_clipable": true si compréhensible seul
 - "narrative": récit fluide du clip (3-5 phrases), ce qui se passe seconde par seconde en combinant audio + visuels + réactions chat{", en mentionnant le gameplay de " + vod_game if vod_game else ""}. En français.

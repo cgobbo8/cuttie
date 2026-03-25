@@ -93,6 +93,9 @@
         vodGame={results.vod_game || ""}
         vodDuration={results.vod_duration_seconds || 0}
         jobId={results.job_id}
+        streamer={results.streamer || ""}
+        viewCount={results.view_count || 0}
+        streamDate={results.stream_date || ""}
       />
 
     {:else if phase === "error"}

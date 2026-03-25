@@ -108,21 +108,36 @@ def _analyze_batch(
 
     game_ctx = f' (jeu: {vod_game})' if vod_game else ''
 
+    hud_instruction = ""
+    if vod_game:
+        hud_instruction = f"""
+
+**Analyse du HUD / interface de jeu :**
+Porte une attention particulière aux éléments du HUD et de l'interface de {vod_game} visibles à l'écran :
+- Barres de vie (streamer et ennemis) : vie basse = moment de tension
+- Kill streaks, combos, compteurs de dégâts importants
+- Nombre d'ennemis à l'écran, encerclement
+- Notifications de victoire, défaite, achievement, loot rare
+- Score, classement, timer critique
+- Tout indicateur visuel de moment intense (écran rouge, effets spéciaux, etc.)
+Ces éléments de HUD sont des signaux forts pour identifier les moments clippables."""
+
     prompt = f"""Analyse ce clip de stream Twitch "{vod_title}"{game_ctx}.
 
 Chaque image est une capture du clip avec son timestamp exact en secondes. Les images sont espacées de ~2s.
 
 **Transcription :**
 {transcript if transcript else "(silence)"}
+{hud_instruction}
 
-Identifie 3-6 **moments clés** où il se passe quelque chose de visuellement distinct (changement de scène, action, réaction du streamer, événement in-game).
+Identifie 3-6 **moments clés** où il se passe quelque chose de visuellement distinct (changement de scène, action, réaction du streamer, événement in-game, changement notable dans le HUD).
 
 IMPORTANT pour "time": utilise EXACTEMENT un des timestamps affichés sur les images. Ne pas inventer de timestamp intermédiaire.
 
 Pour chaque moment:
 - "time": float, un timestamp EXACT d'une des images fournies
 - "label": titre court (5-8 mots), en français{", référençant le gameplay de " + vod_game if vod_game else ""}
-- "description": 1 phrase, ce qui se passe visuellement
+- "description": 1 phrase, ce qui se passe visuellement (inclure les infos du HUD si pertinentes : vie basse, gros dégâts, kill, loot, etc.)
 
 JSON array uniquement."""
 

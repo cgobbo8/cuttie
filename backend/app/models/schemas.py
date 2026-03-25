@@ -66,3 +66,6 @@ class JobResponse(BaseModel):
     vod_title: str | None = None
     vod_game: str | None = None
     vod_duration_seconds: float | None = None
+    streamer: str | None = None
+    view_count: int | None = None
+    stream_date: str | None = None

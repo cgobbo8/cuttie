@@ -90,17 +90,51 @@ def transcribe_clip(clip_path: str) -> tuple[str, float, list[float]]:
             os.remove(audio_path)
 
 
+def _extract_chat_for_clip(
+    chat_messages: list[dict],
+    clip_start: float,
+    clip_end: float,
+    max_messages: int = 80,
+) -> str:
+    """Extract chat messages within a clip's time window, formatted for LLM context."""
+    relevant = [
+        m for m in chat_messages
+        if clip_start <= m["timestamp"] <= clip_end
+    ]
+    if not relevant:
+        return ""
+
+    # If too many messages, sample evenly
+    if len(relevant) > max_messages:
+        step = len(relevant) / max_messages
+        relevant = [relevant[int(i * step)] for i in range(max_messages)]
+
+    lines = []
+    for m in relevant:
+        offset = m["timestamp"] - clip_start
+        lines.append(f"[{offset:.0f}s] {m['author']}: {m['text']}")
+
+    return "\n".join(lines)
+
+
 def synthesize_analysis(
     transcript: str,
     speech_rate: float,
     key_moments: list[dict],
     score: float,
     timestamp_display: str,
-    vod_title: str,
-    vod_game: str,
+    vod_meta: dict,
+    chat_context: str = "",
 ) -> LlmAnalysis:
     """Final synthesis: combine transcript + vision moments into full analysis."""
     client = _get_client()
+
+    vod_title = vod_meta.get("title", "")
+    vod_game = vod_meta.get("game", "")
+    streamer = vod_meta.get("streamer", "")
+    view_count = vod_meta.get("view_count", 0)
+    stream_date = vod_meta.get("stream_date", "")
+    vod_duration = vod_meta.get("duration", 0)
 
     moments_text = ""
     if key_moments:
@@ -108,24 +142,48 @@ def synthesize_analysis(
         for m in key_moments:
             moments_text += f"- [{m['time']:.1f}s] {m['label']}: {m.get('description', '')}\n"
 
-    game_ctx = f"\n**Jeu:** {vod_game}" if vod_game else ""
+    # Build VOD identity card
+    duration_h = int(vod_duration // 3600)
+    duration_m = int((vod_duration % 3600) // 60)
+    identity_lines = [f"**Stream:** {vod_title}"]
+    if streamer:
+        identity_lines.append(f"**Streamer:** {streamer}")
+    if vod_game:
+        identity_lines.append(f"**Jeu:** {vod_game}")
+    if stream_date:
+        identity_lines.append(f"**Date:** {stream_date}")
+    if vod_duration:
+        identity_lines.append(f"**Durée du stream:** {duration_h}h{duration_m:02d}")
+    if view_count:
+        identity_lines.append(f"**Vues:** {view_count}")
+    identity_card = "\n".join(identity_lines)
+
+    chat_section = ""
+    if chat_context:
+        chat_section = f"""
+
+**Chat Twitch (messages des viewers pendant le clip) :**
+{chat_context}
+
+Note sur le chat : ce streamer a une petite communauté. Le chat mélange des viewers classiques et des amis proches du streamer qui font parfois des private jokes. Utilise le chat comme indicateur de réaction (emotes, exclamations, questions) mais ne te fie pas aveuglément aux messages — distingue les réactions spontanées des conversations entre potes."""
 
     prompt = f"""Tu es un expert en contenu viral pour Twitch/YouTube. Analyse cet extrait de stream.
 
-**Stream:** {vod_title}{game_ctx}
+{identity_card}
 **Timestamp:** {timestamp_display}
 **Score audio:** {score:.0%}
 **Debit:** {speech_rate:.1f} mots/s
 
 **Transcription:**
 {transcript if transcript else "(silence / pas de parole)"}
-{moments_text}
+{moments_text}{chat_section}
+
 Retourne un JSON:
 - "category": parmi "fun", "rage", "clutch", "skill", "fail", "emotional", "reaction", "storytelling", "awkward", "hype"
-- "virality_score": 0 à 1 (sois exigeant : 0.8+ = gold, 0.5+ = bon, <0.3 = bof)
+- "virality_score": 0 à 1 (sois exigeant : 0.8+ = gold, 0.5+ = bon, <0.3 = bof). Indicateurs forts de viralité : chat qui s'emballe, vie basse + clutch, kill streaks, gros dégâts, loot rare, réaction intense du streamer.
 - "summary": UNE SEULE phrase punch de 10-15 mots max, style titre de clip YouTube/TikTok. Doit donner envie de cliquer. En français.
 - "is_clipable": true si compréhensible seul
-- "narrative": récit fluide du clip (3-5 phrases), ce qui se passe seconde par seconde en combinant audio + visuels{", en mentionnant le gameplay de " + vod_game if vod_game else ""}. En français.
+- "narrative": récit fluide du clip (3-5 phrases), ce qui se passe seconde par seconde en combinant audio + visuels + réactions chat{", en mentionnant le gameplay de " + vod_game if vod_game else ""}. En français.
 
 JSON uniquement, pas de markdown."""
 
@@ -167,11 +225,13 @@ def analyze_single_clip(
     job_id: str,
     clip_index: int,
     hp: HotPoint,
-    vod_title: str,
-    vod_game: str,
+    vod_meta: dict,
+    chat_messages: list[dict] | None = None,
 ) -> None:
     """Full analysis pipeline for a single clip."""
     clip_path = os.path.join(CLIPS_DIR, job_id, hp.clip_filename)
+    vod_title = vod_meta.get("title", "")
+    vod_game = vod_meta.get("game", "")
 
     # Step 1: Whisper transcription
     logger.info(f"  [1/4] Whisper transcription...")
@@ -189,6 +249,16 @@ def analyze_single_clip(
     else:
         logger.info(f"  [3/4] Vision skipped (no frames)")
 
+    # Extract chat messages for this clip's time window
+    chat_context = ""
+    if chat_messages:
+        from app.services.clipper import CLIP_HALF_DURATION
+        clip_start = max(0, hp.timestamp_seconds - CLIP_HALF_DURATION)
+        clip_end = hp.timestamp_seconds + CLIP_HALF_DURATION
+        chat_context = _extract_chat_for_clip(chat_messages, clip_start, clip_end)
+        if chat_context:
+            logger.info(f"  Chat context: {chat_context.count(chr(10)) + 1} messages")
+
     # Step 4: Final synthesis
     logger.info(f"  [4/4] Synthesis...")
     llm = synthesize_analysis(
@@ -197,8 +267,8 @@ def analyze_single_clip(
         key_moments=key_moments,
         score=hp.score,
         timestamp_display=hp.timestamp_display,
-        vod_title=vod_title,
-        vod_game=vod_game,
+        vod_meta=vod_meta,
+        chat_context=chat_context,
     )
 
     hp.llm = llm
@@ -215,9 +285,9 @@ def analyze_single_clip(
 def analyze_hot_points(
     job_id: str,
     hot_points: list[HotPoint],
-    vod_title: str,
-    vod_game: str = "",
+    vod_meta: dict,
     max_analyze: int = 20,
+    chat_messages: list[dict] | None = None,
 ) -> None:
     """Run full analysis on hot points with clips, then re-rank."""
     analyzed = 0
@@ -237,7 +307,7 @@ def analyze_hot_points(
         logger.info(f"Analyzing clip {analyzed}/{min(max_analyze, len(hot_points))}: {hp.timestamp_display}")
 
         try:
-            analyze_single_clip(job_id, i + 1, hp, vod_title, vod_game)
+            analyze_single_clip(job_id, i + 1, hp, vod_meta, chat_messages=chat_messages)
         except Exception as e:
             logger.error(f"Analysis failed for clip at {hp.timestamp_display}: {e}")
 

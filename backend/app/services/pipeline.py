@@ -35,6 +35,11 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
         duration = job.vod_duration_seconds if job else 0
         vod_title = job.vod_title if job else ""
         vod_game = job.vod_game if job else ""
+        streamer = job.streamer if job else ""
+        view_count = job.view_count if job else 0
+        stream_date = job.stream_date if job else ""
+
+        chat_messages: list[dict] = []
 
         # Steps 1-5: Download + Analysis (skip if resuming from later step)
         if not resume_from or resume_from in ("DOWNLOADING_AUDIO", "DOWNLOADING_CHAT", "ANALYZING_AUDIO", "ANALYZING_CHAT", "SCORING"):
@@ -44,16 +49,23 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
             duration = metadata.get("duration", 0)
             vod_title = metadata.get("title", "")
             vod_game = metadata.get("game", "")
+            streamer = metadata.get("streamer", "")
+            view_count = metadata.get("view_count", 0)
+            stream_date = metadata.get("stream_date", "")
             update_job(
                 job_id,
                 vod_title=vod_title,
                 vod_game=vod_game,
                 vod_duration_seconds=duration,
+                streamer=streamer,
+                view_count=view_count,
+                stream_date=stream_date,
             )
 
             # 2. Download chat
             update_job(job_id, status="DOWNLOADING_CHAT", progress="Downloading chat messages...")
-            messages = download_chat(url)
+            chat_messages = download_chat(url)
+            logger.info(f"Downloaded {len(chat_messages)} chat messages")
 
             # 3. Analyze audio
             update_job(job_id, status="ANALYZING_AUDIO", progress="Analyzing audio signals...")
@@ -61,7 +73,7 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
 
             # 4. Analyze chat
             update_job(job_id, status="ANALYZING_CHAT", progress="Analyzing chat activity...")
-            chat_features = analyze_chat(messages, duration)
+            chat_features = analyze_chat(chat_messages, duration)
 
             # 5. Score and find peaks
             update_job(job_id, status="SCORING", progress="Computing scores and finding hot points...")
@@ -87,7 +99,15 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
             if resume_from:
                 _reattach_clips(job_id, hot_points)
 
-            analyze_hot_points(job_id, hot_points, vod_title or "", vod_game or "")
+            vod_meta = {
+                "title": vod_title or "",
+                "game": vod_game or "",
+                "streamer": streamer or "",
+                "view_count": view_count or 0,
+                "stream_date": stream_date or "",
+                "duration": duration,
+            }
+            analyze_hot_points(job_id, hot_points, vod_meta, chat_messages=chat_messages)
 
         # 9. Done
         update_job(job_id, status="DONE", progress="Analysis complete!", error=None)

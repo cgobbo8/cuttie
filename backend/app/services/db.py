@@ -55,6 +55,9 @@ def init_db() -> None:
         ("hot_points", "llm_json", "TEXT"),
         ("hot_points", "final_score", "REAL"),
         ("jobs", "vod_game", "TEXT"),
+        ("jobs", "streamer", "TEXT"),
+        ("jobs", "view_count", "INTEGER"),
+        ("jobs", "stream_date", "TEXT"),
     ]
     for table, col, col_type in migrations:
         try:
@@ -161,6 +164,7 @@ def get_job(job_id: str) -> JobResponse | None:
                 )
             )
 
+    keys = row.keys()
     return JobResponse(
         job_id=row["job_id"],
         status=JobStatus(row["status"]),
@@ -168,8 +172,11 @@ def get_job(job_id: str) -> JobResponse | None:
         hot_points=hot_points,
         error=row["error"],
         vod_title=row["vod_title"],
-        vod_game=row["vod_game"] if "vod_game" in row.keys() else None,
+        vod_game=row["vod_game"] if "vod_game" in keys else None,
         vod_duration_seconds=row["vod_duration_seconds"],
+        streamer=row["streamer"] if "streamer" in keys else None,
+        view_count=row["view_count"] if "view_count" in keys else None,
+        stream_date=row["stream_date"] if "stream_date" in keys else None,
     )
 
 

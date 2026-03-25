@@ -58,6 +58,9 @@ export interface JobResponse {
   vod_title: string | null;
   vod_game: string | null;
   vod_duration_seconds: number | null;
+  streamer: string | null;
+  view_count: number | null;
+  stream_date: string | null;
 }
 
 export interface JobSummary {

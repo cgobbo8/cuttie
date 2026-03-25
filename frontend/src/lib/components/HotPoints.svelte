@@ -7,12 +7,18 @@
     vodGame,
     vodDuration,
     jobId,
+    streamer = "",
+    viewCount = 0,
+    streamDate = "",
   }: {
     hotPoints: HotPoint[];
     vodTitle: string;
     vodGame: string;
     vodDuration: number;
     jobId: string;
+    streamer?: string;
+    viewCount?: number;
+    streamDate?: string;
   } = $props();
 
   interface SignalInfo {
@@ -133,11 +139,23 @@
   <!-- Header -->
   <div class="mb-8 text-center">
     <h2 class="text-2xl font-bold text-white mb-2">{vodTitle}</h2>
-    <p class="text-zinc-400">
-      {hotPoints.length} moments forts detectes sur {formatDuration(vodDuration)}
-      {#if vodGame}
-        <span class="text-zinc-500">— {vodGame}</span>
+    <div class="flex flex-wrap items-center justify-center gap-3 text-sm text-zinc-400 mb-1">
+      {#if streamer}
+        <span class="text-purple-400 font-medium">{streamer}</span>
       {/if}
+      {#if vodGame}
+        <span>{vodGame}</span>
+      {/if}
+      {#if streamDate}
+        <span class="text-zinc-500">{streamDate}</span>
+      {/if}
+      <span>{formatDuration(vodDuration)}</span>
+      {#if viewCount}
+        <span class="text-zinc-500">{viewCount} vues</span>
+      {/if}
+    </div>
+    <p class="text-zinc-500 text-sm">
+      {hotPoints.length} moments forts detectes
     </p>
   </div>
 

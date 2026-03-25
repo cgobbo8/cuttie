@@ -1,0 +1,33 @@
+# Python
+backend/.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+
+# Backend data
+backend/data/
+backend/clips/
+backend/cuttie.db
+backend/screenshots/
+
+# Frontend
+frontend/node_modules/
+frontend/.svelte-kit/
+frontend/build/
+frontend/dist/
+
+# Environment
+.env
+.env.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+.playwright-mcp/

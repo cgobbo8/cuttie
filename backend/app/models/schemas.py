@@ -30,6 +30,12 @@ class SignalBreakdown(BaseModel):
     chat_speed: float = 0.0
 
 
+class KeyMoment(BaseModel):
+    time: float  # seconds into the clip
+    label: str  # short title (5-8 words)
+    description: str = ""  # what happens visually + contextually
+
+
 class LlmAnalysis(BaseModel):
     transcript: str = ""
     speech_rate: float = 0.0  # words per second
@@ -37,6 +43,8 @@ class LlmAnalysis(BaseModel):
     virality_score: float = 0.0  # 0-1, LLM's assessment of viral potential
     summary: str = ""  # Short description of what happens
     is_clipable: bool = True  # Can this stand alone as a clip?
+    key_moments: list[KeyMoment] = []  # Vision-based timeline of key moments
+    narrative: str = ""  # Full narrative combining transcript + vision
 
 
 class HotPoint(BaseModel):

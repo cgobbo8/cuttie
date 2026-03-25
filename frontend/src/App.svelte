@@ -3,7 +3,7 @@
   import JobStatus from "./lib/components/JobStatus.svelte";
   import HotPoints from "./lib/components/HotPoints.svelte";
   import JobList from "./lib/components/JobList.svelte";
-  import { getJobStatus, type JobResponse } from "./lib/api";
+  import { getJobStatus, retryJob, type JobResponse } from "./lib/api";
 
   let phase = $state<"input" | "processing" | "results" | "error">("input");
   let jobId = $state("");
@@ -33,6 +33,16 @@
       phase = job.status === "DONE" ? "results" : "error";
     } catch {
       // ignore
+    }
+  }
+
+  async function onRetryJob(id: string) {
+    try {
+      await retryJob(id);
+      jobId = id;
+      phase = "processing";
+    } catch (e: any) {
+      alert(e.message);
     }
   }
 </script>
@@ -70,7 +80,7 @@
 
       <!-- Past analyses -->
       <div class="mt-12 max-w-2xl mx-auto">
-        <JobList onSelect={onSelectJob} />
+        <JobList onSelect={onSelectJob} onRetry={onRetryJob} />
       </div>
 
     {:else if phase === "processing"}
@@ -89,12 +99,29 @@
         <p class="text-red-400 text-lg mb-4">
           {results?.error || "Une erreur est survenue"}
         </p>
-        <button
-          onclick={onReset}
-          class="px-6 py-3 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg transition-colors"
-        >
-          Reessayer
-        </button>
+        <div class="flex gap-3 justify-center">
+          <button
+            onclick={async () => {
+              if (!results) return;
+              try {
+                await retryJob(results.job_id);
+                jobId = results.job_id;
+                phase = "processing";
+              } catch (e: any) {
+                alert(e.message);
+              }
+            }}
+            class="px-6 py-3 bg-purple-600 hover:bg-purple-500 text-white rounded-lg transition-colors"
+          >
+            Reprendre l'analyse
+          </button>
+          <button
+            onclick={onReset}
+            class="px-6 py-3 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg transition-colors"
+          >
+            Nouvelle analyse
+          </button>
+        </div>
       </div>
     {/if}
   </main>

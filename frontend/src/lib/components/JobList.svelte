@@ -1,7 +1,7 @@
 <script lang="ts">
   import { listJobs, type JobSummary } from "../api";
 
-  let { onSelect }: { onSelect: (jobId: string) => void } = $props();
+  let { onSelect, onRetry }: { onSelect: (jobId: string) => void; onRetry?: (jobId: string) => void } = $props();
 
   let jobs = $state<JobSummary[]>([]);
   let loading = $state(true);
@@ -56,7 +56,7 @@
       <button
         class="w-full text-left p-3 rounded-lg bg-zinc-800/30 border border-zinc-700/30 hover:border-purple-500/30 transition-colors"
         onclick={() => onSelect(job.job_id)}
-        disabled={job.status !== "DONE"}
+        disabled={job.status !== "DONE" && job.status !== "ERROR"}
       >
         <div class="flex items-center justify-between">
           <div class="min-w-0 flex-1">
@@ -70,9 +70,18 @@
               {/if}
             </p>
           </div>
-          <span class="text-xs ml-3 {STATUS_COLORS[job.status] || 'text-zinc-500'}">
-            {job.status === "DONE" ? "Voir" : job.status}
-          </span>
+          {#if job.status === "ERROR" && onRetry}
+            <button
+              class="text-xs ml-3 text-orange-400 hover:text-orange-300 cursor-pointer"
+              onclick={(e: MouseEvent) => { e.stopPropagation(); onRetry?.(job.job_id); }}
+            >
+              Reprendre
+            </button>
+          {:else}
+            <span class="text-xs ml-3 {STATUS_COLORS[job.status] || 'text-zinc-500'}">
+              {job.status === "DONE" ? "Voir" : job.status}
+            </span>
+          {/if}
         </div>
       </button>
     {/each}

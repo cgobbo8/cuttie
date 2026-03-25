@@ -98,6 +98,15 @@ export async function listJobs(): Promise<JobSummary[]> {
   return res.json();
 }
 
+export async function retryJob(jobId: string): Promise<{ job_id: string; resume_from: string | null }> {
+  const res = await fetch(`${BASE}/jobs/${jobId}/retry`, { method: "POST" });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: "Retry failed" }));
+    throw new Error(err.detail || "Retry failed");
+  }
+  return res.json();
+}
+
 export function clipUrl(jobId: string, filename: string): string {
   return `${BASE}/clips/${jobId}/${filename}`;
 }

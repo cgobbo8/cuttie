@@ -14,12 +14,14 @@ from app.services.downloader import download_audio, download_chat
 from app.services.llm_analyzer import analyze_hot_points
 from app.services.scorer import compute_scores
 from app.services.triage import run_triage
+from app.services.vertical_clipper import generate_vertical_clips
 
 logger = logging.getLogger(__name__)
 
 # Steps that can be resumed from (in order)
 RESUMABLE_FROM = {
     "CLIPPING",
+    "VERTICAL",
     "TRANSCRIBING",
     "LLM_ANALYSIS",
 }
@@ -120,8 +122,17 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
                 raise RuntimeError("No hot points available for clipping")
             extract_clips(job_id, url, hot_points, duration, audio_features=audio_features)
 
-        # Step 9: Vision + LLM full analysis (reuses triage transcripts)
-        if not resume_from or resume_from in ("CLIPPING", "TRANSCRIBING", "LLM_ANALYSIS"):
+        # Step 9: Vertical clips (facecam + game + subtitles)
+        if not resume_from or resume_from in ("CLIPPING", "VERTICAL"):
+            update_job(job_id, status="VERTICAL", progress="Generation verticale...", error=None)
+            if hot_points is None:
+                raise RuntimeError("No hot points available for vertical generation")
+            if resume_from:
+                _reattach_clips(job_id, hot_points)
+            generate_vertical_clips(job_id, hot_points)
+
+        # Step 10: Vision + LLM full analysis (reuses triage transcripts)
+        if not resume_from or resume_from in ("CLIPPING", "VERTICAL", "TRANSCRIBING", "LLM_ANALYSIS"):
             update_job(job_id, status="LLM_ANALYSIS", progress="Analyse IA des clips (vision + synthese)...", error=None)
             if hot_points is None:
                 raise RuntimeError("No hot points available for analysis")

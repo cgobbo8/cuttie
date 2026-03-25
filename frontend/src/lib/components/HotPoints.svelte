@@ -77,6 +77,7 @@
   let expandedClip = $state<number | null>(null);
   let videoElements: Record<number, HTMLVideoElement> = {};
   let activeMoment = $state<Record<number, number | null>>({});
+  let showVertical = $state<Record<number, boolean>>({});
 
   function formatDuration(seconds: number): string {
     const h = Math.floor(seconds / 3600);
@@ -233,35 +234,65 @@
         <!-- Expanded detail view -->
         {#if expandedClip === i}
           <div class="border-t border-zinc-700/50">
-            <!-- Video player with timeline markers -->
+            <!-- Video player with toggle raw/vertical -->
             {#if point.clip_filename}
               <div class="p-4 bg-black/30">
-                <video
-                  bind:this={videoElements[i]}
-                  controls
-                  class="w-full rounded-lg max-h-[400px]"
-                  src={clipUrl(jobId, point.clip_filename)}
-                >
-                  <track kind="captions" />
-                </video>
-
-                <!-- Key moments timeline (goto buttons) -->
-                {#if moments.length > 0}
-                  <div class="mt-3 flex flex-wrap gap-2">
-                    {#each moments as moment, mi}
-                      <button
-                        class="text-xs px-3 py-1.5 rounded-lg transition-colors cursor-pointer
-                          {activeMoment[i] === mi
-                            ? 'bg-purple-500/30 text-purple-300 border border-purple-500/50'
-                            : 'bg-zinc-700/40 text-zinc-300 border border-zinc-600/30 hover:bg-zinc-700/60 hover:text-white'}"
-                        onclick={() => seekTo(i, moment.time, mi)}
-                        title={moment.description}
-                      >
-                        <span class="font-mono text-zinc-500 mr-1">{formatTime(moment.time)}</span>
-                        {moment.label}
-                      </button>
-                    {/each}
+                <!-- Toggle buttons -->
+                {#if point.vertical_filename}
+                  <div class="flex gap-2 mb-3">
+                    <button
+                      class="text-xs px-3 py-1.5 rounded-lg transition-colors cursor-pointer {!showVertical[i] ? 'bg-purple-500/30 text-purple-300 border border-purple-500/50' : 'bg-zinc-700/40 text-zinc-400 border border-zinc-600/30 hover:text-white'}"
+                      onclick={() => showVertical[i] = false}
+                    >
+                      Clip brut (16:9)
+                    </button>
+                    <button
+                      class="text-xs px-3 py-1.5 rounded-lg transition-colors cursor-pointer {showVertical[i] ? 'bg-purple-500/30 text-purple-300 border border-purple-500/50' : 'bg-zinc-700/40 text-zinc-400 border border-zinc-600/30 hover:text-white'}"
+                      onclick={() => showVertical[i] = true}
+                    >
+                      Vertical (9:16)
+                    </button>
                   </div>
+                {/if}
+
+                {#if showVertical[i] && point.vertical_filename}
+                  <div class="flex justify-center">
+                    <video
+                      controls
+                      class="rounded-lg max-h-[500px]"
+                      src={clipUrl(jobId, point.vertical_filename)}
+                    >
+                      <track kind="captions" />
+                    </video>
+                  </div>
+                {:else}
+                  <video
+                    bind:this={videoElements[i]}
+                    controls
+                    class="w-full rounded-lg max-h-[400px]"
+                    src={clipUrl(jobId, point.clip_filename)}
+                  >
+                    <track kind="captions" />
+                  </video>
+
+                  <!-- Key moments timeline (goto buttons) -->
+                  {#if moments.length > 0}
+                    <div class="mt-3 flex flex-wrap gap-2">
+                      {#each moments as moment, mi}
+                        <button
+                          class="text-xs px-3 py-1.5 rounded-lg transition-colors cursor-pointer
+                            {activeMoment[i] === mi
+                              ? 'bg-purple-500/30 text-purple-300 border border-purple-500/50'
+                              : 'bg-zinc-700/40 text-zinc-300 border border-zinc-600/30 hover:bg-zinc-700/60 hover:text-white'}"
+                          onclick={() => seekTo(i, moment.time, mi)}
+                          title={moment.description}
+                        >
+                          <span class="font-mono text-zinc-500 mr-1">{formatTime(moment.time)}</span>
+                          {moment.label}
+                        </button>
+                      {/each}
+                    </div>
+                  {/if}
                 {/if}
               </div>
             {/if}

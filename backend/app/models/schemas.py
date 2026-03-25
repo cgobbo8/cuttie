@@ -12,6 +12,7 @@ class JobStatus(str, Enum):
     SCORING = "SCORING"
     TRIAGE = "TRIAGE"
     CLIPPING = "CLIPPING"
+    VERTICAL = "VERTICAL"
     TRANSCRIBING = "TRANSCRIBING"
     LLM_ANALYSIS = "LLM_ANALYSIS"
     DONE = "DONE"
@@ -56,6 +57,7 @@ class HotPoint(BaseModel):
     signals: SignalBreakdown
     chat_mood: str = ""  # pre-tag from chat sentiment: "hype", "fun", "rip", or ""
     clip_filename: str | None = None
+    vertical_filename: str | None = None
     llm: LlmAnalysis | None = None
 
 

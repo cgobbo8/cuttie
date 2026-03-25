@@ -33,6 +33,7 @@ export interface HotPoint {
   final_score: number | null;
   signals: SignalBreakdown;
   clip_filename: string | null;
+  vertical_filename: string | null;
   llm: LlmAnalysis | null;
 }
 
@@ -45,6 +46,7 @@ export type JobStatus =
   | "SCORING"
   | "TRIAGE"
   | "CLIPPING"
+  | "VERTICAL"
   | "TRANSCRIBING"
   | "LLM_ANALYSIS"
   | "DONE"

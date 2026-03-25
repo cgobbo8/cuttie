@@ -125,6 +125,7 @@ def synthesize_analysis(
     timestamp_display: str,
     vod_meta: dict,
     chat_context: str = "",
+    chat_mood: str = "",
 ) -> LlmAnalysis:
     """Final synthesis: combine transcript + vision moments into full analysis."""
     client = _get_client()
@@ -156,6 +157,12 @@ def synthesize_analysis(
         identity_lines.append(f"**Durée du stream:** {duration_h}h{duration_m:02d}")
     if view_count:
         identity_lines.append(f"**Vues:** {view_count}")
+
+    # Add chat mood pre-tag if available
+    mood_labels = {"hype": "Hype/Skill (PogChamp, GG...)", "fun": "Humour/Fail (KEKW, LUL...)", "rip": "Mort/Sadness (F, RIP...)"}
+    if chat_mood and chat_mood in mood_labels:
+        identity_lines.append(f"**Mood chat détecté:** {mood_labels[chat_mood]}")
+
     identity_card = "\n".join(identity_lines)
 
     chat_section = ""
@@ -269,6 +276,7 @@ def analyze_single_clip(
         timestamp_display=hp.timestamp_display,
         vod_meta=vod_meta,
         chat_context=chat_context,
+        chat_mood=hp.chat_mood,
     )
 
     hp.llm = llm
@@ -339,4 +347,4 @@ def analyze_hot_points(
 
     # Persist re-ranked hot points
     save_hot_points(job_id, hot_points)
-    logger.info(f"Analysis complete: {analyzed} clips analyzed, re-ranked")
+    logger.info(f"Analysis complete: {total} clips analyzed, re-ranked")

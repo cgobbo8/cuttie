@@ -53,6 +53,7 @@ class HotPoint(BaseModel):
     score: float  # heuristic score from audio/chat analysis
     final_score: float | None = None  # blended score after LLM (0.3 heuristic + 0.7 LLM)
     signals: SignalBreakdown
+    chat_mood: str = ""  # pre-tag from chat sentiment: "hype", "fun", "rip", or ""
     clip_filename: str | None = None
     llm: LlmAnalysis | None = None
 

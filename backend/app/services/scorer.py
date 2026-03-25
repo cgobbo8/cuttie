@@ -86,6 +86,8 @@ def compute_scores(
     chat_burst = np.zeros(n)
     emote_density = np.zeros(n)
     caps_ratio = np.zeros(n)
+    sentiment_intensity = np.zeros(n)
+    dominant_moods: list[str] = [""] * n
 
     if chat_features:
         chat_times_arr = np.array([c["time"] for c in chat_features])
@@ -94,7 +96,9 @@ def compute_scores(
             "chat_burst": np.array([c.get("chat_burst", 0) for c in chat_features]),
             "emote_density": np.array([c.get("emote_density", 0) for c in chat_features]),
             "caps_ratio": np.array([c.get("caps_ratio", 0) for c in chat_features]),
+            "sentiment_intensity": np.array([c.get("sentiment_intensity", 0) for c in chat_features]),
         }
+        chat_moods = [c.get("dominant_mood", "") for c in chat_features]
         for i, t in enumerate(times):
             diffs = np.abs(chat_times_arr - t)
             nearest = np.argmin(diffs)
@@ -103,6 +107,8 @@ def compute_scores(
                 chat_burst[i] = chat_arrays["chat_burst"][nearest]
                 emote_density[i] = chat_arrays["emote_density"][nearest]
                 caps_ratio[i] = chat_arrays["caps_ratio"][nearest]
+                sentiment_intensity[i] = chat_arrays["sentiment_intensity"][nearest]
+                dominant_moods[i] = chat_moods[nearest]
 
     # Normalize all signals to [0, 1]
     norm = {
@@ -128,6 +134,13 @@ def compute_scores(
     chat_combined = norm["chat_speed"]
     agreement = audio_combined * chat_combined  # high only when both high
     score += 0.15 * _normalize(agreement)
+
+    # Semantic sentiment bonus (additive, never penalizes)
+    # Only kicks in when chat has identifiable mood keywords/emotes
+    norm_sentiment = _normalize(sentiment_intensity)
+    has_sentiment = np.any(sentiment_intensity > 0.05)
+    if has_sentiment:
+        score += 0.10 * norm_sentiment
 
     # Smooth score curve for cleaner peak detection
     score_smooth = gaussian_filter1d(score, sigma=SMOOTH_SIGMA)
@@ -158,6 +171,7 @@ def compute_scores(
                     zcr=round(float(norm["zcr"][idx]), 3),
                     chat_speed=round(float(norm["chat_speed"][idx]), 3),
                 ),
+                chat_mood=dominant_moods[idx],
             )
         )
 

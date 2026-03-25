@@ -17,16 +17,17 @@ from app.models.schemas import HotPoint, SignalBreakdown
 
 # Default weights for composite score
 WEIGHTS = {
-    "rms": 0.20,
-    "chat_speed": 0.20,
-    "flux": 0.15,
-    "pitch_var": 0.12,
-    "centroid": 0.08,
-    "zcr": 0.03,
-    # New chat signals
+    "rms": 0.18,
+    "chat_speed": 0.18,
+    "flux": 0.12,
+    "onset": 0.10,       # Onset strength: catches moment transitions
+    "pitch_var": 0.10,
+    "centroid": 0.05,
+    "zcr": 0.02,
+    # Chat signals
     "chat_burst": 0.10,
-    "emote_density": 0.07,
-    "caps_ratio": 0.05,
+    "emote_density": 0.08,
+    "caps_ratio": 0.07,
 }
 
 # Minimum distance between peaks in seconds
@@ -43,13 +44,19 @@ def seconds_to_display(s: float) -> str:
 
 
 def _normalize(arr: np.ndarray) -> np.ndarray:
-    """Min-max normalize to [0, 1], handling NaN and edge cases."""
+    """Baseline-relative normalization to [0, 1].
+
+    Uses median as baseline and clips at 95th percentile.
+    This gives more meaningful scores than min-max: a quiet stream
+    won't have artificial 100% peaks.
+    """
     clean = np.nan_to_num(arr, nan=0.0)
-    mn = np.min(clean)
-    mx = np.max(clean)
-    if mx - mn < 1e-8:
+    baseline = np.median(clean)
+    ceiling = np.percentile(clean, 95)
+    if ceiling - baseline < 1e-8:
         return np.zeros_like(clean)
-    return (clean - mn) / (mx - mn)
+    normed = (clean - baseline) / (ceiling - baseline)
+    return np.clip(normed, 0.0, 1.0)
 
 
 def compute_scores(
@@ -71,6 +78,7 @@ def compute_scores(
     centroid = np.array([w["centroid"] for w in audio_features])
     zcr = np.array([w["zcr"] for w in audio_features])
     flux = np.array([w["flux"] for w in audio_features])
+    onset = np.array([w.get("onset", 0) for w in audio_features])
     pitch_var = np.array([w["pitch_var"] for w in audio_features])
 
     # Build chat arrays aligned to audio time grid
@@ -101,6 +109,7 @@ def compute_scores(
         "rms": _normalize(rms),
         "chat_speed": _normalize(chat_speed),
         "flux": _normalize(flux),
+        "onset": _normalize(onset),
         "pitch_var": _normalize(pitch_var),
         "centroid": _normalize(centroid),
         "zcr": _normalize(zcr),

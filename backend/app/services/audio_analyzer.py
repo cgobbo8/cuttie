@@ -39,13 +39,17 @@ def _extract_frame_features(y: np.ndarray, sr: int) -> dict[str, np.ndarray]:
     zcr = librosa.feature.zero_crossing_rate(y=y, frame_length=FRAME_LENGTH, hop_length=HOP_LENGTH)[0]
     flux = _compute_spectral_flux(y)
 
+    # Onset strength: detects when excitement "starts" (transients, attacks)
+    onset_env = librosa.onset.onset_strength(y=y, sr=sr, hop_length=HOP_LENGTH)
+
     # Ensure all arrays have the same length
-    min_len = min(len(rms), len(centroid), len(zcr), len(flux))
+    min_len = min(len(rms), len(centroid), len(zcr), len(flux), len(onset_env))
     return {
         "rms": rms[:min_len],
         "centroid": centroid[:min_len],
         "zcr": zcr[:min_len],
         "flux": flux[:min_len],
+        "onset": onset_env[:min_len],
     }
 
 
@@ -99,6 +103,7 @@ def _aggregate_to_windows(
             "centroid": float(np.mean(features["centroid"][start:end])),
             "zcr": float(np.mean(features["zcr"][start:end])),
             "flux": float(np.mean(features["flux"][start:end])),
+            "onset": float(np.mean(features["onset"][start:end])),
             "pitch_var": pitch_var,
         }
         windows.append(window)

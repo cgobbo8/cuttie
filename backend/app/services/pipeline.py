@@ -6,6 +6,7 @@ import shutil
 from concurrent.futures import ThreadPoolExecutor
 
 from app.services.audio_analyzer import analyze_audio
+from app.services.audio_classifier import classify_audio
 from app.services.chat_analyzer import analyze_chat
 from app.services.clipper import extract_clips
 from app.services.db import get_job, update_job
@@ -73,9 +74,13 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
             )
             logger.info(f"Downloaded {len(chat_messages)} chat messages")
 
-            # 3. Analyze audio
-            update_job(job_id, status="ANALYZING_AUDIO", progress="Analyzing audio signals...")
-            audio_features = analyze_audio(audio_path)
+            # 3. Analyze audio signals + classify audio events in parallel
+            update_job(job_id, status="ANALYZING_AUDIO", progress="Analyzing audio signals + classification...")
+            with ThreadPoolExecutor(max_workers=2) as audio_pool:
+                features_future = audio_pool.submit(analyze_audio, audio_path)
+                classify_future = audio_pool.submit(classify_audio, audio_path)
+                audio_features = features_future.result()
+                classification_features = classify_future.result()
 
             # 4. Analyze chat
             update_job(job_id, status="ANALYZING_CHAT", progress="Analyzing chat activity...")
@@ -83,7 +88,11 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
 
             # 5. Score and find peaks — get top 50 candidates for triage
             update_job(job_id, status="SCORING", progress="Computing scores and finding hot points...")
-            hot_points = compute_scores(audio_features, chat_features, total_duration=duration, top_n=50)
+            hot_points = compute_scores(
+                audio_features, chat_features,
+                total_duration=duration, top_n=50,
+                classification_features=classification_features,
+            )
 
             # 6. Save initial hot points to DB
             update_job(job_id, hot_points=hot_points)

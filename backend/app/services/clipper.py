@@ -20,9 +20,9 @@ MAX_CLIPS = 20
 MAX_CLIP_WORKERS = 3
 
 # Clip boundary parameters (inspired by Powder, KoalaVOD research)
-PRE_PEAK_WINDOW = 15   # seconds before peak (context/setup)
-POST_PEAK_WINDOW = 12  # seconds after peak (reaction)
-MIN_CLIP_DURATION = 20  # minimum clip duration
+PRE_PEAK_WINDOW = 20   # seconds before peak (context/setup)
+POST_PEAK_WINDOW = 15  # seconds after peak (reaction)
+MIN_CLIP_DURATION = 30  # minimum clip duration
 MAX_CLIP_DURATION = 60  # maximum clip duration
 CLIP_HALF_DURATION = 30  # fallback (exported for other modules)
 

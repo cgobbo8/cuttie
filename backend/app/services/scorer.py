@@ -65,6 +65,7 @@ def compute_scores(
     total_duration: float = 0,
     top_n: int = 20,
     hop_sec: float = 2.5,
+    classification_features: list[dict] | None = None,
 ) -> list[HotPoint]:
     """Compute composite scores and detect peak hot points."""
     if not audio_features:
@@ -110,6 +111,24 @@ def compute_scores(
                 sentiment_intensity[i] = chat_arrays["sentiment_intensity"][nearest]
                 dominant_moods[i] = chat_moods[nearest]
 
+    # Align audio classification features (speech, excitement, game)
+    speech_presence = np.zeros(n)
+    vocal_excitement = np.zeros(n)
+    game_audio = np.zeros(n)
+
+    if classification_features:
+        cls_times = np.array([c["time"] for c in classification_features])
+        cls_speech = np.array([c["speech_presence"] for c in classification_features])
+        cls_excite = np.array([c["vocal_excitement"] for c in classification_features])
+        cls_game = np.array([c["game_audio"] for c in classification_features])
+        for i, t in enumerate(times):
+            diffs = np.abs(cls_times - t)
+            nearest = np.argmin(diffs)
+            if diffs[nearest] < hop_sec:
+                speech_presence[i] = cls_speech[nearest]
+                vocal_excitement[i] = cls_excite[nearest]
+                game_audio[i] = cls_game[nearest]
+
     # Normalize all signals to [0, 1]
     norm = {
         "rms": _normalize(rms),
@@ -136,11 +155,29 @@ def compute_scores(
     score += 0.15 * _normalize(agreement)
 
     # Semantic sentiment bonus (additive, never penalizes)
-    # Only kicks in when chat has identifiable mood keywords/emotes
     norm_sentiment = _normalize(sentiment_intensity)
     has_sentiment = np.any(sentiment_intensity > 0.05)
     if has_sentiment:
         score += 0.10 * norm_sentiment
+
+    # Audio classification signals (PANNs CNN14)
+    has_classification = np.any(speech_presence > 0.05)
+    if has_classification:
+        norm_speech = _normalize(speech_presence)
+        norm_excite = _normalize(vocal_excitement)
+        norm_game = _normalize(game_audio)
+
+        # Boost: loud + streamer speaking = streamer is reacting
+        # speech_presence modulates RMS: high RMS + high speech = excited voice
+        voice_energy = norm_speech * norm["rms"]
+        score += 0.10 * _normalize(voice_energy)
+
+        # Strong boost: vocal excitement (laughter, screaming) — rare but gold
+        score += 0.12 * norm_excite
+
+        # Dampen: loud game audio without speech = just game noise
+        game_only = np.clip(norm_game - norm_speech, 0, 1)
+        score -= 0.05 * game_only
 
     # Smooth score curve for cleaner peak detection
     score_smooth = gaussian_filter1d(score, sigma=SMOOTH_SIGMA)

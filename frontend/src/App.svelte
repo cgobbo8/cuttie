@@ -28,9 +28,17 @@
   async function onSelectJob(id: string) {
     try {
       const job = await getJobStatus(id);
-      results = job;
       jobId = id;
-      phase = job.status === "DONE" ? "results" : "error";
+      if (job.status === "DONE") {
+        results = job;
+        phase = "results";
+      } else if (job.status === "ERROR") {
+        results = job;
+        phase = "error";
+      } else {
+        // Job still in progress — show progress bar
+        phase = "processing";
+      }
     } catch {
       // ignore
     }

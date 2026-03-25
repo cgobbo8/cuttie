@@ -56,7 +56,7 @@
       <button
         class="w-full text-left p-3 rounded-lg bg-zinc-800/30 border border-zinc-700/30 hover:border-purple-500/30 transition-colors"
         onclick={() => onSelect(job.job_id)}
-        disabled={job.status !== "DONE" && job.status !== "ERROR"}
+        disabled={false}
       >
         <div class="flex items-center justify-between">
           <div class="min-w-0 flex-1">
@@ -78,8 +78,8 @@
               Reprendre
             </button>
           {:else}
-            <span class="text-xs ml-3 {STATUS_COLORS[job.status] || 'text-zinc-500'}">
-              {job.status === "DONE" ? "Voir" : job.status}
+            <span class="text-xs ml-3 {STATUS_COLORS[job.status] || 'text-yellow-400'}">
+              {job.status === "DONE" ? "Voir" : job.status === "ERROR" ? "Erreur" : "En cours..."}
             </span>
           {/if}
         </div>

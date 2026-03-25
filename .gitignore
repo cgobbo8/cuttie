@@ -9,6 +9,7 @@ dist/
 # Backend data
 backend/data/
 backend/clips/
+backend/frames/
 backend/cuttie.db
 backend/screenshots/
 

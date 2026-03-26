@@ -1,5 +1,5 @@
-import type { Layer, LayerStyle, SubtitleData } from "../../lib/editorTypes";
-import { SUBTITLE_FONTS } from "../../lib/editorTypes";
+import type { Layer, LayerStyle, ShapeData, SubtitleData } from "../../lib/editorTypes";
+import { SUBTITLE_FONTS, BOX_SHADOW_PRESETS } from "../../lib/editorTypes";
 
 const CANVAS_W = 1080;
 const CANVAS_H = 1920;
@@ -8,6 +8,7 @@ interface Props {
   layer: Layer;
   onStyleChange: (id: string, patch: Partial<LayerStyle>) => void;
   onSubtitleChange: (id: string, patch: Partial<SubtitleData>) => void;
+  onShapeChange: (id: string, patch: Partial<ShapeData>) => void;
   onTransformChange: (id: string, patch: Partial<Layer["transform"]>) => void;
   onCommit: () => void;
   onStartCrop?: (id: string) => void;
@@ -59,8 +60,8 @@ function Slider({
   );
 }
 
-export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange, onTransformChange, onCommit, onStartCrop }: Props) {
-  const { style, transform, subtitle } = layer;
+export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange, onShapeChange, onTransformChange, onCommit, onStartCrop }: Props) {
+  const { style, transform, subtitle, shape } = layer;
 
   const centerX = () => {
     onCommit();
@@ -156,16 +157,19 @@ export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange
           onCommit={onCommit}
         />
 
-        <Slider
-          label="Arrondi"
-          value={style.borderRadius}
-          min={0}
-          max={100}
-          step={1}
-          unit="px"
-          onChange={(v) => onStyleChange(layer.id, { borderRadius: v })}
-          onCommit={onCommit}
-        />
+        {/* Hide generic border-radius for shapes — they have their own in the shape section */}
+        {!shape && (
+          <Slider
+            label="Arrondi"
+            value={style.borderRadius}
+            min={0}
+            max={100}
+            step={1}
+            unit="px"
+            onChange={(v) => onStyleChange(layer.id, { borderRadius: v })}
+            onCommit={onCommit}
+          />
+        )}
 
         {/* ─── Subtitle-specific properties ─── */}
         {subtitle && (
@@ -282,6 +286,126 @@ export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange
                     className="w-full h-6 bg-transparent border-0 cursor-pointer rounded"
                   />
                 )}
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* ─── Shape-specific properties ─── */}
+        {shape && (
+          <>
+            <div className="h-px bg-white/[0.06]" />
+
+            {/* Shape type toggle */}
+            <div className="flex flex-col gap-1.5">
+              <span className="text-[10px] text-zinc-400 uppercase tracking-wider font-medium">
+                Forme
+              </span>
+              <div className="flex gap-1">
+                <button
+                  onClick={() => {
+                    onCommit();
+                    onShapeChange(layer.id, { shapeType: "rectangle" });
+                  }}
+                  className={`flex-1 text-[10px] px-2 py-1.5 rounded-md font-medium transition-colors ${
+                    shape.shapeType === "rectangle"
+                      ? "bg-purple-500/20 text-purple-300"
+                      : "bg-white/[0.04] text-zinc-500 hover:text-zinc-300"
+                  }`}
+                >
+                  Rectangle
+                </button>
+                <button
+                  onClick={() => {
+                    onCommit();
+                    onShapeChange(layer.id, { shapeType: "circle" });
+                  }}
+                  className={`flex-1 text-[10px] px-2 py-1.5 rounded-md font-medium transition-colors ${
+                    shape.shapeType === "circle"
+                      ? "bg-purple-500/20 text-purple-300"
+                      : "bg-white/[0.04] text-zinc-500 hover:text-zinc-300"
+                  }`}
+                >
+                  Cercle
+                </button>
+              </div>
+            </div>
+
+            {/* Background color + alpha */}
+            <div className="flex flex-col gap-1.5">
+              <span className="text-[10px] text-zinc-400 uppercase tracking-wider font-medium">
+                Couleur de fond
+              </span>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={shape.backgroundColor}
+                  onChange={(e) => onShapeChange(layer.id, { backgroundColor: e.target.value })}
+                  onFocus={onCommit}
+                  className="w-7 h-7 bg-transparent border border-white/[0.1] rounded-md cursor-pointer shrink-0"
+                />
+                <span className="text-[10px] text-zinc-500 font-mono">{shape.backgroundColor}</span>
+              </div>
+            </div>
+
+            <Slider
+              label="Opacite fond"
+              value={shape.backgroundAlpha}
+              min={0}
+              max={1}
+              step={0.01}
+              unit="%"
+              onChange={(v) => onShapeChange(layer.id, { backgroundAlpha: v })}
+              onCommit={onCommit}
+            />
+
+            <Slider
+              label="Backdrop blur"
+              value={shape.backdropBlur}
+              min={0}
+              max={80}
+              step={1}
+              unit="px"
+              onChange={(v) => onShapeChange(layer.id, { backdropBlur: v })}
+              onCommit={onCommit}
+            />
+
+            {/* Border radius (only for rectangle) */}
+            {shape.shapeType === "rectangle" && (
+              <Slider
+                label="Arrondi"
+                value={style.borderRadius}
+                min={0}
+                max={200}
+                step={1}
+                unit="px"
+                onChange={(v) => onStyleChange(layer.id, { borderRadius: v })}
+                onCommit={onCommit}
+              />
+            )}
+
+            {/* Box shadow presets */}
+            <div className="flex flex-col gap-1.5">
+              <span className="text-[10px] text-zinc-400 uppercase tracking-wider font-medium">
+                Ombre
+              </span>
+              <div className="grid grid-cols-2 gap-1">
+                {Object.entries(BOX_SHADOW_PRESETS).map(([key, preset]) => (
+                  <button
+                    key={key}
+                    onClick={() => {
+                      onCommit();
+                      onShapeChange(layer.id, { boxShadowPreset: key });
+                    }}
+                    className={`text-[10px] px-2 py-1.5 rounded-md font-medium transition-colors ${
+                      shape.boxShadowPreset === key
+                        ? "bg-purple-500/20 text-purple-300"
+                        : "bg-white/[0.04] text-zinc-500 hover:text-zinc-300"
+                    }`}
+                  >
+                    {preset.label}
+                  </button>
+                ))}
               </div>
             </div>
           </>

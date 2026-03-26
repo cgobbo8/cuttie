@@ -4,7 +4,7 @@ import re
 import subprocess
 import uuid
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi import APIRouter, BackgroundTasks, HTTPException, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 
@@ -250,3 +250,51 @@ def trim_clip(job_id: str, filename: str, req: TrimRequest) -> dict:
 
     except subprocess.TimeoutExpired:
         raise HTTPException(status_code=500, detail="Trim timed out")
+
+
+# ── Assets ──────────────────────────────────────────────────
+
+ASSETS_DIR = os.path.join(CLIPS_DIR, "_assets")
+
+
+@router.post("/assets/upload")
+async def upload_asset(file: UploadFile) -> dict:
+    """Upload an image asset. Returns its id and URL."""
+    if not file.content_type or not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="Only image files accepted")
+
+    os.makedirs(ASSETS_DIR, exist_ok=True)
+    ext = os.path.splitext(file.filename or "img.png")[1] or ".png"
+    asset_id = uuid.uuid4().hex[:12]
+    filename = f"{asset_id}{ext}"
+    path = os.path.join(ASSETS_DIR, filename)
+
+    content = await file.read()
+    with open(path, "wb") as f:
+        f.write(content)
+
+    logger.info(f"Asset uploaded: {filename} ({len(content) / 1024:.0f}KB)")
+    return {"id": asset_id, "filename": filename, "url": f"/api/assets/{filename}"}
+
+
+@router.get("/assets")
+def list_assets() -> JSONResponse:
+    """List all uploaded assets."""
+    if not os.path.isdir(ASSETS_DIR):
+        return JSONResponse(content=[])
+    files = sorted(os.listdir(ASSETS_DIR))
+    assets = [
+        {"filename": f, "url": f"/api/assets/{f}"}
+        for f in files
+        if not f.startswith(".")
+    ]
+    return JSONResponse(content=assets)
+
+
+@router.get("/assets/{filename}")
+def get_asset(filename: str) -> FileResponse:
+    """Serve an uploaded asset."""
+    path = os.path.join(ASSETS_DIR, filename)
+    if not os.path.isfile(path):
+        raise HTTPException(status_code=404, detail="Asset not found")
+    return FileResponse(path)

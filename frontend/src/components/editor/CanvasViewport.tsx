@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Layer } from "../../lib/editorTypes";
 import VideoLayer from "./VideoLayer";
 import SubtitleLayer from "./SubtitleLayer";
+import AssetLayer from "./AssetLayer";
+import ShapeLayer from "./ShapeLayer";
 import TransformHandles from "./TransformHandles";
 
 const CANVAS_W = 1080;
@@ -104,13 +106,15 @@ export default function CanvasViewport({
               }}
             >
               {/* Content wrapper — receives visual styles (blur, opacity, radius) */}
+              {/* Shape layers handle their own borderRadius and backdrop-filter,
+                  so we skip overflow:hidden to let backdrop-filter work. */}
               <div
                 style={{
                   width: "100%",
                   height: "100%",
                   opacity: style.opacity,
-                  borderRadius: style.borderRadius > 0 ? style.borderRadius : undefined,
-                  overflow: style.borderRadius > 0 ? "hidden" : undefined,
+                  borderRadius: !layer.shape && style.borderRadius > 0 ? style.borderRadius : undefined,
+                  overflow: !layer.shape && style.borderRadius > 0 ? "hidden" : undefined,
                   filter: style.blur > 0 ? `blur(${style.blur}px)` : undefined,
                 }}
               >
@@ -119,6 +123,12 @@ export default function CanvasViewport({
                 )}
                 {layer.subtitle && (
                   <SubtitleLayer layer={layer} currentTime={currentTime} />
+                )}
+                {layer.asset && (
+                  <AssetLayer layer={layer} />
+                )}
+                {layer.shape && (
+                  <ShapeLayer layer={layer} />
                 )}
               </div>
 

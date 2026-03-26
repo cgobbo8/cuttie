@@ -1,7 +1,7 @@
 /* ── Layer types ─────────────────────────────────────────── */
 
 /** Category of the layer — decoupled from its name. */
-export type LayerType = "gameplay" | "facecam" | "subtitles";
+export type LayerType = "gameplay" | "facecam" | "subtitles" | "asset" | "shape";
 
 export interface LayerTransform {
   x: number;      // px in canvas space (1080×1920)
@@ -48,6 +48,31 @@ export const SUBTITLE_FONTS = [
   { value: "Inter", label: "Inter" },
 ];
 
+export interface AssetData {
+  /** Data URL (base64) or object URL for the image */
+  src: string;
+}
+
+export type ShapeType = "rectangle" | "circle";
+
+export interface ShapeData {
+  shapeType: ShapeType;
+  backgroundColor: string;   // hex or rgba
+  backgroundAlpha: number;    // 0–1
+  backdropBlur: number;       // px — CSS backdrop-filter: blur()
+  boxShadowPreset: string;    // key from BOX_SHADOW_PRESETS
+}
+
+export const BOX_SHADOW_PRESETS: Record<string, { label: string; value: string }> = {
+  none: { label: "Aucune", value: "none" },
+  soft: { label: "Douce", value: "0 4px 20px rgba(0,0,0,0.25)" },
+  medium: { label: "Moyenne", value: "0 8px 40px rgba(0,0,0,0.4)" },
+  strong: { label: "Forte", value: "0 12px 60px rgba(0,0,0,0.6)" },
+  glow: { label: "Glow", value: "0 0 40px rgba(168,85,247,0.5)" },
+  neon: { label: "Neon", value: "0 0 20px rgba(168,85,247,0.6), 0 0 60px rgba(168,85,247,0.3)" },
+  outline: { label: "Outline", value: "inset 0 0 0 3px rgba(255,255,255,0.3)" },
+};
+
 export interface Layer {
   id: string;
   name: string;
@@ -58,4 +83,6 @@ export interface Layer {
   style: LayerStyle;
   video?: VideoLayerData;
   subtitle?: SubtitleData;
+  asset?: AssetData;
+  shape?: ShapeData;
 }

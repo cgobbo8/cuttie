@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Layer, LayerType, SubtitleData, VideoLayerData } from "../../lib/editorTypes";
+import type { AssetData, Layer, LayerType, ShapeData, SubtitleData, VideoLayerData } from "../../lib/editorTypes";
 import { DEFAULT_STYLE } from "../../lib/editorTypes";
 
 const MAX_HISTORY = 50;
@@ -49,7 +49,7 @@ export function useEditorState(clipKey: string) {
   /** Push current layers onto the undo stack (call BEFORE mutating). */
   const pushHistory = useCallback(() => {
     setLayers((cur) => {
-      historyRef.current = [...historyRef.current.slice(-(MAX_HISTORY - 1)), cur.map((l) => ({ ...l, transform: { ...l.transform }, style: { ...l.style }, subtitle: l.subtitle ? { ...l.subtitle } : undefined }))];
+      historyRef.current = [...historyRef.current.slice(-(MAX_HISTORY - 1)), cur.map((l) => ({ ...l, transform: { ...l.transform }, style: { ...l.style }, subtitle: l.subtitle ? { ...l.subtitle } : undefined, shape: l.shape ? { ...l.shape } : undefined }))];
       futureRef.current = [];
       return cur; // no mutation — just capture snapshot
     });
@@ -59,7 +59,7 @@ export function useEditorState(clipKey: string) {
     const prev = historyRef.current.pop();
     if (!prev) return;
     setLayers((cur) => {
-      futureRef.current.push(cur.map((l) => ({ ...l, transform: { ...l.transform }, style: { ...l.style }, subtitle: l.subtitle ? { ...l.subtitle } : undefined })));
+      futureRef.current.push(cur.map((l) => ({ ...l, transform: { ...l.transform }, style: { ...l.style }, subtitle: l.subtitle ? { ...l.subtitle } : undefined, shape: l.shape ? { ...l.shape } : undefined })));
       return prev;
     });
   }, []);
@@ -68,7 +68,7 @@ export function useEditorState(clipKey: string) {
     const next = futureRef.current.pop();
     if (!next) return;
     setLayers((cur) => {
-      historyRef.current.push(cur.map((l) => ({ ...l, transform: { ...l.transform }, style: { ...l.style }, subtitle: l.subtitle ? { ...l.subtitle } : undefined })));
+      historyRef.current.push(cur.map((l) => ({ ...l, transform: { ...l.transform }, style: { ...l.style }, subtitle: l.subtitle ? { ...l.subtitle } : undefined, shape: l.shape ? { ...l.shape } : undefined })));
       return next;
     });
   }, []);
@@ -132,6 +132,8 @@ export function useEditorState(clipKey: string) {
     style?: Partial<Layer["style"]>;
     video?: VideoLayerData;
     subtitle?: SubtitleData;
+    asset?: AssetData;
+    shape?: ShapeData;
   }) => {
     pushHistory();
     const id = uid();
@@ -145,6 +147,8 @@ export function useEditorState(clipKey: string) {
       style: { ...DEFAULT_STYLE, ...opts.style },
       video: opts.video ?? (opts.clipUrl ? { src: opts.clipUrl } : undefined),
       subtitle: opts.subtitle,
+      asset: opts.asset,
+      shape: opts.shape,
     };
     setLayers((prev) => [...prev, layer]);
     setSelectedId(id);
@@ -188,6 +192,15 @@ export function useEditorState(clipKey: string) {
     setLayers((prev) =>
       prev.map((l) =>
         l.id === id && l.subtitle ? { ...l, subtitle: { ...l.subtitle, ...patch } } : l,
+      ),
+    );
+  }, []);
+
+  /** Live shape property update (no history push). */
+  const updateShape = useCallback((id: string, patch: Partial<ShapeData>) => {
+    setLayers((prev) =>
+      prev.map((l) =>
+        l.id === id && l.shape ? { ...l, shape: { ...l.shape, ...patch } } : l,
       ),
     );
   }, []);
@@ -265,6 +278,7 @@ export function useEditorState(clipKey: string) {
     updateStyle,
     updateVideoCrop,
     updateSubtitle,
+    updateShape,
     moveLayer,
     duplicateLayer,
     removeLayer,

@@ -154,3 +154,28 @@ export async function getEditEnvironment(jobId: string, clipFilename: string): P
   if (!res.ok) throw new Error("Failed to load edit environment");
   return res.json();
 }
+
+// ── Assets ──────────────────────────────────────────────
+
+export interface AssetInfo {
+  filename: string;
+  url: string;
+}
+
+export async function uploadAsset(file: File): Promise<AssetInfo & { id: string }> {
+  const form = new FormData();
+  form.append("file", file);
+  const res = await fetch(`${BASE}/assets/upload`, { method: "POST", body: form });
+  if (!res.ok) throw new Error("Upload failed");
+  return res.json();
+}
+
+export async function listAssets(): Promise<AssetInfo[]> {
+  const res = await fetch(`${BASE}/assets`);
+  if (!res.ok) return [];
+  return res.json();
+}
+
+export function assetUrl(filename: string): string {
+  return `${BASE}/assets/${filename}`;
+}

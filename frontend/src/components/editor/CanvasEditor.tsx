@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { clipUrl, getEditEnvironment, type EditEnvironment, type HotPoint } from "../../lib/api";
+import { clipUrl, getEditEnvironment, uploadAsset, listAssets, assetUrl, type EditEnvironment, type HotPoint, type AssetInfo } from "../../lib/api";
 import { useEditorState } from "./useEditorState";
 import CanvasViewport from "./CanvasViewport";
 import LayerPanel from "./LayerPanel";
@@ -25,7 +25,7 @@ export default function CanvasEditor({
     currentTime, duration, playing,
     registerVideo, seek, togglePlay,
     addLayer,
-    updateTransform, commitTransform, updateStyle, updateVideoCrop, updateSubtitle, moveLayer, duplicateLayer, removeLayer,
+    updateTransform, commitTransform, updateStyle, updateVideoCrop, updateSubtitle, updateShape, moveLayer, duplicateLayer, removeLayer,
     renameLayer, toggleVisibility, toggleLock,
     undo, redo,
   } = editor;
@@ -34,6 +34,9 @@ export default function CanvasEditor({
   const [addMenuOpen, setAddMenuOpen] = useState(false);
   const addMenuRef = useRef<HTMLDivElement>(null);
   const [cropEditingId, setCropEditingId] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [assetLibraryOpen, setAssetLibraryOpen] = useState(false);
+  const [assetLibrary, setAssetLibrary] = useState<AssetInfo[]>([]);
 
   // Cache edit-env (facecam data) — fetched once lazily
   const editEnvRef = useRef<EditEnvironment | null>(null);
@@ -108,6 +111,73 @@ export default function CanvasEditor({
       },
     });
   }, [addLayer, fetchEditEnv]);
+
+  /** Add asset from a URL (backend-served). Loads image to get dimensions. */
+  const addAssetFromUrl = useCallback((url: string, name: string) => {
+    const img = new Image();
+    img.onload = () => {
+      const maxW = 540;
+      const scale = Math.min(maxW / img.width, 1);
+      const w = Math.round(img.width * scale);
+      const h = Math.round(img.height * scale);
+      addLayer({
+        type: "asset",
+        name,
+        transform: { x: Math.round((1080 - w) / 2), y: Math.round((1920 - h) / 2), width: w, height: h },
+        asset: { src: url },
+      });
+    };
+    img.src = url;
+  }, [addLayer]);
+
+  const handleAddAsset = useCallback(() => {
+    setAddMenuOpen(false);
+    fileInputRef.current?.click();
+  }, []);
+
+  const handleOpenLibrary = useCallback(async () => {
+    setAddMenuOpen(false);
+    const assets = await listAssets();
+    setAssetLibrary(assets);
+    setAssetLibraryOpen(true);
+  }, []);
+
+  const handleFileSelected = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+
+    try {
+      const result = await uploadAsset(file);
+      const url = assetUrl(result.filename);
+      addAssetFromUrl(url, file.name.replace(/\.[^.]+$/, ""));
+    } catch {
+      // Fallback to base64 if upload fails
+      const reader = new FileReader();
+      reader.onload = () => {
+        addAssetFromUrl(reader.result as string, file.name.replace(/\.[^.]+$/, ""));
+      };
+      reader.readAsDataURL(file);
+    }
+  }, [addAssetFromUrl]);
+
+  const handleAddShape = useCallback((shapeType: "rectangle" | "circle") => {
+    setAddMenuOpen(false);
+    const size = shapeType === "circle" ? 300 : 400;
+    const h = shapeType === "circle" ? 300 : 250;
+    addLayer({
+      type: "shape",
+      name: shapeType === "circle" ? "Cercle" : "Rectangle",
+      transform: { x: Math.round((1080 - size) / 2), y: Math.round((1920 - h) / 2), width: size, height: h },
+      shape: {
+        shapeType,
+        backgroundColor: "#a855f7",
+        backgroundAlpha: 0.3,
+        backdropBlur: 0,
+        boxShadowPreset: "none",
+      },
+    });
+  }, [addLayer]);
 
   // Close popup on outside click
   useEffect(() => {
@@ -240,6 +310,43 @@ export default function CanvasEditor({
                   </svg>
                   Sous-titres
                 </button>
+                <button
+                  onClick={handleAddAsset}
+                  className="w-full text-left text-xs px-3 py-2.5 hover:bg-white/[0.05] text-zinc-300 hover:text-white transition-colors flex items-center gap-2"
+                >
+                  <svg className="w-4 h-4 text-purple-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  Importer image
+                </button>
+                <button
+                  onClick={handleOpenLibrary}
+                  className="w-full text-left text-xs px-3 py-2.5 hover:bg-white/[0.05] text-zinc-300 hover:text-white transition-colors flex items-center gap-2"
+                >
+                  <svg className="w-4 h-4 text-purple-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                  </svg>
+                  Bibliothèque
+                </button>
+                <div className="h-px bg-white/[0.06] mx-2" />
+                <button
+                  onClick={() => handleAddShape("rectangle")}
+                  className="w-full text-left text-xs px-3 py-2.5 hover:bg-white/[0.05] text-zinc-300 hover:text-white transition-colors flex items-center gap-2"
+                >
+                  <svg className="w-4 h-4 text-purple-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5a1 1 0 011-1h14a1 1 0 011 1v14a1 1 0 01-1 1H5a1 1 0 01-1-1V5z" />
+                  </svg>
+                  Rectangle
+                </button>
+                <button
+                  onClick={() => handleAddShape("circle")}
+                  className="w-full text-left text-xs px-3 py-2.5 hover:bg-white/[0.05] text-zinc-300 hover:text-white transition-colors flex items-center gap-2"
+                >
+                  <svg className="w-4 h-4 text-purple-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <circle cx="12" cy="12" r="9" strokeWidth={2} />
+                  </svg>
+                  Cercle
+                </button>
               </div>
             )}
           </div>
@@ -263,6 +370,7 @@ export default function CanvasEditor({
               layer={selected}
               onStyleChange={updateStyle}
               onSubtitleChange={updateSubtitle}
+              onShapeChange={updateShape}
               onTransformChange={updateTransform}
               onCommit={commitTransform}
               onStartCrop={setCropEditingId}
@@ -279,6 +387,73 @@ export default function CanvasEditor({
         onSeek={seek}
         onTogglePlay={togglePlay}
       />
+
+      {/* Hidden file input for asset upload */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handleFileSelected}
+      />
+
+      {/* ─── Asset library modal ─── */}
+      {assetLibraryOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60" onClick={() => setAssetLibraryOpen(false)}>
+          <div
+            className="bg-zinc-900 border border-white/[0.08] rounded-xl shadow-2xl w-[480px] max-h-[70vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.06]">
+              <h3 className="text-sm font-semibold text-white">Bibliothèque d'assets</h3>
+              <button onClick={() => setAssetLibraryOpen(false)} className="text-zinc-500 hover:text-white transition-colors">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4">
+              {assetLibrary.length === 0 ? (
+                <p className="text-xs text-zinc-500 text-center py-8">Aucun asset importé pour l'instant.</p>
+              ) : (
+                <div className="grid grid-cols-4 gap-2">
+                  {assetLibrary.map((a) => (
+                    <button
+                      key={a.filename}
+                      className="group relative aspect-square rounded-lg overflow-hidden border border-white/[0.06] hover:border-purple-500/50 transition-colors bg-zinc-800"
+                      onClick={() => {
+                        const url = assetUrl(a.filename);
+                        addAssetFromUrl(url, a.filename.replace(/\.[^.]+$/, ""));
+                        setAssetLibraryOpen(false);
+                      }}
+                    >
+                      <img
+                        src={assetUrl(a.filename)}
+                        alt={a.filename}
+                        className="w-full h-full object-contain"
+                      />
+                      <div className="absolute inset-x-0 bottom-0 bg-black/60 px-1 py-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <span className="text-[9px] text-zinc-300 truncate block">{a.filename}</span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="border-t border-white/[0.06] px-4 py-3">
+              <button
+                onClick={() => { setAssetLibraryOpen(false); fileInputRef.current?.click(); }}
+                className="w-full text-xs px-3 py-2 rounded-lg bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 hover:text-purple-200 transition-colors flex items-center justify-center gap-2 font-medium"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                Importer une nouvelle image
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ─── Crop editor modal ─── */}
       {cropEditingId && (() => {

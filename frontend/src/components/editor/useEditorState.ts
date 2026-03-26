@@ -87,6 +87,7 @@ export function useEditorState(clipKey: string) {
       videoRefs.current.set(id, el);
       if (!masterIdRef.current) {
         masterIdRef.current = id;
+        el.muted = false; // master plays audio
         el.addEventListener("timeupdate", () => setCurrentTime(el.currentTime));
         el.addEventListener("loadedmetadata", () => {
           if (el.duration && !isNaN(el.duration)) setDuration(el.duration);
@@ -172,6 +173,16 @@ export function useEditorState(clipKey: string) {
     );
   }, []);
 
+  /** Update video crop (pushes history). */
+  const updateVideoCrop = useCallback((id: string, crop: { x: number; y: number; w: number; h: number }) => {
+    pushHistory();
+    setLayers((prev) =>
+      prev.map((l) =>
+        l.id === id && l.video ? { ...l, video: { ...l.video, crop } } : l,
+      ),
+    );
+  }, [pushHistory]);
+
   /** Live subtitle property update (no history push). */
   const updateSubtitle = useCallback((id: string, patch: Partial<SubtitleData>) => {
     setLayers((prev) =>
@@ -252,6 +263,7 @@ export function useEditorState(clipKey: string) {
     updateTransform,
     commitTransform,
     updateStyle,
+    updateVideoCrop,
     updateSubtitle,
     moveLayer,
     duplicateLayer,

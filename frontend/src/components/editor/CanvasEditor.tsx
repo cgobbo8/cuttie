@@ -5,6 +5,7 @@ import CanvasViewport from "./CanvasViewport";
 import LayerPanel from "./LayerPanel";
 import PropertiesPanel from "./PropertiesPanel";
 import PlaybackBar from "./PlaybackBar";
+import CropEditor from "./CropEditor";
 
 interface Props {
   jobId: string;
@@ -24,7 +25,7 @@ export default function CanvasEditor({
     currentTime, duration, playing,
     registerVideo, seek, togglePlay,
     addLayer,
-    updateTransform, commitTransform, updateStyle, updateSubtitle, moveLayer, duplicateLayer, removeLayer,
+    updateTransform, commitTransform, updateStyle, updateVideoCrop, updateSubtitle, moveLayer, duplicateLayer, removeLayer,
     renameLayer, toggleVisibility, toggleLock,
     undo, redo,
   } = editor;
@@ -32,6 +33,7 @@ export default function CanvasEditor({
   const rawClipUrl = clipUrl(jobId, hotPoint.clip_filename!);
   const [addMenuOpen, setAddMenuOpen] = useState(false);
   const addMenuRef = useRef<HTMLDivElement>(null);
+  const [cropEditingId, setCropEditingId] = useState<string | null>(null);
 
   // Cache edit-env (facecam data) — fetched once lazily
   const editEnvRef = useRef<EditEnvironment | null>(null);
@@ -257,7 +259,14 @@ export default function CanvasEditor({
         {/* Right: Properties panel — visible when a layer is selected */}
         {selected && (
           <div className="w-56 shrink-0 border-l border-white/[0.06] flex flex-col">
-            <PropertiesPanel layer={selected} onStyleChange={updateStyle} onSubtitleChange={updateSubtitle} onTransformChange={updateTransform} onCommit={commitTransform} />
+            <PropertiesPanel
+              layer={selected}
+              onStyleChange={updateStyle}
+              onSubtitleChange={updateSubtitle}
+              onTransformChange={updateTransform}
+              onCommit={commitTransform}
+              onStartCrop={setCropEditingId}
+            />
           </div>
         )}
       </div>
@@ -270,6 +279,23 @@ export default function CanvasEditor({
         onSeek={seek}
         onTogglePlay={togglePlay}
       />
+
+      {/* ─── Crop editor modal ─── */}
+      {cropEditingId && (() => {
+        const cropLayer = layers.find((l) => l.id === cropEditingId);
+        if (!cropLayer?.video?.crop) return null;
+        return (
+          <CropEditor
+            videoSrc={cropLayer.video.src}
+            initialCrop={cropLayer.video.crop}
+            onConfirm={(newCrop) => {
+              updateVideoCrop(cropEditingId, newCrop);
+              setCropEditingId(null);
+            }}
+            onCancel={() => setCropEditingId(null)}
+          />
+        );
+      })()}
     </div>
   );
 }

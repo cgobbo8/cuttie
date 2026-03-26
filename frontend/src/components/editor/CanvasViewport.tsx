@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Layer } from "../../lib/editorTypes";
 import VideoLayer from "./VideoLayer";
-import TextLayer from "./TextLayer";
 import TransformHandles from "./TransformHandles";
 
 const CANVAS_W = 1080;
@@ -10,23 +9,19 @@ const CANVAS_H = 1920;
 interface Props {
   layers: Layer[];
   selectedId: string | null;
-  currentTime: number;
-  clipWidth: number;
-  clipHeight: number;
   registerVideo: (id: string, el: HTMLVideoElement | null) => void;
   onSelect: (id: string | null) => void;
   onTransformChange: (id: string, patch: Partial<Layer["transform"]>) => void;
+  onTransformStart?: () => void;
 }
 
 export default function CanvasViewport({
   layers,
   selectedId,
-  currentTime,
-  clipWidth,
-  clipHeight,
   registerVideo,
   onSelect,
   onTransformChange,
+  onTransformStart,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(0.3);
@@ -37,7 +32,7 @@ export default function CanvasViewport({
     if (!el) return;
     const observer = new ResizeObserver((entries) => {
       const { width, height } = entries[0].contentRect;
-      const pad = 32;
+      const pad = 40;
       const s = Math.min((width - pad) / CANVAS_W, (height - pad) / CANVAS_H);
       setScale(Math.max(0.1, s));
     });
@@ -53,26 +48,38 @@ export default function CanvasViewport({
   );
 
   return (
-    <div ref={containerRef} className="flex-1 flex items-center justify-center bg-zinc-950/50 overflow-hidden">
-      {/* Scaled canvas wrapper */}
+    <div
+      ref={containerRef}
+      className="flex-1 flex items-center justify-center overflow-hidden"
+      style={{ background: "#18181b", isolation: "isolate" }}
+    >
+      {/* Scaled canvas */}
+      {/* Outer wrapper: allows overflow to be visible but dimmed */}
       <div
         style={{
+          position: "relative",
           width: CANVAS_W,
           height: CANVAS_H,
           transform: `scale(${scale})`,
           transformOrigin: "center center",
-          position: "relative",
-          background: "#000",
-          borderRadius: 8 / scale,
-          boxShadow: "0 0 0 1px rgba(255,255,255,0.06)",
           flexShrink: 0,
         }}
         onClick={handleCanvasClick}
       >
-        {/* Render layers bottom to top */}
+        {/* Canvas area (black background) */}
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            background: "#000",
+            boxShadow: "0 0 0 1px rgba(255,255,255,0.08)",
+            zIndex: 0,
+          }}
+        />
+
+        {/* Layers — can overflow the canvas */}
         {layers.map((layer) => {
           if (!layer.visible) return null;
-
           const isSelected = layer.id === selectedId;
 
           return (
@@ -84,38 +91,57 @@ export default function CanvasViewport({
                 top: layer.transform.y,
                 width: layer.transform.width,
                 height: layer.transform.height,
-                overflow: layer.type === "video" ? "hidden" : undefined,
+                zIndex: 1,
               }}
               onClick={(e) => {
                 e.stopPropagation();
-                if (!layer.locked) onSelect(layer.id);
+                onSelect(layer.id);
               }}
             >
-              {/* Layer content */}
               {layer.type === "video" && (
-                <VideoLayer
-                  layer={layer}
-                  clipWidth={clipWidth}
-                  clipHeight={clipHeight}
-                  registerVideo={registerVideo}
-                />
-              )}
-              {layer.type === "text" && (
-                <TextLayer layer={layer} currentTime={currentTime} />
+                <VideoLayer layer={layer} registerVideo={registerVideo} />
               )}
 
-              {/* Transform handles if selected */}
               {isSelected && (
                 <TransformHandles
                   transform={layer.transform}
                   scale={scale}
                   locked={layer.locked}
                   onTransformChange={(patch) => onTransformChange(layer.id, patch)}
+                  onTransformStart={onTransformStart}
                 />
               )}
             </div>
           );
         })}
+
+        {/* Overflow mask: dims content outside the canvas bounds */}
+        {/* Top */}
+        <div style={{ position: "absolute", left: -9999, right: -9999, top: -9999, height: 9999, background: "rgba(24,24,27,0.75)", zIndex: 2, pointerEvents: "none" }} />
+        {/* Bottom */}
+        <div style={{ position: "absolute", left: -9999, right: -9999, bottom: -9999, height: 9999, background: "rgba(24,24,27,0.75)", zIndex: 2, pointerEvents: "none" }} />
+        {/* Left */}
+        <div style={{ position: "absolute", left: -9999, top: 0, width: 9999, height: CANVAS_H, background: "rgba(24,24,27,0.75)", zIndex: 2, pointerEvents: "none" }} />
+        {/* Right */}
+        <div style={{ position: "absolute", right: -9999, top: 0, width: 9999, height: CANVAS_H, background: "rgba(24,24,27,0.75)", zIndex: 2, pointerEvents: "none" }} />
+
+        {/* Canvas border (on top of masks) */}
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            border: "1px solid rgba(255,255,255,0.1)",
+            zIndex: 3,
+            pointerEvents: "none",
+          }}
+        />
+
+        {/* Empty state */}
+        {layers.length === 0 && (
+          <div className="absolute inset-0 flex items-center justify-center" style={{ zIndex: 1 }}>
+            <p className="text-zinc-700 text-sm">Canvas vide — ajoute un calque</p>
+          </div>
+        )}
       </div>
     </div>
   );

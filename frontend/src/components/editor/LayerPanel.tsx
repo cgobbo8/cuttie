@@ -13,14 +13,7 @@ interface Props {
   onRename: (id: string, name: string) => void;
 }
 
-function LayerIcon({ type }: { type: Layer["type"] }) {
-  if (type === "text") {
-    return (
-      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h8m-8 6h16" />
-      </svg>
-    );
-  }
+function LayerIcon() {
   return (
     <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
@@ -98,7 +91,7 @@ export default function LayerPanel({
 
               {/* Type icon */}
               <span className={`shrink-0 ${layer.visible ? "text-zinc-400" : "text-zinc-700"}`}>
-                <LayerIcon type={layer.type} />
+                <LayerIcon />
               </span>
 
               {/* Name */}

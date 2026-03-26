@@ -1,89 +1,13 @@
 import { useCallback, useRef, useState } from "react";
-import type { Layer, EditEnvironment, VideoCrop } from "../../lib/editorTypes";
+import type { Layer } from "../../lib/editorTypes";
 
 const CANVAS_W = 1080;
 const CANVAS_H = 1920;
+const MAX_HISTORY = 50;
 
 let _nextId = 0;
 function uid() {
   return `layer_${++_nextId}_${Date.now().toString(36)}`;
-}
-
-/* ── Build default layers from edit-env ──────────────────── */
-
-export function buildDefaultLayers(env: EditEnvironment, clipUrl: string): Layer[] {
-  const { layout, facecam, game_crop, words } = env;
-  const layers: Layer[] = [];
-
-  // L0: Blurred background
-  layers.push({
-    id: uid(),
-    name: "Fond flou",
-    type: "video",
-    visible: true,
-    locked: true,
-    transform: { x: 0, y: 0, width: CANVAS_W, height: CANVAS_H },
-    video: { src: clipUrl, blur: layout.blur_sigma, brightness: 0.9 },
-  });
-
-  // L1: Game footage
-  layers.push({
-    id: uid(),
-    name: "Gameplay",
-    type: "video",
-    visible: true,
-    locked: false,
-    transform: { x: 0, y: layout.game_y, width: CANVAS_W, height: layout.game_h },
-    video: { src: clipUrl, crop: game_crop },
-  });
-
-  // L2: Facecam
-  if (facecam) {
-    const camW = layout.cam_size;
-    // Maintain facecam aspect ratio
-    const camH = Math.round(camW * (facecam.h / facecam.w));
-    layers.push({
-      id: uid(),
-      name: "Facecam",
-      type: "video",
-      visible: true,
-      locked: false,
-      transform: {
-        x: (CANVAS_W - camW) / 2,
-        y: layout.cam_margin_top,
-        width: camW,
-        height: camH,
-      },
-      video: {
-        src: clipUrl,
-        crop: facecam as VideoCrop,
-        borderRadius: layout.cam_border_radius,
-      },
-    });
-  }
-
-  // L3: Subtitles
-  if (words.length > 0) {
-    layers.push({
-      id: uid(),
-      name: "Sous-titres",
-      type: "text",
-      visible: true,
-      locked: false,
-      transform: { x: 40, y: CANVAS_H - 400, width: CANVAS_W - 80, height: 180 },
-      text: {
-        words,
-        fontSize: 72,
-        fontFamily: "Luckiest Guy",
-        color: "#ffffff",
-        outlineColor: "#000000",
-        outlineWidth: 4,
-        uppercase: true,
-      },
-    });
-  }
-
-  return layers;
 }
 
 /* ── Editor state hook ───────────────────────────────────── */
@@ -95,23 +19,50 @@ export function useEditorState() {
   const [duration, setDuration] = useState(0);
   const [playing, setPlaying] = useState(false);
 
-  // Video refs for sync — first registered video is the master clock
+  // ── Undo / Redo ──
+  const historyRef = useRef<Layer[][]>([]);
+  const futureRef = useRef<Layer[][]>([]);
+
+  /** Push current layers onto the undo stack (call BEFORE mutating). */
+  const pushHistory = useCallback(() => {
+    setLayers((cur) => {
+      historyRef.current = [...historyRef.current.slice(-(MAX_HISTORY - 1)), cur.map((l) => ({ ...l, transform: { ...l.transform } }))];
+      futureRef.current = [];
+      return cur; // no mutation — just capture snapshot
+    });
+  }, []);
+
+  const undo = useCallback(() => {
+    const prev = historyRef.current.pop();
+    if (!prev) return;
+    setLayers((cur) => {
+      futureRef.current.push(cur.map((l) => ({ ...l, transform: { ...l.transform } })));
+      return prev;
+    });
+  }, []);
+
+  const redo = useCallback(() => {
+    const next = futureRef.current.pop();
+    if (!next) return;
+    setLayers((cur) => {
+      historyRef.current.push(cur.map((l) => ({ ...l, transform: { ...l.transform } })));
+      return next;
+    });
+  }, []);
+
+  // Video refs for sync — first registered becomes master clock
   const videoRefs = useRef<Map<string, HTMLVideoElement>>(new Map());
   const masterIdRef = useRef<string | null>(null);
 
   const registerVideo = useCallback((id: string, el: HTMLVideoElement | null) => {
     if (el) {
       videoRefs.current.set(id, el);
-      // First registered video becomes the master
       if (!masterIdRef.current) {
         masterIdRef.current = id;
-        el.addEventListener("timeupdate", () => {
-          setCurrentTime(el.currentTime);
-        });
+        el.addEventListener("timeupdate", () => setCurrentTime(el.currentTime));
         el.addEventListener("loadedmetadata", () => {
           if (el.duration && !isNaN(el.duration)) setDuration(el.duration);
         });
-        // If already loaded
         if (el.duration && !isNaN(el.duration)) setDuration(el.duration);
       }
     } else {
@@ -143,16 +94,26 @@ export function useEditorState() {
     });
   }, []);
 
-  const pause = useCallback(() => {
-    setPlaying(false);
-    videoRefs.current.forEach((v) => v.pause());
-  }, []);
+  // Add a raw gameplay layer (16:9 native ratio, full width)
+  const addGameplayLayer = useCallback((clipUrl: string) => {
+    pushHistory();
+    const id = uid();
+    const w = CANVAS_W;
+    const h = Math.round(CANVAS_W * (9 / 16)); // 16:9 → 608px at 1080w
+    const layer: Layer = {
+      id,
+      name: "Gameplay",
+      type: "video",
+      visible: true,
+      locked: false,
+      transform: { x: 0, y: Math.round((CANVAS_H - h) / 2), width: w, height: h },
+      video: { src: clipUrl },
+    };
+    setLayers((prev) => [...prev, layer]);
+    setSelectedId(id);
+  }, [pushHistory]);
 
-  // Layer CRUD
-  const updateLayer = useCallback((id: string, patch: Partial<Layer>) => {
-    setLayers((prev) => prev.map((l) => (l.id === id ? { ...l, ...patch } : l)));
-  }, []);
-
+  // Layer CRUD — live transform updates (no history push, called every pointer move)
   const updateTransform = useCallback((id: string, patch: Partial<Layer["transform"]>) => {
     setLayers((prev) =>
       prev.map((l) =>
@@ -161,7 +122,13 @@ export function useEditorState() {
     );
   }, []);
 
+  /** Called on pointer-up to snapshot the pre-drag state into undo history. */
+  const commitTransform = useCallback(() => {
+    pushHistory();
+  }, [pushHistory]);
+
   const moveLayer = useCallback((id: string, direction: "up" | "down") => {
+    pushHistory();
     setLayers((prev) => {
       const idx = prev.findIndex((l) => l.id === id);
       if (idx < 0) return prev;
@@ -171,9 +138,10 @@ export function useEditorState() {
       [next[idx], next[swapIdx]] = [next[swapIdx], next[idx]];
       return next;
     });
-  }, []);
+  }, [pushHistory]);
 
   const duplicateLayer = useCallback((id: string) => {
+    pushHistory();
     setLayers((prev) => {
       const src = prev.find((l) => l.id === id);
       if (!src) return prev;
@@ -188,16 +156,17 @@ export function useEditorState() {
       next.splice(idx + 1, 0, clone);
       return next;
     });
-  }, []);
+  }, [pushHistory]);
 
   const removeLayer = useCallback((id: string) => {
+    pushHistory();
     setLayers((prev) => prev.filter((l) => l.id !== id));
     setSelectedId((prev) => (prev === id ? null : prev));
-  }, []);
+  }, [pushHistory]);
 
   const renameLayer = useCallback((id: string, name: string) => {
-    updateLayer(id, { name });
-  }, [updateLayer]);
+    setLayers((prev) => prev.map((l) => (l.id === id ? { ...l, name } : l)));
+  }, []);
 
   const toggleVisibility = useCallback((id: string) => {
     setLayers((prev) =>
@@ -220,22 +189,21 @@ export function useEditorState() {
     setSelectedId,
     selected,
     currentTime,
-    setCurrentTime,
     duration,
-    setDuration,
     playing,
-    setPlaying,
     registerVideo,
     seek,
     togglePlay,
-    pause,
-    updateLayer,
+    addGameplayLayer,
     updateTransform,
+    commitTransform,
     moveLayer,
     duplicateLayer,
     removeLayer,
     renameLayer,
     toggleVisibility,
     toggleLock,
+    undo,
+    redo,
   };
 }

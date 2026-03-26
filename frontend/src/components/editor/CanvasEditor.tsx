@@ -1,7 +1,6 @@
-import { useEffect, useState } from "react";
-import { getEditEnvironment, clipUrl, type HotPoint } from "../../lib/api";
-import type { EditEnvironment } from "../../lib/editorTypes";
-import { buildDefaultLayers, useEditorState } from "./useEditorState";
+import { useEffect } from "react";
+import { clipUrl, type HotPoint } from "../../lib/api";
+import { useEditorState } from "./useEditorState";
 import CanvasViewport from "./CanvasViewport";
 import LayerPanel from "./LayerPanel";
 import PlaybackBar from "./PlaybackBar";
@@ -23,78 +22,39 @@ export default function CanvasEditor({
   onSelectClip,
   onClose,
 }: Props) {
-  const [env, setEnv] = useState<EditEnvironment | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-
   const editor = useEditorState();
   const {
-    layers, setLayers, selectedId, setSelectedId, selected,
-    currentTime, duration,
-    playing, registerVideo, seek, togglePlay,
-    updateTransform, moveLayer, duplicateLayer, removeLayer,
+    layers, selectedId, setSelectedId, selected,
+    currentTime, duration, playing,
+    registerVideo, seek, togglePlay,
+    addGameplayLayer,
+    updateTransform, commitTransform, moveLayer, duplicateLayer, removeLayer,
     renameLayer, toggleVisibility, toggleLock,
+    undo, redo,
   } = editor;
 
   const rawClipUrl = clipUrl(jobId, hotPoint.clip_filename!);
 
-  // Fetch edit environment + build default layers
-  useEffect(() => {
-    setLoading(true);
-    setError("");
-    getEditEnvironment(jobId, hotPoint.clip_filename!)
-      .then((data: EditEnvironment) => {
-        setEnv(data);
-        setLayers(buildDefaultLayers(data, rawClipUrl));
-      })
-      .catch((e: Error) => setError(e.message))
-      .finally(() => setLoading(false));
-  }, [jobId, hotPoint.clip_filename, rawClipUrl, setLayers]);
-
   // Keyboard shortcuts
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
+      // Don't capture when renaming a layer (input focused)
+      if ((e.target as HTMLElement).tagName === "INPUT") return;
       if (e.key === " ") { e.preventDefault(); togglePlay(); }
       if (e.key === "Escape") onClose();
-      if (e.key === "Delete" || e.key === "Backspace") {
-        if (selectedId && !selected?.locked) removeLayer(selectedId);
+      if ((e.key === "Delete" || e.key === "Backspace") && selectedId && !selected?.locked) {
+        removeLayer(selectedId);
       }
+      // Undo / Redo
+      if ((e.metaKey || e.ctrlKey) && e.key === "z" && !e.shiftKey) { e.preventDefault(); undo(); }
+      if ((e.metaKey || e.ctrlKey) && e.key === "z" && e.shiftKey) { e.preventDefault(); redo(); }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [togglePlay, onClose, selectedId, selected, removeLayer]);
+  }, [togglePlay, onClose, selectedId, selected, removeLayer, undo, redo]);
 
-  /* ── Loading / Error ──── */
-  if (loading) {
-    return (
-      <div className="h-screen bg-zinc-950 flex items-center justify-center">
-        <div className="text-center">
-          <svg className="w-8 h-8 spinner text-purple-400 mx-auto mb-3" viewBox="0 0 24 24" fill="none">
-            <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="60" opacity="0.3" />
-            <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
-          </svg>
-          <p className="text-zinc-500 text-sm">Preparation de l'editeur...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (error || !env) {
-    return (
-      <div className="h-screen bg-zinc-950 flex items-center justify-center">
-        <div className="glass rounded-2xl p-8 text-center max-w-md">
-          <p className="text-red-400 mb-4">{error || "Erreur de chargement"}</p>
-          <button onClick={onClose} className="text-sm text-purple-400 hover:text-purple-300 transition-colors">
-            Retour
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  /* ── Fullscreen editor ──── */
   return (
-    <div className="h-screen bg-zinc-950 flex flex-col overflow-hidden" data-editor-canvas>
+    <div className="h-screen bg-zinc-950 flex flex-col overflow-hidden">
       {/* ─── Top bar ─── */}
       <div className="shrink-0 h-11 border-b border-white/[0.06] flex items-center justify-between px-4">
         <div className="flex items-center gap-4">
@@ -109,6 +69,27 @@ export default function CanvasEditor({
           </button>
           <div className="h-5 w-px bg-white/[0.06]" />
           <span className="text-sm font-semibold text-white">Cuttie Editor</span>
+          <div className="h-5 w-px bg-white/[0.06]" />
+          <div className="flex gap-0.5">
+            <button
+              onClick={undo}
+              className="text-zinc-500 hover:text-white transition-colors p-1 rounded hover:bg-white/[0.05]"
+              title="Annuler (⌘Z)"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a5 5 0 015 5v2M3 10l4-4M3 10l4 4" />
+              </svg>
+            </button>
+            <button
+              onClick={redo}
+              className="text-zinc-500 hover:text-white transition-colors p-1 rounded hover:bg-white/[0.05]"
+              title="Rétablir (⌘⇧Z)"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 10H11a5 5 0 00-5 5v2M21 10l-4-4M21 10l-4 4" />
+              </svg>
+            </button>
+          </div>
         </div>
 
         <div className="flex items-center gap-2">
@@ -130,17 +111,14 @@ export default function CanvasEditor({
               ))}
             </div>
           )}
-
-          <span className="text-[10px] text-zinc-600 font-mono">
-            {env.layout.canvas_w}×{env.layout.canvas_h}
-          </span>
+          <span className="text-[10px] text-zinc-600 font-mono">1080×1920</span>
         </div>
       </div>
 
-      {/* ─── Main area: layers + canvas ─── */}
+      {/* ─── Main area ─── */}
       <div className="flex-1 flex min-h-0">
         {/* Left: Layer panel */}
-        <div className="w-56 shrink-0 border-r border-white/[0.06]">
+        <div className="w-56 shrink-0 border-r border-white/[0.06] flex flex-col">
           <LayerPanel
             layers={layers}
             selectedId={selectedId}
@@ -152,18 +130,29 @@ export default function CanvasEditor({
             onRemove={removeLayer}
             onRename={renameLayer}
           />
+
+          {/* Add layer button */}
+          <div className="shrink-0 border-t border-white/[0.06] p-2">
+            <button
+              onClick={() => addGameplayLayer(rawClipUrl)}
+              className="w-full text-xs px-3 py-2 rounded-lg bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 hover:text-purple-200 transition-colors flex items-center justify-center gap-2 font-medium"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              Ajouter Gameplay
+            </button>
+          </div>
         </div>
 
         {/* Center: Canvas viewport */}
         <CanvasViewport
           layers={layers}
           selectedId={selectedId}
-          currentTime={currentTime}
-          clipWidth={env.clip_width}
-          clipHeight={env.clip_height}
           registerVideo={registerVideo}
           onSelect={setSelectedId}
           onTransformChange={updateTransform}
+          onTransformStart={commitTransform}
         />
       </div>
 

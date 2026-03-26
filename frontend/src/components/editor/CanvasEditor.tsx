@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { clipUrl, getEditEnvironment, uploadAsset, listAssets, assetUrl, type EditEnvironment, type HotPoint, type AssetInfo } from "../../lib/api";
+import { clipUrl, getEditEnvironment, renderClip, uploadAsset, listAssets, assetUrl, type EditEnvironment, type HotPoint, type AssetInfo } from "../../lib/api";
+import type { Layer, SubtitleData } from "../../lib/editorTypes";
+import type { ThemeLayerTemplate } from "../../lib/editorThemes";
 import { useEditorState } from "./useEditorState";
 import CanvasViewport from "./CanvasViewport";
 import LayerPanel from "./LayerPanel";
 import PropertiesPanel from "./PropertiesPanel";
+import ThemesPanel from "./ThemesPanel";
 import PlaybackBar from "./PlaybackBar";
 import CropEditor from "./CropEditor";
 
@@ -11,6 +14,13 @@ interface Props {
   jobId: string;
   hotPoint: HotPoint;
   onClose: () => void;
+}
+
+type RightTab = "properties" | "themes";
+
+let _nextApplyId = 0;
+function applyUid() {
+  return `layer_a${++_nextApplyId}_${Date.now().toString(36)}`;
 }
 
 export default function CanvasEditor({
@@ -21,7 +31,7 @@ export default function CanvasEditor({
   const clipKey = `${jobId}_${hotPoint.clip_filename}`;
   const editor = useEditorState(clipKey);
   const {
-    layers, selectedId, setSelectedId, selected,
+    layers, setLayers, selectedId, setSelectedId, selected,
     currentTime, duration, playing,
     registerVideo, seek, togglePlay,
     addLayer,
@@ -37,6 +47,9 @@ export default function CanvasEditor({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [assetLibraryOpen, setAssetLibraryOpen] = useState(false);
   const [assetLibrary, setAssetLibrary] = useState<AssetInfo[]>([]);
+
+  // Right sidebar
+  const [rightTab, setRightTab] = useState<RightTab>("properties");
 
   // Cache edit-env (facecam data) — fetched once lazily
   const editEnvRef = useRef<EditEnvironment | null>(null);
@@ -54,6 +67,8 @@ export default function CanvasEditor({
     }
   }, [jobId, hotPoint.clip_filename]);
 
+  /* ── Add layer handlers ─────────────────────────────────── */
+
   const handleAddGameplay = useCallback(() => {
     setAddMenuOpen(false);
     addLayer({
@@ -68,15 +83,14 @@ export default function CanvasEditor({
     setAddMenuOpen(false);
     const env = await fetchEditEnv();
     if (!env) return;
-    // Use detected facecam or fallback to bottom-right quarter of the source
     const cam = env.facecam ?? {
       x: Math.round(env.clip_width * 0.65),
       y: Math.round(env.clip_height * 0.65),
       w: Math.round(Math.min(env.clip_width, env.clip_height) / 3),
       h: Math.round(Math.min(env.clip_width, env.clip_height) / 3),
     };
-    const camSize = env.layout.cam_size; // 560
-    const camY = env.layout.cam_margin_top; // 40
+    const camSize = env.layout.cam_size;
+    const camY = env.layout.cam_margin_top;
     const camX = Math.round((1080 - camSize) / 2);
     addLayer({
       type: "facecam",
@@ -112,7 +126,6 @@ export default function CanvasEditor({
     });
   }, [addLayer, fetchEditEnv]);
 
-  /** Add asset from a URL (backend-served). Loads image to get dimensions. */
   const addAssetFromUrl = useCallback((url: string, name: string) => {
     const img = new Image();
     img.onload = () => {
@@ -146,13 +159,11 @@ export default function CanvasEditor({
     const file = e.target.files?.[0];
     if (!file) return;
     e.target.value = "";
-
     try {
       const result = await uploadAsset(file);
       const url = assetUrl(result.filename);
       addAssetFromUrl(url, file.name.replace(/\.[^.]+$/, ""));
     } catch {
-      // Fallback to base64 if upload fails
       const reader = new FileReader();
       reader.onload = () => {
         addAssetFromUrl(reader.result as string, file.name.replace(/\.[^.]+$/, ""));
@@ -179,7 +190,87 @@ export default function CanvasEditor({
     });
   }, [addLayer]);
 
-  // Close popup on outside click
+  /* ── Theme application ──────────────────────────────────── */
+
+  const handleApplyTheme = useCallback(async (templates: ThemeLayerTemplate[]) => {
+    // Snapshot current state for undo
+    commitTransform();
+
+    // Fetch edit-env lazily for facecam/subtitles
+    let env: EditEnvironment | null = null;
+    const needsEnv = templates.some((t) => t.type === "facecam" || t.type === "subtitles");
+    if (needsEnv) {
+      env = await fetchEditEnv();
+    }
+
+    const dc = env?.dominant_color;
+    const autoColor = dc
+      ? `#${dc.r.toString(16).padStart(2, "0")}${dc.g.toString(16).padStart(2, "0")}${dc.b.toString(16).padStart(2, "0")}`
+      : "#6464C8";
+
+    const newLayers: Layer[] = templates.map((tpl) => {
+      const id = applyUid();
+      const base: Layer = {
+        id,
+        name: tpl.name,
+        type: tpl.type,
+        visible: true,
+        locked: false,
+        transform: { ...tpl.transform },
+        style: { ...tpl.style },
+      };
+
+      if (tpl.type === "gameplay") {
+        base.video = { src: rawClipUrl };
+      } else if (tpl.type === "facecam") {
+        const crop = tpl.videoCrop ?? env?.facecam ?? {
+          x: Math.round((env?.clip_width ?? 1920) * 0.65),
+          y: Math.round((env?.clip_height ?? 1080) * 0.65),
+          w: Math.round(Math.min(env?.clip_width ?? 1920, env?.clip_height ?? 1080) / 3),
+          h: Math.round(Math.min(env?.clip_width ?? 1920, env?.clip_height ?? 1080) / 3),
+        };
+        base.video = { src: rawClipUrl, crop };
+      } else if (tpl.type === "subtitles" && tpl.subtitle) {
+        const sub: SubtitleData = {
+          ...tpl.subtitle,
+          words: env?.words ?? [],
+          autoColor,
+        };
+        base.subtitle = sub;
+      } else if (tpl.type === "shape" && tpl.shape) {
+        base.shape = { ...tpl.shape };
+      } else if (tpl.type === "asset" && tpl.asset) {
+        base.asset = { ...tpl.asset };
+      }
+
+      return base;
+    });
+
+    setLayers(newLayers);
+    setSelectedId(null);
+  }, [commitTransform, fetchEditEnv, rawClipUrl, setLayers, setSelectedId]);
+
+  /* ── Export ──────────────────────────────────────────────── */
+
+  const [exporting, setExporting] = useState(false);
+  const [exportResult, setExportResult] = useState<{ filename: string; url: string; size_mb: number } | null>(null);
+
+  const handleExport = useCallback(async () => {
+    if (exporting || layers.length === 0) return;
+    setExporting(true);
+    setExportResult(null);
+    try {
+      const result = await renderClip(jobId, hotPoint.clip_filename!, layers);
+      setExportResult(result);
+    } catch (err) {
+      alert(`Export échoué: ${err instanceof Error ? err.message : "erreur inconnue"}`);
+    } finally {
+      setExporting(false);
+    }
+  }, [exporting, layers, jobId, hotPoint.clip_filename]);
+
+  /* ── Popups & keyboard ──────────────────────────────────── */
+
   useEffect(() => {
     if (!addMenuOpen) return;
     function onClick(e: MouseEvent) {
@@ -191,23 +282,22 @@ export default function CanvasEditor({
     return () => document.removeEventListener("pointerdown", onClick);
   }, [addMenuOpen]);
 
-  // Keyboard shortcuts
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      // Don't capture when renaming a layer (input focused)
       if ((e.target as HTMLElement).tagName === "INPUT") return;
       if (e.key === " ") { e.preventDefault(); togglePlay(); }
       if (e.key === "Escape") onClose();
       if ((e.key === "Delete" || e.key === "Backspace") && selectedId && !selected?.locked) {
         removeLayer(selectedId);
       }
-      // Undo / Redo
       if ((e.metaKey || e.ctrlKey) && e.key === "z" && !e.shiftKey) { e.preventDefault(); undo(); }
       if ((e.metaKey || e.ctrlKey) && e.key === "z" && e.shiftKey) { e.preventDefault(); redo(); }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [togglePlay, onClose, selectedId, selected, removeLayer, undo, redo]);
+
+  /* ── Render ─────────────────────────────────────────────── */
 
   return (
     <div className="h-screen bg-zinc-950 flex flex-col overflow-hidden">
@@ -248,7 +338,31 @@ export default function CanvasEditor({
           </div>
         </div>
 
-        <span className="text-[10px] text-zinc-600 font-mono">1080×1920</span>
+        <div className="flex items-center gap-3">
+          <span className="text-[10px] text-zinc-600 font-mono">1080×1920</span>
+          <button
+            onClick={handleExport}
+            disabled={exporting || layers.length === 0}
+            className="text-xs px-3 py-1.5 rounded-lg bg-purple-500 hover:bg-purple-400 text-white font-medium transition-colors flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {exporting ? (
+              <>
+                <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+                Export...
+              </>
+            ) : (
+              <>
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+                Exporter
+              </>
+            )}
+          </button>
+        </div>
       </div>
 
       {/* ─── Main area ─── */}
@@ -281,70 +395,33 @@ export default function CanvasEditor({
 
             {addMenuOpen && (
               <div className="absolute bottom-full left-2 right-2 mb-1 bg-zinc-900 border border-white/[0.08] rounded-lg shadow-xl overflow-hidden z-50">
-                <button
-                  onClick={handleAddGameplay}
-                  className="w-full text-left text-xs px-3 py-2.5 hover:bg-white/[0.05] text-zinc-300 hover:text-white transition-colors flex items-center gap-2"
-                >
-                  <svg className="w-4 h-4 text-purple-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                  </svg>
+                <button onClick={handleAddGameplay} className="w-full text-left text-xs px-3 py-2.5 hover:bg-white/[0.05] text-zinc-300 hover:text-white transition-colors flex items-center gap-2">
+                  <svg className="w-4 h-4 text-purple-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
                   Gameplay
                 </button>
-                <button
-                  onClick={handleAddFacecam}
-                  disabled={editEnvLoading}
-                  className="w-full text-left text-xs px-3 py-2.5 hover:bg-white/[0.05] text-zinc-300 hover:text-white transition-colors flex items-center gap-2 disabled:opacity-40"
-                >
-                  <svg className="w-4 h-4 text-purple-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0z" />
-                  </svg>
+                <button onClick={handleAddFacecam} disabled={editEnvLoading} className="w-full text-left text-xs px-3 py-2.5 hover:bg-white/[0.05] text-zinc-300 hover:text-white transition-colors flex items-center gap-2 disabled:opacity-40">
+                  <svg className="w-4 h-4 text-purple-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                   Facecam
                 </button>
-                <button
-                  onClick={handleAddSubtitles}
-                  disabled={editEnvLoading}
-                  className="w-full text-left text-xs px-3 py-2.5 hover:bg-white/[0.05] text-zinc-300 hover:text-white transition-colors flex items-center gap-2 disabled:opacity-40"
-                >
-                  <svg className="w-4 h-4 text-purple-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
-                  </svg>
+                <button onClick={handleAddSubtitles} disabled={editEnvLoading} className="w-full text-left text-xs px-3 py-2.5 hover:bg-white/[0.05] text-zinc-300 hover:text-white transition-colors flex items-center gap-2 disabled:opacity-40">
+                  <svg className="w-4 h-4 text-purple-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" /></svg>
                   Sous-titres
                 </button>
-                <button
-                  onClick={handleAddAsset}
-                  className="w-full text-left text-xs px-3 py-2.5 hover:bg-white/[0.05] text-zinc-300 hover:text-white transition-colors flex items-center gap-2"
-                >
-                  <svg className="w-4 h-4 text-purple-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
+                <button onClick={handleAddAsset} className="w-full text-left text-xs px-3 py-2.5 hover:bg-white/[0.05] text-zinc-300 hover:text-white transition-colors flex items-center gap-2">
+                  <svg className="w-4 h-4 text-purple-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
                   Importer image
                 </button>
-                <button
-                  onClick={handleOpenLibrary}
-                  className="w-full text-left text-xs px-3 py-2.5 hover:bg-white/[0.05] text-zinc-300 hover:text-white transition-colors flex items-center gap-2"
-                >
-                  <svg className="w-4 h-4 text-purple-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                  </svg>
+                <button onClick={handleOpenLibrary} className="w-full text-left text-xs px-3 py-2.5 hover:bg-white/[0.05] text-zinc-300 hover:text-white transition-colors flex items-center gap-2">
+                  <svg className="w-4 h-4 text-purple-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
                   Bibliothèque
                 </button>
                 <div className="h-px bg-white/[0.06] mx-2" />
-                <button
-                  onClick={() => handleAddShape("rectangle")}
-                  className="w-full text-left text-xs px-3 py-2.5 hover:bg-white/[0.05] text-zinc-300 hover:text-white transition-colors flex items-center gap-2"
-                >
-                  <svg className="w-4 h-4 text-purple-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5a1 1 0 011-1h14a1 1 0 011 1v14a1 1 0 01-1 1H5a1 1 0 01-1-1V5z" />
-                  </svg>
+                <button onClick={() => handleAddShape("rectangle")} className="w-full text-left text-xs px-3 py-2.5 hover:bg-white/[0.05] text-zinc-300 hover:text-white transition-colors flex items-center gap-2">
+                  <svg className="w-4 h-4 text-purple-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5a1 1 0 011-1h14a1 1 0 011 1v14a1 1 0 01-1 1H5a1 1 0 01-1-1V5z" /></svg>
                   Rectangle
                 </button>
-                <button
-                  onClick={() => handleAddShape("circle")}
-                  className="w-full text-left text-xs px-3 py-2.5 hover:bg-white/[0.05] text-zinc-300 hover:text-white transition-colors flex items-center gap-2"
-                >
-                  <svg className="w-4 h-4 text-purple-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <circle cx="12" cy="12" r="9" strokeWidth={2} />
-                  </svg>
+                <button onClick={() => handleAddShape("circle")} className="w-full text-left text-xs px-3 py-2.5 hover:bg-white/[0.05] text-zinc-300 hover:text-white transition-colors flex items-center gap-2">
+                  <svg className="w-4 h-4 text-purple-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><circle cx="12" cy="12" r="9" strokeWidth={2} /></svg>
                   Cercle
                 </button>
               </div>
@@ -363,20 +440,67 @@ export default function CanvasEditor({
           onTransformStart={commitTransform}
         />
 
-        {/* Right: Properties panel — visible when a layer is selected */}
-        {selected && (
-          <div className="w-56 shrink-0 border-l border-white/[0.06] flex flex-col">
-            <PropertiesPanel
-              layer={selected}
-              onStyleChange={updateStyle}
-              onSubtitleChange={updateSubtitle}
-              onShapeChange={updateShape}
-              onTransformChange={updateTransform}
-              onCommit={commitTransform}
-              onStartCrop={setCropEditingId}
-            />
+        {/* ─── Right: Icon toolbar + panel ─── */}
+        <div className="shrink-0 flex border-l border-white/[0.06]">
+          {/* Content panel */}
+          <div className="w-56 flex flex-col border-r border-white/[0.06]">
+            {rightTab === "properties" && (
+              selected ? (
+                <PropertiesPanel
+                  layer={selected}
+                  onStyleChange={updateStyle}
+                  onSubtitleChange={updateSubtitle}
+                  onShapeChange={updateShape}
+                  onTransformChange={updateTransform}
+                  onCommit={commitTransform}
+                  onStartCrop={setCropEditingId}
+                />
+              ) : (
+                <div className="flex-1 flex items-center justify-center px-4">
+                  <p className="text-[11px] text-zinc-600 text-center">Sélectionne un calque pour voir ses propriétés</p>
+                </div>
+              )
+            )}
+            {rightTab === "themes" && (
+              <ThemesPanel
+                layers={layers}
+                onApplyTheme={handleApplyTheme}
+              />
+            )}
           </div>
-        )}
+
+          {/* Icon strip */}
+          <div className="w-11 flex flex-col items-center py-2 gap-1">
+            <button
+              onClick={() => setRightTab("properties")}
+              className={`w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${
+                rightTab === "properties"
+                  ? "bg-purple-500/15 text-purple-300"
+                  : "text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.05]"
+              }`}
+              title="Propriétés"
+            >
+              {/* Sliders icon */}
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+              </svg>
+            </button>
+            <button
+              onClick={() => setRightTab("themes")}
+              className={`w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${
+                rightTab === "themes"
+                  ? "bg-purple-500/15 text-purple-300"
+                  : "text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.05]"
+              }`}
+              title="Thèmes"
+            >
+              {/* Layout/grid icon */}
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5a1 1 0 011-1h4a1 1 0 011 1v5a1 1 0 01-1 1H5a1 1 0 01-1-1V5zm10 0a1 1 0 011-1h4a1 1 0 011 1v2a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zm0 7a1 1 0 011-1h4a1 1 0 011 1v5a1 1 0 01-1 1h-4a1 1 0 01-1-1v-5zm-10 2a1 1 0 011-1h4a1 1 0 011 1v3a1 1 0 01-1 1H5a1 1 0 01-1-1v-3z" />
+              </svg>
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* ─── Bottom: Playback ─── */}
@@ -427,11 +551,7 @@ export default function CanvasEditor({
                         setAssetLibraryOpen(false);
                       }}
                     >
-                      <img
-                        src={assetUrl(a.filename)}
-                        alt={a.filename}
-                        className="w-full h-full object-contain"
-                      />
+                      <img src={assetUrl(a.filename)} alt={a.filename} className="w-full h-full object-contain" />
                       <div className="absolute inset-x-0 bottom-0 bg-black/60 px-1 py-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                         <span className="text-[9px] text-zinc-300 truncate block">{a.filename}</span>
                       </div>
@@ -452,6 +572,36 @@ export default function CanvasEditor({
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ─── Export result toast ─── */}
+      {exportResult && (
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-[200] bg-zinc-900 border border-white/[0.1] rounded-xl shadow-2xl px-5 py-4 flex items-center gap-4">
+          <div className="w-8 h-8 rounded-full bg-green-500/15 flex items-center justify-center shrink-0">
+            <svg className="w-4 h-4 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+          <div>
+            <p className="text-sm text-white font-medium">Export terminé</p>
+            <p className="text-[11px] text-zinc-400">{exportResult.filename} — {exportResult.size_mb} MB</p>
+          </div>
+          <a
+            href={clipUrl(jobId, exportResult.filename)}
+            download={exportResult.filename}
+            className="text-xs px-3 py-1.5 rounded-lg bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 hover:text-purple-200 transition-colors font-medium"
+          >
+            Télécharger
+          </a>
+          <button
+            onClick={() => setExportResult(null)}
+            className="text-zinc-600 hover:text-white transition-colors ml-1"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
         </div>
       )}
 

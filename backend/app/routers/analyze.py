@@ -252,6 +252,58 @@ def trim_clip(job_id: str, filename: str, req: TrimRequest) -> dict:
         raise HTTPException(status_code=500, detail="Trim timed out")
 
 
+# ── Render (editor export) ───────────────────────────────────
+
+
+class RenderLayer(BaseModel):
+    type: str
+    name: str = ""
+    visible: bool = True
+    transform: dict
+    style: dict = {}
+    video: dict | None = None
+    subtitle: dict | None = None
+    shape: dict | None = None
+    asset: dict | None = None
+
+
+class RenderRequest(BaseModel):
+    layers: list[RenderLayer]
+
+
+@router.post("/clips/{job_id}/{clip_filename}/render")
+def render_editor_export(
+    job_id: str,
+    clip_filename: str,
+    req: RenderRequest,
+    bg: BackgroundTasks,
+) -> dict:
+    """Render the editor canvas to a final video file."""
+    clip_path = os.path.join(CLIPS_DIR, job_id, clip_filename)
+    if not os.path.isfile(clip_path):
+        raise HTTPException(status_code=404, detail="Clip not found")
+
+    base, _ = os.path.splitext(clip_filename)
+    rendered_name = f"{base}_rendered.mp4"
+    output_path = os.path.join(CLIPS_DIR, job_id, rendered_name)
+
+    from app.services.editor_renderer import render_from_layers
+
+    layer_dicts = [l.model_dump() for l in req.layers]
+    asset_dir = os.path.join(CLIPS_DIR, "_assets")
+
+    success = render_from_layers(clip_path, layer_dicts, output_path, asset_dir)
+    if not success:
+        raise HTTPException(status_code=500, detail="Render failed")
+
+    size_mb = os.path.getsize(output_path) / (1024 * 1024)
+    return {
+        "filename": rendered_name,
+        "size_mb": round(size_mb, 1),
+        "url": f"/api/clips/{job_id}/{rendered_name}",
+    }
+
+
 # ── Assets ──────────────────────────────────────────────────
 
 ASSETS_DIR = os.path.join(CLIPS_DIR, "_assets")

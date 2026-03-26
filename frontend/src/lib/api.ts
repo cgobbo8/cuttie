@@ -155,6 +155,31 @@ export async function getEditEnvironment(jobId: string, clipFilename: string): P
   return res.json();
 }
 
+// ── Render (editor export) ───────────────────────────────
+
+export interface RenderResult {
+  filename: string;
+  size_mb: number;
+  url: string;
+}
+
+export async function renderClip(
+  jobId: string,
+  clipFilename: string,
+  layers: unknown[],
+): Promise<RenderResult> {
+  const res = await fetch(`${BASE}/clips/${jobId}/${clipFilename}/render`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ layers }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: "Render failed" }));
+    throw new Error(err.detail || "Render failed");
+  }
+  return res.json();
+}
+
 // ── Assets ──────────────────────────────────────────────
 
 export interface AssetInfo {

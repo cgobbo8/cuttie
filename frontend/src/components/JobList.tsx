@@ -47,10 +47,11 @@ export default function JobList({ onSelect, onRetry }: Props) {
       </h3>
       <div className="space-y-2">
         {jobs.map((job) => (
-          <button
+          <div
             key={job.job_id}
             onClick={() => onSelect(job.job_id)}
-            className="w-full text-left p-4 rounded-xl glass ambient-glow transition-all group"
+            role="button"
+            className="w-full text-left p-4 rounded-xl glass ambient-glow transition-all group cursor-pointer"
           >
             <div className="flex items-center justify-between gap-4">
               <div className="min-w-0 flex-1">
@@ -86,7 +87,7 @@ export default function JobList({ onSelect, onRetry }: Props) {
                 </span>
               )}
             </div>
-          </button>
+          </div>
         ))}
       </div>
     </div>

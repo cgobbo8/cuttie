@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback } from "react";
+import { Link } from "react-router";
 import { clipUrl, type HotPoint } from "../lib/api";
 
 interface Props {
@@ -182,27 +183,40 @@ function ClipCard({
           {/* Video */}
           {point.clip_filename && (
             <div className="p-4">
-              {/* Format toggle */}
-              {point.vertical_filename && (
-                <div className="flex gap-2 mb-3">
-                  {[
-                    { label: "Clip brut (16:9)", vertical: false },
-                    { label: "Vertical (9:16)", vertical: true },
-                  ].map(({ label, vertical }) => (
-                    <button
-                      key={label}
-                      className={`text-xs px-3 py-1.5 rounded-lg transition-all ${
-                        showVertical === vertical
-                          ? "bg-purple-500/20 text-purple-300 border border-purple-500/30"
-                          : "glass text-zinc-500 hover:text-white"
-                      }`}
-                      onClick={() => setShowVertical(vertical)}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              )}
+              {/* Format toggle + Edit link */}
+              <div className="flex items-center gap-2 mb-3">
+                {point.vertical_filename && (
+                  <>
+                    {[
+                      { label: "Clip brut (16:9)", vertical: false },
+                      { label: "Vertical (9:16)", vertical: true },
+                    ].map(({ label, vertical }) => (
+                      <button
+                        key={label}
+                        className={`text-xs px-3 py-1.5 rounded-lg transition-all ${
+                          showVertical === vertical
+                            ? "bg-purple-500/20 text-purple-300 border border-purple-500/30"
+                            : "glass text-zinc-500 hover:text-white"
+                        }`}
+                        onClick={() => setShowVertical(vertical)}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </>
+                )}
+                {point.vertical_filename && (
+                  <Link
+                    to={`/${jobId}/edit`}
+                    className="text-xs px-3 py-1.5 rounded-lg glass text-zinc-500 hover:text-purple-300 hover:border-purple-500/30 transition-all ml-auto flex items-center gap-1.5"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.121 4.879l5 5m-11.5 2.5L16 4l4 4-8.379 8.379a2 2 0 01-1.414.586H7v-3.207a2 2 0 01.586-1.414z" />
+                    </svg>
+                    Editer
+                  </Link>
+                )}
+              </div>
 
               {showVertical && point.vertical_filename ? (
                 <div className="flex justify-center">

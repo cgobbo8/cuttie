@@ -1,12 +1,18 @@
+import logging
+import os
 import re
+import subprocess
 import uuid
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 from fastapi.responses import FileResponse
+from pydantic import BaseModel
 
 from app.models.schemas import AnalyzeRequest, JobResponse
 from app.services.db import create_job, get_job, list_jobs
 from app.services.pipeline import RESUMABLE_FROM, run_pipeline_sync
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -73,8 +79,52 @@ async def retry_job(job_id: str, bg: BackgroundTasks) -> dict:
 
 @router.get("/clips/{job_id}/{filename}")
 def get_clip(job_id: str, filename: str) -> FileResponse:
-    import os
     filepath = os.path.join(CLIPS_DIR, job_id, filename)
     if not os.path.isfile(filepath):
         raise HTTPException(status_code=404, detail="Clip not found")
     return FileResponse(filepath, media_type="video/mp4")
+
+
+class TrimRequest(BaseModel):
+    start_seconds: float
+    end_seconds: float
+
+
+@router.post("/clips/{job_id}/{filename}/trim")
+def trim_clip(job_id: str, filename: str, req: TrimRequest) -> dict:
+    """Trim a clip using FFmpeg stream copy (instant, no re-encode)."""
+    input_path = os.path.join(CLIPS_DIR, job_id, filename)
+    if not os.path.isfile(input_path):
+        raise HTTPException(status_code=404, detail="Clip not found")
+
+    if req.start_seconds >= req.end_seconds:
+        raise HTTPException(status_code=400, detail="start must be < end")
+
+    # Output: same name with _trimmed suffix
+    base, ext = os.path.splitext(filename)
+    trimmed_name = f"{base}_trimmed{ext}"
+    output_path = os.path.join(CLIPS_DIR, job_id, trimmed_name)
+
+    try:
+        result = subprocess.run(
+            [
+                "ffmpeg", "-y",
+                "-ss", str(req.start_seconds),
+                "-i", input_path,
+                "-to", str(req.end_seconds - req.start_seconds),
+                "-c", "copy",
+                "-movflags", "+faststart",
+                output_path,
+            ],
+            capture_output=True, text=True, timeout=30,
+        )
+        if result.returncode != 0:
+            logger.error(f"Trim failed: {result.stderr[-300:]}")
+            raise HTTPException(status_code=500, detail="FFmpeg trim failed")
+
+        size_mb = os.path.getsize(output_path) / (1024 * 1024)
+        logger.info(f"Trimmed {filename}: {req.start_seconds:.2f}s-{req.end_seconds:.2f}s -> {trimmed_name} ({size_mb:.1f}MB)")
+        return {"filename": trimmed_name}
+
+    except subprocess.TimeoutExpired:
+        raise HTTPException(status_code=500, detail="Trim timed out")

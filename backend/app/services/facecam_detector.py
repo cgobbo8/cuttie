@@ -229,27 +229,66 @@ def detect_facecam(clip_path: str, extra_clips: list[str] | None = None) -> dict
     The overlay is a static element, so using multiple clips makes detection
     more robust: overlay borders persist while game content washes out.
 
+    Filters outlier clips where face detection picks up game characters instead
+    of the streamer's webcam (face too far from median position).
+
     Returns dict with keys: x, y, w, h (pixel coords in clip resolution)
     or None if no face found.
     """
-    face = _detect_face(clip_path)
-    if face is None:
-        logger.info(f"No face detected in {clip_path}")
-        return None
-
-    fx, fy, fw, fh, frame_w, frame_h = face
-    logger.info(f"Face detected: ({fx},{fy}) {fw}x{fh} in {frame_w}x{frame_h}")
-
-    # Use multiple clips for edge persistence if available
     all_clips = [clip_path]
     if extra_clips:
         all_clips.extend(extra_clips)
 
-    persistent = _build_persistent_edges(all_clips, frame_w, frame_h)
+    # Detect face on each clip independently
+    faces_per_clip: list[tuple[str, int, int, int, int, int, int]] = []
+    for cp in all_clips:
+        face = _detect_face(cp)
+        if face:
+            faces_per_clip.append((cp, *face))
+
+    if not faces_per_clip:
+        logger.info("No face detected in any clip")
+        return None
+
+    # Compute median face center across all clips
+    centers_x = [fx + fw // 2 for _, fx, fy, fw, fh, _, _ in faces_per_clip]
+    centers_y = [fy + fh // 2 for _, fx, fy, fw, fh, _, _ in faces_per_clip]
+    median_cx = np.median(centers_x)
+    median_cy = np.median(centers_y)
+
+    # Filter outliers: keep clips where face center is within 2× median face width
+    median_fw = np.median([fw for _, fx, fy, fw, fh, _, _ in faces_per_clip])
+    max_dist = median_fw * 2
+
+    good_clips = []
+    for cp, fx, fy, fw, fh, frame_w, frame_h in faces_per_clip:
+        cx = fx + fw // 2
+        cy = fy + fh // 2
+        dist = np.sqrt((cx - median_cx) ** 2 + (cy - median_cy) ** 2)
+        if dist <= max_dist:
+            good_clips.append(cp)
+        else:
+            logger.info(f"Outlier face in {cp}: ({cx},{cy}) dist={dist:.0f} > {max_dist:.0f}")
+
+    if not good_clips:
+        good_clips = [faces_per_clip[0][0]]
+
+    # Use consensus face from good clips
+    good_faces = [(fx, fy, fw, fh, frame_w, frame_h)
+                  for cp, fx, fy, fw, fh, frame_w, frame_h in faces_per_clip
+                  if cp in good_clips]
+    fx = int(np.median([f[0] for f in good_faces]))
+    fy = int(np.median([f[1] for f in good_faces]))
+    fw = int(np.median([f[2] for f in good_faces]))
+    fh = int(np.median([f[3] for f in good_faces]))
+    frame_w = good_faces[0][4]
+    frame_h = good_faces[0][5]
+
+    logger.info(f"Face consensus: ({fx},{fy}) {fw}x{fh} [from {len(good_clips)}/{len(all_clips)} clips]")
+
+    persistent = _build_persistent_edges(good_clips, frame_w, frame_h)
     x, y, w, h = _find_overlay_rect(persistent, fx, fy, fw, fh, frame_w, frame_h)
 
     result = {"x": x, "y": y, "w": w, "h": h}
-    logger.info(
-        f"Facecam overlay detected: {w}x{h} at ({x},{y}) [from {len(all_clips)} clips]"
-    )
+    logger.info(f"Facecam overlay detected: {w}x{h} at ({x},{y})")
     return result

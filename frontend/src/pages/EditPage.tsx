@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router";
-import { getJobStatus, clipUrl, type HotPoint } from "../lib/api";
-import ClipEditor from "../components/ClipEditor";
+import { getJobStatus, type HotPoint } from "../lib/api";
+import CanvasEditor from "../components/editor/CanvasEditor";
 
 export default function EditPage() {
   const { jobId } = useParams<{ jobId: string }>();
@@ -18,7 +18,8 @@ export default function EditPage() {
           navigate(`/${jobId}`);
           return;
         }
-        setClips(job.hot_points.filter((hp) => hp.vertical_filename));
+        // Keep clips that have both a raw clip and a vertical version
+        setClips(job.hot_points.filter((hp) => hp.clip_filename && hp.vertical_filename));
       })
       .catch(() => navigate("/"))
       .finally(() => setLoading(false));
@@ -39,7 +40,7 @@ export default function EditPage() {
     return (
       <div className="h-screen bg-zinc-950 flex items-center justify-center">
         <div className="glass rounded-2xl p-8 text-center">
-          <p className="text-zinc-400 mb-4">Aucun clip vertical disponible.</p>
+          <p className="text-zinc-400 mb-4">Aucun clip disponible pour l'edition.</p>
           <button
             onClick={() => navigate(`/${jobId}`)}
             className="text-sm text-purple-400 hover:text-purple-300 transition-colors"
@@ -51,15 +52,11 @@ export default function EditPage() {
     );
   }
 
-  const current = clips[selectedIdx];
-
   return (
-    <ClipEditor
+    <CanvasEditor
       key={selectedIdx}
-      videoUrl={clipUrl(jobId!, current.vertical_filename!)}
-      clipFilename={current.vertical_filename!}
       jobId={jobId!}
-      llm={current.llm}
+      hotPoint={clips[selectedIdx]}
       clips={clips}
       selectedIdx={selectedIdx}
       onSelectClip={setSelectedIdx}

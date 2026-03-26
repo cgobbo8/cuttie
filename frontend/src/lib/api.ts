@@ -128,3 +128,9 @@ export async function getClipWords(jobId: string, filename: string): Promise<Tra
   if (!res.ok) return [];
   return res.json();
 }
+
+export async function getEditEnvironment(jobId: string, clipFilename: string) {
+  const res = await fetch(`${BASE}/clips/${jobId}/${clipFilename}/edit-env`);
+  if (!res.ok) throw new Error("Failed to load edit environment");
+  return res.json();
+}

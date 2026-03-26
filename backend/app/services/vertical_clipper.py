@@ -210,6 +210,13 @@ def generate_vertical_clips(
     update_job(job_id, progress="Generation verticale : detection facecam...")
     facecam = detect_facecam(all_clip_paths[0], extra_clips=all_clip_paths[1:])
 
+    # Persist facecam data for the editor
+    import json as _json
+    facecam_meta_path = os.path.join(clip_dir, "facecam.json")
+    if facecam:
+        with open(facecam_meta_path, "w") as f:
+            _json.dump(facecam, f)
+
     if not facecam:
         logger.warning("No facecam detected, using fallback (bottom-right 25%)")
         # Fallback: assume bottom-right corner, 25% of frame

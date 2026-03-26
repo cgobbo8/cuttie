@@ -3,32 +3,28 @@ import { clipUrl, type HotPoint } from "../../lib/api";
 import { useEditorState } from "./useEditorState";
 import CanvasViewport from "./CanvasViewport";
 import LayerPanel from "./LayerPanel";
+import PropertiesPanel from "./PropertiesPanel";
 import PlaybackBar from "./PlaybackBar";
 
 interface Props {
   jobId: string;
   hotPoint: HotPoint;
-  clips: HotPoint[];
-  selectedIdx: number;
-  onSelectClip: (idx: number) => void;
   onClose: () => void;
 }
 
 export default function CanvasEditor({
   jobId,
   hotPoint,
-  clips,
-  selectedIdx,
-  onSelectClip,
   onClose,
 }: Props) {
-  const editor = useEditorState();
+  const clipKey = `${jobId}_${hotPoint.clip_filename}`;
+  const editor = useEditorState(clipKey);
   const {
     layers, selectedId, setSelectedId, selected,
     currentTime, duration, playing,
     registerVideo, seek, togglePlay,
     addGameplayLayer,
-    updateTransform, commitTransform, moveLayer, duplicateLayer, removeLayer,
+    updateTransform, commitTransform, updateStyle, moveLayer, duplicateLayer, removeLayer,
     renameLayer, toggleVisibility, toggleLock,
     undo, redo,
   } = editor;
@@ -92,27 +88,7 @@ export default function CanvasEditor({
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          {/* Clip selector */}
-          {clips.length > 1 && (
-            <div className="flex gap-1 mr-3">
-              {clips.map((hp, i) => (
-                <button
-                  key={i}
-                  onClick={() => onSelectClip(i)}
-                  className={`text-[10px] px-2 py-0.5 rounded transition-all ${
-                    selectedIdx === i
-                      ? "bg-purple-500/20 text-purple-300"
-                      : "text-zinc-600 hover:text-zinc-300"
-                  }`}
-                >
-                  {hp.timestamp_display}
-                </button>
-              ))}
-            </div>
-          )}
-          <span className="text-[10px] text-zinc-600 font-mono">1080×1920</span>
-        </div>
+        <span className="text-[10px] text-zinc-600 font-mono">1080×1920</span>
       </div>
 
       {/* ─── Main area ─── */}
@@ -154,6 +130,13 @@ export default function CanvasEditor({
           onTransformChange={updateTransform}
           onTransformStart={commitTransform}
         />
+
+        {/* Right: Properties panel — visible when a layer is selected */}
+        {selected && (
+          <div className="w-56 shrink-0 border-l border-white/[0.06] flex flex-col">
+            <PropertiesPanel layer={selected} onStyleChange={updateStyle} onCommit={commitTransform} />
+          </div>
+        )}
       </div>
 
       {/* ─── Bottom: Playback ─── */}

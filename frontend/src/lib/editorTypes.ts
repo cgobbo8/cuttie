@@ -9,6 +9,14 @@ export interface LayerTransform {
   height: number;
 }
 
+export interface LayerStyle {
+  opacity: number;       // 0–1
+  blur: number;          // px (CSS blur)
+  borderRadius: number;  // px
+}
+
+export const DEFAULT_STYLE: LayerStyle = { opacity: 1, blur: 0, borderRadius: 0 };
+
 export interface VideoLayerData {
   src: string;
 }
@@ -20,5 +28,6 @@ export interface Layer {
   visible: boolean;
   locked: boolean;
   transform: LayerTransform;
+  style: LayerStyle;
   video?: VideoLayerData;
 }

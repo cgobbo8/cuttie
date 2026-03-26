@@ -82,6 +82,8 @@ export default function CanvasViewport({
           if (!layer.visible) return null;
           const isSelected = layer.id === selectedId;
 
+          const { style } = layer;
+
           return (
             <div
               key={layer.id}
@@ -98,10 +100,23 @@ export default function CanvasViewport({
                 onSelect(layer.id);
               }}
             >
-              {layer.type === "video" && (
-                <VideoLayer layer={layer} registerVideo={registerVideo} />
-              )}
+              {/* Content wrapper — receives visual styles (blur, opacity, radius) */}
+              <div
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  opacity: style.opacity,
+                  borderRadius: style.borderRadius > 0 ? style.borderRadius : undefined,
+                  overflow: style.borderRadius > 0 ? "hidden" : undefined,
+                  filter: style.blur > 0 ? `blur(${style.blur}px)` : undefined,
+                }}
+              >
+                {layer.type === "video" && (
+                  <VideoLayer layer={layer} registerVideo={registerVideo} />
+                )}
+              </div>
 
+              {/* Handles stay outside the styled wrapper — never blurred */}
               {isSelected && (
                 <TransformHandles
                   transform={layer.transform}

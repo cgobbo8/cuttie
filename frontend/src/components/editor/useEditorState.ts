@@ -1,5 +1,6 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Layer } from "../../lib/editorTypes";
+import { DEFAULT_STYLE } from "../../lib/editorTypes";
 
 const CANVAS_W = 1080;
 const CANVAS_H = 1920;
@@ -10,10 +11,30 @@ function uid() {
   return `layer_${++_nextId}_${Date.now().toString(36)}`;
 }
 
+function storageKey(clipKey: string) {
+  return `cuttie_editor_${clipKey}`;
+}
+
+function loadLayers(clipKey: string): Layer[] | null {
+  try {
+    const raw = localStorage.getItem(storageKey(clipKey));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Layer[];
+    // Ensure style field exists (migration from older saves)
+    return parsed.map((l) => ({ ...l, style: l.style ?? { ...DEFAULT_STYLE } }));
+  } catch { return null; }
+}
+
+function saveLayers(clipKey: string, layers: Layer[]) {
+  try {
+    localStorage.setItem(storageKey(clipKey), JSON.stringify(layers));
+  } catch { /* quota exceeded — ignore */ }
+}
+
 /* ── Editor state hook ───────────────────────────────────── */
 
-export function useEditorState() {
-  const [layers, setLayers] = useState<Layer[]>([]);
+export function useEditorState(clipKey: string) {
+  const [layers, setLayers] = useState<Layer[]>(() => loadLayers(clipKey) ?? []);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -26,7 +47,7 @@ export function useEditorState() {
   /** Push current layers onto the undo stack (call BEFORE mutating). */
   const pushHistory = useCallback(() => {
     setLayers((cur) => {
-      historyRef.current = [...historyRef.current.slice(-(MAX_HISTORY - 1)), cur.map((l) => ({ ...l, transform: { ...l.transform } }))];
+      historyRef.current = [...historyRef.current.slice(-(MAX_HISTORY - 1)), cur.map((l) => ({ ...l, transform: { ...l.transform }, style: { ...l.style } }))];
       futureRef.current = [];
       return cur; // no mutation — just capture snapshot
     });
@@ -36,7 +57,7 @@ export function useEditorState() {
     const prev = historyRef.current.pop();
     if (!prev) return;
     setLayers((cur) => {
-      futureRef.current.push(cur.map((l) => ({ ...l, transform: { ...l.transform } })));
+      futureRef.current.push(cur.map((l) => ({ ...l, transform: { ...l.transform }, style: { ...l.style } })));
       return prev;
     });
   }, []);
@@ -45,10 +66,15 @@ export function useEditorState() {
     const next = futureRef.current.pop();
     if (!next) return;
     setLayers((cur) => {
-      historyRef.current.push(cur.map((l) => ({ ...l, transform: { ...l.transform } })));
+      historyRef.current.push(cur.map((l) => ({ ...l, transform: { ...l.transform }, style: { ...l.style } })));
       return next;
     });
   }, []);
+
+  // ── Persist to localStorage ──
+  useEffect(() => {
+    saveLayers(clipKey, layers);
+  }, [clipKey, layers]);
 
   // Video refs for sync — first registered becomes master clock
   const videoRefs = useRef<Map<string, HTMLVideoElement>>(new Map());
@@ -107,6 +133,7 @@ export function useEditorState() {
       visible: true,
       locked: false,
       transform: { x: 0, y: Math.round((CANVAS_H - h) / 2), width: w, height: h },
+      style: { ...DEFAULT_STYLE },
       video: { src: clipUrl },
     };
     setLayers((prev) => [...prev, layer]);
@@ -126,6 +153,15 @@ export function useEditorState() {
   const commitTransform = useCallback(() => {
     pushHistory();
   }, [pushHistory]);
+
+  /** Live style update (no history push — call commitTransform before starting a slider drag). */
+  const updateStyle = useCallback((id: string, patch: Partial<Layer["style"]>) => {
+    setLayers((prev) =>
+      prev.map((l) =>
+        l.id === id ? { ...l, style: { ...l.style, ...patch } } : l,
+      ),
+    );
+  }, []);
 
   const moveLayer = useCallback((id: string, direction: "up" | "down") => {
     pushHistory();
@@ -197,6 +233,7 @@ export function useEditorState() {
     addGameplayLayer,
     updateTransform,
     commitTransform,
+    updateStyle,
     moveLayer,
     duplicateLayer,
     removeLayer,

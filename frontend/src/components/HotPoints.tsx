@@ -207,7 +207,7 @@ function ClipCard({
                 )}
                 {point.vertical_filename && (
                   <Link
-                    to={`/${jobId}/edit`}
+                    to={`/${jobId}/edit?clip=${encodeURIComponent(point.clip_filename!)}`}
                     className="text-xs px-3 py-1.5 rounded-lg glass text-zinc-500 hover:text-purple-300 hover:border-purple-500/30 transition-all ml-auto flex items-center gap-1.5"
                   >
                     <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">

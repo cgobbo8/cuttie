@@ -1,14 +1,16 @@
 import { useEffect, useState } from "react";
-import { useParams, useNavigate } from "react-router";
+import { useParams, useNavigate, useSearchParams } from "react-router";
 import { getJobStatus, type HotPoint } from "../lib/api";
 import CanvasEditor from "../components/editor/CanvasEditor";
 
 export default function EditPage() {
   const { jobId } = useParams<{ jobId: string }>();
   const navigate = useNavigate();
-  const [clips, setClips] = useState<HotPoint[]>([]);
-  const [selectedIdx, setSelectedIdx] = useState(0);
+  const [searchParams] = useSearchParams();
+  const [clip, setClip] = useState<HotPoint | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const clipFile = searchParams.get("clip");
 
   useEffect(() => {
     if (!jobId) return;
@@ -18,12 +20,16 @@ export default function EditPage() {
           navigate(`/${jobId}`);
           return;
         }
-        // Keep clips that have both a raw clip and a vertical version
-        setClips(job.hot_points.filter((hp) => hp.clip_filename && hp.vertical_filename));
+        const clips = job.hot_points.filter((hp) => hp.clip_filename && hp.vertical_filename);
+        // If a clip is specified in the URL, use it; otherwise use the first one
+        const target = clipFile
+          ? clips.find((hp) => hp.clip_filename === clipFile)
+          : clips[0];
+        setClip(target ?? null);
       })
       .catch(() => navigate("/"))
       .finally(() => setLoading(false));
-  }, [jobId, navigate]);
+  }, [jobId, clipFile, navigate]);
 
   if (loading) {
     return (
@@ -36,7 +42,7 @@ export default function EditPage() {
     );
   }
 
-  if (clips.length === 0) {
+  if (!clip) {
     return (
       <div className="h-screen bg-zinc-950 flex items-center justify-center">
         <div className="glass rounded-2xl p-8 text-center">
@@ -54,12 +60,9 @@ export default function EditPage() {
 
   return (
     <CanvasEditor
-      key={selectedIdx}
+      key={clip.clip_filename}
       jobId={jobId!}
-      hotPoint={clips[selectedIdx]}
-      clips={clips}
-      selectedIdx={selectedIdx}
-      onSelectClip={setSelectedIdx}
+      hotPoint={clip}
       onClose={() => navigate(`/${jobId}`)}
     />
   );

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Layer, LayerType, VideoLayerData } from "../../lib/editorTypes";
+import type { Layer, LayerType, SubtitleData, VideoLayerData } from "../../lib/editorTypes";
 import { DEFAULT_STYLE } from "../../lib/editorTypes";
 
 const MAX_HISTORY = 50;
@@ -49,7 +49,7 @@ export function useEditorState(clipKey: string) {
   /** Push current layers onto the undo stack (call BEFORE mutating). */
   const pushHistory = useCallback(() => {
     setLayers((cur) => {
-      historyRef.current = [...historyRef.current.slice(-(MAX_HISTORY - 1)), cur.map((l) => ({ ...l, transform: { ...l.transform }, style: { ...l.style } }))];
+      historyRef.current = [...historyRef.current.slice(-(MAX_HISTORY - 1)), cur.map((l) => ({ ...l, transform: { ...l.transform }, style: { ...l.style }, subtitle: l.subtitle ? { ...l.subtitle } : undefined }))];
       futureRef.current = [];
       return cur; // no mutation — just capture snapshot
     });
@@ -59,7 +59,7 @@ export function useEditorState(clipKey: string) {
     const prev = historyRef.current.pop();
     if (!prev) return;
     setLayers((cur) => {
-      futureRef.current.push(cur.map((l) => ({ ...l, transform: { ...l.transform }, style: { ...l.style } })));
+      futureRef.current.push(cur.map((l) => ({ ...l, transform: { ...l.transform }, style: { ...l.style }, subtitle: l.subtitle ? { ...l.subtitle } : undefined })));
       return prev;
     });
   }, []);
@@ -68,7 +68,7 @@ export function useEditorState(clipKey: string) {
     const next = futureRef.current.pop();
     if (!next) return;
     setLayers((cur) => {
-      historyRef.current.push(cur.map((l) => ({ ...l, transform: { ...l.transform }, style: { ...l.style } })));
+      historyRef.current.push(cur.map((l) => ({ ...l, transform: { ...l.transform }, style: { ...l.style }, subtitle: l.subtitle ? { ...l.subtitle } : undefined })));
       return next;
     });
   }, []);
@@ -126,10 +126,11 @@ export function useEditorState(clipKey: string) {
   const addLayer = useCallback((opts: {
     type: LayerType;
     name: string;
-    clipUrl: string;
+    clipUrl?: string;
     transform: Layer["transform"];
     style?: Partial<Layer["style"]>;
     video?: VideoLayerData;
+    subtitle?: SubtitleData;
   }) => {
     pushHistory();
     const id = uid();
@@ -141,7 +142,8 @@ export function useEditorState(clipKey: string) {
       locked: false,
       transform: opts.transform,
       style: { ...DEFAULT_STYLE, ...opts.style },
-      video: opts.video ?? { src: opts.clipUrl },
+      video: opts.video ?? (opts.clipUrl ? { src: opts.clipUrl } : undefined),
+      subtitle: opts.subtitle,
     };
     setLayers((prev) => [...prev, layer]);
     setSelectedId(id);
@@ -166,6 +168,15 @@ export function useEditorState(clipKey: string) {
     setLayers((prev) =>
       prev.map((l) =>
         l.id === id ? { ...l, style: { ...l.style, ...patch } } : l,
+      ),
+    );
+  }, []);
+
+  /** Live subtitle property update (no history push). */
+  const updateSubtitle = useCallback((id: string, patch: Partial<SubtitleData>) => {
+    setLayers((prev) =>
+      prev.map((l) =>
+        l.id === id && l.subtitle ? { ...l, subtitle: { ...l.subtitle, ...patch } } : l,
       ),
     );
   }, []);
@@ -241,6 +252,7 @@ export function useEditorState(clipKey: string) {
     updateTransform,
     commitTransform,
     updateStyle,
+    updateSubtitle,
     moveLayer,
     duplicateLayer,
     removeLayer,

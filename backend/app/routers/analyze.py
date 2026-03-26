@@ -170,10 +170,27 @@ def get_edit_environment(job_id: str, clip_filename: str) -> JSONResponse:
         with open(words_path, encoding="utf-8") as f:
             words = json.load(f)
 
+    # Dominant color — load cached or extract on the fly
+    dominant_color = None
+    dominant_path = os.path.join(CLIPS_DIR, job_id, "dominant_color.json")
+    if os.path.isfile(dominant_path):
+        with open(dominant_path, encoding="utf-8") as f:
+            dominant_color = json.load(f)
+    else:
+        try:
+            from app.services.subtitle_generator import extract_dominant_color
+            r, g, b = extract_dominant_color(clip_path)
+            dominant_color = {"r": r, "g": g, "b": b}
+            with open(dominant_path, "w", encoding="utf-8") as f:
+                json.dump(dominant_color, f)
+        except Exception:
+            pass
+
     return JSONResponse(content={
         "clip_width": input_w,
         "clip_height": input_h,
         "facecam": facecam,
+        "dominant_color": dominant_color,
         "game_crop": {"x": crop_x, "y": crop_y, "w": crop_w, "h": crop_h},
         "layout": {
             "canvas_w": OUTPUT_WIDTH,

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Layer } from "../../lib/editorTypes";
 import VideoLayer from "./VideoLayer";
+import SubtitleLayer from "./SubtitleLayer";
 import TransformHandles from "./TransformHandles";
 
 const CANVAS_W = 1080;
@@ -9,6 +10,7 @@ const CANVAS_H = 1920;
 interface Props {
   layers: Layer[];
   selectedId: string | null;
+  currentTime: number;
   registerVideo: (id: string, el: HTMLVideoElement | null) => void;
   onSelect: (id: string | null) => void;
   onTransformChange: (id: string, patch: Partial<Layer["transform"]>) => void;
@@ -18,6 +20,7 @@ interface Props {
 export default function CanvasViewport({
   layers,
   selectedId,
+  currentTime,
   registerVideo,
   onSelect,
   onTransformChange,
@@ -113,6 +116,9 @@ export default function CanvasViewport({
               >
                 {layer.video && (
                   <VideoLayer layer={layer} registerVideo={registerVideo} />
+                )}
+                {layer.subtitle && (
+                  <SubtitleLayer layer={layer} currentTime={currentTime} />
                 )}
               </div>
 

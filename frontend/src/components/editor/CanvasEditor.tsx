@@ -24,7 +24,7 @@ export default function CanvasEditor({
     currentTime, duration, playing,
     registerVideo, seek, togglePlay,
     addLayer,
-    updateTransform, commitTransform, updateStyle, moveLayer, duplicateLayer, removeLayer,
+    updateTransform, commitTransform, updateStyle, updateSubtitle, moveLayer, duplicateLayer, removeLayer,
     renameLayer, toggleVisibility, toggleLock,
     undo, redo,
   } = editor;
@@ -82,6 +82,30 @@ export default function CanvasEditor({
       video: { src: rawClipUrl, crop: cam },
     });
   }, [addLayer, rawClipUrl, fetchEditEnv]);
+
+  const handleAddSubtitles = useCallback(async () => {
+    setAddMenuOpen(false);
+    const env = await fetchEditEnv();
+    if (!env) return;
+    const dc = env.dominant_color;
+    const autoColor = dc
+      ? `#${dc.r.toString(16).padStart(2, "0")}${dc.g.toString(16).padStart(2, "0")}${dc.b.toString(16).padStart(2, "0")}`
+      : "#6464C8";
+    addLayer({
+      type: "subtitles",
+      name: "Sous-titres",
+      transform: { x: 40, y: 1650, width: 1000, height: 200 },
+      subtitle: {
+        words: env.words ?? [],
+        fontFamily: "Luckiest Guy",
+        fontSize: 75,
+        colorMode: "auto",
+        customColor: "#6464C8",
+        autoColor,
+        uppercase: true,
+      },
+    });
+  }, [addLayer, fetchEditEnv]);
 
   // Close popup on outside click
   useEffect(() => {
@@ -204,6 +228,16 @@ export default function CanvasEditor({
                   </svg>
                   Facecam
                 </button>
+                <button
+                  onClick={handleAddSubtitles}
+                  disabled={editEnvLoading}
+                  className="w-full text-left text-xs px-3 py-2.5 hover:bg-white/[0.05] text-zinc-300 hover:text-white transition-colors flex items-center gap-2 disabled:opacity-40"
+                >
+                  <svg className="w-4 h-4 text-purple-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+                  </svg>
+                  Sous-titres
+                </button>
               </div>
             )}
           </div>
@@ -213,6 +247,7 @@ export default function CanvasEditor({
         <CanvasViewport
           layers={layers}
           selectedId={selectedId}
+          currentTime={currentTime}
           registerVideo={registerVideo}
           onSelect={setSelectedId}
           onTransformChange={updateTransform}
@@ -222,7 +257,7 @@ export default function CanvasEditor({
         {/* Right: Properties panel — visible when a layer is selected */}
         {selected && (
           <div className="w-56 shrink-0 border-l border-white/[0.06] flex flex-col">
-            <PropertiesPanel layer={selected} onStyleChange={updateStyle} onTransformChange={updateTransform} onCommit={commitTransform} />
+            <PropertiesPanel layer={selected} onStyleChange={updateStyle} onSubtitleChange={updateSubtitle} onTransformChange={updateTransform} onCommit={commitTransform} />
           </div>
         )}
       </div>

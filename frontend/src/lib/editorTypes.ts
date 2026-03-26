@@ -1,7 +1,7 @@
 /* ── Layer types ─────────────────────────────────────────── */
 
 /** Category of the layer — decoupled from its name. */
-export type LayerType = "gameplay" | "facecam";
+export type LayerType = "gameplay" | "facecam" | "subtitles";
 
 export interface LayerTransform {
   x: number;      // px in canvas space (1080×1920)
@@ -24,6 +24,30 @@ export interface VideoLayerData {
   crop?: { x: number; y: number; w: number; h: number };
 }
 
+export interface SubtitleWord {
+  word: string;
+  start: number;
+  end: number;
+}
+
+export interface SubtitleData {
+  words: SubtitleWord[];
+  fontFamily: string;
+  fontSize: number;       // canvas px
+  colorMode: "auto" | "custom";
+  customColor: string;    // hex (#RRGGBB)
+  autoColor: string;      // hex — dominant color from backend
+  uppercase: boolean;
+}
+
+export const SUBTITLE_FONTS = [
+  { value: "Luckiest Guy", label: "Luckiest Guy" },
+  { value: "Bebas Neue", label: "Bebas Neue" },
+  { value: "Impact", label: "Impact" },
+  { value: "Arial Black", label: "Arial Black" },
+  { value: "Inter", label: "Inter" },
+];
+
 export interface Layer {
   id: string;
   name: string;
@@ -33,4 +57,5 @@ export interface Layer {
   transform: LayerTransform;
   style: LayerStyle;
   video?: VideoLayerData;
+  subtitle?: SubtitleData;
 }

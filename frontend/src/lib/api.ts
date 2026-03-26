@@ -133,6 +133,7 @@ export interface EditEnvironment {
   clip_width: number;
   clip_height: number;
   facecam: { x: number; y: number; w: number; h: number } | null;
+  dominant_color: { r: number; g: number; b: number } | null;
   game_crop: { x: number; y: number; w: number; h: number };
   layout: {
     canvas_w: number;

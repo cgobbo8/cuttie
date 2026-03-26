@@ -1,4 +1,5 @@
-import type { Layer, LayerStyle } from "../../lib/editorTypes";
+import type { Layer, LayerStyle, SubtitleData } from "../../lib/editorTypes";
+import { SUBTITLE_FONTS } from "../../lib/editorTypes";
 
 const CANVAS_W = 1080;
 const CANVAS_H = 1920;
@@ -6,6 +7,7 @@ const CANVAS_H = 1920;
 interface Props {
   layer: Layer;
   onStyleChange: (id: string, patch: Partial<LayerStyle>) => void;
+  onSubtitleChange: (id: string, patch: Partial<SubtitleData>) => void;
   onTransformChange: (id: string, patch: Partial<Layer["transform"]>) => void;
   onCommit: () => void;
 }
@@ -56,8 +58,8 @@ function Slider({
   );
 }
 
-export default function PropertiesPanel({ layer, onStyleChange, onTransformChange, onCommit }: Props) {
-  const { style, transform } = layer;
+export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange, onTransformChange, onCommit }: Props) {
+  const { style, transform, subtitle } = layer;
 
   const centerX = () => {
     onCommit();
@@ -150,6 +152,126 @@ export default function PropertiesPanel({ layer, onStyleChange, onTransformChang
           onChange={(v) => onStyleChange(layer.id, { borderRadius: v })}
           onCommit={onCommit}
         />
+
+        {/* ─── Subtitle-specific properties ─── */}
+        {subtitle && (
+          <>
+            <div className="h-px bg-white/[0.06]" />
+
+            {/* Font selector */}
+            <div className="flex flex-col gap-1.5">
+              <span className="text-[10px] text-zinc-400 uppercase tracking-wider font-medium">
+                Police
+              </span>
+              <select
+                value={subtitle.fontFamily}
+                onChange={(e) => {
+                  onCommit();
+                  onSubtitleChange(layer.id, { fontFamily: e.target.value });
+                }}
+                className="w-full text-xs bg-white/[0.06] text-zinc-300 rounded-md px-2 py-1.5 border border-white/[0.06] outline-none focus:border-purple-500/50 cursor-pointer"
+              >
+                {SUBTITLE_FONTS.map((f) => (
+                  <option key={f.value} value={f.value} style={{ fontFamily: f.value }}>
+                    {f.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Font size */}
+            <Slider
+              label="Taille"
+              value={subtitle.fontSize}
+              min={30}
+              max={120}
+              step={1}
+              unit="px"
+              onChange={(v) => onSubtitleChange(layer.id, { fontSize: v })}
+              onCommit={onCommit}
+            />
+
+            {/* Uppercase toggle */}
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] text-zinc-400 uppercase tracking-wider font-medium">
+                Majuscules
+              </span>
+              <button
+                onClick={() => {
+                  onCommit();
+                  onSubtitleChange(layer.id, { uppercase: !subtitle.uppercase });
+                }}
+                className={`text-[10px] px-2.5 py-1 rounded-md font-bold transition-colors ${
+                  subtitle.uppercase
+                    ? "bg-purple-500/20 text-purple-300"
+                    : "bg-white/[0.04] text-zinc-500"
+                }`}
+              >
+                AA
+              </button>
+            </div>
+
+            <div className="h-px bg-white/[0.06]" />
+
+            {/* Color mode */}
+            <div className="flex flex-col gap-2">
+              <span className="text-[10px] text-zinc-400 uppercase tracking-wider font-medium">
+                Couleur
+              </span>
+              <div className="flex gap-1">
+                <button
+                  onClick={() => {
+                    onCommit();
+                    onSubtitleChange(layer.id, { colorMode: "auto" });
+                  }}
+                  className={`flex-1 text-[10px] px-2 py-1.5 rounded-md font-medium transition-colors ${
+                    subtitle.colorMode === "auto"
+                      ? "bg-purple-500/20 text-purple-300"
+                      : "bg-white/[0.04] text-zinc-500 hover:text-zinc-300"
+                  }`}
+                >
+                  Auto
+                </button>
+                <button
+                  onClick={() => {
+                    onCommit();
+                    onSubtitleChange(layer.id, { colorMode: "custom" });
+                  }}
+                  className={`flex-1 text-[10px] px-2 py-1.5 rounded-md font-medium transition-colors ${
+                    subtitle.colorMode === "custom"
+                      ? "bg-purple-500/20 text-purple-300"
+                      : "bg-white/[0.04] text-zinc-500 hover:text-zinc-300"
+                  }`}
+                >
+                  Custom
+                </button>
+              </div>
+
+              {/* Color preview + picker */}
+              <div className="flex items-center gap-2">
+                <div
+                  className="w-6 h-6 rounded-md border border-white/[0.1] shrink-0"
+                  style={{
+                    backgroundColor: subtitle.colorMode === "auto" ? subtitle.autoColor : subtitle.customColor,
+                  }}
+                />
+                {subtitle.colorMode === "auto" ? (
+                  <span className="text-[10px] text-zinc-500 font-mono">
+                    {subtitle.autoColor}
+                  </span>
+                ) : (
+                  <input
+                    type="color"
+                    value={subtitle.customColor}
+                    onChange={(e) => onSubtitleChange(layer.id, { customColor: e.target.value })}
+                    onFocus={onCommit}
+                    className="w-full h-6 bg-transparent border-0 cursor-pointer rounded"
+                  />
+                )}
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

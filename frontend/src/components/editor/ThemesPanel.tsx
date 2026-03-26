@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Layer } from "../../lib/editorTypes";
 import type { EditorTheme, ThemeLayerTemplate } from "../../lib/editorThemes";
-import { getAllThemes, loadUserThemes, saveUserThemes } from "../../lib/editorThemes";
+import { getAllThemes, loadUserThemes, saveUserThemes, getDefaultThemeId, setDefaultThemeId } from "../../lib/editorThemes";
 
 interface Props {
   layers: Layer[];
@@ -10,17 +10,24 @@ interface Props {
 
 export default function ThemesPanel({ layers, onApplyTheme }: Props) {
   const [themes, setThemes] = useState<EditorTheme[]>(() => getAllThemes());
+  const [defaultId, setDefaultId] = useState<string | null>(() => getDefaultThemeId());
   const [saveName, setSaveName] = useState("");
   const [showSave, setShowSave] = useState(false);
 
-  // Refresh when panel mounts
-  useEffect(() => setThemes(getAllThemes()), []);
+  useEffect(() => {
+    setThemes(getAllThemes());
+    setDefaultId(getDefaultThemeId());
+  }, []);
+
+  const refresh = useCallback(() => {
+    setThemes(getAllThemes());
+    setDefaultId(getDefaultThemeId());
+  }, []);
 
   const handleSave = useCallback(() => {
     const name = saveName.trim();
     if (!name || layers.length === 0) return;
 
-    // Convert current layers to templates (strip clip-specific data)
     const templates: ThemeLayerTemplate[] = layers.map((l) => {
       const tpl: ThemeLayerTemplate = {
         type: l.type,
@@ -46,16 +53,30 @@ export default function ThemesPanel({ layers, onApplyTheme }: Props) {
 
     const userThemes = [...loadUserThemes(), theme];
     saveUserThemes(userThemes);
-    setThemes(getAllThemes());
     setSaveName("");
     setShowSave(false);
-  }, [saveName, layers]);
+    refresh();
+  }, [saveName, layers, refresh]);
 
   const handleDelete = useCallback((id: string) => {
     const userThemes = loadUserThemes().filter((t) => t.id !== id);
     saveUserThemes(userThemes);
-    setThemes(getAllThemes());
-  }, []);
+    // Clear default if we're deleting it
+    if (getDefaultThemeId() === id) {
+      setDefaultThemeId(null);
+    }
+    refresh();
+  }, [refresh]);
+
+  const handleToggleDefault = useCallback((id: string) => {
+    if (defaultId === id) {
+      setDefaultThemeId(null);
+    } else {
+      setDefaultThemeId(id);
+    }
+    setDefaultId(getDefaultThemeId() === id ? null : id);
+    refresh();
+  }, [defaultId, refresh]);
 
   return (
     <div className="flex flex-col h-full">
@@ -67,58 +88,86 @@ export default function ThemesPanel({ layers, onApplyTheme }: Props) {
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto">
-        {themes.map((theme) => (
-          <div
-            key={theme.id}
-            className="group flex items-center gap-2 px-3 py-2.5 border-b border-white/[0.04] hover:bg-white/[0.03] transition-colors"
-          >
-            {/* Mini preview: colored dots for each layer type */}
-            <div className="shrink-0 w-8 h-8 rounded-md bg-white/[0.04] border border-white/[0.06] flex items-center justify-center gap-0.5 flex-wrap p-0.5">
-              {theme.layers.map((l, i) => (
-                <div
-                  key={i}
-                  className="w-2 h-2 rounded-full"
-                  style={{
-                    backgroundColor:
-                      l.type === "gameplay" ? "#a855f7" :
-                      l.type === "facecam" ? "#3b82f6" :
-                      l.type === "subtitles" ? "#f59e0b" :
-                      l.type === "shape" ? "#10b981" :
-                      "#6b7280",
-                  }}
-                />
-              ))}
-            </div>
-
-            <div className="flex-1 min-w-0">
-              <div className="text-xs text-zinc-300 truncate">{theme.name}</div>
-              <div className="text-[10px] text-zinc-600">
-                {theme.layers.length} calque{theme.layers.length > 1 ? "s" : ""}
-                {theme.builtIn && <span className="ml-1 text-zinc-700">- intégré</span>}
+        {themes.map((theme) => {
+          const isDefault = theme.id === defaultId;
+          return (
+            <div
+              key={theme.id}
+              className={`group flex items-center gap-2 px-3 py-2.5 border-b border-white/[0.04] hover:bg-white/[0.03] transition-colors ${
+                isDefault ? "bg-purple-500/[0.04]" : ""
+              }`}
+            >
+              {/* Mini preview */}
+              <div className="shrink-0 w-8 h-8 rounded-md bg-white/[0.04] border border-white/[0.06] flex items-center justify-center gap-0.5 flex-wrap p-0.5">
+                {theme.layers.map((l, i) => (
+                  <div
+                    key={i}
+                    className="w-2 h-2 rounded-full"
+                    style={{
+                      backgroundColor:
+                        l.type === "gameplay" ? "#a855f7" :
+                        l.type === "facecam" ? "#3b82f6" :
+                        l.type === "subtitles" ? "#f59e0b" :
+                        l.type === "shape" ? "#10b981" :
+                        "#6b7280",
+                    }}
+                  />
+                ))}
               </div>
-            </div>
 
-            <div className="shrink-0 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-              <button
-                onClick={() => onApplyTheme(theme.layers)}
-                className="text-[10px] px-2 py-1 rounded bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 hover:text-purple-200 transition-colors font-medium"
-              >
-                Appliquer
-              </button>
-              {!theme.builtIn && (
+              <div className="flex-1 min-w-0">
+                <div className="text-xs text-zinc-300 truncate flex items-center gap-1.5">
+                  {theme.name}
+                  {isDefault && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 font-medium leading-none">
+                      défaut
+                    </span>
+                  )}
+                </div>
+                <div className="text-[10px] text-zinc-600">
+                  {theme.layers.length} calque{theme.layers.length > 1 ? "s" : ""}
+                  {theme.builtIn && <span className="ml-1 text-zinc-700">- intégré</span>}
+                </div>
+              </div>
+
+              <div className="shrink-0 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                {/* Set as default */}
                 <button
-                  onClick={() => handleDelete(theme.id)}
-                  className="text-[10px] px-1.5 py-1 rounded bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 transition-colors"
-                  title="Supprimer"
+                  onClick={() => handleToggleDefault(theme.id)}
+                  className={`text-[10px] px-1.5 py-1 rounded transition-colors ${
+                    isDefault
+                      ? "bg-purple-500/20 text-purple-300"
+                      : "bg-white/[0.04] hover:bg-white/[0.08] text-zinc-500 hover:text-zinc-300"
+                  }`}
+                  title={isDefault ? "Retirer par défaut" : "Définir par défaut"}
                 >
-                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  <svg className="w-3 h-3" fill={isDefault ? "currentColor" : "none"} viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
                   </svg>
                 </button>
-              )}
+                {/* Apply */}
+                <button
+                  onClick={() => onApplyTheme(theme.layers)}
+                  className="text-[10px] px-2 py-1 rounded bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 hover:text-purple-200 transition-colors font-medium"
+                >
+                  Appliquer
+                </button>
+                {/* Delete (user themes always, built-in never) */}
+                {!theme.builtIn && (
+                  <button
+                    onClick={() => handleDelete(theme.id)}
+                    className="text-[10px] px-1.5 py-1 rounded bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 transition-colors"
+                    title="Supprimer"
+                  >
+                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Save current layout as theme */}

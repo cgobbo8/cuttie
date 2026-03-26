@@ -79,6 +79,25 @@ export const BUILTIN_THEMES: EditorTheme[] = [
 /* ── Persistence (localStorage) ───────────────────────────── */
 
 const STORAGE_KEY = "cuttie_themes";
+const DEFAULT_THEME_KEY = "cuttie_default_theme";
+
+export function getDefaultThemeId(): string | null {
+  return localStorage.getItem(DEFAULT_THEME_KEY);
+}
+
+export function setDefaultThemeId(id: string | null) {
+  if (id) {
+    localStorage.setItem(DEFAULT_THEME_KEY, id);
+  } else {
+    localStorage.removeItem(DEFAULT_THEME_KEY);
+  }
+}
+
+export function getDefaultTheme(): EditorTheme | null {
+  const id = getDefaultThemeId();
+  if (!id) return null;
+  return getAllThemes().find((t) => t.id === id) ?? null;
+}
 
 export function loadUserThemes(): EditorTheme[] {
   try {

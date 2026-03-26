@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { clipUrl, getEditEnvironment, renderClip, uploadAsset, listAssets, assetUrl, type EditEnvironment, type HotPoint, type AssetInfo } from "../../lib/api";
 import type { Layer, SubtitleData } from "../../lib/editorTypes";
 import type { ThemeLayerTemplate } from "../../lib/editorThemes";
+import { getDefaultTheme } from "../../lib/editorThemes";
 import { useEditorState } from "./useEditorState";
 import CanvasViewport from "./CanvasViewport";
 import LayerPanel from "./LayerPanel";
@@ -249,6 +250,18 @@ export default function CanvasEditor({
     setLayers(newLayers);
     setSelectedId(null);
   }, [commitTransform, fetchEditEnv, rawClipUrl, setLayers, setSelectedId]);
+
+  /* ── Auto-apply default theme on first open ──────────────── */
+
+  const defaultAppliedRef = useRef(false);
+  useEffect(() => {
+    if (defaultAppliedRef.current) return;
+    if (layers.length > 0) return; // Already has saved layers
+    const defaultTheme = getDefaultTheme();
+    if (!defaultTheme) return;
+    defaultAppliedRef.current = true;
+    handleApplyTheme(defaultTheme.layers);
+  }, [layers.length, handleApplyTheme]);
 
   /* ── Export ──────────────────────────────────────────────── */
 

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { LlmAnalysis, HotPoint } from "../lib/api";
+import { getClipWords, type LlmAnalysis, type HotPoint, type TranscriptWord } from "../lib/api";
 
 /* ── Types ──────────────────────────────────────────────── */
 
@@ -153,9 +153,11 @@ function Timeline({
   );
 }
 
-/* ── Transcript panel ────────────────────────────────────── */
+/* ── Left panel (Moments clés / Transcription toggle) ──── */
 
-function TranscriptPanel({
+type LeftTab = "moments" | "transcript";
+
+function MomentsView({
   llm,
   currentTime,
   onSeek,
@@ -166,7 +168,127 @@ function TranscriptPanel({
 }) {
   const moments = llm?.key_moments ?? [];
 
-  if (!llm || (!llm.transcript && moments.length === 0)) {
+  if (moments.length === 0) {
+    return (
+      <div className="flex items-center justify-center h-full text-zinc-600 text-xs">
+        Pas de moments cles
+      </div>
+    );
+  }
+
+  return (
+    <div className="h-full overflow-y-auto space-y-0.5 pr-1">
+      {moments.map((moment, i) => {
+        const isActive =
+          currentTime >= moment.time &&
+          (i === moments.length - 1 || currentTime < moments[i + 1].time);
+        return (
+          <button
+            key={i}
+            onClick={() => onSeek(moment.time)}
+            className={`w-full text-left px-3 py-2.5 rounded-lg transition-all text-xs ${
+              isActive
+                ? "bg-purple-500/15 text-purple-200"
+                : "text-zinc-400 hover:bg-white/[0.04] hover:text-zinc-200"
+            }`}
+          >
+            <div className="flex items-start gap-2.5">
+              <span className={`font-mono text-[10px] shrink-0 mt-0.5 ${isActive ? "text-purple-400" : "text-zinc-600"}`}>
+                {fmtShort(moment.time)}
+              </span>
+              <div>
+                <span className={`font-medium block ${isActive ? "text-purple-100" : "text-zinc-300"}`}>
+                  {moment.label}
+                </span>
+                {moment.description && (
+                  <span className="text-zinc-500 text-[11px] leading-snug block mt-0.5">
+                    {moment.description}
+                  </span>
+                )}
+              </div>
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Group words into segments (~4 words each) for readable display */
+function groupWords(words: TranscriptWord[], maxWords = 4, maxDuration = 3.0): { start: number; end: number; text: string }[] {
+  const groups: { start: number; end: number; text: string }[] = [];
+  let current: TranscriptWord[] = [];
+
+  for (const w of words) {
+    if (current.length > 0) {
+      const dur = w.end - current[0].start;
+      if (current.length >= maxWords || dur > maxDuration) {
+        groups.push({
+          start: current[0].start,
+          end: current[current.length - 1].end,
+          text: current.map((c) => c.word).join(" "),
+        });
+        current = [];
+      }
+    }
+    current.push(w);
+  }
+  if (current.length > 0) {
+    groups.push({
+      start: current[0].start,
+      end: current[current.length - 1].end,
+      text: current.map((c) => c.word).join(" "),
+    });
+  }
+  return groups;
+}
+
+function TranscriptView({
+  words,
+  loading,
+  currentTime,
+  onSeek,
+  fallbackText,
+}: {
+  words: TranscriptWord[];
+  loading: boolean;
+  currentTime: number;
+  onSeek: (t: number) => void;
+  fallbackText: string;
+}) {
+  const activeRef = useRef<HTMLButtonElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll to active segment
+  useEffect(() => {
+    if (activeRef.current && scrollRef.current) {
+      const container = scrollRef.current;
+      const el = activeRef.current;
+      const top = el.offsetTop - container.offsetTop - container.clientHeight / 3;
+      container.scrollTo({ top, behavior: "smooth" });
+    }
+  }, [currentTime]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-full text-zinc-600 text-xs">
+        <svg className="w-4 h-4 spinner text-purple-400 mr-2" viewBox="0 0 24 24" fill="none">
+          <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="60" opacity="0.3" />
+          <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+        </svg>
+        Chargement...
+      </div>
+    );
+  }
+
+  if (words.length === 0) {
+    if (fallbackText) {
+      return (
+        <div className="h-full overflow-y-auto pr-1 px-3">
+          <p className="text-[11px] text-zinc-400 leading-relaxed italic">{fallbackText}</p>
+        </div>
+      );
+    }
     return (
       <div className="flex items-center justify-center h-full text-zinc-600 text-xs">
         Pas de transcription
@@ -174,55 +296,103 @@ function TranscriptPanel({
     );
   }
 
-  return (
-    <div className="h-full overflow-y-auto space-y-0.5 pr-1">
-      {moments.length > 0 && (
-        <div className="space-y-0.5">
-          {moments.map((moment, i) => {
-            const isActive =
-              currentTime >= moment.time &&
-              (i === moments.length - 1 || currentTime < moments[i + 1].time);
-            return (
-              <button
-                key={i}
-                onClick={() => onSeek(moment.time)}
-                className={`w-full text-left px-3 py-2.5 rounded-lg transition-all text-xs ${
-                  isActive
-                    ? "bg-purple-500/15 text-purple-200"
-                    : "text-zinc-400 hover:bg-white/[0.04] hover:text-zinc-200"
-                }`}
-              >
-                <div className="flex items-start gap-2.5">
-                  <span className={`font-mono text-[10px] shrink-0 mt-0.5 ${isActive ? "text-purple-400" : "text-zinc-600"}`}>
-                    {fmtShort(moment.time)}
-                  </span>
-                  <div>
-                    <span className={`font-medium block ${isActive ? "text-purple-100" : "text-zinc-300"}`}>
-                      {moment.label}
-                    </span>
-                    {moment.description && (
-                      <span className="text-zinc-500 text-[11px] leading-snug block mt-0.5">
-                        {moment.description}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      )}
+  const segments = groupWords(words);
 
-      {llm.transcript && (
-        <div className={moments.length > 0 ? "mt-4 pt-4 border-t border-white/[0.04]" : ""}>
-          <h4 className="text-[10px] font-semibold text-zinc-600 uppercase tracking-widest mb-2 px-3">
-            Transcription
-          </h4>
-          <p className="text-[11px] text-zinc-500 leading-relaxed px-3 italic">
-            {llm.transcript}
-          </p>
-        </div>
-      )}
+  return (
+    <div ref={scrollRef} className="h-full overflow-y-auto space-y-0.5 pr-1">
+      {segments.map((seg, i) => {
+        const isActive = currentTime >= seg.start && currentTime < seg.end;
+        const isPast = currentTime >= seg.end;
+        return (
+          <button
+            key={i}
+            ref={isActive ? activeRef : undefined}
+            onClick={() => onSeek(seg.start)}
+            className={`w-full text-left px-3 py-2 rounded-lg transition-all text-xs ${
+              isActive
+                ? "bg-purple-500/15 text-white"
+                : isPast
+                  ? "text-zinc-600 hover:bg-white/[0.03] hover:text-zinc-400"
+                  : "text-zinc-400 hover:bg-white/[0.04] hover:text-zinc-200"
+            }`}
+          >
+            <div className="flex items-start gap-2.5">
+              <span className={`font-mono text-[10px] shrink-0 mt-0.5 ${isActive ? "text-purple-400" : "text-zinc-600"}`}>
+                {fmtShort(seg.start)}
+              </span>
+              <span className={isActive ? "font-medium" : ""}>{seg.text}</span>
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function LeftPanel({
+  jobId,
+  clipFilename,
+  llm,
+  currentTime,
+  onSeek,
+}: {
+  jobId: string;
+  clipFilename: string;
+  llm: LlmAnalysis | null;
+  currentTime: number;
+  onSeek: (t: number) => void;
+}) {
+  const hasMoments = (llm?.key_moments?.length ?? 0) > 0;
+  const [tab, setTab] = useState<LeftTab>(hasMoments ? "moments" : "transcript");
+  const [words, setWords] = useState<TranscriptWord[]>([]);
+  const [wordsLoading, setWordsLoading] = useState(false);
+  const [wordsFetched, setWordsFetched] = useState(false);
+
+  // Fetch words when switching to transcript tab
+  useEffect(() => {
+    if (tab !== "transcript" || wordsFetched) return;
+    setWordsLoading(true);
+    getClipWords(jobId, clipFilename)
+      .then(setWords)
+      .finally(() => {
+        setWordsLoading(false);
+        setWordsFetched(true);
+      });
+  }, [tab, jobId, clipFilename, wordsFetched]);
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* Tab toggle */}
+      <div className="shrink-0 px-3 py-2.5 border-b border-white/[0.06] flex gap-1">
+        {(["moments", "transcript"] as const).map((t) => (
+          <button
+            key={t}
+            onClick={() => setTab(t)}
+            className={`text-[11px] px-3 py-1.5 rounded-md transition-all font-medium ${
+              tab === t
+                ? "bg-white/[0.08] text-zinc-200"
+                : "text-zinc-600 hover:text-zinc-300 hover:bg-white/[0.03]"
+            }`}
+          >
+            {t === "moments" ? "Moments cles" : "Transcription"}
+          </button>
+        ))}
+      </div>
+
+      {/* Content */}
+      <div className="flex-1 min-h-0 p-2">
+        {tab === "moments" ? (
+          <MomentsView llm={llm} currentTime={currentTime} onSeek={onSeek} />
+        ) : (
+          <TranscriptView
+            words={words}
+            loading={wordsLoading}
+            currentTime={currentTime}
+            onSeek={onSeek}
+            fallbackText={llm?.transcript ?? ""}
+          />
+        )}
+      </div>
     </div>
   );
 }
@@ -400,16 +570,15 @@ export default function ClipEditor({
 
       {/* ─── Main area: transcript + video ─── */}
       <div className="flex-1 flex min-h-0">
-        {/* Left: Transcript */}
-        <div className="w-72 shrink-0 border-r border-white/[0.06] flex flex-col">
-          <div className="shrink-0 px-4 py-3 border-b border-white/[0.06]">
-            <h4 className="text-[10px] font-semibold text-zinc-500 uppercase tracking-widest">
-              Moments cles
-            </h4>
-          </div>
-          <div className="flex-1 min-h-0 p-2">
-            <TranscriptPanel llm={llm} currentTime={currentTime} onSeek={seek} />
-          </div>
+        {/* Left: Moments / Transcript */}
+        <div className="w-72 shrink-0 border-r border-white/[0.06]">
+          <LeftPanel
+            jobId={jobId}
+            clipFilename={clipFilename}
+            llm={llm}
+            currentTime={currentTime}
+            onSeek={seek}
+          />
         </div>
 
         {/* Center: Video */}

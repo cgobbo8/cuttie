@@ -252,6 +252,11 @@ def generate_vertical_clips(
         if words:
             ass_path = vertical_path.replace(".mp4", ".ass")
             generate_ass(words, ass_path, OUTPUT_WIDTH, OUTPUT_HEIGHT, dominant)
+            # Save word-level timestamps for the editor transcript panel
+            import json
+            words_path = vertical_path.replace(".mp4", "_words.json")
+            with open(words_path, "w", encoding="utf-8") as f:
+                json.dump(words, f, ensure_ascii=False)
         return hp, clip_path, vertical_path, vertical_name, ass_path
 
     with ThreadPoolExecutor(max_workers=MAX_TRANSCRIBE_WORKERS) as executor:

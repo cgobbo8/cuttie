@@ -5,7 +5,7 @@ import subprocess
 import uuid
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 
 from app.models.schemas import AnalyzeRequest, JobResponse
@@ -83,6 +83,19 @@ def get_clip(job_id: str, filename: str) -> FileResponse:
     if not os.path.isfile(filepath):
         raise HTTPException(status_code=404, detail="Clip not found")
     return FileResponse(filepath, media_type="video/mp4")
+
+
+@router.get("/clips/{job_id}/{filename}/words")
+def get_clip_words(job_id: str, filename: str) -> JSONResponse:
+    """Return word-level timestamps for a clip's transcript."""
+    base, _ = os.path.splitext(filename)
+    words_path = os.path.join(CLIPS_DIR, job_id, f"{base}_words.json")
+    if not os.path.isfile(words_path):
+        return JSONResponse(content=[])
+    import json
+    with open(words_path, encoding="utf-8") as f:
+        words = json.load(f)
+    return JSONResponse(content=words)
 
 
 class TrimRequest(BaseModel):

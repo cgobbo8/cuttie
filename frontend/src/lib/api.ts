@@ -116,3 +116,15 @@ export async function retryJob(
 export function clipUrl(jobId: string, filename: string): string {
   return `${BASE}/clips/${jobId}/${filename}`;
 }
+
+export interface TranscriptWord {
+  word: string;
+  start: number;
+  end: number;
+}
+
+export async function getClipWords(jobId: string, filename: string): Promise<TranscriptWord[]> {
+  const res = await fetch(`${BASE}/clips/${jobId}/${filename}/words`);
+  if (!res.ok) return [];
+  return res.json();
+}

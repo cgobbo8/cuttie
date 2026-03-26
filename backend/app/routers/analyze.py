@@ -120,12 +120,29 @@ def get_edit_environment(job_id: str, clip_filename: str) -> JSONResponse:
     input_w = int(video_stream["width"])
     input_h = int(video_stream["height"])
 
-    # Facecam data
+    # Facecam data — load persisted or detect on the fly
     facecam_path = os.path.join(CLIPS_DIR, job_id, "facecam.json")
     facecam = None
     if os.path.isfile(facecam_path):
         with open(facecam_path, encoding="utf-8") as f:
             facecam = json.load(f)
+    else:
+        # Try to detect and persist for future calls
+        try:
+            from app.services.facecam_detector import detect_facecam
+            clip_dir = os.path.join(CLIPS_DIR, job_id)
+            clips = sorted(
+                [f for f in os.listdir(clip_dir) if f.startswith("clip_") and f.endswith(".mp4")],
+            )
+            if clips:
+                clip_paths = [os.path.join(clip_dir, c) for c in clips[:5]]
+                raw = detect_facecam(clip_paths[0], extra_clips=clip_paths[1:])
+                if raw:
+                    facecam = {k: int(v) for k, v in raw.items()}
+                    with open(facecam_path, "w", encoding="utf-8") as f:
+                        json.dump(facecam, f)
+        except Exception:
+            pass  # Non-critical — frontend has its own fallback
 
     # Compute game crop (same logic as _build_filtergraph)
     from app.services.vertical_clipper import (

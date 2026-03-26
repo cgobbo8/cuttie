@@ -111,7 +111,7 @@ export default function CanvasViewport({
                   filter: style.blur > 0 ? `blur(${style.blur}px)` : undefined,
                 }}
               >
-                {layer.type === "video" && (
+                {layer.video && (
                   <VideoLayer layer={layer} registerVideo={registerVideo} />
                 )}
               </div>

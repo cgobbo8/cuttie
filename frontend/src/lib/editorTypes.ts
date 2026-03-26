@@ -1,6 +1,7 @@
 /* ── Layer types ─────────────────────────────────────────── */
 
-export type LayerType = "video";
+/** Category of the layer — decoupled from its name. */
+export type LayerType = "gameplay" | "facecam";
 
 export interface LayerTransform {
   x: number;      // px in canvas space (1080×1920)
@@ -19,6 +20,8 @@ export const DEFAULT_STYLE: LayerStyle = { opacity: 1, blur: 0, borderRadius: 0 
 
 export interface VideoLayerData {
   src: string;
+  /** Source-resolution crop rect (facecam only) */
+  crop?: { x: number; y: number; w: number; h: number };
 }
 
 export interface Layer {

@@ -1,9 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Layer } from "../../lib/editorTypes";
+import type { Layer, LayerType, VideoLayerData } from "../../lib/editorTypes";
 import { DEFAULT_STYLE } from "../../lib/editorTypes";
 
-const CANVAS_W = 1080;
-const CANVAS_H = 1920;
 const MAX_HISTORY = 50;
 
 let _nextId = 0;
@@ -20,8 +18,12 @@ function loadLayers(clipKey: string): Layer[] | null {
     const raw = localStorage.getItem(storageKey(clipKey));
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Layer[];
-    // Ensure style field exists (migration from older saves)
-    return parsed.map((l) => ({ ...l, style: l.style ?? { ...DEFAULT_STYLE } }));
+    // Migration from older saves
+    return parsed.map((l) => ({
+      ...l,
+      style: l.style ?? { ...DEFAULT_STYLE },
+      type: l.type === ("video" as string) ? "gameplay" : l.type, // old "video" → "gameplay"
+    }));
   } catch { return null; }
 }
 
@@ -120,21 +122,26 @@ export function useEditorState(clipKey: string) {
     });
   }, []);
 
-  // Add a raw gameplay layer (16:9 native ratio, full width)
-  const addGameplayLayer = useCallback((clipUrl: string) => {
+  /** Generic layer factory — type is the category, name is user-facing. */
+  const addLayer = useCallback((opts: {
+    type: LayerType;
+    name: string;
+    clipUrl: string;
+    transform: Layer["transform"];
+    style?: Partial<Layer["style"]>;
+    video?: VideoLayerData;
+  }) => {
     pushHistory();
     const id = uid();
-    const w = CANVAS_W;
-    const h = Math.round(CANVAS_W * (9 / 16)); // 16:9 → 608px at 1080w
     const layer: Layer = {
       id,
-      name: "Gameplay",
-      type: "video",
+      name: opts.name,
+      type: opts.type,
       visible: true,
       locked: false,
-      transform: { x: 0, y: Math.round((CANVAS_H - h) / 2), width: w, height: h },
-      style: { ...DEFAULT_STYLE },
-      video: { src: clipUrl },
+      transform: opts.transform,
+      style: { ...DEFAULT_STYLE, ...opts.style },
+      video: opts.video ?? { src: opts.clipUrl },
     };
     setLayers((prev) => [...prev, layer]);
     setSelectedId(id);
@@ -230,7 +237,7 @@ export function useEditorState(clipKey: string) {
     registerVideo,
     seek,
     togglePlay,
-    addGameplayLayer,
+    addLayer,
     updateTransform,
     commitTransform,
     updateStyle,

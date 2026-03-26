@@ -129,7 +129,26 @@ export async function getClipWords(jobId: string, filename: string): Promise<Tra
   return res.json();
 }
 
-export async function getEditEnvironment(jobId: string, clipFilename: string) {
+export interface EditEnvironment {
+  clip_width: number;
+  clip_height: number;
+  facecam: { x: number; y: number; w: number; h: number } | null;
+  game_crop: { x: number; y: number; w: number; h: number };
+  layout: {
+    canvas_w: number;
+    canvas_h: number;
+    game_h: number;
+    game_y: number;
+    cam_size: number;
+    cam_margin_top: number;
+    cam_border_radius: number;
+    blur_sigma: number;
+    game_margin_bottom: number;
+  };
+  words: TranscriptWord[];
+}
+
+export async function getEditEnvironment(jobId: string, clipFilename: string): Promise<EditEnvironment> {
   const res = await fetch(`${BASE}/clips/${jobId}/${clipFilename}/edit-env`);
   if (!res.ok) throw new Error("Failed to load edit environment");
   return res.json();

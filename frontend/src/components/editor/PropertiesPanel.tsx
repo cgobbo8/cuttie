@@ -1,8 +1,12 @@
 import type { Layer, LayerStyle } from "../../lib/editorTypes";
 
+const CANVAS_W = 1080;
+const CANVAS_H = 1920;
+
 interface Props {
   layer: Layer;
   onStyleChange: (id: string, patch: Partial<LayerStyle>) => void;
+  onTransformChange: (id: string, patch: Partial<Layer["transform"]>) => void;
   onCommit: () => void;
 }
 
@@ -52,8 +56,17 @@ function Slider({
   );
 }
 
-export default function PropertiesPanel({ layer, onStyleChange, onCommit }: Props) {
-  const { style } = layer;
+export default function PropertiesPanel({ layer, onStyleChange, onTransformChange, onCommit }: Props) {
+  const { style, transform } = layer;
+
+  const centerX = () => {
+    onCommit();
+    onTransformChange(layer.id, { x: Math.round((CANVAS_W - transform.width) / 2) });
+  };
+  const centerY = () => {
+    onCommit();
+    onTransformChange(layer.id, { y: Math.round((CANVAS_H - transform.height) / 2) });
+  };
 
   return (
     <div className="flex flex-col h-full">
@@ -84,6 +97,22 @@ export default function PropertiesPanel({ layer, onStyleChange, onCommit }: Prop
               </span>
             </div>
           ))}
+        </div>
+
+        {/* Center buttons */}
+        <div className="flex gap-2">
+          <button
+            onClick={centerX}
+            className="flex-1 text-[10px] px-2 py-1.5 rounded-md bg-white/[0.04] hover:bg-white/[0.08] text-zinc-400 hover:text-zinc-200 transition-colors font-medium"
+          >
+            Centrer X
+          </button>
+          <button
+            onClick={centerY}
+            className="flex-1 text-[10px] px-2 py-1.5 rounded-md bg-white/[0.04] hover:bg-white/[0.08] text-zinc-400 hover:text-zinc-200 transition-colors font-medium"
+          >
+            Centrer Y
+          </button>
         </div>
 
         <div className="h-px bg-white/[0.06]" />

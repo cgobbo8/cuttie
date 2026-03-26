@@ -222,7 +222,7 @@ export default function CanvasEditor({
         {/* Right: Properties panel — visible when a layer is selected */}
         {selected && (
           <div className="w-56 shrink-0 border-l border-white/[0.06] flex flex-col">
-            <PropertiesPanel layer={selected} onStyleChange={updateStyle} onCommit={commitTransform} />
+            <PropertiesPanel layer={selected} onStyleChange={updateStyle} onTransformChange={updateTransform} onCommit={commitTransform} />
           </div>
         )}
       </div>

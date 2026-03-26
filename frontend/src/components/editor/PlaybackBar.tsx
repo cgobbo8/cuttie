@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Play, Pause } from "lucide-react";
 
 function fmtShort(s: number): string {
   const m = Math.floor(s / 60);
@@ -98,13 +99,9 @@ export default function PlaybackBar({ currentTime, duration, playing, onSeek, on
             className="w-8 h-8 rounded-md bg-white/[0.05] hover:bg-white/[0.1] flex items-center justify-center text-zinc-300 hover:text-white transition-colors"
           >
             {playing ? (
-              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" />
-              </svg>
+              <Pause className="w-4 h-4" fill="currentColor" />
             ) : (
-              <svg className="w-4 h-4 ml-0.5" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M8 5v14l11-7z" />
-              </svg>
+              <Play className="w-4 h-4 ml-0.5" fill="currentColor" />
             )}
           </button>
 

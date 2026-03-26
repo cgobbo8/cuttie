@@ -1,4 +1,5 @@
 import { useState, useCallback } from "react";
+import { Video, User, MessageSquare, Image, Square, Eye, EyeOff, Lock } from "lucide-react";
 import type { Layer, LayerType } from "../../lib/editorTypes";
 
 interface Props {
@@ -13,40 +14,17 @@ interface Props {
   onRename: (id: string, name: string) => void;
 }
 
+const LAYER_ICONS: Record<LayerType, typeof Video> = {
+  gameplay: Video,
+  facecam: User,
+  subtitles: MessageSquare,
+  asset: Image,
+  shape: Square,
+};
+
 function LayerIcon({ type }: { type: LayerType }) {
-  if (type === "facecam") {
-    return (
-      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0z" />
-      </svg>
-    );
-  }
-  if (type === "subtitles") {
-    return (
-      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
-      </svg>
-    );
-  }
-  if (type === "asset") {
-    return (
-      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-      </svg>
-    );
-  }
-  if (type === "shape") {
-    return (
-      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5a1 1 0 011-1h14a1 1 0 011 1v14a1 1 0 01-1 1H5a1 1 0 01-1-1V5z" />
-      </svg>
-    );
-  }
-  return (
-    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-    </svg>
-  );
+  const Icon = LAYER_ICONS[type] ?? Video;
+  return <Icon className="w-3.5 h-3.5" />;
 }
 
 export default function LayerPanel({
@@ -108,13 +86,7 @@ export default function LayerPanel({
                 onClick={(e) => { e.stopPropagation(); onToggleVisibility(layer.id); }}
                 title={layer.visible ? "Masquer" : "Afficher"}
               >
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  {layer.visible ? (
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                  ) : (
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M3 3l18 18" />
-                  )}
-                </svg>
+                {layer.visible ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
               </button>
 
               {/* Type icon */}
@@ -152,9 +124,7 @@ export default function LayerPanel({
                 onClick={(e) => { e.stopPropagation(); onToggleLock(layer.id); }}
                 title={layer.locked ? "Deverrouiller" : "Verrouiller"}
               >
-                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                </svg>
+                <Lock className="w-3 h-3" />
               </button>
             </div>
           );

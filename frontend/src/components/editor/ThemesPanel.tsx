@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { Pin, Trash2, Save } from "lucide-react";
 import type { Layer } from "../../lib/editorTypes";
 import type { EditorTheme, ThemeLayerTemplate } from "../../lib/editorThemes";
 import { getAllThemes, loadUserThemes, saveUserThemes, getDefaultThemeId, setDefaultThemeId } from "../../lib/editorThemes";
@@ -141,10 +142,7 @@ export default function ThemesPanel({ layers, onApplyTheme }: Props) {
                   }`}
                   title={isDefault ? "Retirer par défaut" : "Définir par défaut"}
                 >
-                  {/* Pin icon */}
-                  <svg className="w-3.5 h-3.5" fill={isDefault ? "currentColor" : "none"} viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v3a1 1 0 01-.293.707L16 11.414V17a1 1 0 01-.293.707l-3 3a1 1 0 01-1.414 0l-3-3A1 1 0 018 17v-5.586L5.293 8.707A1 1 0 015 8V5z" />
-                  </svg>
+                  <Pin className="w-3.5 h-3.5" fill={isDefault ? "currentColor" : "none"} />
                 </button>
                 <button
                   onClick={() => onApplyTheme(theme.layers)}
@@ -158,9 +156,7 @@ export default function ThemesPanel({ layers, onApplyTheme }: Props) {
                     className="pointer-events-auto text-[10px] px-1.5 py-1 rounded bg-red-500/15 hover:bg-red-500/25 text-red-400 hover:text-red-300 transition-colors"
                     title="Supprimer"
                   >
-                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
+                    <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 )}
               </div>
@@ -203,9 +199,7 @@ export default function ThemesPanel({ layers, onApplyTheme }: Props) {
             disabled={layers.length === 0}
             className="w-full text-xs px-3 py-2 rounded-lg bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 hover:text-purple-200 transition-colors flex items-center justify-center gap-2 font-medium disabled:opacity-30 disabled:cursor-not-allowed"
           >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
-            </svg>
+            <Save className="w-4 h-4" />
             Sauvegarder le layout
           </button>
         )}

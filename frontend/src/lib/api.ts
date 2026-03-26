@@ -35,9 +35,10 @@ export interface HotPoint {
   clip_filename: string | null;
   vertical_filename: string | null;
   llm: LlmAnalysis | null;
+  chat_mood: string | null;
 }
 
-export type JobStatus =
+export type JobStatusType =
   | "PENDING"
   | "DOWNLOADING_AUDIO"
   | "DOWNLOADING_CHAT"
@@ -54,7 +55,7 @@ export type JobStatus =
 
 export interface JobResponse {
   job_id: string;
-  status: JobStatus;
+  status: JobStatusType;
   progress: string | null;
   hot_points: HotPoint[] | null;
   error: string | null;
@@ -91,21 +92,19 @@ export async function submitVod(url: string): Promise<{ job_id: string }> {
 
 export async function getJobStatus(jobId: string): Promise<JobResponse> {
   const res = await fetch(`${BASE}/jobs/${jobId}`);
-  if (!res.ok) {
-    throw new Error("Failed to fetch job status");
-  }
+  if (!res.ok) throw new Error("Failed to fetch job status");
   return res.json();
 }
 
 export async function listJobs(): Promise<JobSummary[]> {
   const res = await fetch(`${BASE}/jobs`);
-  if (!res.ok) {
-    throw new Error("Failed to fetch jobs");
-  }
+  if (!res.ok) throw new Error("Failed to fetch jobs");
   return res.json();
 }
 
-export async function retryJob(jobId: string): Promise<{ job_id: string; resume_from: string | null }> {
+export async function retryJob(
+  jobId: string,
+): Promise<{ job_id: string; resume_from: string | null }> {
   const res = await fetch(`${BASE}/jobs/${jobId}/retry`, { method: "POST" });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: "Retry failed" }));

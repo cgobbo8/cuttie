@@ -31,7 +31,8 @@ logger = logging.getLogger(__name__)
 CLIPS_DIR = "clips"
 OUTPUT_WIDTH = 1080
 OUTPUT_HEIGHT = 1920
-MAX_VERTICAL_WORKERS = 2
+MAX_TRANSCRIBE_WORKERS = 5   # Whisper + LLM rewrite (API-bound)
+MAX_RENDER_WORKERS = 3       # FFmpeg rendering (CPU-bound)
 
 # Layout ratios
 GAME_HEIGHT_RATIO = 0.70   # game footage = 70% of output height
@@ -157,7 +158,7 @@ def generate_vertical_clip(
         "-filter_complex", filtergraph,
         "-map", output_label,
         "-map", "0:a?",
-        "-c:v", "libx264", "-preset", "fast",
+        "-c:v", "libx264", "-preset", "veryfast",
         "-b:v", "2M", "-maxrate", "3M", "-bufsize", "4M",
         "-c:a", "aac", "-b:a", "128k",
         "-movflags", "+faststart",
@@ -165,7 +166,7 @@ def generate_vertical_clip(
     ]
 
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
         if result.returncode != 0:
             logger.error(f"FFmpeg vertical render failed: {result.stderr[-500:]}")
             return False
@@ -236,33 +237,49 @@ def generate_vertical_clips(
         to_process.append((hp, clip_path, vertical_path, vertical_name))
 
     total = len(to_process)
-    logger.info(f"Generating {total} vertical clips...")
+    logger.info(f"Generating {total} vertical clips (2 phases: transcribe then render)")
 
-    def _process_one(item: tuple) -> tuple[HotPoint, str | None]:
+    # --- Phase 1: Transcribe + dominant color extraction (API-bound, 5 workers) ---
+    update_job(job_id, progress=f"Generation verticale : transcription 0/{total}...")
+
+    prepared: list[tuple[HotPoint, str, str, str, str | None]] = []
+
+    def _transcribe_one(item: tuple) -> tuple:
         hp, clip_path, vertical_path, vertical_name = item
-
-        # Extract dominant color for subtitle styling
         dominant = extract_dominant_color(clip_path)
-
-        # Transcribe for subtitles
         _, _, words = transcribe_with_words(clip_path)
-
         ass_path = None
         if words:
             ass_path = vertical_path.replace(".mp4", ".ass")
             generate_ass(words, ass_path, OUTPUT_WIDTH, OUTPUT_HEIGHT, dominant)
+        return hp, clip_path, vertical_path, vertical_name, ass_path
 
+    with ThreadPoolExecutor(max_workers=MAX_TRANSCRIBE_WORKERS) as executor:
+        futures = {executor.submit(_transcribe_one, item): item for item in to_process}
+        done = 0
+        for future in as_completed(futures):
+            done += 1
+            try:
+                result = future.result()
+                prepared.append(result)
+                update_job(job_id, progress=f"Generation verticale : transcription {done}/{total}...")
+            except Exception as e:
+                logger.error(f"Transcription error: {e}")
+
+    logger.info(f"Transcription done: {len(prepared)}/{total}")
+
+    # --- Phase 2: FFmpeg rendering (CPU-bound, 3 workers) ---
+    update_job(job_id, progress=f"Generation verticale : rendu 0/{total}...")
+
+    def _render_one(item: tuple) -> tuple[HotPoint, str | None]:
+        hp, clip_path, vertical_path, vertical_name, ass_path = item
         ok = generate_vertical_clip(clip_path, vertical_path, facecam, ass_path)
-
-        # Cleanup ASS file
         if ass_path and os.path.isfile(ass_path):
             os.remove(ass_path)
-
         return hp, vertical_name if ok else None
 
-    with ThreadPoolExecutor(max_workers=MAX_VERTICAL_WORKERS) as executor:
-        futures = {executor.submit(_process_one, item): item for item in to_process}
-
+    with ThreadPoolExecutor(max_workers=MAX_RENDER_WORKERS) as executor:
+        futures = {executor.submit(_render_one, item): item for item in prepared}
         done = 0
         for future in as_completed(futures):
             done += 1
@@ -273,12 +290,9 @@ def generate_vertical_clips(
                     logger.info(f"Vertical {done}/{total}: {vertical_name}")
                 else:
                     logger.warning(f"Vertical {done}/{total}: failed")
-                update_job(
-                    job_id,
-                    progress=f"Generation verticale : {done}/{total} clips...",
-                )
+                update_job(job_id, progress=f"Generation verticale : rendu {done}/{total}...")
             except Exception as e:
-                logger.error(f"Vertical clip generation error: {e}")
+                logger.error(f"Vertical render error: {e}")
 
     success = sum(1 for hp in hot_points if getattr(hp, "vertical_filename", None))
     logger.info(f"Vertical generation complete: {success}/{total}")

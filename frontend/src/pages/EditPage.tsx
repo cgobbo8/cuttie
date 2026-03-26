@@ -20,7 +20,7 @@ export default function EditPage() {
           navigate(`/${jobId}`);
           return;
         }
-        const clips = job.hot_points.filter((hp) => hp.clip_filename && hp.vertical_filename);
+        const clips = job.hot_points.filter((hp) => hp.clip_filename);
         // If a clip is specified in the URL, use it; otherwise use the first one
         const target = clipFile
           ? clips.find((hp) => hp.clip_filename === clipFile)

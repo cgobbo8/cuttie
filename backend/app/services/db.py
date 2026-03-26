@@ -50,6 +50,21 @@ def init_db() -> None:
         );
 
         CREATE INDEX IF NOT EXISTS idx_hot_points_job ON hot_points(job_id);
+
+        CREATE TABLE IF NOT EXISTS renders (
+            render_id TEXT PRIMARY KEY,
+            job_id TEXT NOT NULL,
+            clip_filename TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'rendering',
+            progress INTEGER NOT NULL DEFAULT 0,
+            output_filename TEXT,
+            size_mb REAL,
+            error TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_renders_job ON renders(job_id);
     """)
     # Migrations: add columns if they don't exist (for existing DBs)
     migrations = [
@@ -190,6 +205,50 @@ def list_jobs() -> list[dict]:
     conn = _get_conn()
     rows = conn.execute(
         "SELECT job_id, url, status, vod_title, vod_duration_seconds, created_at, error FROM jobs ORDER BY created_at DESC"
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+# ── Renders ──────────────────────────────────────────────────
+
+def create_render(render_id: str, job_id: str, clip_filename: str) -> None:
+    now = datetime.now(timezone.utc).isoformat()
+    conn = _get_conn()
+    conn.execute(
+        "INSERT INTO renders (render_id, job_id, clip_filename, status, progress, created_at, updated_at) VALUES (?, ?, ?, 'rendering', 0, ?, ?)",
+        (render_id, job_id, clip_filename, now, now),
+    )
+    conn.commit()
+    conn.close()
+
+
+def update_render(render_id: str, **kwargs) -> None:
+    if not kwargs:
+        return
+    now = datetime.now(timezone.utc).isoformat()
+    kwargs["updated_at"] = now
+    cols = ", ".join(f"{k} = ?" for k in kwargs)
+    vals = list(kwargs.values()) + [render_id]
+    conn = _get_conn()
+    conn.execute(f"UPDATE renders SET {cols} WHERE render_id = ?", vals)
+    conn.commit()
+    conn.close()
+
+
+def get_render(render_id: str) -> dict | None:
+    conn = _get_conn()
+    row = conn.execute("SELECT * FROM renders WHERE render_id = ?", (render_id,)).fetchone()
+    conn.close()
+    if row is None:
+        return None
+    return dict(row)
+
+
+def list_renders() -> list[dict]:
+    conn = _get_conn()
+    rows = conn.execute(
+        "SELECT r.*, j.vod_title FROM renders r LEFT JOIN jobs j ON r.job_id = j.job_id ORDER BY r.created_at DESC"
     ).fetchall()
     conn.close()
     return [dict(r) for r in rows]

@@ -3,6 +3,7 @@ import Layout from "./components/Layout";
 import HomePage from "./pages/HomePage";
 import JobPage from "./pages/JobPage";
 import EditPage from "./pages/EditPage";
+import ExportsPage from "./pages/ExportsPage";
 
 export default function App() {
   return (
@@ -10,6 +11,7 @@ export default function App() {
       <Routes>
         <Route element={<Layout />}>
           <Route index element={<HomePage />} />
+          <Route path="exports" element={<ExportsPage />} />
           <Route path=":jobId" element={<JobPage />} />
         </Route>
         {/* Edit page: fullscreen, outside the standard layout */}

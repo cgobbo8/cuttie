@@ -47,7 +47,6 @@ export type JobStatusType =
   | "SCORING"
   | "TRIAGE"
   | "CLIPPING"
-  | "VERTICAL"
   | "TRANSCRIBING"
   | "LLM_ANALYSIS"
   | "DONE"
@@ -163,11 +162,25 @@ export interface RenderResult {
   url: string;
 }
 
-export async function renderClip(
+export interface RenderStatus {
+  render_id: string;
+  job_id: string;
+  clip_filename: string;
+  status: "rendering" | "done" | "error";
+  progress: number;
+  output_filename?: string;
+  size_mb?: number;
+  url?: string;
+  error?: string;
+  vod_title?: string;
+  created_at: string;
+}
+
+export async function startRender(
   jobId: string,
   clipFilename: string,
   layers: unknown[],
-): Promise<RenderResult> {
+): Promise<string> {
   const res = await fetch(`${BASE}/clips/${jobId}/${clipFilename}/render`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -177,7 +190,53 @@ export async function renderClip(
     const err = await res.json().catch(() => ({ detail: "Render failed" }));
     throw new Error(err.detail || "Render failed");
   }
+  const data = await res.json();
+  return data.render_id;
+}
+
+export async function getRenderStatus(renderId: string): Promise<RenderStatus> {
+  const res = await fetch(`${BASE}/renders/${renderId}`);
+  if (!res.ok) throw new Error("Failed to fetch render status");
   return res.json();
+}
+
+export async function listRenders(): Promise<RenderStatus[]> {
+  const res = await fetch(`${BASE}/renders`);
+  if (!res.ok) throw new Error("Failed to fetch renders");
+  return res.json();
+}
+
+export async function renderClip(
+  jobId: string,
+  clipFilename: string,
+  layers: unknown[],
+  onProgress?: (pct: number) => void,
+): Promise<RenderResult> {
+  const renderId = await startRender(jobId, clipFilename, layers);
+
+  return new Promise((resolve, reject) => {
+    const poll = async () => {
+      try {
+        const status = await getRenderStatus(renderId);
+        if (onProgress) onProgress(status.progress);
+
+        if (status.status === "done") {
+          resolve({
+            filename: status.output_filename!,
+            size_mb: status.size_mb!,
+            url: status.url!,
+          });
+        } else if (status.status === "error") {
+          reject(new Error(status.error || "Render failed"));
+        } else {
+          setTimeout(poll, 1000);
+        }
+      } catch (err) {
+        reject(err);
+      }
+    };
+    poll();
+  });
 }
 
 // ── Assets ──────────────────────────────────────────────

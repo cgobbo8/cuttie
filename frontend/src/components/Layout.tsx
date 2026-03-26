@@ -1,4 +1,5 @@
 import { Outlet, Link } from "react-router";
+import { Film } from "lucide-react";
 
 export default function Layout() {
   return (
@@ -20,6 +21,13 @@ export default function Layout() {
             <span className="text-sm text-zinc-600 font-medium hidden sm:inline">
               Twitch VOD Clip Finder
             </span>
+          </Link>
+          <Link
+            to="/exports"
+            className="flex items-center gap-1.5 text-sm text-zinc-500 hover:text-zinc-300 transition-colors"
+          >
+            <Film className="w-4 h-4" />
+            Exports
           </Link>
         </div>
       </header>

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowLeft, Undo2, Redo2, Loader2, Download, Plus, Video, User, MessageSquare, ImagePlus, FolderOpen, Square, Circle, SlidersHorizontal, LayoutTemplate, X, Check } from "lucide-react";
-import { clipUrl, getEditEnvironment, renderClip, uploadAsset, listAssets, assetUrl, type EditEnvironment, type HotPoint, type AssetInfo } from "../../lib/api";
+import { clipUrl, getEditEnvironment, startRender, uploadAsset, listAssets, assetUrl, type EditEnvironment, type HotPoint, type AssetInfo } from "../../lib/api";
 import type { Layer, SubtitleData } from "../../lib/editorTypes";
 import type { ThemeLayerTemplate } from "../../lib/editorThemes";
 import { getDefaultTheme } from "../../lib/editorThemes";
@@ -267,21 +267,37 @@ export default function CanvasEditor({
   /* ── Export ──────────────────────────────────────────────── */
 
   const [exporting, setExporting] = useState(false);
-  const [exportResult, setExportResult] = useState<{ filename: string; url: string; size_mb: number } | null>(null);
+  const [exportToast, setExportToast] = useState(false);
 
   const handleExport = useCallback(async () => {
     if (exporting || layers.length === 0) return;
     setExporting(true);
-    setExportResult(null);
     try {
-      const result = await renderClip(jobId, hotPoint.clip_filename!, layers);
-      setExportResult(result);
+      // If subtitle layer has empty words, re-fetch from backend (bypass cache)
+      let exportLayers = layers;
+      const subLayer = layers.find((l) => l.type === "subtitles" && l.visible && l.subtitle && l.subtitle.words.length === 0);
+      if (subLayer) {
+        const env = await getEditEnvironment(jobId, hotPoint.clip_filename!);
+        if (env?.words?.length) {
+          exportLayers = layers.map((l) =>
+            l.id === subLayer.id && l.subtitle
+              ? { ...l, subtitle: { ...l.subtitle, words: env.words } }
+              : l,
+          );
+          // Update cache + editor state so next export doesn't re-fetch
+          editEnvRef.current = env;
+          updateSubtitle(subLayer.id, { words: env.words });
+        }
+      }
+      await startRender(jobId, hotPoint.clip_filename!, exportLayers);
+      setExportToast(true);
+      setTimeout(() => setExportToast(false), 6000);
     } catch (err) {
       alert(`Export échoué: ${err instanceof Error ? err.message : "erreur inconnue"}`);
     } finally {
       setExporting(false);
     }
-  }, [exporting, layers, jobId, hotPoint.clip_filename]);
+  }, [exporting, layers, jobId, hotPoint.clip_filename, updateSubtitle]);
 
   /* ── Popups & keyboard ──────────────────────────────────── */
 
@@ -566,25 +582,26 @@ export default function CanvasEditor({
         </div>
       )}
 
-      {/* ─── Export result toast ─── */}
-      {exportResult && (
+      {/* ─── Export launched toast ─── */}
+      {exportToast && (
         <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-[200] bg-zinc-900 border border-white/[0.1] rounded-xl shadow-2xl px-5 py-4 flex items-center gap-4">
-          <div className="w-8 h-8 rounded-full bg-green-500/15 flex items-center justify-center shrink-0">
-            <Check className="w-4 h-4 text-green-400" />
+          <div className="w-8 h-8 rounded-full bg-purple-500/15 flex items-center justify-center shrink-0">
+            <Check className="w-4 h-4 text-purple-400" />
           </div>
           <div>
-            <p className="text-sm text-white font-medium">Export terminé</p>
-            <p className="text-[11px] text-zinc-400">{exportResult.filename} — {exportResult.size_mb} MB</p>
+            <p className="text-sm text-white font-medium">Export lance</p>
+            <p className="text-[11px] text-zinc-400">
+              Tu peux suivre la progression et telecharger dans la page Exports.
+            </p>
           </div>
           <a
-            href={clipUrl(jobId, exportResult.filename)}
-            download={exportResult.filename}
-            className="text-xs px-3 py-1.5 rounded-lg bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 hover:text-purple-200 transition-colors font-medium"
+            href="/exports"
+            className="text-xs px-3 py-1.5 rounded-lg bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 hover:text-purple-200 transition-colors font-medium whitespace-nowrap"
           >
-            Télécharger
+            Voir les exports
           </a>
           <button
-            onClick={() => setExportResult(null)}
+            onClick={() => setExportToast(false)}
             className="text-zinc-600 hover:text-white transition-colors ml-1"
           >
             <X className="w-4 h-4" />

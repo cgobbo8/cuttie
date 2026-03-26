@@ -161,7 +161,7 @@ def get_edit_environment(job_id: str, clip_filename: str) -> JSONResponse:
     crop_y = (input_h - crop_h) // 2
     game_y = OUTPUT_HEIGHT - game_h - GAME_MARGIN_BOTTOM
 
-    # Words
+    # Words — try cached file, else transcribe on the fly
     base, _ = os.path.splitext(clip_filename)
     vertical_base = base.replace("clip_", "vertical_")
     words_path = os.path.join(CLIPS_DIR, job_id, f"{vertical_base}_words.json")
@@ -169,6 +169,18 @@ def get_edit_environment(job_id: str, clip_filename: str) -> JSONResponse:
     if os.path.isfile(words_path):
         with open(words_path, encoding="utf-8") as f:
             words = json.load(f)
+    elif os.path.isfile(clip_path):
+        # Lazy transcription: generate words on first access
+        try:
+            from app.services.subtitle_generator import transcribe_with_words
+            logger.info(f"Transcribing {clip_filename} for word timestamps (lazy)...")
+            _, _, words = transcribe_with_words(clip_path)
+            if words:
+                with open(words_path, "w", encoding="utf-8") as f:
+                    json.dump(words, f, ensure_ascii=False)
+                logger.info(f"Saved {len(words)} words to {words_path}")
+        except Exception as e:
+            logger.warning(f"Lazy transcription failed: {e}")
 
     # Dominant color — load cached or extract on the fly
     dominant_color = None
@@ -254,6 +266,8 @@ def trim_clip(job_id: str, filename: str, req: TrimRequest) -> dict:
 
 # ── Render (editor export) ───────────────────────────────────
 
+from app.services.db import create_render, update_render, get_render, list_renders
+
 
 class RenderLayer(BaseModel):
     type: str
@@ -271,6 +285,48 @@ class RenderRequest(BaseModel):
     layers: list[RenderLayer]
 
 
+def _run_render(render_id: str, clip_path: str, layer_dicts: list[dict], output_path: str, asset_dir: str, job_id: str):
+    """Background render task."""
+    import sys
+    from app.services.editor_renderer import render_from_layers
+
+    print(f"[RENDER] Starting render {render_id}", flush=True)
+    print(f"[RENDER] clip_path={clip_path}", flush=True)
+    print(f"[RENDER] output_path={output_path}", flush=True)
+    print(f"[RENDER] layers count={len(layer_dicts)}", flush=True)
+    # Check for subtitle layer
+    for i, l in enumerate(layer_dicts):
+        print(f"[RENDER] layer[{i}] type={l.get('type')} visible={l.get('visible', True)}", flush=True)
+        if l.get("type") == "subtitles":
+            sub = l.get("subtitle", {})
+            words = sub.get("words", [])
+            print(f"[RENDER]   subtitle words count={len(words)}", flush=True)
+            if words:
+                print(f"[RENDER]   first word={words[0]}", flush=True)
+
+    def on_progress(pct: int, current: float, total: float):
+        update_render(render_id, progress=pct)
+
+    try:
+        success = render_from_layers(clip_path, layer_dicts, output_path, asset_dir, progress_cb=on_progress)
+        print(f"[RENDER] render_from_layers returned: {success}", flush=True)
+        if success:
+            size_mb = os.path.getsize(output_path) / (1024 * 1024)
+            base = os.path.basename(output_path)
+            update_render(
+                render_id,
+                status="done",
+                progress=100,
+                output_filename=base,
+                size_mb=round(size_mb, 1),
+            )
+        else:
+            update_render(render_id, status="error", error="FFmpeg render failed")
+    except Exception as e:
+        logger.exception(f"Render {render_id} crashed")
+        update_render(render_id, status="error", error=str(e))
+
+
 @router.post("/clips/{job_id}/{clip_filename}/render")
 def render_editor_export(
     job_id: str,
@@ -278,7 +334,7 @@ def render_editor_export(
     req: RenderRequest,
     bg: BackgroundTasks,
 ) -> dict:
-    """Render the editor canvas to a final video file."""
+    """Start an async render of the editor canvas."""
     clip_path = os.path.join(CLIPS_DIR, job_id, clip_filename)
     if not os.path.isfile(clip_path):
         raise HTTPException(status_code=404, detail="Clip not found")
@@ -287,21 +343,36 @@ def render_editor_export(
     rendered_name = f"{base}_rendered.mp4"
     output_path = os.path.join(CLIPS_DIR, job_id, rendered_name)
 
-    from app.services.editor_renderer import render_from_layers
-
     layer_dicts = [l.model_dump() for l in req.layers]
     asset_dir = os.path.join(CLIPS_DIR, "_assets")
 
-    success = render_from_layers(clip_path, layer_dicts, output_path, asset_dir)
-    if not success:
-        raise HTTPException(status_code=500, detail="Render failed")
+    render_id = uuid.uuid4().hex[:10]
+    create_render(render_id, job_id, clip_filename)
 
-    size_mb = os.path.getsize(output_path) / (1024 * 1024)
-    return {
-        "filename": rendered_name,
-        "size_mb": round(size_mb, 1),
-        "url": f"/api/clips/{job_id}/{rendered_name}",
-    }
+    bg.add_task(_run_render, render_id, clip_path, layer_dicts, output_path, asset_dir, job_id)
+
+    return {"render_id": render_id}
+
+
+@router.get("/renders")
+def list_all_renders() -> list[dict]:
+    """List all renders."""
+    renders = list_renders()
+    for r in renders:
+        if r.get("output_filename") and r.get("job_id"):
+            r["url"] = f"/api/clips/{r['job_id']}/{r['output_filename']}"
+    return renders
+
+
+@router.get("/renders/{render_id}")
+def get_render_status(render_id: str) -> dict:
+    """Poll render progress."""
+    r = get_render(render_id)
+    if not r:
+        raise HTTPException(status_code=404, detail="Render not found")
+    if r.get("output_filename") and r.get("job_id"):
+        r["url"] = f"/api/clips/{r['job_id']}/{r['output_filename']}"
+    return r
 
 
 # ── Assets ──────────────────────────────────────────────────

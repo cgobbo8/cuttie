@@ -15,7 +15,6 @@ export default class JobsController {
       id: randomUUID(),
       url,
       status: 'PENDING',
-      progress: 0,
     })
 
     // Push to Redis list — Python worker does BRPOP on this
@@ -43,7 +42,7 @@ export default class JobsController {
 
     job.status = 'PENDING'
     job.error = null
-    job.progress = 0
+    job.progress = null
     await job.save()
 
     await redis.lpush('cuttie:jobs_queue', JSON.stringify({ job_id: job.id, url: job.url, retry: true }))

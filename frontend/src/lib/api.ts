@@ -1,4 +1,4 @@
-const BASE = "http://localhost:8000/api";
+const BASE = "http://localhost:3333/api";
 
 export interface SignalBreakdown {
   rms: number;
@@ -76,6 +76,39 @@ export interface JobSummary {
   error: string | null;
 }
 
+// ── Adonis response mappers ──────────────────────────────────────────────────
+// Adonis returns camelCase; frontend interfaces use snake_case from old FastAPI.
+
+function mapJobResponse(raw: any): JobResponse {
+  return {
+    job_id: raw.id,
+    status: raw.status,
+    progress: raw.progress ?? null,
+    hot_points: raw.hotPoints ?? null,
+    error: raw.error ?? null,
+    vod_title: raw.vodTitle ?? null,
+    vod_game: null,
+    vod_duration_seconds: null,
+    streamer: null,
+    view_count: null,
+    stream_date: null,
+  };
+}
+
+function mapJobSummary(raw: any): JobSummary {
+  return {
+    job_id: raw.id,
+    url: raw.url,
+    status: raw.status,
+    vod_title: raw.vodTitle ?? null,
+    vod_duration_seconds: null,
+    created_at: raw.createdAt,
+    error: raw.error ?? null,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 export async function submitVod(url: string): Promise<{ job_id: string }> {
   const res = await fetch(`${BASE}/analyze`, {
     method: "POST",
@@ -86,19 +119,20 @@ export async function submitVod(url: string): Promise<{ job_id: string }> {
     const err = await res.json().catch(() => ({ detail: "Request failed" }));
     throw new Error(err.detail || "Request failed");
   }
-  return res.json();
+  return res.json(); // Adonis returns { job_id } directly
 }
 
 export async function getJobStatus(jobId: string): Promise<JobResponse> {
   const res = await fetch(`${BASE}/jobs/${jobId}`);
   if (!res.ok) throw new Error("Failed to fetch job status");
-  return res.json();
+  return mapJobResponse(await res.json());
 }
 
 export async function listJobs(): Promise<JobSummary[]> {
   const res = await fetch(`${BASE}/jobs`);
   if (!res.ok) throw new Error("Failed to fetch jobs");
-  return res.json();
+  const data = await res.json();
+  return (Array.isArray(data) ? data : data.data ?? []).map(mapJobSummary);
 }
 
 export async function retryJob(

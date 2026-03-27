@@ -11,7 +11,7 @@ export default class extends BaseSchema {
       table.string('error').nullable()
       table.json('hot_points').nullable()  // array of HotPoint
       table.json('clips').nullable()       // array of clip metadata
-      table.integer('progress').defaultTo(0)
+      table.string('progress').nullable()  // text label from Python worker
       table.timestamp('created_at')
       table.timestamp('updated_at')
     })

@@ -46,7 +46,7 @@ export class JobSchema extends BaseModel {
   @column({ isPrimary: true })
   declare id: string
   @column()
-  declare progress: number | null
+  declare progress: string | null
   @column()
   declare status: string
   @column.dateTime({ autoCreate: true, autoUpdate: true })

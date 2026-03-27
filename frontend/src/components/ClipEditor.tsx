@@ -118,7 +118,7 @@ function Timeline({
         />
         {/* Active region */}
         <div
-          className="absolute top-0 h-full bg-purple-500/10 border-y border-purple-500/20"
+          className="absolute top-0 h-full bg-white/[0.06] border-y border-white/[0.1]"
           style={{ left: `${pct(inTime)}%`, width: `${pct(outTime) - pct(inTime)}%` }}
         />
 
@@ -128,7 +128,7 @@ function Timeline({
           style={{ left: `${pct(inTime)}%`, transform: "translateX(-50%)" }}
           onMouseDown={(e) => { e.stopPropagation(); setDragging("in"); }}
         >
-          <div className="w-1.5 h-8 bg-purple-400 rounded-full shadow-lg shadow-purple-500/30 hover:bg-purple-300 transition-colors" />
+          <div className="w-1.5 h-8 bg-white rounded-full shadow-lg shadow-white/20 hover:bg-zinc-200 transition-colors" />
         </div>
 
         {/* Out handle */}
@@ -137,7 +137,7 @@ function Timeline({
           style={{ left: `${pct(outTime)}%`, transform: "translateX(-50%)" }}
           onMouseDown={(e) => { e.stopPropagation(); setDragging("out"); }}
         >
-          <div className="w-1.5 h-8 bg-purple-400 rounded-full shadow-lg shadow-purple-500/30 hover:bg-purple-300 transition-colors" />
+          <div className="w-1.5 h-8 bg-white rounded-full shadow-lg shadow-white/20 hover:bg-zinc-200 transition-colors" />
         </div>
 
         {/* Playhead */}
@@ -188,16 +188,16 @@ function MomentsView({
             onClick={() => onSeek(moment.time)}
             className={`w-full text-left px-3 py-2.5 rounded-lg transition-all text-xs ${
               isActive
-                ? "bg-purple-500/15 text-purple-200"
+                ? "bg-white/[0.08] text-zinc-100"
                 : "text-zinc-400 hover:bg-white/[0.04] hover:text-zinc-200"
             }`}
           >
             <div className="flex items-start gap-2.5">
-              <span className={`font-mono text-[10px] shrink-0 mt-0.5 ${isActive ? "text-purple-400" : "text-zinc-600"}`}>
+              <span className={`font-mono text-[10px] shrink-0 mt-0.5 ${isActive ? "text-white" : "text-zinc-600"}`}>
                 {fmtShort(moment.time)}
               </span>
               <div>
-                <span className={`font-medium block ${isActive ? "text-purple-100" : "text-zinc-300"}`}>
+                <span className={`font-medium block ${isActive ? "text-zinc-100" : "text-zinc-300"}`}>
                   {moment.label}
                 </span>
                 {moment.description && (
@@ -272,7 +272,7 @@ function TranscriptView({
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full text-zinc-600 text-xs">
-        <svg className="w-4 h-4 spinner text-purple-400 mr-2" viewBox="0 0 24 24" fill="none">
+        <svg className="w-4 h-4 spinner text-white mr-2" viewBox="0 0 24 24" fill="none">
           <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="60" opacity="0.3" />
           <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
         </svg>
@@ -310,14 +310,14 @@ function TranscriptView({
             onClick={() => onSeek(seg.start)}
             className={`w-full text-left px-3 py-2 rounded-lg transition-all text-xs ${
               isActive
-                ? "bg-purple-500/15 text-white"
+                ? "bg-white/[0.08] text-white"
                 : isPast
                   ? "text-zinc-600 hover:bg-white/[0.03] hover:text-zinc-400"
                   : "text-zinc-400 hover:bg-white/[0.04] hover:text-zinc-200"
             }`}
           >
             <div className="flex items-start gap-2.5">
-              <span className={`font-mono text-[10px] shrink-0 mt-0.5 ${isActive ? "text-purple-400" : "text-zinc-600"}`}>
+              <span className={`font-mono text-[10px] shrink-0 mt-0.5 ${isActive ? "text-white" : "text-zinc-600"}`}>
                 {fmtShort(seg.start)}
               </span>
               <span className={isActive ? "font-medium" : ""}>{seg.text}</span>
@@ -497,7 +497,7 @@ export default function ClipEditor({
   if (duration === 0) {
     return (
       <div className="h-screen bg-zinc-950 flex items-center justify-center">
-        <svg className="w-8 h-8 spinner text-purple-400" viewBox="0 0 24 24" fill="none">
+        <svg className="w-8 h-8 spinner text-white" viewBox="0 0 24 24" fill="none">
           <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="60" opacity="0.3" />
           <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
         </svg>
@@ -531,7 +531,7 @@ export default function ClipEditor({
           <button
             onClick={handleSave}
             disabled={saving || inTime >= outTime}
-            className="text-xs px-4 py-1.5 rounded-lg bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-400 hover:to-purple-500 text-white font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            className="text-xs px-4 py-1.5 rounded-lg bg-white hover:bg-zinc-200 text-black font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {saving ? "Export..." : "Exporter le trim"}
           </button>
@@ -549,7 +549,7 @@ export default function ClipEditor({
                 onClick={() => onSelectClip(i)}
                 className={`shrink-0 text-[11px] px-2.5 py-1 rounded-md transition-all ${
                   selectedIdx === i
-                    ? "bg-purple-500/20 text-purple-300 border border-purple-500/30"
+                    ? "bg-white/[0.1] text-white border border-white/[0.15]"
                     : "text-zinc-600 hover:text-zinc-300 hover:bg-white/[0.03]"
                 }`}
               >

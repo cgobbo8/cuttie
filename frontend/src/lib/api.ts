@@ -162,6 +162,88 @@ export function clipUrl(jobId: string, filename: string): string {
   return `${BASE}/clips/${jobId}/${filename}`;
 }
 
+// ── SSE (Server-Sent Events) ─────────────────────────────
+
+export interface SSEClipReady {
+  type: "clip_ready";
+  job_id: string;
+  rank: number;
+  hot_point: HotPoint;
+}
+
+export interface SSEStatusUpdate {
+  status: JobStatusType;
+  progress?: string;
+  error?: string | null;
+  step_timings?: Record<string, StepTiming>;
+  hot_points?: HotPoint[];
+  // VOD meta that may arrive during processing
+  vod_title?: string | null;
+  vod_game?: string | null;
+  vod_duration_seconds?: number | null;
+  streamer?: string | null;
+  view_count?: number | null;
+  stream_date?: string | null;
+}
+
+export type SSEEvent = SSEClipReady | SSEStatusUpdate;
+
+function mapSSEHotPoint(raw: any): HotPoint {
+  return { ...raw, clip_name: raw.clip_name ?? "" };
+}
+
+export function subscribeJobSSE(
+  jobId: string,
+  onEvent: (event: SSEEvent) => void,
+  onError?: () => void,
+): () => void {
+  const es = new EventSource(`${BASE}/jobs/${jobId}/sse`);
+
+  es.onmessage = (e) => {
+    try {
+      const data = JSON.parse(e.data);
+
+      if (data.type === "clip_ready") {
+        onEvent({
+          type: "clip_ready",
+          job_id: data.job_id,
+          rank: data.rank,
+          hot_point: mapSSEHotPoint(data.hot_point),
+        });
+        return;
+      }
+
+      // Status update — map hot_points if present
+      const update: SSEStatusUpdate = {
+        status: data.status,
+        progress: data.progress,
+        error: data.error,
+        step_timings: data.step_timings ?? data.stepTimings,
+        vod_title: data.vod_title ?? data.vodTitle,
+        vod_game: data.vod_game ?? data.vodGame,
+        vod_duration_seconds: data.vod_duration_seconds ?? data.vodDurationSeconds,
+        streamer: data.streamer,
+        view_count: data.view_count ?? data.viewCount,
+        stream_date: data.stream_date ?? data.streamDate,
+      };
+      if (data.hot_points) {
+        update.hot_points = data.hot_points.map(mapSSEHotPoint);
+      } else if (data.hotPoints) {
+        update.hot_points = data.hotPoints.map(mapSSEHotPoint);
+      }
+      onEvent(update);
+    } catch {
+      // ignore parse errors
+    }
+  };
+
+  es.onerror = () => {
+    onError?.();
+  };
+
+  return () => es.close();
+}
+
 export async function renameClip(jobId: string, clipFilename: string, clipName: string): Promise<{ clip_name: string }> {
   const res = await fetch(`${BASE}/jobs/${jobId}/clips/${clipFilename}/name`, {
     method: "PATCH",
@@ -239,6 +321,7 @@ export interface RenderStatus {
   url?: string;
   error?: string;
   vod_title?: string;
+  vod_game?: string;
   created_at: string;
 }
 

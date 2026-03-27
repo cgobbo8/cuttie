@@ -129,10 +129,10 @@ export default function LayerPanel({
                 layer.locked
                   ? "border-transparent opacity-60"
                   : isSelected
-                    ? "bg-purple-500/10 border-purple-500 cursor-pointer"
+                    ? "bg-white/[0.06] border-white cursor-pointer"
                     : "border-transparent hover:bg-white/[0.03] cursor-pointer"
               } ${isDragging ? "opacity-30" : ""} ${
-                isDropTarget ? "border-t-2 border-t-purple-500" : ""
+                isDropTarget ? "border-t-2 border-t-white" : ""
               }`}
               onClick={() => !layer.locked && onSelect(layer.id)}
             >
@@ -160,7 +160,7 @@ export default function LayerPanel({
               {/* Name */}
               {editingId === layer.id ? (
                 <input
-                  className="flex-1 min-w-0 bg-transparent text-xs text-white border-b border-purple-500 outline-none py-0.5"
+                  className="flex-1 min-w-0 bg-transparent text-xs text-white border-b border-white outline-none py-0.5"
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}
                   onBlur={commitRename}

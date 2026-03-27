@@ -1,6 +1,16 @@
 import { useState, useRef, useCallback } from "react";
 import { Link } from "react-router";
 import { clipUrl, type HotPoint } from "../lib/api";
+import {
+  ChevronDown,
+  Pencil,
+  Download,
+  Clock,
+  Flame,
+  Sparkles,
+  Zap,
+  Play,
+} from "lucide-react";
 
 interface Props {
   hotPoints: HotPoint[];
@@ -11,34 +21,36 @@ interface Props {
   streamer: string;
   viewCount: number;
   streamDate: string;
+  isStreaming?: boolean;
+  animatedClips?: Set<string>;
+  isFinalSort?: boolean;
 }
 
 interface SignalInfo {
   label: string;
-  color: string;
   key: keyof HotPoint["signals"];
 }
 
 const SIGNALS: SignalInfo[] = [
-  { label: "Volume", color: "#ef4444", key: "rms" },
-  { label: "Chat", color: "#a855f7", key: "chat_speed" },
-  { label: "Flux spectral", color: "#f97316", key: "spectral_flux" },
-  { label: "Pitch", color: "#3b82f6", key: "pitch_variance" },
-  { label: "Brillance", color: "#22c55e", key: "spectral_centroid" },
-  { label: "ZCR", color: "#a1a1aa", key: "zcr" },
+  { label: "Volume", key: "rms" },
+  { label: "Chat", key: "chat_speed" },
+  { label: "Flux spectral", key: "spectral_flux" },
+  { label: "Pitch", key: "pitch_variance" },
+  { label: "Brillance", key: "spectral_centroid" },
+  { label: "ZCR", key: "zcr" },
 ];
 
-const CATEGORY_STYLES: Record<string, { label: string; color: string }> = {
-  fun: { label: "Fun", color: "#eab308" },
-  rage: { label: "Rage", color: "#ef4444" },
-  clutch: { label: "Clutch", color: "#10b981" },
-  skill: { label: "Skill", color: "#3b82f6" },
-  fail: { label: "Fail", color: "#f97316" },
-  emotional: { label: "Emotional", color: "#ec4899" },
-  reaction: { label: "Reaction", color: "#a855f7" },
-  storytelling: { label: "Story", color: "#06b6d4" },
-  awkward: { label: "Awkward", color: "#f59e0b" },
-  hype: { label: "Hype", color: "#d946ef" },
+const CATEGORY_STYLES: Record<string, string> = {
+  fun: "Fun",
+  rage: "Rage",
+  clutch: "Clutch",
+  skill: "Skill",
+  fail: "Fail",
+  emotional: "Emotional",
+  reaction: "Reaction",
+  storytelling: "Story",
+  awkward: "Awkward",
+  hype: "Hype",
 };
 
 function formatDuration(seconds: number): string {
@@ -53,52 +65,88 @@ function formatTime(seconds: number): string {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
-function ScoreBadge({ score }: { score: number }) {
-  const pct = Math.round(score * 100);
-  const color =
-    score > 0.7 ? "from-red-500 to-orange-500" :
-    score > 0.5 ? "from-orange-500 to-yellow-500" :
-    "from-zinc-500 to-zinc-400";
+function Tag({ children }: { children: React.ReactNode }) {
   return (
-    <span className={`text-xs font-bold px-2.5 py-1 rounded-lg bg-gradient-to-r ${color} text-white`}>
-      {pct}%
+    <span className="text-[11px] font-medium px-2 py-0.5 rounded-md bg-white/[0.05] text-zinc-400">
+      {children}
     </span>
   );
 }
 
-function CategoryBadge({ category }: { category: string }) {
-  const style = CATEGORY_STYLES[category] || { label: category, color: "#71717a" };
+function SignalBars({
+  signals,
+  activeSignals,
+}: {
+  signals: HotPoint["signals"];
+  activeSignals: SignalInfo[];
+}) {
   return (
-    <span
-      className="text-xs font-semibold px-2.5 py-1 rounded-lg"
-      style={{ backgroundColor: `${style.color}20`, color: style.color }}
-    >
-      {style.label}
-    </span>
-  );
-}
-
-function SignalBars({ signals, activeSignals }: { signals: HotPoint["signals"]; activeSignals: SignalInfo[] }) {
-  return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-1.5">
+    <div className="space-y-2">
       {activeSignals.map((signal) => {
         const value = signals[signal.key];
         return (
-          <div key={signal.key} className="flex items-center gap-2">
-            <span className="text-[10px] text-zinc-500 w-14 text-right shrink-0">{signal.label}</span>
+          <div key={signal.key} className="flex items-center gap-3">
+            <span className="text-[11px] text-zinc-500 w-20 text-right shrink-0">
+              {signal.label}
+            </span>
             <div className="flex-1 h-1 bg-white/[0.04] rounded-full overflow-hidden">
               <div
-                className="h-full rounded-full transition-all"
-                style={{
-                  width: `${Math.round(value * 100)}%`,
-                  backgroundColor: signal.color,
-                  boxShadow: value > 0.5 ? `0 0 8px ${signal.color}60` : "none",
-                }}
+                className="h-full rounded-full bg-white/40 transition-all"
+                style={{ width: `${Math.round(value * 100)}%` }}
               />
             </div>
+            <span className="text-[11px] text-zinc-600 font-mono w-8 text-right tabular-nums">
+              {Math.round(value * 100)}
+            </span>
           </div>
         );
       })}
+    </div>
+  );
+}
+
+function VideoPreview({ src, hovering }: { src: string; hovering: boolean }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  // Play/pause based on card hover
+  const prevHovering = useRef(false);
+  if (hovering !== prevHovering.current) {
+    prevHovering.current = hovering;
+    if (hovering) {
+      videoRef.current?.play().catch(() => {});
+    } else {
+      videoRef.current?.pause();
+    }
+  }
+
+  const handleClick = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    window.open(src, "_blank");
+  }, [src]);
+
+  return (
+    <div className="relative cursor-pointer" onClick={handleClick}>
+      <video
+        ref={videoRef}
+        muted
+        loop
+        playsInline
+        preload="metadata"
+        className={`w-full aspect-[9/16] object-cover rounded-lg bg-zinc-900 transition-all duration-300 ${
+          hovering ? "brightness-100" : "brightness-[0.6]"
+        }`}
+        src={src}
+      />
+      {/* Play icon overlay */}
+      <div
+        className={`absolute inset-0 flex items-center justify-center transition-opacity duration-200 ${
+          hovering ? "opacity-0" : "opacity-100"
+        }`}
+      >
+        <div className="w-10 h-10 rounded-full bg-white/[0.15] backdrop-blur-sm flex items-center justify-center">
+          <Play className="w-4 h-4 text-white ml-0.5" />
+        </div>
+      </div>
     </div>
   );
 }
@@ -108,14 +156,17 @@ function ClipCard({
   index,
   jobId,
   activeSignals,
+  isNew,
 }: {
   point: HotPoint;
   index: number;
   jobId: string;
   activeSignals: SignalInfo[];
+  isNew?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [activeMoment, setActiveMoment] = useState<number | null>(null);
+  const [cardHover, setCardHover] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
 
   const displayScore = point.final_score ?? point.score;
@@ -129,237 +180,244 @@ function ClipCard({
     setActiveMoment(momentIdx);
   }, []);
 
-  return (
-    <div className="glass rounded-2xl overflow-hidden ambient-glow transition-all">
-      {/* Header row */}
-      <button
-        className="w-full p-5 text-left cursor-pointer"
-        onClick={() => setExpanded(!expanded)}
-      >
-        <div className="flex items-start justify-between mb-3">
-          <div className="flex items-center gap-3">
-            <span className="text-xs font-bold text-zinc-600 bg-white/[0.04] w-7 h-7 rounded-full flex items-center justify-center shrink-0">
-              {index + 1}
-            </span>
-            <div className="flex items-center flex-wrap gap-2">
-              <span className="text-base font-semibold text-white">{point.clip_name || point.timestamp_display}</span>
-              <ScoreBadge score={displayScore} />
-              {point.llm?.category && <CategoryBadge category={point.llm.category} />}
-              {point.chat_mood && (
-                <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-white/[0.04] text-zinc-400 capitalize">
-                  {point.chat_mood}
-                </span>
-              )}
-              {point.llm && point.llm.virality_score > 0 && (
-                <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-fuchsia-500/10 text-fuchsia-400">
-                  Viral {Math.round(point.llm.virality_score * 100)}%
-                </span>
-              )}
-              {point.chat_message_count != null && point.chat_message_count > 0 && (
-                <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-400">
-                  {point.chat_message_count} msg
-                </span>
-              )}
-            </div>
-          </div>
-          <svg
-            className={`w-4 h-4 text-zinc-600 transition-transform shrink-0 mt-1 ${expanded ? "rotate-180" : ""}`}
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-          </svg>
-        </div>
+  const handleDownload = useCallback(async (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (!point.clip_filename) return;
+    const url = clipUrl(jobId, point.clip_filename);
+    const res = await fetch(url);
+    const blob = await res.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = blobUrl;
+    a.download = point.clip_name ? `${point.clip_name}.mp4` : point.clip_filename;
+    a.click();
+    URL.revokeObjectURL(blobUrl);
+  }, [jobId, point.clip_filename, point.clip_name]);
 
-        {/* Timecode + Summary */}
-        {(point.clip_name || point.llm?.summary) && (
-          <div className="mb-3">
-            {point.clip_name && (
-              <span className="text-[11px] font-mono text-zinc-600">{point.timestamp_display}</span>
-            )}
-            {point.llm?.summary && (
-              <p className={`text-sm text-zinc-400 line-clamp-2${point.clip_name ? " mt-0.5" : ""}`}>{point.llm.summary}</p>
-            )}
+  return (
+    <div
+      className={`surface-static rounded-xl overflow-hidden transition-all duration-200 relative ${isNew ? "animate-clip-enter" : ""} ${cardHover ? "opacity-100" : "opacity-60"}`}
+      onMouseEnter={() => setCardHover(true)}
+      onMouseLeave={() => setCardHover(false)}
+    >
+      {/* Rank badge — bottom right absolute */}
+      <span className="absolute bottom-3 right-4 text-[11px] font-mono text-zinc-600">
+        #{index + 1}
+      </span>
+
+      {/* CTA buttons — top right absolute */}
+      {point.clip_filename && (
+        <div className="absolute top-4 right-4 flex items-center gap-2 z-10">
+          <Link
+            to={`/${jobId}/edit?clip=${encodeURIComponent(point.clip_filename)}`}
+            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-black bg-white hover:bg-zinc-200 rounded-lg transition-colors"
+          >
+            <Pencil className="w-3.5 h-3.5" />
+            Editer
+          </Link>
+          <button
+            onClick={handleDownload}
+            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-zinc-300 bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.08] rounded-lg transition-colors"
+          >
+            <Download className="w-3.5 h-3.5" />
+            Clip brut
+          </button>
+        </div>
+      )}
+
+      <div className="flex flex-col sm:flex-row">
+        {/* Video preview (left) — muted, card hover triggers play, click opens */}
+        {point.clip_filename && (
+          <div className="sm:w-[200px] shrink-0 p-4 pb-0 sm:pb-4">
+            <VideoPreview src={clipUrl(jobId, point.clip_filename)} hovering={cardHover} />
           </div>
         )}
 
-        {/* Signal bars */}
-        <SignalBars signals={point.signals} activeSignals={activeSignals} />
-      </button>
+        {/* Content (right) */}
+        <div className="flex-1 min-w-0 p-5 pr-48">
+          {/* Title */}
+          <h3 className="text-sm font-semibold text-white mb-1.5">
+            {point.clip_name || point.timestamp_display}
+          </h3>
 
-      {/* Expanded view */}
-      {expanded && (
-        <div className="border-t border-white/[0.04]">
-          {/* Video */}
-          {point.clip_filename && (
-            <div className="p-4">
-              {/* Edit link */}
-              <div className="flex items-center gap-2 mb-3">
-                <Link
-                  to={`/${jobId}/edit?clip=${encodeURIComponent(point.clip_filename!)}`}
-                  className="text-xs px-3 py-1.5 rounded-lg glass text-zinc-500 hover:text-purple-300 hover:border-purple-500/30 transition-all ml-auto flex items-center gap-1.5"
-                >
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.121 4.879l5 5m-11.5 2.5L16 4l4 4-8.379 8.379a2 2 0 01-1.414.586H7v-3.207a2 2 0 01.586-1.414z" />
-                  </svg>
-                  Editer
-                </Link>
-              </div>
-
-              <video
-                ref={videoRef}
-                controls
-                className="w-full max-h-[400px] rounded-xl"
-                src={clipUrl(jobId, point.clip_filename)}
-              />
-
-              {/* Key moments timeline */}
-              {moments.length > 0 && (
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {moments.map((moment, mi) => (
-                    <button
-                      key={mi}
-                      className={`text-xs px-3 py-1.5 rounded-lg transition-all ${
-                        activeMoment === mi
-                          ? "bg-purple-500/20 text-purple-300 border border-purple-500/30"
-                          : "glass text-zinc-400 hover:text-white"
-                      }`}
-                      onClick={() => seekTo(moment.time, mi)}
-                      title={moment.description}
-                    >
-                      <span className="font-mono text-zinc-600 mr-1">{formatTime(moment.time)}</span>
-                      {moment.label}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* LLM Analysis */}
-          {point.llm && (
-            <div className="p-5 border-t border-white/[0.04] space-y-4">
-              {/* Narrative */}
-              {point.llm.narrative && (
-                <div>
-                  <h4 className="text-[10px] font-semibold text-zinc-600 uppercase tracking-widest mb-2">
-                    Recit du clip
-                  </h4>
-                  <p className="text-sm text-zinc-300 leading-relaxed">{point.llm.narrative}</p>
-                </div>
-              )}
-
-              {/* Tags */}
-              <div className="flex flex-wrap gap-2 text-xs">
-                {point.llm.category && <CategoryBadge category={point.llm.category} />}
-                {point.llm.virality_score > 0 && (
-                  <span className="px-2.5 py-1 rounded-lg bg-fuchsia-500/10 text-fuchsia-400">
-                    Potentiel viral : {Math.round(point.llm.virality_score * 100)}%
-                  </span>
-                )}
-                {!point.llm.is_clipable && (
-                  <span className="px-2.5 py-1 rounded-lg bg-white/[0.04] text-zinc-500">
-                    Necessite du contexte
-                  </span>
-                )}
-                {point.llm.speech_rate > 0 && (
-                  <span className="px-2.5 py-1 rounded-lg bg-white/[0.04] text-zinc-500">
-                    {point.llm.speech_rate.toFixed(1)} mots/s
-                  </span>
-                )}
-              </div>
-
-              {/* Key moments detail */}
-              {moments.length > 0 && (
-                <details className="text-xs group">
-                  <summary className="text-zinc-600 cursor-pointer hover:text-zinc-300 transition-colors">
-                    Moments cles ({moments.length})
-                  </summary>
-                  <div className="mt-2 space-y-1">
-                    {moments.map((moment, mi) => (
-                      <button
-                        key={mi}
-                        className="w-full text-left flex gap-3 p-2.5 rounded-xl hover:bg-white/[0.03] transition-colors"
-                        onClick={() => seekTo(moment.time, mi)}
-                      >
-                        <span className="font-mono text-purple-400 shrink-0">
-                          {formatTime(moment.time)}
-                        </span>
-                        <div>
-                          <span className="text-zinc-200 font-medium">{moment.label}</span>
-                          {moment.description && (
-                            <p className="text-zinc-600 mt-0.5">{moment.description}</p>
-                          )}
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                </details>
-              )}
-
-              {/* Transcript */}
-              {point.llm.transcript && (
-                <details className="text-xs group">
-                  <summary className="text-zinc-600 cursor-pointer hover:text-zinc-300 transition-colors">
-                    Transcription
-                  </summary>
-                  <p className="mt-2 text-zinc-500 italic leading-relaxed">{point.llm.transcript}</p>
-                </details>
-              )}
-            </div>
-          )}
-
-          {/* Score detail */}
-          <div className="p-5 border-t border-white/[0.04] space-y-3">
-            <div className="flex items-center gap-3">
-              <span className="text-xs text-zinc-600">Score final</span>
-              <span className="text-sm font-bold text-white">{Math.round(displayScore * 100)}%</span>
-            </div>
-
-            {point.final_score != null && (
-              <div className="flex gap-4 text-[10px] text-zinc-600">
-                <span>Heuristique : {Math.round(point.score * 100)}% (x0.3)</span>
-                <span>
-                  LLM : {point.llm ? Math.round(point.llm.virality_score * 100) : 0}% (x0.7)
-                </span>
-              </div>
+          {/* Tags row */}
+          <div className="flex flex-wrap items-center gap-1.5 mb-3">
+            {point.llm?.category && (
+              <Tag>
+                {CATEGORY_STYLES[point.llm.category] || point.llm.category}
+              </Tag>
             )}
-
-            {/* Detailed signals */}
-            <details className="text-xs">
-              <summary className="text-zinc-600 cursor-pointer hover:text-zinc-300 transition-colors">
-                Detail des signaux
-              </summary>
-              <div className="space-y-3 mt-3">
-                {activeSignals.map((signal) => {
-                  const value = point.signals[signal.key];
-                  return (
-                    <div key={signal.key}>
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs font-medium" style={{ color: signal.color }}>
-                          {signal.label}
-                        </span>
-                        <span className="text-xs font-mono text-zinc-400">
-                          {Math.round(value * 100)}%
-                        </span>
-                      </div>
-                      <div className="w-full h-1.5 bg-white/[0.04] rounded-full overflow-hidden">
-                        <div
-                          className="h-full rounded-full"
-                          style={{
-                            width: `${Math.round(value * 100)}%`,
-                            backgroundColor: signal.color,
-                            boxShadow: value > 0.5 ? `0 0 12px ${signal.color}40` : "none",
-                          }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </details>
+            {point.chat_mood && <Tag>{point.chat_mood}</Tag>}
+            {point.chat_message_count != null &&
+              point.chat_message_count > 0 && (
+                <Tag>{point.chat_message_count} msg</Tag>
+              )}
+            {point.clip_name && (
+              <span className="text-[11px] font-mono text-zinc-600">
+                {point.timestamp_display}
+              </span>
+            )}
           </div>
+
+          {/* Summary */}
+          {point.llm?.summary && (
+            <p className="text-sm text-zinc-400 leading-relaxed mb-3 line-clamp-2">
+              {point.llm.summary}
+            </p>
+          )}
+
+          {/* Score line — descriptive */}
+          <div className="flex flex-wrap items-center gap-3 text-xs text-zinc-500 mb-4">
+            <span>
+              Score de viralite :{" "}
+              <span className="text-white font-semibold">
+                {Math.round(displayScore * 100)}%
+              </span>
+            </span>
+            {point.llm && point.llm.virality_score > 0 && (
+              <span>
+                Potentiel viral :{" "}
+                <span className="text-zinc-300">
+                  {Math.round(point.llm.virality_score * 100)}%
+                </span>
+              </span>
+            )}
+          </div>
+
+          {/* Key moments (inline) */}
+          {moments.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mb-3">
+              {moments.map((moment, mi) => (
+                <button
+                  key={mi}
+                  className={`text-[11px] px-2.5 py-1 rounded-md transition-colors ${
+                    activeMoment === mi
+                      ? "bg-white/[0.1] text-white"
+                      : "bg-white/[0.03] text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.06]"
+                  }`}
+                  onClick={() => seekTo(moment.time, mi)}
+                  title={moment.description}
+                >
+                  <span className="font-mono text-zinc-600 mr-1">
+                    {formatTime(moment.time)}
+                  </span>
+                  {moment.label}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Expand toggle */}
+          <button
+            onClick={() => setExpanded(!expanded)}
+            className="flex items-center gap-1.5 text-[11px] text-zinc-500 hover:text-zinc-300 transition-colors"
+          >
+            <ChevronDown
+              className={`w-3.5 h-3.5 transition-transform ${expanded ? "rotate-180" : ""}`}
+            />
+            {expanded ? "Masquer les details" : "Voir les details"}
+          </button>
+        </div>
+      </div>
+
+      {/* Expanded details */}
+      {expanded && (
+        <div className="border-t border-white/[0.06] animate-fade-in">
+          <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Left: LLM analysis */}
+            <div className="space-y-4">
+              {point.llm?.narrative && (
+                <div>
+                  <h4 className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider mb-2">
+                    Recit
+                  </h4>
+                  <p className="text-sm text-zinc-300 leading-relaxed">
+                    {point.llm.narrative}
+                  </p>
+                </div>
+              )}
+
+              {point.llm?.transcript && (
+                <div>
+                  <h4 className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider mb-2">
+                    Transcription
+                  </h4>
+                  <p className="text-sm text-zinc-500 leading-relaxed italic">
+                    {point.llm.transcript}
+                  </p>
+                </div>
+              )}
+
+              {/* Score breakdown */}
+              <div>
+                <h4 className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider mb-2">
+                  Decomposition du score
+                </h4>
+                <div className="space-y-1.5 text-xs text-zinc-500">
+                  <div className="flex justify-between">
+                    <span>Score final</span>
+                    <span className="text-white font-semibold">{Math.round(displayScore * 100)}%</span>
+                  </div>
+                  {point.final_score != null && (
+                    <>
+                      <div className="flex justify-between">
+                        <span>Heuristique (x0.3)</span>
+                        <span className="text-zinc-300">{Math.round(point.score * 100)}%</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>LLM viralite (x0.7)</span>
+                        <span className="text-zinc-300">
+                          {point.llm
+                            ? Math.round(point.llm.virality_score * 100)
+                            : 0}%
+                        </span>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Right: Signal bars */}
+            <div>
+              <h4 className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider mb-3">
+                Signaux
+              </h4>
+              <SignalBars signals={point.signals} activeSignals={activeSignals} />
+            </div>
+          </div>
+
+          {/* Key moments detail */}
+          {moments.length > 0 && (
+            <div className="px-5 pb-5">
+              <h4 className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider mb-2">
+                Moments cles
+              </h4>
+              <div className="space-y-1">
+                {moments.map((moment, mi) => (
+                  <button
+                    key={mi}
+                    className="w-full text-left flex gap-3 p-2.5 rounded-lg hover:bg-white/[0.03] transition-colors"
+                    onClick={() => seekTo(moment.time, mi)}
+                  >
+                    <span className="font-mono text-[11px] text-zinc-500 shrink-0 pt-0.5">
+                      {formatTime(moment.time)}
+                    </span>
+                    <div>
+                      <span className="text-xs text-zinc-200 font-medium">
+                        {moment.label}
+                      </span>
+                      {moment.description && (
+                        <p className="text-[11px] text-zinc-600 mt-0.5">
+                          {moment.description}
+                        </p>
+                      )}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -375,43 +433,70 @@ export default function HotPoints({
   streamer,
   viewCount,
   streamDate,
+  isStreaming,
+  animatedClips,
+  isFinalSort,
 }: Props) {
   const activeSignals = SIGNALS.filter((signal) =>
     hotPoints.some((hp) => hp.signals[signal.key] > 0.01),
   );
 
   return (
-    <div className="w-full max-w-4xl mx-auto">
+    <div className="w-full">
       {/* VOD Header */}
-      <div className="mb-10 text-center">
-        <h2 className="text-2xl font-bold text-white mb-3">{vodTitle}</h2>
-        <div className="flex flex-wrap items-center justify-center gap-3 text-sm">
+      <div className="mb-8">
+        <h2 className="text-xl font-semibold text-white mb-2">{vodTitle}</h2>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-zinc-500">
           {streamer && (
-            <span className="text-purple-400 font-semibold">{streamer}</span>
+            <span className="flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5" />
+              {streamer}
+            </span>
           )}
-          {vodGame && <span className="text-zinc-400">{vodGame}</span>}
-          {streamDate && <span className="text-zinc-600">{streamDate}</span>}
-          <span className="text-zinc-600">{formatDuration(vodDuration)}</span>
-          {viewCount > 0 && (
-            <span className="text-zinc-600">{viewCount.toLocaleString()} vues</span>
+          {vodGame && (
+            <span className="flex items-center gap-1.5">
+              <Zap className="w-3.5 h-3.5" />
+              {vodGame}
+            </span>
           )}
+          {streamDate && (
+            <span className="flex items-center gap-1.5">
+              <Clock className="w-3.5 h-3.5" />
+              {streamDate}
+            </span>
+          )}
+          <span>{formatDuration(vodDuration)}</span>
+          {viewCount > 0 && <span>{viewCount.toLocaleString()} vues</span>}
         </div>
-        <p className="text-zinc-600 text-sm mt-2">
-          {hotPoints.length} moments forts detectes
+        <p className="text-sm text-zinc-600 mt-2">
+          {isStreaming ? (
+            <span className="flex items-center gap-1.5">
+              <Flame className="w-3.5 h-3.5 text-zinc-400" />
+              {hotPoints.length} clip
+              {hotPoints.length > 1 ? "s" : ""} pret
+              {hotPoints.length > 1 ? "s" : ""}
+            </span>
+          ) : (
+            `${hotPoints.length} moments forts detectes`
+          )}
         </p>
       </div>
 
-      {/* Clips grid */}
-      <div className="space-y-3">
-        {hotPoints.map((point, i) => (
-          <ClipCard
-            key={i}
-            point={point}
-            index={i}
-            jobId={jobId}
-            activeSignals={activeSignals}
-          />
-        ))}
+      {/* Clips list */}
+      <div className={`space-y-3 ${isFinalSort ? "" : ""}`}>
+        {hotPoints.map((point, i) => {
+          const clipKey = point.clip_filename || `rank-${i}`;
+          return (
+            <ClipCard
+              key={point.clip_filename || i}
+              point={point}
+              index={i}
+              jobId={jobId}
+              activeSignals={activeSignals}
+              isNew={animatedClips?.has(clipKey)}
+            />
+          );
+        })}
       </div>
     </div>
   );

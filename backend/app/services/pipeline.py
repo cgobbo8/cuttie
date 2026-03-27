@@ -12,7 +12,7 @@ from app.services.audio_analyzer import analyze_audio
 from app.services.audio_classifier import classify_audio
 from app.services.chat_analyzer import analyze_chat
 from app.services.clipper import CLIPS_DIR, extract_group, plan_downloads
-from app.services.db import get_job, save_hot_points, update_hot_point_clip, update_job
+from app.services.db import get_job, publish_clip_ready, save_hot_points, update_hot_point_clip, update_job
 from app.services.downloader import download_audio, download_chat
 from app.services.llm_analyzer import analyze_hot_points, analyze_single_clip
 from app.services.scorer import compute_scores
@@ -103,6 +103,21 @@ def _run_clipping_and_analysis(
         # As groups complete, attach filenames and submit LLM analysis
         llm_futures: dict = {}
         done_dl = 0
+        done_llm = 0
+
+        def _drain_completed_llm():
+            """Publish clips whose LLM analysis finished while downloads were running."""
+            nonlocal done_llm
+            completed = [f for f in llm_futures if f.done()]
+            for f in completed:
+                idx, hp = llm_futures.pop(f)
+                done_llm += 1
+                try:
+                    f.result()
+                    logger.info(f"Analysis ready (during clipping): {hp.timestamp_display}")
+                    publish_clip_ready(job_id, idx + 1, hp)
+                except Exception as e:
+                    logger.error(f"Analysis failed for {hp.timestamp_display}: {e}")
 
         for future in as_completed(dl_futures):
             try:
@@ -128,12 +143,14 @@ def _run_clipping_and_analysis(
             except Exception as e:
                 logger.error(f"Group extraction error: {e}")
 
+            # Drain LLM futures that completed while we were downloading
+            _drain_completed_llm()
+
         # All downloads done — wait for remaining LLM analyses
         if timer:
             timer.start("LLM_ANALYSIS")
-        update_job(job_id, status="LLM_ANALYSIS", progress="Analyse IA des clips...", step_timings=timer.timings if timer else None)
-        done_llm = 0
-        total_llm = len(llm_futures)
+        total_llm = done_llm + len(llm_futures)
+        update_job(job_id, status="LLM_ANALYSIS", progress=f"Analyse IA : {done_llm}/{total_llm} clips...", step_timings=timer.timings if timer else None)
 
         for future in as_completed(llm_futures):
             idx, hp = llm_futures[future]
@@ -141,6 +158,7 @@ def _run_clipping_and_analysis(
             try:
                 future.result()
                 logger.info(f"Analysis {done_llm}/{total_llm}: {hp.timestamp_display}")
+                publish_clip_ready(job_id, idx + 1, hp)
             except Exception as e:
                 logger.error(f"Analysis failed for {hp.timestamp_display}: {e}")
             update_job(

@@ -32,7 +32,7 @@ export default function UrlForm({ onSubmit }: Props) {
 
   return (
     <form onSubmit={handleSubmit} className="w-full max-w-2xl">
-      <div className="glass rounded-2xl p-2 flex gap-2 focus-within:border-purple-500/30 transition-colors">
+      <div className="glass rounded-2xl p-2 flex gap-2 focus-within:border-white/[0.15] transition-colors">
         <input
           type="text"
           value={url}
@@ -44,7 +44,7 @@ export default function UrlForm({ onSubmit }: Props) {
         <button
           type="submit"
           disabled={loading || !url.trim()}
-          className="px-6 py-3 bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-400 hover:to-purple-500 disabled:from-zinc-700 disabled:to-zinc-700 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-all text-sm shrink-0"
+          className="px-6 py-3 bg-white hover:bg-zinc-200 disabled:bg-zinc-800 disabled:text-zinc-500 disabled:cursor-not-allowed text-black font-semibold rounded-xl transition-all text-sm shrink-0"
         >
           {loading ? (
             <span className="flex items-center gap-2">

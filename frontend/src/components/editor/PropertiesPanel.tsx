@@ -55,8 +55,8 @@ function Slider({
         onChange={(e) => onChange(parseFloat(e.target.value))}
         className="w-full h-1 bg-white/[0.06] rounded-full appearance-none cursor-pointer
           [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3
-          [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-purple-400
-          [&::-webkit-slider-thumb]:hover:bg-purple-300 [&::-webkit-slider-thumb]:transition-colors"
+          [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white
+          [&::-webkit-slider-thumb]:hover:bg-zinc-200 [&::-webkit-slider-thumb]:transition-colors"
       />
     </div>
   );
@@ -125,7 +125,7 @@ export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange
         {layer.type === "facecam" && layer.video?.crop && onStartCrop && (
           <button
             onClick={() => onStartCrop(layer.id)}
-            className="w-full text-[10px] px-2 py-1.5 rounded-md bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 hover:text-purple-200 transition-colors font-medium flex items-center justify-center gap-1.5"
+            className="w-full text-[10px] px-2 py-1.5 rounded-md bg-white/[0.06] hover:bg-white/[0.1] text-zinc-200 hover:text-zinc-100 transition-colors font-medium flex items-center justify-center gap-1.5"
           >
             <Crop className="w-3.5 h-3.5" />
             Recadrer la source
@@ -211,7 +211,7 @@ export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange
                   onCommit();
                   onSubtitleChange(layer.id, { fontFamily: e.target.value });
                 }}
-                className="w-full text-xs bg-white/[0.06] text-zinc-300 rounded-md px-2 py-1.5 border border-white/[0.06] outline-none focus:border-purple-500/50 cursor-pointer"
+                className="w-full text-xs bg-white/[0.06] text-zinc-300 rounded-md px-2 py-1.5 border border-white/[0.06] outline-none focus:border-white/[0.2] cursor-pointer"
               >
                 {SUBTITLE_FONTS.map((f) => (
                   <option key={f.value} value={f.value} style={{ fontFamily: f.value }}>
@@ -245,7 +245,7 @@ export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange
                 }}
                 className={`text-[10px] px-2.5 py-1 rounded-md font-bold transition-colors ${
                   subtitle.uppercase
-                    ? "bg-purple-500/20 text-purple-300"
+                    ? "bg-white/[0.1] text-zinc-200"
                     : "bg-white/[0.04] text-zinc-500"
                 }`}
               >
@@ -268,7 +268,7 @@ export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange
                   }}
                   className={`flex-1 text-[10px] px-2 py-1.5 rounded-md font-medium transition-colors ${
                     subtitle.colorMode === "auto"
-                      ? "bg-purple-500/20 text-purple-300"
+                      ? "bg-white/[0.1] text-zinc-200"
                       : "bg-white/[0.04] text-zinc-500 hover:text-zinc-300"
                   }`}
                 >
@@ -281,7 +281,7 @@ export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange
                   }}
                   className={`flex-1 text-[10px] px-2 py-1.5 rounded-md font-medium transition-colors ${
                     subtitle.colorMode === "custom"
-                      ? "bg-purple-500/20 text-purple-300"
+                      ? "bg-white/[0.1] text-zinc-200"
                       : "bg-white/[0.04] text-zinc-500 hover:text-zinc-300"
                   }`}
                 >
@@ -330,7 +330,7 @@ export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange
                   onCommit();
                   onChatChange(layer.id, { fontFamily: e.target.value });
                 }}
-                className="w-full text-xs bg-white/[0.06] text-zinc-300 rounded-md px-2 py-1.5 border border-white/[0.06] outline-none focus:border-purple-500/50 cursor-pointer"
+                className="w-full text-xs bg-white/[0.06] text-zinc-300 rounded-md px-2 py-1.5 border border-white/[0.06] outline-none focus:border-white/[0.2] cursor-pointer"
               >
                 {SUBTITLE_FONTS.map((f) => (
                   <option key={f.value} value={f.value} style={{ fontFamily: f.value }}>
@@ -397,7 +397,7 @@ export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange
                   }}
                   className={`flex-1 text-[10px] px-2 py-1.5 rounded-md font-medium transition-colors ${
                     shape.shapeType === "rectangle"
-                      ? "bg-purple-500/20 text-purple-300"
+                      ? "bg-white/[0.1] text-zinc-200"
                       : "bg-white/[0.04] text-zinc-500 hover:text-zinc-300"
                   }`}
                 >
@@ -410,7 +410,7 @@ export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange
                   }}
                   className={`flex-1 text-[10px] px-2 py-1.5 rounded-md font-medium transition-colors ${
                     shape.shapeType === "circle"
-                      ? "bg-purple-500/20 text-purple-300"
+                      ? "bg-white/[0.1] text-zinc-200"
                       : "bg-white/[0.04] text-zinc-500 hover:text-zinc-300"
                   }`}
                 >
@@ -487,7 +487,7 @@ export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange
                     }}
                     className={`text-[10px] px-2 py-1.5 rounded-md font-medium transition-colors ${
                       shape.boxShadowPreset === key
-                        ? "bg-purple-500/20 text-purple-300"
+                        ? "bg-white/[0.1] text-zinc-200"
                         : "bg-white/[0.04] text-zinc-500 hover:text-zinc-300"
                     }`}
                   >

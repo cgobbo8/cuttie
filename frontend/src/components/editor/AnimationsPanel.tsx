@@ -60,7 +60,7 @@ function DurationInput({
         value={displayValue}
         onChange={(e) => handleChange(e.target.value)}
         onFocus={onCommit}
-        className="w-0 flex-1 min-w-0 text-[10px] bg-white/[0.06] text-zinc-300 rounded-l px-1.5 py-1 border border-white/[0.06] border-r-0 outline-none focus:border-purple-500/50 font-mono tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+        className="w-0 flex-1 min-w-0 text-[10px] bg-white/[0.06] text-zinc-300 rounded-l px-1.5 py-1 border border-white/[0.06] border-r-0 outline-none focus:border-white/[0.2] font-mono tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
       />
       <select
         value={unit}
@@ -151,7 +151,7 @@ export default function AnimationsPanel({
                     });
                   }}
                   onMouseDown={onCommit}
-                  className="flex-1 accent-purple-500 h-1"
+                  className="flex-1 accent-white h-1"
                 />
                 <span className="text-[10px] text-zinc-400 font-mono w-8 text-right">
                   {def.category === "out"
@@ -205,7 +205,7 @@ export default function AnimationsPanel({
       <div className="shrink-0 border-t border-white/[0.06] p-2 relative">
         <button
           onClick={() => setAddMenuOpen((v) => !v)}
-          className="w-full text-xs px-3 py-2 rounded-lg bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 hover:text-purple-200 transition-colors flex items-center justify-center gap-2 font-medium"
+          className="w-full text-xs px-3 py-2 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] text-zinc-200 hover:text-zinc-100 transition-colors flex items-center justify-center gap-2 font-medium"
         >
           <Plus className="w-4 h-4" />
           Ajouter animation

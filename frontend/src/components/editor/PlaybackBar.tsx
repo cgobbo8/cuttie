@@ -57,7 +57,7 @@ function WaveformCanvas({ peaks, width, height }: { peaks: Float32Array; width: 
     const barCount = Math.min(peaks.length, Math.floor(width));
     const barW = canvas.width / barCount;
 
-    ctx.fillStyle = "rgba(168, 85, 247, 0.25)"; // purple-500 at 25%
+    ctx.fillStyle = "rgba(255, 255, 255, 0.12)"; // white at 12%
     for (let i = 0; i < barCount; i++) {
       // Map bar index to peak index
       const peakIdx = Math.floor((i / barCount) * peaks.length);
@@ -124,7 +124,7 @@ function LayerLifetimeBar({
       ctx.fillStyle = v >= 0.99
         ? "rgba(255, 255, 255, 0.4)"
         : v > 0
-          ? "rgba(168, 85, 247, 0.35)"
+          ? "rgba(255, 255, 255, 0.15)"
           : "rgba(255, 255, 255, 0.03)";
       ctx.fillRect(x, y, barW, barH);
 
@@ -439,7 +439,7 @@ export default function PlaybackBar({
 
           {/* Active trim region highlight */}
           <div
-            className="absolute top-0 h-full bg-purple-500/5"
+            className="absolute top-0 h-full bg-white/[0.03]"
             style={{ left: `${pct(trimStart)}%`, width: `${pct(trimEnd) - pct(trimStart)}%` }}
           />
 
@@ -449,9 +449,9 @@ export default function PlaybackBar({
             style={{ left: `${pct(trimStart)}%`, transform: "translateX(-50%)" }}
             onMouseDown={(e) => { e.stopPropagation(); setTrimDragging("start"); }}
           >
-            <div className="w-1 h-full bg-purple-400 group-hover:bg-purple-300 cursor-ew-resize rounded-full transition-colors" />
+            <div className="w-1 h-full bg-white group-hover:bg-zinc-200 cursor-ew-resize rounded-full transition-colors" />
             <div className="absolute top-1/2 -translate-y-1/2 -left-1.5 w-4 h-8 flex items-center justify-center cursor-ew-resize">
-              <div className="w-0.5 h-4 bg-purple-400 group-hover:bg-purple-300 rounded-full transition-colors" />
+              <div className="w-0.5 h-4 bg-white group-hover:bg-zinc-200 rounded-full transition-colors" />
             </div>
           </div>
 
@@ -461,9 +461,9 @@ export default function PlaybackBar({
             style={{ left: `${pct(trimEnd)}%`, transform: "translateX(-50%)" }}
             onMouseDown={(e) => { e.stopPropagation(); setTrimDragging("end"); }}
           >
-            <div className="w-1 h-full bg-purple-400 group-hover:bg-purple-300 cursor-ew-resize rounded-full transition-colors" />
+            <div className="w-1 h-full bg-white group-hover:bg-zinc-200 cursor-ew-resize rounded-full transition-colors" />
             <div className="absolute top-1/2 -translate-y-1/2 -right-1.5 w-4 h-8 flex items-center justify-center cursor-ew-resize">
-              <div className="w-0.5 h-4 bg-purple-400 group-hover:bg-purple-300 rounded-full transition-colors" />
+              <div className="w-0.5 h-4 bg-white group-hover:bg-zinc-200 rounded-full transition-colors" />
             </div>
           </div>
 
@@ -498,11 +498,11 @@ export default function PlaybackBar({
                 onClick={() => setShowWaveform((v) => !v)}
                 className={`flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded-full border transition-colors ${
                   showWaveform
-                    ? "border-purple-500/30 bg-purple-500/10 text-purple-300"
+                    ? "border-white/[0.15] bg-white/[0.06] text-zinc-200"
                     : "border-white/[0.06] bg-transparent text-zinc-600"
                 }`}
               >
-                <span className={`inline-block w-1.5 h-1.5 rounded-full ${showWaveform ? "bg-purple-400" : "bg-zinc-700"}`} />
+                <span className={`inline-block w-1.5 h-1.5 rounded-full ${showWaveform ? "bg-white" : "bg-zinc-700"}`} />
                 audio
               </button>
             )}
@@ -555,7 +555,7 @@ export default function PlaybackBar({
           </span>
 
           {hasTrim && (
-            <span className="text-[10px] font-mono text-purple-400/70 ml-1">
+            <span className="text-[10px] font-mono text-white/70 ml-1">
               trim {fmt(trimmedDuration)}
             </span>
           )}

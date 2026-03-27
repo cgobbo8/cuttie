@@ -34,7 +34,7 @@ export default function RemotionEditPage() {
   if (loading) {
     return (
       <div className="h-screen bg-zinc-950 flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-purple-400" />
+        <Loader2 className="w-8 h-8 animate-spin text-zinc-400" />
       </div>
     );
   }
@@ -46,7 +46,7 @@ export default function RemotionEditPage() {
           <p className="text-zinc-400 mb-4">Aucun clip disponible pour l'édition.</p>
           <button
             onClick={() => navigate(`/${jobId}`)}
-            className="text-sm text-purple-400 hover:text-purple-300 transition-colors"
+            className="text-sm text-zinc-400 hover:text-zinc-300 transition-colors"
           >
             Retour aux résultats
           </button>

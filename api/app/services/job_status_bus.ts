@@ -76,7 +76,23 @@ class JobStatusBus extends EventEmitter {
     const job = await Job.find(update.job_id)
     if (!job) return
 
-    job.status = update.status
+    // clip_ready: merge a single enriched hot point into the existing array
+    if ((update as any).type === 'clip_ready') {
+      const rank: number = (update as any).rank
+      const hp: any = (update as any).hot_point
+      const hotPoints = job.hotPoints ?? []
+      const idx = hotPoints.findIndex((h: any) => h.clip_filename === hp.clip_filename)
+      if (idx >= 0) {
+        hotPoints[idx] = hp
+      } else {
+        hotPoints.push(hp)
+      }
+      job.hotPoints = hotPoints
+      await job.save()
+      return
+    }
+
+    if (update.status) job.status = update.status
     if (update.progress !== undefined) job.progress = update.progress
     if (update.error !== undefined) job.error = update.error ?? null
     if (update.hot_points !== undefined) job.hotPoints = update.hot_points

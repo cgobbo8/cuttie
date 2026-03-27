@@ -100,7 +100,7 @@ export default function ThemesPanel({ layers, onApplyTheme }: Props) {
             <div
               key={theme.id}
               className={`group relative flex items-center gap-2 px-3 py-2.5 border-b border-white/[0.04] hover:bg-white/[0.03] transition-colors ${
-                isDefault ? "bg-purple-500/[0.04]" : ""
+                isDefault ? "bg-white/[0.03]" : ""
               }`}
             >
               {/* Mini preview */}
@@ -125,7 +125,7 @@ export default function ThemesPanel({ layers, onApplyTheme }: Props) {
                 <div className="text-xs text-zinc-300 truncate flex items-center gap-1.5">
                   {theme.name}
                   {isDefault && (
-                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 font-medium leading-none shrink-0">
+                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-white/[0.1] text-zinc-200 font-medium leading-none shrink-0">
                       défaut
                     </span>
                   )}
@@ -142,7 +142,7 @@ export default function ThemesPanel({ layers, onApplyTheme }: Props) {
                   onClick={() => handleToggleDefault(theme.id)}
                   className={`pointer-events-auto text-[10px] px-1.5 py-1 rounded transition-colors ${
                     isDefault
-                      ? "bg-purple-500/25 text-purple-300"
+                      ? "bg-white/[0.12] text-zinc-200"
                       : "bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200"
                   }`}
                   title={isDefault ? "Retirer par défaut" : "Définir par défaut"}
@@ -151,7 +151,7 @@ export default function ThemesPanel({ layers, onApplyTheme }: Props) {
                 </button>
                 <button
                   onClick={() => onApplyTheme(theme.layers)}
-                  className="pointer-events-auto text-[10px] px-2 py-1 rounded bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 hover:text-purple-200 transition-colors font-medium"
+                  className="pointer-events-auto text-[10px] px-2 py-1 rounded bg-white/[0.1] hover:bg-white/[0.15] text-zinc-200 hover:text-zinc-100 transition-colors font-medium"
                 >
                   Appliquer
                 </button>
@@ -175,7 +175,7 @@ export default function ThemesPanel({ layers, onApplyTheme }: Props) {
         {showSave ? (
           <div className="flex flex-col gap-2">
             <input
-              className="w-full text-xs bg-white/[0.06] text-zinc-300 rounded-md px-2.5 py-1.5 border border-white/[0.06] outline-none focus:border-purple-500/50 placeholder-zinc-600"
+              className="w-full text-xs bg-white/[0.06] text-zinc-300 rounded-md px-2.5 py-1.5 border border-white/[0.06] outline-none focus:border-white/[0.2] placeholder-zinc-600"
               placeholder="Nom du thème..."
               value={saveName}
               onChange={(e) => setSaveName(e.target.value)}
@@ -186,7 +186,7 @@ export default function ThemesPanel({ layers, onApplyTheme }: Props) {
               <button
                 onClick={handleSave}
                 disabled={!saveName.trim() || layers.length === 0}
-                className="flex-1 text-[10px] px-2 py-1.5 rounded-md bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 hover:text-purple-200 transition-colors font-medium disabled:opacity-30 disabled:cursor-not-allowed"
+                className="flex-1 text-[10px] px-2 py-1.5 rounded-md bg-white/[0.08] hover:bg-white/[0.12] text-zinc-200 hover:text-zinc-100 transition-colors font-medium disabled:opacity-30 disabled:cursor-not-allowed"
               >
                 Enregistrer
               </button>
@@ -202,7 +202,7 @@ export default function ThemesPanel({ layers, onApplyTheme }: Props) {
           <button
             onClick={() => setShowSave(true)}
             disabled={layers.length === 0}
-            className="w-full text-xs px-3 py-2 rounded-lg bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 hover:text-purple-200 transition-colors flex items-center justify-center gap-2 font-medium disabled:opacity-30 disabled:cursor-not-allowed"
+            className="w-full text-xs px-3 py-2 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] text-zinc-200 hover:text-zinc-100 transition-colors flex items-center justify-center gap-2 font-medium disabled:opacity-30 disabled:cursor-not-allowed"
           >
             <Save className="w-4 h-4" />
             Sauvegarder le layout

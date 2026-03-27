@@ -27,6 +27,8 @@ function serializeRender(row: any) {
       ? `/api/clips/${row.job_id}/${row.output_filename}`
       : undefined,
     error: row.error ?? undefined,
+    vod_title: row.vod_title ?? undefined,
+    vod_game: row.vod_game ?? undefined,
     created_at: row.created_at,
   }
 }
@@ -76,7 +78,7 @@ export default class RendersController {
     const rows = await db
       .from('renders')
       .join('jobs', 'renders.job_id', 'jobs.id')
-      .select('renders.*', 'jobs.vod_title')
+      .select('renders.*', 'jobs.vod_title', 'jobs.vod_game')
       .orderBy('renders.created_at', 'desc')
     return response.json(rows.map(serializeRender))
   }

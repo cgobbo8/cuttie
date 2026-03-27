@@ -198,6 +198,16 @@ def save_hot_points(job_id: str, hot_points: list[HotPoint]) -> None:
     conn.close()
 
 
+def publish_clip_ready(job_id: str, rank: int, hp: HotPoint) -> None:
+    """Publish a single enriched hot point via Redis so SSE clients get it immediately."""
+    _publish_status(job_id, {
+        "job_id": job_id,
+        "type": "clip_ready",
+        "rank": rank,
+        "hot_point": hp.model_dump(),
+    })
+
+
 def update_hot_point_clip(job_id: str, rank: int, clip_filename: str) -> None:
     conn = _get_conn()
     conn.execute(
@@ -325,7 +335,7 @@ def get_render(render_id: str) -> dict | None:
 def list_renders() -> list[dict]:
     conn = _get_conn()
     rows = conn.execute(
-        "SELECT r.*, j.vod_title FROM renders r LEFT JOIN jobs j ON r.job_id = j.job_id ORDER BY r.created_at DESC"
+        "SELECT r.*, j.vod_title, j.vod_game FROM renders r LEFT JOIN jobs j ON r.job_id = j.job_id ORDER BY r.created_at DESC"
     ).fetchall()
     conn.close()
     return [dict(r) for r in rows]

@@ -2,64 +2,34 @@
 
 @theme {
   --font-sans: "Inter", system-ui, sans-serif;
-  --color-glass: rgba(255, 255, 255, 0.03);
-  --color-glass-border: rgba(255, 255, 255, 0.06);
-  --color-glass-hover: rgba(255, 255, 255, 0.06);
-  --color-accent: #a855f7;
-  --color-accent-dim: rgba(168, 85, 247, 0.15);
-  --color-accent-glow: rgba(168, 85, 247, 0.3);
+  --color-surface: rgba(255, 255, 255, 0.03);
+  --color-surface-hover: rgba(255, 255, 255, 0.06);
+  --color-border: rgba(255, 255, 255, 0.08);
+  --color-border-hover: rgba(255, 255, 255, 0.14);
 }
 
 body {
-  background: #0a0a0c;
+  background: #09090b;
   color: #e4e4e7;
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
 }
 
-/* Glassmorphism card */
-.glass {
-  background: var(--color-glass);
-  border: 1px solid var(--color-glass-border);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
+/* Surface card */
+.surface {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
 }
 
-.glass:hover {
-  background: var(--color-glass-hover);
-  border-color: rgba(255, 255, 255, 0.1);
+.surface:hover {
+  background: var(--color-surface-hover);
+  border-color: var(--color-border-hover);
 }
 
-/* Ambient glow effect */
-.ambient-glow {
-  position: relative;
-}
-
-.ambient-glow::before {
-  content: "";
-  position: absolute;
-  inset: -1px;
-  border-radius: inherit;
-  background: conic-gradient(
-    from 180deg at 50% 50%,
-    rgba(168, 85, 247, 0.08) 0deg,
-    rgba(59, 130, 246, 0.05) 120deg,
-    rgba(168, 85, 247, 0.08) 240deg,
-    rgba(236, 72, 153, 0.05) 360deg
-  );
-  z-index: -1;
-  filter: blur(16px);
-  opacity: 0;
-  transition: opacity 0.4s;
-}
-
-.ambient-glow:hover::before {
-  opacity: 1;
-}
-
-/* Signal bar glow */
-.signal-bar {
-  box-shadow: 0 0 8px currentColor;
+/* Surface without hover */
+.surface-static {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
 }
 
 /* Progress bar shimmer */
@@ -71,9 +41,9 @@ body {
 .progress-shimmer {
   background: linear-gradient(
     90deg,
-    var(--color-accent) 0%,
-    #c084fc 50%,
-    var(--color-accent) 100%
+    #fff 0%,
+    #a1a1aa 50%,
+    #fff 100%
   );
   background-size: 200% 100%;
   animation: shimmer 2s infinite;
@@ -96,14 +66,40 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.08);
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.15);
+}
+
+/* Clip entry animation */
+@keyframes clip-enter {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-clip-enter {
+  animation: clip-enter 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 /* Video player rounded */
 video {
-  border-radius: 12px;
+  border-radius: 10px;
+}
+
+/* Fade-in for page transitions */
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.25s ease-out both;
 }

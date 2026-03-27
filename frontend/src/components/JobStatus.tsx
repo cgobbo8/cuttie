@@ -1,12 +1,15 @@
-import { useState, useEffect, useCallback } from "react";
-import { getJobStatus, type JobResponse, type JobStatusType, type StepTiming } from "../lib/api";
+import { useState, useEffect } from "react";
+import type { JobStatusType, StepTiming } from "../lib/api";
 
 interface Props {
-  jobId: string;
-  onComplete: (job: JobResponse) => void;
+  status: JobStatusType;
+  progress: string;
+  stepTimings: Record<string, StepTiming> | null;
+  clipsReady: number;
+  clipsTotal: number | null;
 }
 
-const STATUS_LABELS: Record<JobStatusType, string> = {
+export const STATUS_LABELS: Record<JobStatusType, string> = {
   PENDING: "En attente...",
   DOWNLOADING_AUDIO: "Telechargement audio",
   DOWNLOADING_CHAT: "Telechargement chat",
@@ -48,42 +51,9 @@ function formatDuration(seconds: number): string {
   return s > 0 ? `${m}m ${s}s` : `${m}m`;
 }
 
-export default function JobStatus({ jobId, onComplete }: Props) {
-  const [status, setStatus] = useState<JobStatusType>("PENDING");
-  const [progress, setProgress] = useState("Demarrage...");
-  const [stepTimings, setStepTimings] = useState<Record<string, StepTiming> | null>(null);
+export default function JobStatus({ status, progress, stepTimings, clipsReady, clipsTotal }: Props) {
   const [now, setNow] = useState(() => Date.now() / 1000);
 
-  const poll = useCallback(async () => {
-    try {
-      const job = await getJobStatus(jobId);
-      setStatus(job.status);
-      setProgress(job.progress || STATUS_LABELS[job.status]);
-      if (job.step_timings) setStepTimings(job.step_timings);
-      if (job.status === "DONE" || job.status === "ERROR") {
-        onComplete(job);
-        return true;
-      }
-    } catch {
-      // keep polling
-    }
-    return false;
-  }, [jobId, onComplete]);
-
-  useEffect(() => {
-    let active = true;
-    const interval = setInterval(async () => {
-      if (!active) return;
-      const done = await poll();
-      if (done) clearInterval(interval);
-    }, 2000);
-    return () => {
-      active = false;
-      clearInterval(interval);
-    };
-  }, [poll]);
-
-  // Live clock for current-step elapsed time
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now() / 1000), 1000);
     return () => clearInterval(t);
@@ -91,37 +61,41 @@ export default function JobStatus({ jobId, onComplete }: Props) {
 
   const pct = getProgress(status);
   const currentIdx = STATUS_ORDER.indexOf(status);
+  const showClipCount = clipsReady > 0 || (status === "CLIPPING" || status === "LLM_ANALYSIS");
 
   return (
-    <div className="max-w-2xl mx-auto">
-      <div className="glass rounded-2xl p-8 text-center">
-        {/* Animated spinner */}
-        <div className="relative w-16 h-16 mx-auto mb-6">
-          <svg className="w-16 h-16 spinner" viewBox="0 0 50 50">
-            <circle cx="25" cy="25" r="20" fill="none" stroke="rgba(168,85,247,0.15)" strokeWidth="3" />
-            <circle cx="25" cy="25" r="20" fill="none" stroke="url(#grad)" strokeWidth="3" strokeDasharray="80" strokeLinecap="round" />
-            <defs>
-              <linearGradient id="grad">
-                <stop offset="0%" stopColor="#a855f7" />
-                <stop offset="100%" stopColor="#ec4899" />
-              </linearGradient>
-            </defs>
-          </svg>
-        </div>
+    <div className="w-full">
+      <div className="surface-static rounded-xl p-5">
+        <div className="flex items-center gap-4 mb-4">
+          {/* Spinner */}
+          <div className="relative w-7 h-7 shrink-0">
+            <svg className="w-7 h-7 spinner" viewBox="0 0 50 50">
+              <circle cx="25" cy="25" r="20" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="3" />
+              <circle cx="25" cy="25" r="20" fill="none" stroke="white" strokeWidth="3" strokeDasharray="80" strokeLinecap="round" opacity="0.5" />
+            </svg>
+          </div>
 
-        <p className="text-lg text-white font-medium mb-1">{progress}</p>
-        <p className="text-sm text-zinc-500 mb-8">{STATUS_LABELS[status]}</p>
-
-        {/* Progress bar */}
-        <div className="w-full bg-white/[0.04] rounded-full h-1.5 overflow-hidden mb-6">
-          <div
-            className="progress-shimmer h-full rounded-full transition-all duration-700 ease-out"
-            style={{ width: `${pct}%` }}
-          />
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between mb-1.5">
+              <p className="text-sm text-white font-medium truncate">{progress}</p>
+              {showClipCount && clipsTotal && (
+                <span className="text-xs text-zinc-400 font-mono tabular-nums shrink-0 ml-3">
+                  {clipsReady}/{clipsTotal} clips
+                </span>
+              )}
+            </div>
+            {/* Progress bar */}
+            <div className="w-full bg-white/[0.04] rounded-full h-1 overflow-hidden">
+              <div
+                className="progress-shimmer h-full rounded-full transition-all duration-700 ease-out"
+                style={{ width: `${pct}%` }}
+              />
+            </div>
+          </div>
         </div>
 
         {/* Step pills */}
-        <div className="flex flex-wrap justify-center gap-2">
+        <div className="flex flex-wrap gap-1.5">
           {STATUS_ORDER.slice(1, -1).map((step, i) => {
             const isCompleted = currentIdx > i + 1;
             const isCurrent = currentIdx === i + 1;
@@ -137,9 +111,9 @@ export default function JobStatus({ jobId, onComplete }: Props) {
             return (
               <span
                 key={step}
-                className={`inline-flex items-center gap-1.5 text-xs px-3 py-1 rounded-full transition-all ${
+                className={`inline-flex items-center gap-1.5 text-[11px] px-2.5 py-0.5 rounded-full transition-all ${
                   isCurrent
-                    ? "bg-purple-500/20 text-purple-300 border border-purple-500/30"
+                    ? "bg-white/[0.1] text-white border border-white/[0.15]"
                     : isCompleted
                       ? "text-zinc-400 bg-white/[0.03]"
                       : "text-zinc-700"
@@ -147,7 +121,7 @@ export default function JobStatus({ jobId, onComplete }: Props) {
               >
                 {STATUS_LABELS[step]}
                 {durationLabel && (
-                  <span className={`font-mono tabular-nums ${isCurrent ? "text-purple-400" : "text-zinc-600"}`}>
+                  <span className={`font-mono tabular-nums ${isCurrent ? "text-zinc-300" : "text-zinc-600"}`}>
                     {durationLabel}
                   </span>
                 )}

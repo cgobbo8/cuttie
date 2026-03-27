@@ -34,7 +34,7 @@ export default function EditPage() {
   if (loading) {
     return (
       <div className="h-screen bg-zinc-950 flex items-center justify-center">
-        <svg className="w-8 h-8 spinner text-purple-400" viewBox="0 0 24 24" fill="none">
+        <svg className="w-8 h-8 spinner text-zinc-400" viewBox="0 0 24 24" fill="none">
           <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="60" opacity="0.3" />
           <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
         </svg>
@@ -49,7 +49,7 @@ export default function EditPage() {
           <p className="text-zinc-400 mb-4">Aucun clip disponible pour l'edition.</p>
           <button
             onClick={() => navigate(`/${jobId}`)}
-            className="text-sm text-purple-400 hover:text-purple-300 transition-colors"
+            className="text-sm text-zinc-400 hover:text-zinc-300 transition-colors"
           >
             Retour aux resultats
           </button>

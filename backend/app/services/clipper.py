@@ -229,7 +229,7 @@ def _extract_single_clip(
                 "yt-dlp",
                 "--download-sections", f"*{_fmt_time(start)}-{_fmt_time(end)}",
                 "--force-keyframes-at-cuts",
-                "-f", "best",
+                "-f", "bestvideo+bestaudio/best",
                 "-o", raw_file,
                 "--no-warnings",
                 url,
@@ -248,10 +248,9 @@ def _extract_single_clip(
             [
                 "ffmpeg", "-y",
                 "-i", raw_file,
-                "-vf", "scale=-2:480",
                 "-c:v", "libx264", "-preset", "fast",
-                "-b:v", "1M", "-maxrate", "1.5M", "-bufsize", "2M",
-                "-c:a", "aac", "-b:a", "96k",
+                "-crf", "18",
+                "-c:a", "aac", "-b:a", "128k",
                 "-movflags", "+faststart",
                 filepath,
             ],
@@ -335,16 +334,15 @@ def _fmt_time(seconds: float) -> str:
 
 
 def _compress_clip(raw_path: str, output_path: str) -> bool:
-    """Compress a raw clip to 480p h264. Returns True on success."""
+    """Compress a raw clip to h264 (source resolution). Returns True on success."""
     try:
         subprocess.run(
             [
                 "ffmpeg", "-y",
                 "-i", raw_path,
-                "-vf", "scale=-2:480",
                 "-c:v", "libx264", "-preset", "fast",
-                "-b:v", "1M", "-maxrate", "1.5M", "-bufsize", "2M",
-                "-c:a", "aac", "-b:a", "96k",
+                "-crf", "18",
+                "-c:a", "aac", "-b:a", "128k",
                 "-movflags", "+faststart",
                 output_path,
             ],
@@ -448,7 +446,7 @@ def extract_group(
                 [
                     "yt-dlp",
                     "--download-sections", f"*{_fmt_time(start)}-{_fmt_time(end)}",
-                    "--force-keyframes-at-cuts", "-f", "best",
+                    "--force-keyframes-at-cuts", "-f", "bestvideo+bestaudio/best",
                     "-o", raw_file, "--no-warnings", url,
                 ],
                 check=True, timeout=180, capture_output=True, text=True,
@@ -488,7 +486,7 @@ def extract_group(
                 [
                     "yt-dlp",
                     "--download-sections", f"*{_fmt_time(g_start)}-{_fmt_time(g_end)}",
-                    "--force-keyframes-at-cuts", "-f", "best",
+                    "--force-keyframes-at-cuts", "-f", "bestvideo+bestaudio/best",
                     "-o", group_file, "--no-warnings", url,
                 ],
                 check=True, timeout=300, capture_output=True, text=True,
@@ -514,10 +512,9 @@ def extract_group(
                             "-ss", str(local_start),
                             "-i", group_file,
                             "-t", str(duration),
-                            "-vf", "scale=-2:480",
                             "-c:v", "libx264", "-preset", "fast",
-                            "-b:v", "1M", "-maxrate", "1.5M", "-bufsize", "2M",
-                            "-c:a", "aac", "-b:a", "96k",
+                            "-crf", "18",
+                            "-c:a", "aac", "-b:a", "128k",
                             "-movflags", "+faststart",
                             filepath,
                         ],

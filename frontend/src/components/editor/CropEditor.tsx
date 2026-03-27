@@ -165,7 +165,7 @@ export default function CropEditor({ videoSrc, initialCrop, onConfirm, onCancel 
             top: toDisplay(crop.y),
             width: toDisplay(crop.w),
             height: toDisplay(crop.h),
-            border: "2px solid rgba(168,85,247,0.9)",
+            border: "2px solid rgba(255,255,255,0.9)",
             cursor: "move",
             zIndex: 1,
           }}
@@ -185,7 +185,7 @@ export default function CropEditor({ videoSrc, initialCrop, onConfirm, onCancel 
                 top: toDisplay(crop.y + (isBottom ? crop.h : 0)) - HANDLE_SIZE / 2,
                 width: HANDLE_SIZE,
                 height: HANDLE_SIZE,
-                background: "rgb(168,85,247)",
+                background: "rgb(255,255,255)",
                 border: "2px solid white",
                 borderRadius: 3,
                 cursor: `${corner}-resize`,
@@ -219,7 +219,7 @@ export default function CropEditor({ videoSrc, initialCrop, onConfirm, onCancel 
         </button>
         <button
           onClick={() => onConfirm(crop)}
-          className="px-5 py-2 text-xs rounded-lg bg-purple-600/30 hover:bg-purple-600/50 text-purple-200 hover:text-white transition-colors font-medium"
+          className="px-5 py-2 text-xs rounded-lg bg-white/[0.15] hover:bg-white/[0.25] text-zinc-100 hover:text-white transition-colors font-medium"
         >
           Appliquer (Enter)
         </button>

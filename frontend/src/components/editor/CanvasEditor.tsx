@@ -91,14 +91,15 @@ export default function CanvasEditor({
       w: Math.round(Math.min(env.clip_width, env.clip_height) / 3),
       h: Math.round(Math.min(env.clip_width, env.clip_height) / 3),
     };
-    const camSize = env.layout.cam_size;
+    const camWidth = env.layout.cam_size;
+    const camHeight = Math.round(camWidth * (cam.h / cam.w));
     const camY = env.layout.cam_margin_top;
-    const camX = Math.round((1080 - camSize) / 2);
+    const camX = Math.round((1080 - camWidth) / 2);
     addLayer({
       type: "facecam",
       name: "Facecam",
       clipUrl: rawClipUrl,
-      transform: { x: camX, y: camY, width: camSize, height: camSize },
+      transform: { x: camX, y: camY, width: camWidth, height: camHeight },
       style: { borderRadius: env.layout.cam_border_radius },
       video: { src: rawClipUrl, crop: cam },
     });
@@ -250,6 +251,8 @@ export default function CanvasEditor({
           h: Math.round(Math.min(env?.clip_width ?? 1920, env?.clip_height ?? 1080) / 3),
         };
         base.video = { src: rawClipUrl, crop };
+        // Adjust height to match crop aspect ratio (avoid distortion)
+        base.transform.height = Math.round(base.transform.width * (crop.h / crop.w));
       } else if (tpl.type === "subtitles" && tpl.subtitle) {
         const sub: SubtitleData = {
           ...tpl.subtitle,
@@ -663,7 +666,20 @@ export default function CanvasEditor({
             videoSrc={cropLayer.video.src}
             initialCrop={cropLayer.video.crop}
             onConfirm={(newCrop) => {
-              updateVideoCrop(cropEditingId, newCrop);
+              // Adjust transform to match the new crop's aspect ratio (no distortion)
+              commitTransform();
+              setLayers((prev) =>
+                prev.map((l) => {
+                  if (l.id !== cropEditingId || !l.video) return l;
+                  const aspectRatio = newCrop.h / newCrop.w;
+                  const newHeight = Math.round(l.transform.width * aspectRatio);
+                  return {
+                    ...l,
+                    video: { ...l.video, crop: newCrop },
+                    transform: { ...l.transform, height: newHeight },
+                  };
+                }),
+              );
               setCropEditingId(null);
             }}
             onCancel={() => setCropEditingId(null)}

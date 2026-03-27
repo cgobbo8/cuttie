@@ -100,16 +100,14 @@ export async function renderClip(opts: RenderOptions): Promise<{ sizeMb: number 
   const startFrame = trim ? Math.floor(trim.start * fps) : 0
   const endFrame = trim ? Math.ceil(trim.end * fps) : fullDurationInFrames
 
-  const API_BASE = process.env.API_BASE_URL ?? 'http://localhost:3333/api'
-
-  // Enrich video layers: use HTTP src (Remotion doesn't support file://), inject native dimensions
+  // Enrich video layers: use local file path for server-side rendering (no auth needed)
   const enrichedLayers: Layer[] = layers.map((layer) => {
     if ((layer.type === 'gameplay' || layer.type === 'facecam') && layer.video) {
       return {
         ...layer,
         video: {
           ...layer.video,
-          src: `${API_BASE}/clips/${jobId}/${clipFilename}`,
+          src: videoPath,
           nativeWidth: nativeW,
           nativeHeight: nativeH,
         },

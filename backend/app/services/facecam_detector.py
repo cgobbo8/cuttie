@@ -24,11 +24,12 @@ MODEL_PATH = os.path.join(os.path.expanduser("~"), ".cache", "mediapipe", "blaze
 
 # How many frames to sample
 N_FRAMES_FACE = 5
-N_FRAMES_EDGES = 20
+N_FRAMES_EDGES = 30
 FACE_SAMPLE_POSITIONS = [0.2, 0.35, 0.5, 0.65, 0.8]
 
-# Edge persistence: keep edges present in > 50% of frames
-EDGE_PERSISTENCE_RATIO = 0.5
+# Edge persistence: keep edges present in > 35% of frames
+# (lowered from 50% to catch thinner / semi-transparent overlay borders)
+EDGE_PERSISTENCE_RATIO = 0.35
 
 # Snap to frame edge if within this fraction of frame dimension
 SNAP_MARGIN = 0.08
@@ -127,7 +128,13 @@ def _build_persistent_edges(clip_paths: list[str], frame_w: int, frame_h: int) -
         cap.release()
 
     threshold = total_sampled * 255 * EDGE_PERSISTENCE_RATIO
-    return ((edge_sum > threshold) * 255).astype(np.uint8)
+    persistent = ((edge_sum > threshold) * 255).astype(np.uint8)
+
+    # Morphological closing to bridge small gaps in overlay borders
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
+    persistent = cv2.morphologyEx(persistent, cv2.MORPH_CLOSE, kernel, iterations=2)
+
+    return persistent
 
 
 def _find_overlay_rect(
@@ -136,6 +143,9 @@ def _find_overlay_rect(
     frame_w: int, frame_h: int,
 ) -> tuple[int, int, int, int]:
     """Find the webcam overlay rectangle using Hough line detection on persistent edges.
+
+    Lines are scored by a combination of length and proximity to the face,
+    and constrained to a reasonable search radius around the face.
     Returns (x, y, w, h).
     """
     lines = cv2.HoughLinesP(
@@ -147,8 +157,12 @@ def _find_overlay_rect(
 
     face_cx = fx + fw // 2
     face_cy = fy + fh // 2
+    face_diag = np.sqrt(fw**2 + fh**2)
 
-    # Classify lines as horizontal or vertical
+    # Max search distance from face center — overlay is typically < 4× face size
+    max_search = face_diag * 4
+
+    # Classify lines as horizontal or vertical, filtering by search radius
     h_lines = []  # (y, x1, x2, length)
     v_lines = []  # (x, y1, y2, length)
 
@@ -161,47 +175,56 @@ def _find_overlay_rect(
 
             if dy <= LINE_TOLERANCE and dx > LINE_TOLERANCE:
                 y_avg = (y1 + y2) // 2
-                h_lines.append((y_avg, min(x1, x2), max(x1, x2), length))
+                if abs(y_avg - face_cy) <= max_search:
+                    h_lines.append((y_avg, min(x1, x2), max(x1, x2), length))
             elif dx <= LINE_TOLERANCE and dy > LINE_TOLERANCE:
                 x_avg = (x1 + x2) // 2
-                v_lines.append((x_avg, min(y1, y2), max(y1, y2), length))
+                if abs(x_avg - face_cx) <= max_search:
+                    v_lines.append((x_avg, min(y1, y2), max(y1, y2), length))
+
+    def _score_line(length: float, distance: float) -> float:
+        """Score a line: balance length and proximity to face.
+
+        Proximity matters more — a shorter line close to the face beats
+        a long game-HUD line far away.
+        """
+        proximity = 1.0 / (1.0 + distance / face_diag)
+        return length * (proximity ** 2)
 
     # --- Find best border in each direction from face ---
-    # Priority: longest line first (overlay borders span the full width/height),
-    # then closest to face as tiebreaker.
 
-    # LEFT: vertical line left of face → longest, then closest (highest x)
+    # LEFT: vertical line left of face
     left_edge = 0
     left_candidates = [v for v in v_lines if v[0] < fx]
     if left_candidates:
-        left_candidates.sort(key=lambda v: (-v[3], -v[0]))
+        left_candidates.sort(key=lambda v: -_score_line(v[3], fx - v[0]))
         left_edge = left_candidates[0][0]
 
-    # RIGHT: vertical line right of face → longest, then closest (lowest x)
+    # RIGHT: vertical line right of face
     right_edge = frame_w
     right_candidates = [v for v in v_lines if v[0] > fx + fw]
     if right_candidates:
-        right_candidates.sort(key=lambda v: (-v[3], v[0]))
+        right_candidates.sort(key=lambda v: -_score_line(v[3], v[0] - (fx + fw)))
         right_edge = right_candidates[0][0]
 
-    # TOP: horizontal line above face, overlapping face x-range → longest, then closest
+    # TOP: horizontal line above face (must overlap face x-range)
     top_edge = 0
     top_candidates = [
         h for h in h_lines
         if h[0] < fy and h[2] > fx and h[1] < fx + fw
     ]
     if top_candidates:
-        top_candidates.sort(key=lambda h: (-h[3], -h[0]))
+        top_candidates.sort(key=lambda h: -_score_line(h[3], fy - h[0]))
         top_edge = top_candidates[0][0]
 
-    # BOTTOM: horizontal line below face, overlapping face x-range → longest, then closest
+    # BOTTOM: horizontal line below face (must overlap face x-range)
     bottom_edge = frame_h
     bottom_candidates = [
         h for h in h_lines
         if h[0] > fy + fh and h[2] > fx and h[1] < fx + fw
     ]
     if bottom_candidates:
-        bottom_candidates.sort(key=lambda h: (-h[3], h[0]))
+        bottom_candidates.sort(key=lambda h: -_score_line(h[3], h[0] - (fy + fh)))
         bottom_edge = bottom_candidates[0][0]
 
     # Snap to frame edge if close
@@ -221,6 +244,23 @@ def _find_overlay_rect(
     bottom_edge -= INNER_CROP
 
     return left_edge, top_edge, right_edge - left_edge, bottom_edge - top_edge
+
+
+def _face_centered_fallback(
+    fx: int, fy: int, fw: int, fh: int,
+    frame_w: int, frame_h: int,
+) -> tuple[int, int, int, int]:
+    """Build a crop rect centered on the detected face with generous padding.
+
+    Used when Hough border detection fails (overlay rect covers most of the frame).
+    Assumes the face occupies roughly 35-40% of the webcam overlay width.
+    """
+    pad = max(fw, fh)
+    x = max(INNER_CROP, fx - pad)
+    y = max(INNER_CROP, fy - int(pad * 0.6))
+    r = min(frame_w - INNER_CROP, fx + fw + pad)
+    b = min(frame_h - INNER_CROP, fy + fh + int(pad * 1.4))
+    return x, y, r - x, b - y
 
 
 def detect_facecam(clip_path: str, extra_clips: list[str] | None = None) -> dict | None:
@@ -288,6 +328,17 @@ def detect_facecam(clip_path: str, extra_clips: list[str] | None = None) -> dict
 
     persistent = _build_persistent_edges(good_clips, frame_w, frame_h)
     x, y, w, h = _find_overlay_rect(persistent, fx, fy, fw, fh, frame_w, frame_h)
+
+    # Validate: if detected overlay is too large, border detection likely failed.
+    # Fall back to a face-centered crop with generous padding.
+    overlay_area = w * h
+    frame_area = frame_w * frame_h
+    if overlay_area > frame_area * 0.35:
+        logger.info(
+            f"Overlay rect too large ({overlay_area / frame_area * 100:.0f}% of frame), "
+            "falling back to face-centered crop"
+        )
+        x, y, w, h = _face_centered_fallback(fx, fy, fw, fh, frame_w, frame_h)
 
     result = {"x": x, "y": y, "w": w, "h": h}
     logger.info(f"Facecam overlay detected: {w}x{h} at ({x},{y})")

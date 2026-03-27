@@ -14,7 +14,7 @@ interface Props {
   onCancel: () => void;
 }
 
-type DragMode = "move" | "nw" | "ne" | "sw" | "se";
+type DragMode = "move" | "nw" | "ne" | "sw" | "se" | "n" | "s" | "e" | "w";
 
 const HANDLE_SIZE = 12;
 const MIN_CROP = 20;
@@ -90,14 +90,20 @@ export default function CropEditor({ videoSrc, initialCrop, onConfirm, onCancel 
     dragRef.current = null;
   }, []);
 
-  // Keyboard
+  // Keyboard — stopImmediatePropagation prevents parent handlers (CanvasEditor)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onCancel();
-      if (e.key === "Enter") onConfirm(crop);
+      if (e.key === "Escape") {
+        e.stopImmediatePropagation();
+        onCancel();
+      }
+      if (e.key === "Enter") {
+        e.stopImmediatePropagation();
+        onConfirm(crop);
+      }
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
   }, [onCancel, onConfirm, crop]);
 
   // Loading state
@@ -196,6 +202,45 @@ export default function CropEditor({ videoSrc, initialCrop, onConfirm, onCancel 
           );
         })}
 
+        {/* Edge handles (mid-point of each side) */}
+        {(["n", "s", "e", "w"] as DragMode[]).map((edge) => {
+          const isHoriz = edge === "n" || edge === "s";
+          const handleW = isHoriz ? 24 : 8;
+          const handleH = isHoriz ? 8 : 24;
+          let left: number, top: number;
+          if (edge === "n") {
+            left = toDisplay(crop.x + crop.w / 2) - handleW / 2;
+            top = toDisplay(crop.y) - handleH / 2;
+          } else if (edge === "s") {
+            left = toDisplay(crop.x + crop.w / 2) - handleW / 2;
+            top = toDisplay(crop.y + crop.h) - handleH / 2;
+          } else if (edge === "e") {
+            left = toDisplay(crop.x + crop.w) - handleW / 2;
+            top = toDisplay(crop.y + crop.h / 2) - handleH / 2;
+          } else {
+            left = toDisplay(crop.x) - handleW / 2;
+            top = toDisplay(crop.y + crop.h / 2) - handleH / 2;
+          }
+          return (
+            <div
+              key={edge}
+              style={{
+                position: "absolute",
+                left,
+                top,
+                width: handleW,
+                height: handleH,
+                background: "rgb(255,255,255)",
+                border: "2px solid white",
+                borderRadius: 3,
+                cursor: `${edge}-resize`,
+                zIndex: 2,
+              }}
+              onPointerDown={(e) => startDrag(e, edge)}
+            />
+          );
+        })}
+
         {/* Crop size label */}
         <div
           className="absolute text-[11px] text-white bg-black/60 px-2 py-0.5 rounded font-mono"
@@ -219,7 +264,7 @@ export default function CropEditor({ videoSrc, initialCrop, onConfirm, onCancel 
         </button>
         <button
           onClick={() => onConfirm(crop)}
-          className="px-5 py-2 text-xs rounded-lg bg-white/[0.15] hover:bg-white/[0.25] text-zinc-100 hover:text-white transition-colors font-medium"
+          className="px-5 py-2 text-xs rounded-lg bg-white hover:bg-zinc-200 text-black transition-colors font-medium"
         >
           Appliquer (Enter)
         </button>

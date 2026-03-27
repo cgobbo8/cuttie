@@ -1,13 +1,58 @@
 """SQLite persistence layer for jobs and hot points."""
 
 import json
+import logging
 import os
 import sqlite3
 from datetime import datetime, timezone
+from typing import Any
 
 from app.models.schemas import HotPoint, JobResponse, JobStatus, LlmAnalysis, SignalBreakdown
 
+logger = logging.getLogger(__name__)
+
 DB_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "cuttie.db")
+
+# ── Optional Redis publisher ──────────────────────────────────────────────────
+# When REDIS_HOST is set, status updates are published so AdonisJS can relay
+# them to SSE clients. Falls back to a no-op if Redis is unavailable.
+
+_redis: Any = None
+_redis_init = False
+
+
+def _get_redis():
+    global _redis, _redis_init
+    if _redis_init:
+        return _redis
+    _redis_init = True
+    host = os.getenv("REDIS_HOST")
+    if not host:
+        return None
+    try:
+        import redis as redis_lib  # type: ignore
+        _redis = redis_lib.Redis(
+            host=host,
+            port=int(os.getenv("REDIS_PORT", "6379")),
+            password=os.getenv("REDIS_PASSWORD") or None,
+            decode_responses=True,
+        )
+        _redis.ping()
+        logger.info("Redis publisher connected at %s", host)
+    except Exception as e:
+        logger.warning("Redis publisher unavailable: %s", e)
+        _redis = None
+    return _redis
+
+
+def _publish_status(job_id: str, payload: dict) -> None:
+    r = _get_redis()
+    if r is None:
+        return
+    try:
+        r.publish(f"cuttie:job_status:{job_id}", json.dumps(payload))
+    except Exception as e:
+        logger.debug("Redis publish failed: %s", e)
 
 
 def _get_conn() -> sqlite3.Connection:
@@ -116,6 +161,13 @@ def update_job(job_id: str, **kwargs) -> None:
 
     if hot_points is not None:
         save_hot_points(job_id, hot_points)
+
+    # Publish status update to Redis (no-op if Redis unavailable)
+    publish_payload: dict = {"job_id": job_id, **kwargs}
+    publish_payload.pop("updated_at", None)
+    if hot_points is not None:
+        publish_payload["hot_points"] = [hp.model_dump() for hp in hot_points]
+    _publish_status(job_id, publish_payload)
 
 
 def save_hot_points(job_id: str, hot_points: list[HotPoint]) -> None:

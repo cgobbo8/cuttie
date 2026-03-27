@@ -52,6 +52,11 @@ export type JobStatusType =
   | "DONE"
   | "ERROR";
 
+export interface StepTiming {
+  start: number; // unix timestamp (seconds)
+  duration_seconds: number | null; // null while step is running
+}
+
 export interface JobResponse {
   job_id: string;
   status: JobStatusType;
@@ -64,6 +69,7 @@ export interface JobResponse {
   streamer: string | null;
   view_count: number | null;
   stream_date: string | null;
+  step_timings: Record<string, StepTiming> | null;
 }
 
 export interface JobSummary {
@@ -87,11 +93,12 @@ function mapJobResponse(raw: any): JobResponse {
     hot_points: raw.hotPoints ?? null,
     error: raw.error ?? null,
     vod_title: raw.vodTitle ?? null,
-    vod_game: null,
-    vod_duration_seconds: null,
-    streamer: null,
-    view_count: null,
-    stream_date: null,
+    vod_game: raw.vodGame ?? null,
+    vod_duration_seconds: raw.vodDurationSeconds ?? null,
+    streamer: raw.streamer ?? null,
+    view_count: raw.viewCount ?? null,
+    stream_date: raw.streamDate ?? null,
+    step_timings: raw.stepTimings ?? null,
   };
 }
 

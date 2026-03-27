@@ -7,7 +7,7 @@ import sqlite3
 from datetime import datetime, timezone
 from typing import Any
 
-from app.models.schemas import HotPoint, JobResponse, JobStatus, LlmAnalysis, SignalBreakdown
+from app.models.schemas import HotPoint, JobResponse, JobStatus, LlmAnalysis, SignalBreakdown, StepTiming
 
 logger = logging.getLogger(__name__)
 
@@ -121,6 +121,7 @@ def init_db() -> None:
         ("jobs", "streamer", "TEXT"),
         ("jobs", "view_count", "INTEGER"),
         ("jobs", "stream_date", "TEXT"),
+        ("jobs", "step_timings", "TEXT"),
     ]
     for table, col, col_type in migrations:
         try:
@@ -148,8 +149,15 @@ def update_job(job_id: str, **kwargs) -> None:
     now = datetime.now(timezone.utc).isoformat()
     kwargs["updated_at"] = now
 
-    # Handle hot_points separately
+    # Handle complex fields separately (not simple SQL columns)
     hot_points = kwargs.pop("hot_points", None)
+    step_timings = kwargs.pop("step_timings", None)
+
+    # Serialize step_timings to JSON for storage
+    if step_timings is not None:
+        kwargs["step_timings"] = json.dumps(
+            {k: v.model_dump() if hasattr(v, "model_dump") else v for k, v in step_timings.items()}
+        )
 
     if kwargs:
         cols = ", ".join(f"{k} = ?" for k in kwargs)
@@ -165,6 +173,11 @@ def update_job(job_id: str, **kwargs) -> None:
     # Publish status update to Redis (no-op if Redis unavailable)
     publish_payload: dict = {"job_id": job_id, **kwargs}
     publish_payload.pop("updated_at", None)
+    # Re-expose step_timings as dict (not JSON string) for Redis subscribers
+    if step_timings is not None:
+        publish_payload["step_timings"] = {
+            k: v.model_dump() if hasattr(v, "model_dump") else v for k, v in step_timings.items()
+        }
     if hot_points is not None:
         publish_payload["hot_points"] = [hp.model_dump() for hp in hot_points]
     _publish_status(job_id, publish_payload)
@@ -237,6 +250,15 @@ def get_job(job_id: str) -> JobResponse | None:
             )
 
     keys = row.keys()
+    raw_timings = row["step_timings"] if "step_timings" in keys else None
+    step_timings = None
+    if raw_timings:
+        try:
+            parsed = json.loads(raw_timings)
+            step_timings = {k: StepTiming(**v) for k, v in parsed.items()}
+        except Exception:
+            pass
+
     return JobResponse(
         job_id=row["job_id"],
         status=JobStatus(row["status"]),
@@ -249,6 +271,7 @@ def get_job(job_id: str) -> JobResponse | None:
         streamer=row["streamer"] if "streamer" in keys else None,
         view_count=row["view_count"] if "view_count" in keys else None,
         stream_date=row["stream_date"] if "stream_date" in keys else None,
+        step_timings=step_timings,
     )
 
 

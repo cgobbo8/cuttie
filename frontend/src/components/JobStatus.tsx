@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { getJobStatus, type JobResponse, type JobStatusType } from "../lib/api";
+import { getJobStatus, type JobResponse, type JobStatusType, type StepTiming } from "../lib/api";
 
 interface Props {
   jobId: string;
@@ -41,15 +41,25 @@ function getProgress(status: JobStatusType): number {
   return Math.round((idx / (STATUS_ORDER.length - 1)) * 100);
 }
 
+function formatDuration(seconds: number): string {
+  if (seconds < 60) return `${Math.round(seconds)}s`;
+  const m = Math.floor(seconds / 60);
+  const s = Math.round(seconds % 60);
+  return s > 0 ? `${m}m ${s}s` : `${m}m`;
+}
+
 export default function JobStatus({ jobId, onComplete }: Props) {
   const [status, setStatus] = useState<JobStatusType>("PENDING");
   const [progress, setProgress] = useState("Demarrage...");
+  const [stepTimings, setStepTimings] = useState<Record<string, StepTiming> | null>(null);
+  const [now, setNow] = useState(() => Date.now() / 1000);
 
   const poll = useCallback(async () => {
     try {
       const job = await getJobStatus(jobId);
       setStatus(job.status);
       setProgress(job.progress || STATUS_LABELS[job.status]);
+      if (job.step_timings) setStepTimings(job.step_timings);
       if (job.status === "DONE" || job.status === "ERROR") {
         onComplete(job);
         return true;
@@ -72,6 +82,12 @@ export default function JobStatus({ jobId, onComplete }: Props) {
       clearInterval(interval);
     };
   }, [poll]);
+
+  // Live clock for current-step elapsed time
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now() / 1000), 1000);
+    return () => clearInterval(t);
+  }, []);
 
   const pct = getProgress(status);
   const currentIdx = STATUS_ORDER.indexOf(status);
@@ -107,20 +123,34 @@ export default function JobStatus({ jobId, onComplete }: Props) {
         {/* Step pills */}
         <div className="flex flex-wrap justify-center gap-2">
           {STATUS_ORDER.slice(1, -1).map((step, i) => {
-            const isActive = currentIdx > i;
+            const isCompleted = currentIdx > i + 1;
             const isCurrent = currentIdx === i + 1;
+            const timing = stepTimings?.[step];
+
+            let durationLabel: string | null = null;
+            if (timing?.duration_seconds != null) {
+              durationLabel = formatDuration(timing.duration_seconds);
+            } else if (isCurrent && timing?.start != null) {
+              durationLabel = formatDuration(Math.max(0, now - timing.start));
+            }
+
             return (
               <span
                 key={step}
-                className={`text-xs px-3 py-1 rounded-full transition-all ${
+                className={`inline-flex items-center gap-1.5 text-xs px-3 py-1 rounded-full transition-all ${
                   isCurrent
                     ? "bg-purple-500/20 text-purple-300 border border-purple-500/30"
-                    : isActive
+                    : isCompleted
                       ? "text-zinc-400 bg-white/[0.03]"
                       : "text-zinc-700"
                 }`}
               >
                 {STATUS_LABELS[step]}
+                {durationLabel && (
+                  <span className={`font-mono tabular-nums ${isCurrent ? "text-purple-400" : "text-zinc-600"}`}>
+                    {durationLabel}
+                  </span>
+                )}
               </span>
             );
           })}

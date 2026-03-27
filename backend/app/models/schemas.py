@@ -60,6 +60,11 @@ class HotPoint(BaseModel):
     llm: LlmAnalysis | None = None
 
 
+class StepTiming(BaseModel):
+    start: float  # unix timestamp
+    duration_seconds: float | None = None  # None while step is in progress
+
+
 class JobResponse(BaseModel):
     job_id: str
     status: JobStatus
@@ -72,3 +77,4 @@ class JobResponse(BaseModel):
     streamer: str | None = None
     view_count: int | None = None
     stream_date: str | None = None
+    step_timings: dict[str, StepTiming] | None = None

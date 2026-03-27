@@ -3,8 +3,10 @@
 import logging
 import os
 import shutil
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+from app.models.schemas import StepTiming
 from app.services.audio_analyzer import analyze_audio
 from app.services.audio_classifier import classify_audio
 from app.services.chat_analyzer import analyze_chat
@@ -14,7 +16,36 @@ from app.services.downloader import download_audio, download_chat
 from app.services.llm_analyzer import analyze_hot_points, analyze_single_clip
 from app.services.scorer import compute_scores
 from app.services.triage import run_triage
+
 logger = logging.getLogger(__name__)
+
+
+class StepTimer:
+    """Tracks per-step wall-clock timings throughout the pipeline."""
+
+    def __init__(self) -> None:
+        self._timings: dict[str, StepTiming] = {}
+        self._current: str | None = None
+
+    def start(self, step: str) -> None:
+        """Finalize previous step and start timing the new one."""
+        if self._current and self._current in self._timings:
+            prev = self._timings[self._current]
+            if prev.duration_seconds is None:
+                prev.duration_seconds = round(time.time() - prev.start, 1)
+        self._current = step
+        self._timings[step] = StepTiming(start=round(time.time(), 3))
+
+    def finish(self) -> None:
+        """Finalize the current step (called at DONE)."""
+        if self._current and self._current in self._timings:
+            prev = self._timings[self._current]
+            if prev.duration_seconds is None:
+                prev.duration_seconds = round(time.time() - prev.start, 1)
+
+    @property
+    def timings(self) -> dict[str, StepTiming]:
+        return self._timings
 
 # Steps that can be resumed from (in order)
 RESUMABLE_FROM = {
@@ -33,6 +64,7 @@ def _run_clipping_and_analysis(
     audio_features: list[dict] | None = None,
     chat_messages: list[dict] | None = None,
     triage_transcripts: dict[int, tuple[str, float]] | None = None,
+    timer: "StepTimer | None" = None,
 ) -> None:
     """Pipeline: batch-download clips and analyze with LLM concurrently.
 
@@ -49,7 +81,7 @@ def _run_clipping_and_analysis(
     DL_WORKERS = 5
     LLM_WORKERS = 3
 
-    update_job(job_id, status="CLIPPING", progress=f"Extraction clips (0/{total_clips})...")
+    update_job(job_id, status="CLIPPING", progress=f"Extraction clips (0/{total_clips})...", step_timings=timer.timings if timer else None)
 
     with ThreadPoolExecutor(max_workers=DL_WORKERS) as dl_pool, \
          ThreadPoolExecutor(max_workers=LLM_WORKERS) as llm_pool:
@@ -89,7 +121,9 @@ def _run_clipping_and_analysis(
                 logger.error(f"Group extraction error: {e}")
 
         # All downloads done — wait for remaining LLM analyses
-        update_job(job_id, status="LLM_ANALYSIS", progress="Analyse IA des clips...")
+        if timer:
+            timer.start("LLM_ANALYSIS")
+        update_job(job_id, status="LLM_ANALYSIS", progress="Analyse IA des clips...", step_timings=timer.timings if timer else None)
         done_llm = 0
         total_llm = len(llm_futures)
 
@@ -123,6 +157,7 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
     If resume_from is set, skip completed steps and resume from that point.
     """
     output_dir = os.path.join("data", job_id)
+    timer = StepTimer()
 
     try:
         job = get_job(job_id) if resume_from else None
@@ -133,6 +168,8 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
         streamer = job.streamer if job else ""
         view_count = job.view_count if job else 0
         stream_date = job.stream_date if job else ""
+        # Restore existing timings if resuming
+        step_timings_restore = job.step_timings if job else None
 
         chat_messages: list[dict] = []
         audio_path: str | None = None
@@ -142,7 +179,8 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
         # Steps 1-6: Download + Analysis + Triage (skip if resuming from later step)
         if not resume_from or resume_from in ("DOWNLOADING_AUDIO", "DOWNLOADING_CHAT", "ANALYZING_AUDIO", "ANALYZING_CHAT", "SCORING", "TRIAGE"):
             # 1 & 2. Download audio + chat in parallel (both I/O bound)
-            update_job(job_id, status="DOWNLOADING_AUDIO", progress="Downloading audio + chat...")
+            timer.start("DOWNLOADING_AUDIO")
+            update_job(job_id, status="DOWNLOADING_AUDIO", progress="Downloading audio + chat...", step_timings=timer.timings)
             with ThreadPoolExecutor(max_workers=2) as dl_pool:
                 audio_future = dl_pool.submit(download_audio, url, output_dir)
                 chat_future = dl_pool.submit(download_chat, url)
@@ -168,7 +206,8 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
             logger.info(f"Downloaded {len(chat_messages)} chat messages")
 
             # 3. Analyze audio signals + classify audio events in parallel
-            update_job(job_id, status="ANALYZING_AUDIO", progress="Analyzing audio signals + classification...")
+            timer.start("ANALYZING_AUDIO")
+            update_job(job_id, status="ANALYZING_AUDIO", progress="Analyzing audio signals + classification...", step_timings=timer.timings)
             with ThreadPoolExecutor(max_workers=2) as audio_pool:
                 features_future = audio_pool.submit(analyze_audio, audio_path)
                 classify_future = audio_pool.submit(classify_audio, audio_path)
@@ -176,11 +215,13 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
                 classification_features = classify_future.result()
 
             # 4. Analyze chat
-            update_job(job_id, status="ANALYZING_CHAT", progress="Analyzing chat activity...")
+            timer.start("ANALYZING_CHAT")
+            update_job(job_id, status="ANALYZING_CHAT", progress="Analyzing chat activity...", step_timings=timer.timings)
             chat_features = analyze_chat(chat_messages, duration)
 
             # 5. Score and find peaks — get top 50 candidates for triage
-            update_job(job_id, status="SCORING", progress="Computing scores and finding hot points...")
+            timer.start("SCORING")
+            update_job(job_id, status="SCORING", progress="Computing scores and finding hot points...", step_timings=timer.timings)
             hot_points = compute_scores(
                 audio_features, chat_features,
                 total_duration=duration, top_n=50,
@@ -199,6 +240,8 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
                 "stream_date": stream_date or "",
                 "duration": duration,
             }
+            timer.start("TRIAGE")
+            update_job(job_id, status="TRIAGE", progress="Sélection des meilleurs moments...", step_timings=timer.timings)
             hot_points, triage_transcripts = run_triage(
                 job_id, audio_path, hot_points, duration,
                 chat_messages, vod_meta,
@@ -218,14 +261,18 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
         if not resume_from or resume_from == "CLIPPING":
             if hot_points is None:
                 raise RuntimeError("No hot points available for clipping")
+            timer.start("CLIPPING")
+            update_job(job_id, status="CLIPPING", progress="Extraction des clips...", step_timings=timer.timings)
             _run_clipping_and_analysis(
                 job_id, url, hot_points, duration, vod_meta,
                 audio_features=audio_features,
                 chat_messages=chat_messages,
                 triage_transcripts=triage_transcripts,
+                timer=timer,
             )
         elif resume_from in ("TRANSCRIBING", "LLM_ANALYSIS"):
-            update_job(job_id, status="LLM_ANALYSIS", progress="Analyse IA des clips (vision + synthese)...", error=None)
+            timer.start("LLM_ANALYSIS")
+            update_job(job_id, status="LLM_ANALYSIS", progress="Analyse IA des clips (vision + synthese)...", error=None, step_timings=timer.timings)
             if hot_points is None:
                 raise RuntimeError("No hot points available for analysis")
             _reattach_clips(job_id, hot_points)
@@ -235,12 +282,23 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
                 transcripts=triage_transcripts,
             )
 
-        # 9. Done
-        update_job(job_id, status="DONE", progress="Analysis complete!", error=None)
+        # Done — finalize timings and re-publish full enriched hot_points
+        timer.finish()
+        final_job = get_job(job_id)
+        update_job(
+            job_id,
+            status="DONE",
+            progress="Analysis complete!",
+            error=None,
+            vod_title=vod_title or "",
+            hot_points=final_job.hot_points if final_job and final_job.hot_points else [],
+            step_timings=timer.timings,
+        )
 
     except Exception as e:
         logger.error(f"Pipeline error for {job_id}: {e}", exc_info=True)
-        update_job(job_id, status="ERROR", error=str(e), progress="An error occurred.")
+        timer.finish()
+        update_job(job_id, status="ERROR", error=str(e), progress="An error occurred.", step_timings=timer.timings)
 
     finally:
         # Cleanup temp audio files (but keep clips/)

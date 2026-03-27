@@ -24,5 +24,10 @@ router
 
     // Clip serving
     router.get('/clips/:jobId/:filename', [() => import('#controllers/clips_controller'), 'show'])
+
+    // Assets
+    router.get('/assets', [() => import('#controllers/assets_controller'), 'index'])
+    router.post('/assets/upload', [() => import('#controllers/assets_controller'), 'store'])
+    router.get('/assets/:filename', [() => import('#controllers/assets_controller'), 'show'])
   })
   .prefix('/api')

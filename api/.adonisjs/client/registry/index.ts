@@ -42,6 +42,24 @@ const routes = {
     tokens: [{"old":"/api/clips/:jobId/:filename","type":0,"val":"api","end":""},{"old":"/api/clips/:jobId/:filename","type":0,"val":"clips","end":""},{"old":"/api/clips/:jobId/:filename","type":1,"val":"jobId","end":""},{"old":"/api/clips/:jobId/:filename","type":1,"val":"filename","end":""}],
     types: placeholder as Registry['clips.show']['types'],
   },
+  'assets.index': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/assets',
+    tokens: [{"old":"/api/assets","type":0,"val":"api","end":""},{"old":"/api/assets","type":0,"val":"assets","end":""}],
+    types: placeholder as Registry['assets.index']['types'],
+  },
+  'assets.store': {
+    methods: ["POST"],
+    pattern: '/api/assets/upload',
+    tokens: [{"old":"/api/assets/upload","type":0,"val":"api","end":""},{"old":"/api/assets/upload","type":0,"val":"assets","end":""},{"old":"/api/assets/upload","type":0,"val":"upload","end":""}],
+    types: placeholder as Registry['assets.store']['types'],
+  },
+  'assets.show': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/assets/:filename',
+    tokens: [{"old":"/api/assets/:filename","type":0,"val":"api","end":""},{"old":"/api/assets/:filename","type":0,"val":"assets","end":""},{"old":"/api/assets/:filename","type":1,"val":"filename","end":""}],
+    types: placeholder as Registry['assets.show']['types'],
+  },
 } as const satisfies Record<string, AdonisEndpoint>
 
 export { routes }

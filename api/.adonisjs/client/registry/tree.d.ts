@@ -12,4 +12,9 @@ export interface ApiDefinition {
   clips: {
     show: typeof routes['clips.show']
   }
+  assets: {
+    index: typeof routes['assets.index']
+    store: typeof routes['assets.store']
+    show: typeof routes['assets.show']
+  }
 }

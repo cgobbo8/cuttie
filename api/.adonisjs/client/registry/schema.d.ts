@@ -79,4 +79,40 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/clips_controller').default['show']>>>
     }
   }
+  'assets.index': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/assets'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/assets_controller').default['index']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/assets_controller').default['index']>>>
+    }
+  }
+  'assets.store': {
+    methods: ["POST"]
+    pattern: '/api/assets/upload'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/assets_controller').default['store']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/assets_controller').default['store']>>>
+    }
+  }
+  'assets.show': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/assets/:filename'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { filename: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/assets_controller').default['show']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/assets_controller').default['show']>>>
+    }
+  }
 }

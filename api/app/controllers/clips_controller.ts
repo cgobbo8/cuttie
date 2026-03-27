@@ -2,7 +2,6 @@ import type { HttpContext } from '@adonisjs/core/http'
 import { createReadStream, existsSync, statSync } from 'node:fs'
 import path from 'node:path'
 
-// Python backend stores clips in backend/clips/<job_id>/
 const CLIPS_BASE = path.resolve('..', 'backend', 'clips')
 
 export default class ClipsController {
@@ -10,7 +9,6 @@ export default class ClipsController {
   async show({ params, request, response }: HttpContext) {
     const { jobId, filename } = params
 
-    // Sanitize to prevent path traversal
     const safeFilename = path.basename(filename)
     const safeJobId = jobId.replace(/[^a-zA-Z0-9_-]/g, '')
     const filePath = path.join(CLIPS_BASE, safeJobId, safeFilename)
@@ -23,26 +21,23 @@ export default class ClipsController {
     const fileSize = stat.size
     const range = request.header('range')
 
+    // Range requests for video seeking
     if (range) {
       const [startStr, endStr] = range.replace(/bytes=/, '').split('-')
       const start = parseInt(startStr, 10)
       const end = endStr ? parseInt(endStr, 10) : fileSize - 1
       const chunkSize = end - start + 1
 
-      response.response.writeHead(206, {
-        'Content-Range': `bytes ${start}-${end}/${fileSize}`,
-        'Accept-Ranges': 'bytes',
-        'Content-Length': chunkSize,
-        'Content-Type': 'video/mp4',
-      })
-      createReadStream(filePath, { start, end }).pipe(response.response)
+      response.status(206)
+      response.header('Content-Range', `bytes ${start}-${end}/${fileSize}`)
+      response.header('Accept-Ranges', 'bytes')
+      response.header('Content-Length', String(chunkSize))
+      response.header('Content-Type', 'video/mp4')
+      response.stream(createReadStream(filePath, { start, end }))
     } else {
-      response.response.writeHead(200, {
-        'Content-Length': fileSize,
-        'Content-Type': 'video/mp4',
-        'Accept-Ranges': 'bytes',
-      })
-      createReadStream(filePath).pipe(response.response)
+      response.header('Accept-Ranges', 'bytes')
+      response.header('Content-Type', 'video/mp4')
+      return response.download(filePath)
     }
   }
 }

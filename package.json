@@ -1,0 +1,15 @@
+{
+  "private": true,
+  "scripts": {
+    "dev": "docker compose up -d && concurrently --kill-others-on-fail -n redis,api,worker,front -c cyan,blue,yellow,green \"docker compose logs -f\" \"cd api && npm run dev\" \"cd backend && uv run python worker.py\" \"cd frontend && npm run dev\"",
+    "dev:api": "cd api && npm run dev",
+    "dev:front": "cd frontend && npm run dev",
+    "dev:worker": "cd backend && uv run python worker.py",
+    "redis:up": "docker compose up -d",
+    "redis:down": "docker compose down",
+    "redis:logs": "docker compose logs -f"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}

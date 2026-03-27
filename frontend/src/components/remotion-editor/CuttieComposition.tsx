@@ -1,5 +1,6 @@
-import { AbsoluteFill, interpolate, useCurrentFrame, useVideoConfig } from "remotion";
+import { AbsoluteFill, useCurrentFrame, useVideoConfig } from "remotion";
 import type { Layer } from "../../lib/editorTypes";
+import { animatedOpacity } from "../../lib/animations";
 import GameplayLayer from "./layers/GameplayLayer";
 import FacecamLayer from "./layers/FacecamLayer";
 import SubtitleLayer from "./layers/SubtitleLayer";
@@ -12,42 +13,27 @@ export interface CuttieCompositionProps {
 
 function LayerContent({ layer }: { layer: Layer }) {
   switch (layer.type) {
-    case "gameplay": return <GameplayLayer layer={layer} />;
-    case "facecam":  return <FacecamLayer layer={layer} />;
+    case "gameplay":  return <GameplayLayer layer={layer} />;
+    case "facecam":   return <FacecamLayer layer={layer} />;
     case "subtitles": return <SubtitleLayer layer={layer} />;
-    case "shape":    return <ShapeLayer layer={layer} />;
-    case "asset":    return <AssetLayer layer={layer} />;
-    default:         return null;
+    case "shape":     return <ShapeLayer layer={layer} />;
+    case "asset":     return <AssetLayer layer={layer} />;
+    default:          return null;
   }
 }
 
 /**
- * Animated wrapper — same fade-in/fade-out logic as NativePreviewViewport.animatedOpacity()
- * but using Remotion's interpolate + useCurrentFrame for frame-accurate export rendering.
+ * Converts Remotion's frame-based time into seconds, then calls the same
+ * animatedOpacity() used in NativePreviewViewport. Logic written once.
  */
 function AnimatedLayerWrapper({ layer, children }: { layer: Layer; children: React.ReactNode }) {
   const frame = useCurrentFrame();
   const { fps, durationInFrames } = useVideoConfig();
+  const currentTime = frame / fps;
+  const duration = durationInFrames / fps;
+
   const { style } = layer;
-
-  const fadeInFrames = style.fadeIn * fps;
-  const fadeOutFrames = style.fadeOut * fps;
-
-  let opacity = style.opacity;
-  if (fadeInFrames > 0) {
-    opacity = interpolate(frame, [0, fadeInFrames], [0, opacity], {
-      extrapolateLeft: "clamp",
-      extrapolateRight: "clamp",
-    });
-  }
-  if (fadeOutFrames > 0) {
-    opacity = interpolate(
-      frame,
-      [durationInFrames - fadeOutFrames, durationInFrames],
-      [opacity, 0],
-      { extrapolateLeft: "clamp", extrapolateRight: "clamp" },
-    );
-  }
+  const opacity = animatedOpacity(style, currentTime, duration);
 
   return (
     <div

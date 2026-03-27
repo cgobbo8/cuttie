@@ -1,28 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Layer, SubtitleWord } from "../../lib/editorTypes";
 import { BOX_SHADOW_PRESETS } from "../../lib/editorTypes";
+import { animatedOpacity } from "../../lib/animations";
 import TransformHandles from "../editor/TransformHandles";
 
 const CANVAS_W = 1080;
 const CANVAS_H = 1920;
-
-// ── Animation helpers ─────────────────────────────────────────────────────
-
-/** Compute animated opacity from currentTime, matching Remotion's interpolate logic. */
-function animatedOpacity(
-  opacity: number,
-  fadeIn: number,
-  fadeOut: number,
-  currentTime: number,
-  duration: number,
-): number {
-  let result = opacity;
-  if (fadeIn > 0 && currentTime < fadeIn) result *= currentTime / fadeIn;
-  if (fadeOut > 0 && duration > 0 && currentTime > duration - fadeOut) {
-    result *= Math.max(0, (duration - currentTime) / fadeOut);
-  }
-  return Math.max(0, result);
-}
 
 // ── Subtitle helpers ──────────────────────────────────────────────────────
 
@@ -186,7 +169,7 @@ export default function NativePreviewViewport({
             if (!layer.visible) return null;
             const { style } = layer;
 
-            const effectiveOpacity = animatedOpacity(style.opacity, style.fadeIn, style.fadeOut, currentTime, duration);
+            const effectiveOpacity = animatedOpacity(style, currentTime, duration);
             const baseStyle: React.CSSProperties = {
               position: "absolute",
               left: layer.transform.x,

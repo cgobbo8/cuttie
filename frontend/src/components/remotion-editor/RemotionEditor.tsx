@@ -1,19 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { type PlayerRef } from "@remotion/player";
 import { ArrowLeft, Undo2, Redo2, Loader2, Download, Plus, Video, User, MessageSquare, ImagePlus, FolderOpen, Square, Circle, SlidersHorizontal, LayoutTemplate, X, Check } from "lucide-react";
 import { clipUrl, getEditEnvironment, startRender, uploadAsset, listAssets, assetUrl, type EditEnvironment, type HotPoint, type AssetInfo } from "../../lib/api";
 import type { Layer, SubtitleData } from "../../lib/editorTypes";
 import type { ThemeLayerTemplate } from "../../lib/editorThemes";
 import { getDefaultTheme } from "../../lib/editorThemes";
 import { useEditorState } from "../editor/useEditorState";
-import RemotionViewport from "./RemotionViewport";
+import NativePreviewViewport from "./NativePreviewViewport";
 import LayerPanel from "../editor/LayerPanel";
 import PropertiesPanel from "../editor/PropertiesPanel";
 import ThemesPanel from "../editor/ThemesPanel";
 import PlaybackBar from "../editor/PlaybackBar";
 import CropEditor from "../editor/CropEditor";
-
-const FPS = 30;
 
 interface Props {
   jobId: string;
@@ -41,8 +38,7 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
   } = editor;
 
   const rawClipUrl = clipUrl(jobId, hotPoint.clip_filename!);
-  const playerRef = useRef<PlayerRef | null>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
   const [addMenuOpen, setAddMenuOpen] = useState(false);
   const addMenuRef = useRef<HTMLDivElement>(null);
   const [cropEditingId, setCropEditingId] = useState<string | null>(null);
@@ -51,78 +47,37 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
   const [assetLibrary, setAssetLibrary] = useState<AssetInfo[]>([]);
   const [rightTab, setRightTab] = useState<RightTab>("properties");
 
-  // Video metadata
+  // Video metadata — probed via a lightweight metadata-only fetch
   const [videoDuration, setVideoDuration] = useState<number | null>(null);
-  const durationInFrames = videoDuration ? Math.ceil(videoDuration * FPS) : 1;
 
-  // Probe video duration
   useEffect(() => {
     const vid = document.createElement("video");
     vid.src = rawClipUrl;
     vid.preload = "metadata";
-    vid.onloadedmetadata = () => {
-      setVideoDuration(vid.duration);
-    };
+    vid.onloadedmetadata = () => setVideoDuration(vid.duration);
     return () => { vid.src = ""; };
   }, [rawClipUrl]);
 
-  // Track current time from player
+  // Playback state — driven by native video events from NativePreviewViewport
   const [playerTime, setPlayerTime] = useState(0);
   const [playing, setPlaying] = useState(false);
 
-  // Sync native audio element with Remotion Player (videos inside are muted)
-  useEffect(() => {
-    const player = playerRef.current;
-    if (!player) return;
-
-    const onFrame = () => {
-      const frame = player.getCurrentFrame();
-      setPlayerTime(frame / FPS);
-    };
-    const onPlay = () => {
-      setPlaying(true);
-      const audio = audioRef.current;
-      if (!audio) return;
-      audio.currentTime = player.getCurrentFrame() / FPS;
-      audio.play().catch(() => {});
-    };
-    const onPause = () => {
-      setPlaying(false);
-      audioRef.current?.pause();
-    };
-    const onSeeked = () => {
-      const audio = audioRef.current;
-      if (!audio) return;
-      audio.currentTime = player.getCurrentFrame() / FPS;
-    };
-
-    player.addEventListener("frameupdate", onFrame);
-    player.addEventListener("play", onPlay);
-    player.addEventListener("pause", onPause);
-    player.addEventListener("seeked", onSeeked);
-    return () => {
-      player.removeEventListener("frameupdate", onFrame);
-      player.removeEventListener("play", onPlay);
-      player.removeEventListener("pause", onPause);
-      player.removeEventListener("seeked", onSeeked);
-    };
-  }, [videoDuration]); // re-attach when player mounts
+  const handleTimeUpdate = useCallback((t: number) => setPlayerTime(t), []);
+  const handlePlay = useCallback(() => setPlaying(true), []);
+  const handlePause = useCallback(() => setPlaying(false), []);
+  const handleDuration = useCallback((d: number) => setVideoDuration(d), []);
 
   const seek = useCallback((t: number) => {
     const clamped = Math.max(0, Math.min(t, videoDuration ?? 0));
-    playerRef.current?.seekTo(Math.round(clamped * FPS));
-    if (audioRef.current) audioRef.current.currentTime = clamped;
+    if (videoRef.current) videoRef.current.currentTime = clamped;
     setPlayerTime(clamped);
   }, [videoDuration]);
 
   const togglePlay = useCallback(() => {
-    const player = playerRef.current;
-    if (!player) return;
-    if (playing) {
-      player.pause();
-    } else {
-      player.play();
-    }
+    const video = videoRef.current;
+    if (!video) return;
+    if (playing) video.pause();
+    else video.play().catch(() => {});
   }, [playing]);
 
   // Cache edit-env
@@ -489,16 +444,19 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
           </div>
         </div>
 
-        {/* Center: Remotion viewport */}
-        <RemotionViewport
+        {/* Center: Native preview viewport */}
+        <NativePreviewViewport
           layers={layers}
           selectedId={selectedId}
-          playerRef={playerRef}
-          durationInFrames={durationInFrames}
-          fps={FPS}
+          videoRef={videoRef}
+          currentTime={playerTime}
           onSelect={setSelectedId}
           onTransformChange={updateTransform}
           onTransformStart={commitTransform}
+          onTimeUpdate={handleTimeUpdate}
+          onPlay={handlePlay}
+          onPause={handlePause}
+          onDuration={handleDuration}
         />
 
         {/* ─── Right: Icon toolbar + panel ─── */}
@@ -552,10 +510,6 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
         onSeek={seek}
         onTogglePlay={togglePlay}
       />
-
-      {/* Native audio element — videos inside Remotion are muted, audio plays here */}
-      {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-      <audio ref={audioRef} src={rawClipUrl} preload="auto" style={{ display: "none" }} />
 
       {/* Hidden file input */}
       <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileSelected} />

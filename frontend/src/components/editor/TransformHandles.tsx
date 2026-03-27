@@ -156,15 +156,18 @@ export default function TransformHandles({
   const halfHandle = handleSize / 2;
   const border = Math.max(1, 1 / scale);
 
+  // Handle positions are in screen space (the parent div is already width*scale × height*scale)
+  const sw = transform.width * scale;
+  const sh = transform.height * scale;
   const handles: { type: HandleType; x: number; y: number; cursor: string }[] = [
     { type: "nw", x: -halfHandle, y: -halfHandle, cursor: "nwse-resize" },
-    { type: "ne", x: transform.width - halfHandle, y: -halfHandle, cursor: "nesw-resize" },
-    { type: "sw", x: -halfHandle, y: transform.height - halfHandle, cursor: "nesw-resize" },
-    { type: "se", x: transform.width - halfHandle, y: transform.height - halfHandle, cursor: "nwse-resize" },
-    { type: "n", x: transform.width / 2 - halfHandle, y: -halfHandle, cursor: "ns-resize" },
-    { type: "s", x: transform.width / 2 - halfHandle, y: transform.height - halfHandle, cursor: "ns-resize" },
-    { type: "w", x: -halfHandle, y: transform.height / 2 - halfHandle, cursor: "ew-resize" },
-    { type: "e", x: transform.width - halfHandle, y: transform.height / 2 - halfHandle, cursor: "ew-resize" },
+    { type: "ne", x: sw - halfHandle, y: -halfHandle, cursor: "nesw-resize" },
+    { type: "sw", x: -halfHandle, y: sh - halfHandle, cursor: "nesw-resize" },
+    { type: "se", x: sw - halfHandle, y: sh - halfHandle, cursor: "nwse-resize" },
+    { type: "n", x: sw / 2 - halfHandle, y: -halfHandle, cursor: "ns-resize" },
+    { type: "s", x: sw / 2 - halfHandle, y: sh - halfHandle, cursor: "ns-resize" },
+    { type: "w", x: -halfHandle, y: sh / 2 - halfHandle, cursor: "ew-resize" },
+    { type: "e", x: sw - halfHandle, y: sh / 2 - halfHandle, cursor: "ew-resize" },
   ];
 
   return (
@@ -179,29 +182,31 @@ export default function TransformHandles({
         }}
       />
 
-      {/* Snap guides */}
+      {/* Snap guides — positions in screen space */}
       {guides.x !== null && (
         <div style={{
           position: "absolute",
-          left: -transform.x,
-          top: -9999, width: 1, height: 99999,
+          left: (guides.x - transform.x) * scale,
+          top: -transform.y * scale,
+          width: 1,
+          height: CANVAS_H * scale,
           background: "#a855f7",
           opacity: 0.5,
           pointerEvents: "none",
           zIndex: 20,
-          transform: `translateX(${guides.x + transform.width / 2}px)`,
         }} />
       )}
       {guides.y !== null && (
         <div style={{
           position: "absolute",
-          top: -transform.y,
-          left: -9999, height: 1, width: 99999,
+          top: (guides.y - transform.y) * scale,
+          left: -transform.x * scale,
+          height: 1,
+          width: CANVAS_W * scale,
           background: "#a855f7",
           opacity: 0.5,
           pointerEvents: "none",
           zIndex: 20,
-          transform: `translateY(${guides.y + transform.height / 2}px)`,
         }} />
       )}
 

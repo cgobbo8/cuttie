@@ -8,6 +8,7 @@ export interface ApiDefinition {
     show: typeof routes['jobs.show']
     retry: typeof routes['jobs.retry']
     stream: typeof routes['jobs.stream']
+    renameClip: typeof routes['jobs.rename_clip']
   }
   clips: {
     editEnv: typeof routes['clips.edit_env']

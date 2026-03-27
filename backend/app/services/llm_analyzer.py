@@ -126,7 +126,7 @@ def synthesize_analysis(
     vod_meta: dict,
     chat_context: str = "",
     chat_mood: str = "",
-) -> LlmAnalysis:
+) -> tuple[LlmAnalysis, str]:
     """Final synthesis: combine transcript + vision moments into full analysis."""
     client = _get_client()
 
@@ -188,6 +188,7 @@ Note sur le chat : ce streamer a une petite communauté. Le chat mélange des vi
 Hiérarchie des sources : en cas de contradiction entre les sources, la transcription (ce que dit le streamer) prime sur les visuels pour déterminer l'émotion et la catégorie. Les visuels servent à comprendre le contexte gameplay.
 
 Retourne un JSON:
+- "clip_name": nom COURT du clip (2-4 mots max), style nom de fichier lisible. Pas de ponctuation speciale, juste des mots. Exemples : "Rage Quit Epique", "Triple Kill Clutch", "Fou Rire Fail". En français.
 - "category": parmi "fun", "rage", "clutch", "skill", "fail", "emotional", "reaction", "storytelling", "awkward", "hype"
 - "virality_score": 0 à 1 (sois exigeant : 0.8+ = gold, 0.5+ = bon, <0.3 = bof). Les réactions intenses du streamer sont virales, qu'elles soient positives ou négatives.
 - "summary": UNE SEULE phrase punch de 10-15 mots max, style titre de clip YouTube/TikTok. Doit donner envie de cliquer. En français.
@@ -210,6 +211,8 @@ JSON uniquement, pas de markdown."""
 
         data = json.loads(content)
 
+        clip_name = data.get("clip_name", "")
+
         return LlmAnalysis(
             transcript=transcript,
             speech_rate=round(speech_rate, 2),
@@ -219,7 +222,7 @@ JSON uniquement, pas de markdown."""
             is_clipable=bool(data.get("is_clipable", True)),
             narrative=data.get("narrative", ""),
             key_moments=[KeyMoment(**m) for m in key_moments] if key_moments else [],
-        )
+        ), clip_name
 
     except Exception as e:
         logger.error(f"Synthesis failed: {e}")
@@ -227,7 +230,7 @@ JSON uniquement, pas de markdown."""
             transcript=transcript,
             speech_rate=round(speech_rate, 2),
             key_moments=[KeyMoment(**m) for m in key_moments] if key_moments else [],
-        )
+        ), ""
 
 
 def analyze_single_clip(
@@ -279,7 +282,7 @@ def analyze_single_clip(
 
     # Step 4: Final synthesis
     logger.info(f"  [4/4] Synthesis...")
-    llm = synthesize_analysis(
+    llm, clip_name = synthesize_analysis(
         transcript=transcript,
         speech_rate=speech_rate,
         key_moments=key_moments,
@@ -291,6 +294,8 @@ def analyze_single_clip(
     )
 
     hp.llm = llm
+    if clip_name:
+        hp.clip_name = clip_name
     hp.final_score = round(
         HEURISTIC_WEIGHT * hp.score + LLM_WEIGHT * llm.virality_score, 3
     )

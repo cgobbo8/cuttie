@@ -70,10 +70,12 @@ export class JobSchema extends BaseModel {
 }
 
 export class RenderSchema extends BaseModel {
-  static $columns = ['clipFilename', 'createdAt', 'error', 'id', 'jobId', 'outputFilename', 'progress', 'sizeMb', 'status', 'updatedAt'] as const
+  static $columns = ['clipFilename', 'clipName', 'createdAt', 'error', 'id', 'jobId', 'outputFilename', 'progress', 'sizeMb', 'status', 'updatedAt'] as const
   $columns = RenderSchema.$columns
   @column()
   declare clipFilename: string
+  @column()
+  declare clipName: string | null
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime | null
   @column()

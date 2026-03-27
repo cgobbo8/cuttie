@@ -21,6 +21,7 @@ router
     router.get('/jobs/:id', [() => import('#controllers/jobs_controller'), 'show'])
     router.post('/jobs/:id/retry', [() => import('#controllers/jobs_controller'), 'retry'])
     router.get('/jobs/:id/sse', [() => import('#controllers/jobs_controller'), 'stream'])
+    router.patch('/jobs/:id/clips/:clipFilename/name', [() => import('#controllers/jobs_controller'), 'renameClip'])
 
     // Clip serving
     router.get('/clips/:jobId/:filename/edit-env', [() => import('#controllers/clips_controller'), 'editEnv'])

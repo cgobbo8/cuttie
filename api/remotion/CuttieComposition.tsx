@@ -1,6 +1,7 @@
 import React from "react";
 import { AbsoluteFill, useCurrentFrame, useVideoConfig } from "remotion";
 import type { Layer } from "./editorTypes";
+import { evaluateAnimations } from "./animations";
 import VideoLayer from "./layers/VideoLayer";
 import SubtitleLayer from "./layers/SubtitleLayer";
 import ChatLayer from "./layers/ChatLayer";
@@ -9,14 +10,6 @@ import ShapeLayer from "./layers/ShapeLayer";
 
 export interface CuttieCompositionProps {
   layers: Layer[];
-}
-
-function layerOpacity(layer: Layer, currentTime: number, duration: number): number {
-  const { opacity, fadeIn, fadeOut } = layer.style;
-  let o = opacity;
-  if (fadeIn > 0 && currentTime < fadeIn) o *= currentTime / fadeIn;
-  if (fadeOut > 0 && currentTime > duration - fadeOut) o *= (duration - currentTime) / fadeOut;
-  return Math.max(0, Math.min(1, o));
 }
 
 export const CuttieComposition: React.FC<CuttieCompositionProps> = ({ layers }) => {
@@ -31,7 +24,7 @@ export const CuttieComposition: React.FC<CuttieCompositionProps> = ({ layers }) 
     <AbsoluteFill style={{ background: "black", width: 1080, height: 1920 }}>
       {visibleLayers.map((layer) => {
         const { transform, style } = layer;
-        const opacity = layerOpacity(layer, currentTime, duration);
+        const animResult = evaluateAnimations(layer, currentTime, duration);
 
         return (
           <div
@@ -42,7 +35,8 @@ export const CuttieComposition: React.FC<CuttieCompositionProps> = ({ layers }) 
               top: transform.y,
               width: transform.width,
               height: transform.height,
-              opacity,
+              opacity: animResult.opacity,
+              transform: animResult.transform || undefined,
               filter: style.blur > 0 ? `blur(${style.blur}px)` : undefined,
               borderRadius: style.borderRadius > 0 ? style.borderRadius : undefined,
               overflow: style.borderRadius > 0 ? "hidden" : undefined,

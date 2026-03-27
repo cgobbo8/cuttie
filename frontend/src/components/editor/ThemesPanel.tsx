@@ -47,6 +47,7 @@ export default function ThemesPanel({ layers, onApplyTheme }: Props) {
       }
       if (l.shape) tpl.shape = { ...l.shape };
       if (l.asset) tpl.asset = { ...l.asset };
+      if (l.animations && l.animations.length > 0) tpl.animations = l.animations.map((a) => ({ ...a }));
       return tpl;
     });
 

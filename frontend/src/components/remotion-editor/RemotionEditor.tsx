@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowLeft, Undo2, Redo2, Loader2, Download, Plus, Video, User, MessageSquare, MessagesSquare, ImagePlus, FolderOpen, Square, Circle, SlidersHorizontal, LayoutTemplate, X, Check } from "lucide-react";
-import { clipUrl, getEditEnvironment, startRender, uploadAsset, listAssets, assetUrl, type EditEnvironment, type HotPoint, type AssetInfo } from "../../lib/api";
+import { ArrowLeft, Undo2, Redo2, Loader2, Download, Plus, Video, User, MessageSquare, MessagesSquare, ImagePlus, FolderOpen, Square, Circle, SlidersHorizontal, LayoutTemplate, Sparkles, X, Check, Pencil } from "lucide-react";
+import { clipUrl, getEditEnvironment, startRender, renameClip, uploadAsset, listAssets, assetUrl, type EditEnvironment, type HotPoint, type AssetInfo } from "../../lib/api";
 import type { Layer, SubtitleData } from "../../lib/editorTypes";
 import type { ThemeLayerTemplate } from "../../lib/editorThemes";
 import { getDefaultTheme } from "../../lib/editorThemes";
@@ -8,6 +8,7 @@ import { useEditorState } from "../editor/useEditorState";
 import NativePreviewViewport from "./NativePreviewViewport";
 import LayerPanel from "../editor/LayerPanel";
 import PropertiesPanel from "../editor/PropertiesPanel";
+import AnimationsPanel from "../editor/AnimationsPanel";
 import ThemesPanel from "../editor/ThemesPanel";
 import PlaybackBar from "../editor/PlaybackBar";
 import CropEditor from "../editor/CropEditor";
@@ -18,7 +19,7 @@ interface Props {
   onClose: () => void;
 }
 
-type RightTab = "properties" | "themes";
+type RightTab = "properties" | "animations" | "themes";
 
 let _nextApplyId = 0;
 function applyUid() {
@@ -31,8 +32,9 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
   const {
     layers, setLayers, selectedId, setSelectedId, selected,
     addLayer,
-    updateTransform, commitTransform, updateStyle, updateVideoCrop, updateSubtitle, updateShape, updateChat, reorderLayers, duplicateLayer, removeLayer,
-    renameLayer, toggleVisibility, toggleLock,
+    updateTransform, commitTransform, updateStyle, updateVideoCrop, updateSubtitle, updateShape, updateChat,
+    addAnimation, updateAnimation, removeAnimation,
+    reorderLayers, duplicateLayer, removeLayer, renameLayer, toggleVisibility, toggleLock,
     undo, redo,
   } = editor;
 
@@ -45,6 +47,31 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
   const [assetLibraryOpen, setAssetLibraryOpen] = useState(false);
   const [assetLibrary, setAssetLibrary] = useState<AssetInfo[]>([]);
   const [rightTab, setRightTab] = useState<RightTab>("properties");
+
+  // ── Clip name state ──
+  const [clipName, setClipName] = useState(hotPoint.clip_name || `Clip ${hotPoint.timestamp_display}`);
+  const [editingName, setEditingName] = useState(false);
+  const [nameInput, setNameInput] = useState(clipName);
+  const nameInputRef = useRef<HTMLInputElement>(null);
+
+  const handleNameSubmit = useCallback(() => {
+    const trimmed = nameInput.trim();
+    if (trimmed && trimmed !== clipName) {
+      setClipName(trimmed);
+      renameClip(jobId, hotPoint.clip_filename!, trimmed).catch(() => {});
+    }
+    setEditingName(false);
+  }, [nameInput, clipName, jobId, hotPoint.clip_filename]);
+
+  const handleNameKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === "Enter") handleNameSubmit();
+    if (e.key === "Escape") { setNameInput(clipName); setEditingName(false); }
+    e.stopPropagation();
+  }, [handleNameSubmit, clipName]);
+
+  useEffect(() => {
+    if (editingName && nameInputRef.current) nameInputRef.current.select();
+  }, [editingName]);
 
   // Video metadata — probed via a lightweight metadata-only fetch
   const [videoDuration, setVideoDuration] = useState<number | null>(null);
@@ -388,6 +415,10 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
         base.asset = { ...tpl.asset };
       }
 
+      if (tpl.animations && tpl.animations.length > 0) {
+        base.animations = tpl.animations.map((a) => ({ ...a }));
+      }
+
       return base;
     });
 
@@ -431,7 +462,7 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
         }
       }
       const hasTrim = trimStart > 0 || effectiveTrimEnd < (videoDuration ?? 0);
-      await startRender(jobId, hotPoint.clip_filename!, exportLayers, hasTrim ? { trimStart, trimEnd: effectiveTrimEnd } : undefined);
+      await startRender(jobId, hotPoint.clip_filename!, exportLayers, hasTrim ? { trimStart, trimEnd: effectiveTrimEnd } : undefined, clipName);
       setExportToast(true);
       setTimeout(() => setExportToast(false), 6000);
     } catch (err) {
@@ -439,7 +470,7 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
     } finally {
       setExporting(false);
     }
-  }, [exporting, layers, jobId, hotPoint.clip_filename, updateSubtitle, trimStart, effectiveTrimEnd, videoDuration]);
+  }, [exporting, layers, jobId, hotPoint.clip_filename, updateSubtitle, trimStart, effectiveTrimEnd, videoDuration, clipName]);
 
   /* ── Popups & keyboard ──────────────────────────────────── */
 
@@ -501,8 +532,26 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
             Retour
           </button>
           <div className="h-5 w-px bg-white/[0.06]" />
-          <span className="text-sm font-semibold text-white">Cuttie Editor</span>
-          <span className="text-[9px] px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 font-mono">Remotion</span>
+          {editingName ? (
+            <input
+              ref={nameInputRef}
+              value={nameInput}
+              onChange={(e) => setNameInput(e.target.value)}
+              onBlur={handleNameSubmit}
+              onKeyDown={handleNameKeyDown}
+              className="text-sm font-semibold text-white bg-white/[0.08] border border-purple-500/40 rounded px-2 py-0.5 outline-none w-48"
+              maxLength={60}
+            />
+          ) : (
+            <button
+              onClick={() => { setNameInput(clipName); setEditingName(true); }}
+              className="text-sm font-semibold text-white hover:text-purple-300 transition-colors flex items-center gap-1.5 group"
+              title="Renommer le clip"
+            >
+              {clipName}
+              <Pencil className="w-3 h-3 text-zinc-600 group-hover:text-purple-400 transition-colors" />
+            </button>
+          )}
           <div className="h-5 w-px bg-white/[0.06]" />
           <div className="flex gap-0.5">
             <button onClick={undo} className="text-zinc-500 hover:text-white transition-colors p-1 rounded hover:bg-white/[0.05]" title="Annuler (⌘Z)">
@@ -623,6 +672,22 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
                 </div>
               )
             )}
+            {rightTab === "animations" && (
+              selected ? (
+                <AnimationsPanel
+                  layer={selected}
+                  clipDuration={videoDuration ?? 0}
+                  onAddAnimation={addAnimation}
+                  onUpdateAnimation={updateAnimation}
+                  onRemoveAnimation={removeAnimation}
+                  onCommit={commitTransform}
+                />
+              ) : (
+                <div className="flex-1 flex items-center justify-center px-4">
+                  <p className="text-[11px] text-zinc-600 text-center">Sélectionne un calque pour gérer ses animations</p>
+                </div>
+              )
+            )}
             {rightTab === "themes" && (
               <ThemesPanel layers={layers} onApplyTheme={handleApplyTheme} />
             )}
@@ -634,6 +699,13 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
               title="Propriétés"
             >
               <SlidersHorizontal className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setRightTab("animations")}
+              className={`w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${rightTab === "animations" ? "bg-purple-500/15 text-purple-300" : "text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.05]"}`}
+              title="Animations"
+            >
+              <Sparkles className="w-4 h-4" />
             </button>
             <button
               onClick={() => setRightTab("themes")}
@@ -659,6 +731,9 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
         waveform={waveform}
         chatTimestamps={chatTimestamps.length > 0 ? chatTimestamps : undefined}
         subtitleWords={subtitleWords.length > 0 ? subtitleWords : undefined}
+        selectedLayer={selected}
+        onUpdateAnimation={updateAnimation}
+        onCommitAnimation={commitTransform}
       />
 
       {/* Hidden file input */}

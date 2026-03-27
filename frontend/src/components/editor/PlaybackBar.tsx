@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Play, Pause } from "lucide-react";
+import type { Layer, LayerAnimation } from "../../lib/editorTypes";
+import { layerVisibilityAtTime, ANIMATION_DEFS } from "../../lib/animations";
 
 function fmtShort(s: number): string {
   const m = Math.floor(s / 60);
@@ -29,6 +31,12 @@ interface Props {
   chatTimestamps?: number[];
   /** Subtitle word intervals */
   subtitleWords?: { start: number; end: number }[];
+  /** Currently selected layer — shows lifetime bar when set */
+  selectedLayer?: Layer | null;
+  /** Called to update an animation on the selected layer (for lifetime bar drag) */
+  onUpdateAnimation?: (layerId: string, animId: string, patch: Partial<LayerAnimation>) => void;
+  /** Called before starting a drag to snapshot undo state */
+  onCommitAnimation?: () => void;
 }
 
 type TrimDragTarget = "start" | "end" | null;
@@ -69,6 +77,203 @@ function WaveformCanvas({ peaks, width, height }: { peaks: Float32Array; width: 
   );
 }
 
+/* ── Layer lifetime bar ──────────────────────────────────── */
+
+/** "move" = translate block (duration fixed), "resize" = change duration (anchor edge fixed) */
+type DragMode = "move" | "resize";
+type LifetimeDragTarget = { animId: string; mode: DragMode; grabOffset: number; initialTime: number; initialDuration: number; category: "in" | "out" } | null;
+
+function LayerLifetimeBar({
+  layer, duration, width,
+  onUpdateAnimation, onCommit,
+}: {
+  layer: Layer;
+  duration: number;
+  width: number;
+  onUpdateAnimation?: (layerId: string, animId: string, patch: Partial<LayerAnimation>) => void;
+  onCommit?: () => void;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const [dragTarget, setDragTarget] = useState<LifetimeDragTarget>(null);
+  const [hoverCursor, setHoverCursor] = useState<string>("default");
+  const HEIGHT = 14;
+  const EDGE_ZONE = 8;  // px from edge = resize
+  const OUTER_PAD = 6;  // px outside block edges still counts as edge hit
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || width <= 0 || duration <= 0) return;
+    const dpr = 2;
+    canvas.width = width * dpr;
+    canvas.height = HEIGHT * dpr;
+    const ctx = canvas.getContext("2d")!;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    const anims = layer.animations ?? [];
+    const SAMPLES = Math.min(Math.floor(width), 400);
+
+    for (let i = 0; i < SAMPLES; i++) {
+      const t = (i / SAMPLES) * duration;
+      const v = layerVisibilityAtTime(layer, t, duration);
+      const x = (i / SAMPLES) * canvas.width;
+      const barW = canvas.width / SAMPLES + 0.5;
+      const barH = v * canvas.height;
+      const y = canvas.height - barH;
+
+      ctx.fillStyle = v >= 0.99
+        ? "rgba(255, 255, 255, 0.4)"
+        : v > 0
+          ? "rgba(168, 85, 247, 0.35)"
+          : "rgba(255, 255, 255, 0.03)";
+      ctx.fillRect(x, y, barW, barH);
+
+      if (v < 0.01) {
+        ctx.fillStyle = "rgba(255, 255, 255, 0.03)";
+        ctx.fillRect(x, canvas.height - 1, barW, 1);
+      }
+    }
+
+    // Draw animation blocks
+    for (const anim of anims) {
+      const def = ANIMATION_DEFS[anim.type];
+      if (!def) continue;
+      const xStart = (anim.time / duration) * canvas.width;
+      const xEnd = ((anim.time + anim.duration) / duration) * canvas.width;
+
+      ctx.fillStyle = def.category === "in" ? "rgba(52, 211, 153, 0.12)" : "rgba(251, 146, 60, 0.12)";
+      ctx.fillRect(xStart, 0, xEnd - xStart, canvas.height);
+
+      const edgeColor = def.category === "in" ? "rgba(52, 211, 153, 0.9)" : "rgba(251, 146, 60, 0.9)";
+      ctx.fillStyle = edgeColor;
+      ctx.fillRect(xStart, 0, dpr * 1.5, canvas.height);
+      ctx.fillRect(xEnd - dpr * 1.5, 0, dpr * 1.5, canvas.height);
+    }
+  }, [layer, duration, width]);
+
+  // Hit-test: determines animation + drag mode based on category
+  // IN:  left edge = move (anchor), right edge = resize (duration)
+  // OUT: right edge = move (anchor), left edge = resize (duration)
+  const hitTest = useCallback((clientX: number): { animId: string; mode: DragMode; category: "in" | "out"; px: number } | null => {
+    const wrapper = wrapperRef.current;
+    if (!wrapper || duration <= 0) return null;
+    const rect = wrapper.getBoundingClientRect();
+    const px = clientX - rect.left;
+    const anims = layer.animations ?? [];
+
+    for (const anim of anims) {
+      const def = ANIMATION_DEFS[anim.type];
+      if (!def) continue;
+      const startPx = (anim.time / duration) * width;
+      const endPx = ((anim.time + anim.duration) / duration) * width;
+      const cat = def.category as "in" | "out";
+
+      // Left edge hit
+      if (px >= startPx - OUTER_PAD && px <= startPx + EDGE_ZONE) {
+        // IN: left = move, OUT: left = resize
+        return { animId: anim.id, mode: cat === "in" ? "move" : "resize", category: cat, px };
+      }
+      // Right edge hit
+      if (px >= endPx - EDGE_ZONE && px <= endPx + OUTER_PAD) {
+        // IN: right = resize, OUT: right = move
+        return { animId: anim.id, mode: cat === "in" ? "resize" : "move", category: cat, px };
+      }
+      // Middle = always move
+      if (px > startPx + EDGE_ZONE && px < endPx - EDGE_ZONE) {
+        return { animId: anim.id, mode: "move", category: cat, px };
+      }
+    }
+    return null;
+  }, [layer.animations, duration, width]);
+
+  // Hover cursor
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    if (dragTarget) return;
+    const hit = hitTest(e.clientX);
+    setHoverCursor(hit ? (hit.mode === "move" ? "grab" : "ew-resize") : "default");
+  }, [hitTest, dragTarget]);
+
+  // Start drag
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    if (!onUpdateAnimation) return;
+    const hit = hitTest(e.clientX);
+    if (!hit) return;
+    e.stopPropagation();
+    e.preventDefault();
+    const anim = (layer.animations ?? []).find((a) => a.id === hit.animId);
+    if (!anim) return;
+    onCommit?.();
+    const startPx = (anim.time / duration) * width;
+    setDragTarget({
+      animId: hit.animId,
+      mode: hit.mode,
+      category: hit.category,
+      grabOffset: hit.px - startPx,
+      initialTime: anim.time,
+      initialDuration: anim.duration,
+    });
+  }, [hitTest, layer.animations, duration, width, onUpdateAnimation, onCommit]);
+
+  // Drag handling
+  useEffect(() => {
+    if (!dragTarget || !onUpdateAnimation) return;
+    const MIN_DURATION = 0.05;
+
+    const onMove = (e: MouseEvent) => {
+      const wrapper = wrapperRef.current;
+      if (!wrapper) return;
+      const rect = wrapper.getBoundingClientRect();
+      const t = Math.max(0, Math.min(duration, ((e.clientX - rect.left) / rect.width) * duration));
+
+      if (dragTarget.mode === "move") {
+        // Translate: duration stays constant, only time changes
+        const px = e.clientX - rect.left;
+        const newStartPx = px - dragTarget.grabOffset;
+        const newTime = (newStartPx / width) * duration;
+        const clamped = Math.max(0, Math.min(duration - dragTarget.initialDuration, newTime));
+        onUpdateAnimation(layer.id, dragTarget.animId, { time: clamped });
+      } else {
+        // Resize: change duration, keep anchor edge fixed
+        if (dragTarget.category === "in") {
+          // IN resize = drag right edge, start stays fixed
+          const start = dragTarget.initialTime;
+          const newEnd = Math.max(start + MIN_DURATION, Math.min(t, duration));
+          onUpdateAnimation(layer.id, dragTarget.animId, { duration: newEnd - start });
+        } else {
+          // OUT resize = drag left edge, end stays fixed
+          const end = dragTarget.initialTime + dragTarget.initialDuration;
+          const newTime = Math.max(0, Math.min(t, end - MIN_DURATION));
+          onUpdateAnimation(layer.id, dragTarget.animId, { time: newTime, duration: end - newTime });
+        }
+      }
+    };
+
+    const onUp = () => setDragTarget(null);
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => { window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
+  }, [dragTarget, duration, width, layer.id, onUpdateAnimation]);
+
+  const activeCursor = dragTarget
+    ? (dragTarget.mode === "move" ? "grabbing" : "ew-resize")
+    : hoverCursor;
+
+  return (
+    <div
+      ref={wrapperRef}
+      style={{ width, height: HEIGHT, cursor: activeCursor, position: "relative" }}
+      onMouseMove={handleMouseMove}
+      onMouseDown={handleMouseDown}
+      onMouseLeave={() => !dragTarget && setHoverCursor("default")}
+    >
+      <canvas
+        ref={canvasRef}
+        style={{ width, height: HEIGHT, display: "block", borderRadius: 4 }}
+      />
+    </div>
+  );
+}
+
 /* ── Main component ─────────────────────────────────────── */
 
 export default function PlaybackBar({
@@ -78,6 +283,9 @@ export default function PlaybackBar({
   waveform,
   chatTimestamps,
   subtitleWords,
+  selectedLayer,
+  onUpdateAnimation,
+  onCommitAnimation,
 }: Props) {
   const trackRef = useRef<HTMLDivElement>(null);
   const [dragging, setDragging] = useState(false);
@@ -268,6 +476,19 @@ export default function PlaybackBar({
             <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-3 h-2 bg-white rounded-b-sm" />
           </div>
         </div>
+
+        {/* Layer lifetime bar */}
+        {selectedLayer && selectedLayer.animations && selectedLayer.animations.length > 0 && trackWidth > 0 && (
+          <div className="mt-1">
+            <LayerLifetimeBar
+              layer={selectedLayer}
+              duration={duration}
+              width={trackWidth}
+              onUpdateAnimation={onUpdateAnimation}
+              onCommit={onCommitAnimation}
+            />
+          </div>
+        )}
 
         {/* Legend chips — clickable toggles */}
         {(waveform || chatTimestamps || subtitleWords) && (

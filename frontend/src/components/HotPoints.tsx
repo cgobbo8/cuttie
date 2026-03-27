@@ -142,7 +142,7 @@ function ClipCard({
               {index + 1}
             </span>
             <div className="flex items-center flex-wrap gap-2">
-              <span className="text-base font-mono text-white">{point.timestamp_display}</span>
+              <span className="text-base font-semibold text-white">{point.clip_name || point.timestamp_display}</span>
               <ScoreBadge score={displayScore} />
               {point.llm?.category && <CategoryBadge category={point.llm.category} />}
               {point.chat_mood && (
@@ -172,9 +172,16 @@ function ClipCard({
           </svg>
         </div>
 
-        {/* Summary */}
-        {point.llm?.summary && (
-          <p className="text-sm text-zinc-400 mb-3 line-clamp-2">{point.llm.summary}</p>
+        {/* Timecode + Summary */}
+        {(point.clip_name || point.llm?.summary) && (
+          <div className="mb-3">
+            {point.clip_name && (
+              <span className="text-[11px] font-mono text-zinc-600">{point.timestamp_display}</span>
+            )}
+            {point.llm?.summary && (
+              <p className={`text-sm text-zinc-400 line-clamp-2${point.clip_name ? " mt-0.5" : ""}`}>{point.llm.summary}</p>
+            )}
+          </div>
         )}
 
         {/* Signal bars */}

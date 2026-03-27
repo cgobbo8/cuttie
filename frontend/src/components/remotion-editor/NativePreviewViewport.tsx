@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Layer, SubtitleWord, ChatMessage } from "../../lib/editorTypes";
 import { BOX_SHADOW_PRESETS } from "../../lib/editorTypes";
-import { animatedOpacity } from "../../lib/animations";
+import { evaluateAnimations } from "../../lib/animations";
 import TransformHandles from "../editor/TransformHandles";
 
 const CANVAS_W = 1080;
@@ -197,14 +197,15 @@ export default function NativePreviewViewport({
             if (!layer.visible) return null;
             const { style } = layer;
 
-            const effectiveOpacity = animatedOpacity(style, animTime, duration);
+            const animResult = evaluateAnimations(layer, animTime, duration);
             const baseStyle: React.CSSProperties = {
               position: "absolute",
               left: layer.transform.x,
               top: layer.transform.y,
               width: layer.transform.width,
               height: layer.transform.height,
-              opacity: effectiveOpacity,
+              opacity: animResult.opacity,
+              transform: animResult.transform || undefined,
               borderRadius: !layer.shape && style.borderRadius > 0 ? style.borderRadius : undefined,
               overflow: !layer.shape && style.borderRadius > 0 ? "hidden" : undefined,
               filter: style.blur > 0 ? `blur(${style.blur}px)` : undefined,

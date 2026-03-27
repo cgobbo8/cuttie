@@ -83,6 +83,26 @@ export default class JobsController {
     return { job_id: job.id }
   }
 
+  // PATCH /api/jobs/:id/clips/:clipFilename/name
+  async renameClip({ params, request, response }: HttpContext) {
+    const job = await Job.find(params.id)
+    if (!job) return response.notFound({ error: 'job not found' })
+
+    const body = request.body() as { clip_name?: string }
+    const clipName = body.clip_name?.trim()
+    if (!clipName) return response.badRequest({ error: 'clip_name is required' })
+
+    const hotPoints = job.hotPoints ?? []
+    const hp = hotPoints.find((h: any) => h.clip_filename === params.clipFilename)
+    if (!hp) return response.notFound({ error: 'clip not found in hot_points' })
+
+    hp.clip_name = clipName
+    job.hotPoints = hotPoints
+    await job.save()
+
+    return { clip_name: clipName }
+  }
+
   // GET /api/jobs/:id/sse  — Server-Sent Events for real-time status
   async stream({ params, response }: HttpContext) {
     const job = await Job.find(params.id)

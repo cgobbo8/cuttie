@@ -3,7 +3,7 @@
  * Never import framework-specific code here.
  */
 
-import type { Layer, AnimationType, AnimationCategory, EasingPreset } from "./editorTypes";
+import type { Layer, LayerAnimation, AnimationType, AnimationCategory, EasingPreset } from "./editorTypes";
 
 /* ── Easing functions ────────────────────────────────────── */
 
@@ -65,6 +65,7 @@ export interface AnimationDef {
 }
 
 const identity = { opacity: 1, scaleX: 1, scaleY: 1, translateX: 0, translateY: 0 };
+const hidden = { opacity: 0, scaleX: 1, scaleY: 1, translateX: 0, translateY: 0 };
 
 function lerp(a: number, b: number, t: number) { return a + (b - a) * t; }
 

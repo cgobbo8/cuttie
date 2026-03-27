@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { AssetData, ChatData, Layer, LayerType, ShapeData, SubtitleData, VideoLayerData } from "../../lib/editorTypes";
+import type { AssetData, ChatData, Layer, LayerAnimation, LayerType, ShapeData, SubtitleData, VideoLayerData } from "../../lib/editorTypes";
 import { DEFAULT_STYLE } from "../../lib/editorTypes";
 
 const MAX_HISTORY = 50;
@@ -223,6 +223,39 @@ export function useEditorState(clipKey: string) {
     );
   }, []);
 
+  /** Add an animation to a layer (pushes history). */
+  const addAnimation = useCallback((layerId: string, anim: LayerAnimation) => {
+    pushHistory();
+    setLayers((prev) =>
+      prev.map((l) =>
+        l.id === layerId ? { ...l, animations: [...(l.animations ?? []), anim] } : l,
+      ),
+    );
+  }, [pushHistory]);
+
+  /** Update an animation on a layer (no history push — call commitTransform before). */
+  const updateAnimation = useCallback((layerId: string, animId: string, patch: Partial<LayerAnimation>) => {
+    setLayers((prev) =>
+      prev.map((l) =>
+        l.id === layerId
+          ? { ...l, animations: (l.animations ?? []).map((a) => a.id === animId ? { ...a, ...patch } : a) }
+          : l,
+      ),
+    );
+  }, []);
+
+  /** Remove an animation from a layer (pushes history). */
+  const removeAnimation = useCallback((layerId: string, animId: string) => {
+    pushHistory();
+    setLayers((prev) =>
+      prev.map((l) =>
+        l.id === layerId
+          ? { ...l, animations: (l.animations ?? []).filter((a) => a.id !== animId) }
+          : l,
+      ),
+    );
+  }, [pushHistory]);
+
   const moveLayer = useCallback((id: string, direction: "up" | "down") => {
     pushHistory();
     setLayers((prev) => {
@@ -315,6 +348,9 @@ export function useEditorState(clipKey: string) {
     updateSubtitle,
     updateShape,
     updateChat,
+    addAnimation,
+    updateAnimation,
+    removeAnimation,
     moveLayer,
     reorderLayers,
     duplicateLayer,

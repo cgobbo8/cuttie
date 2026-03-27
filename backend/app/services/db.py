@@ -122,6 +122,7 @@ def init_db() -> None:
         ("jobs", "view_count", "INTEGER"),
         ("jobs", "stream_date", "TEXT"),
         ("jobs", "step_timings", "TEXT"),
+        ("hot_points", "clip_name", "TEXT"),
     ]
     for table, col, col_type in migrations:
         try:
@@ -190,8 +191,8 @@ def save_hot_points(job_id: str, hot_points: list[HotPoint]) -> None:
         signals_json = json.dumps(hp.signals.model_dump())
         llm_json = json.dumps(hp.llm.model_dump()) if hp.llm else None
         conn.execute(
-            "INSERT INTO hot_points (job_id, rank, timestamp_seconds, timestamp_display, score, signals_json, clip_filename, vertical_filename, llm_json, final_score, chat_mood) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (job_id, i + 1, hp.timestamp_seconds, hp.timestamp_display, hp.score, signals_json, hp.clip_filename, hp.vertical_filename, llm_json, hp.final_score, hp.chat_mood),
+            "INSERT INTO hot_points (job_id, rank, timestamp_seconds, timestamp_display, score, signals_json, clip_filename, vertical_filename, llm_json, final_score, chat_mood, clip_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (job_id, i + 1, hp.timestamp_seconds, hp.timestamp_display, hp.score, signals_json, hp.clip_filename, hp.vertical_filename, llm_json, hp.final_score, hp.chat_mood, hp.clip_name or None),
         )
     conn.commit()
     conn.close()
@@ -244,6 +245,7 @@ def get_job(job_id: str) -> JobResponse | None:
                     signals=signals,
                     clip_filename=hp["clip_filename"],
                     vertical_filename=hp["vertical_filename"] if "vertical_filename" in hp.keys() else None,
+                    clip_name=hp["clip_name"] if "clip_name" in hp.keys() else "",
                     llm=llm,
                     chat_mood=hp["chat_mood"] or "",
                 )

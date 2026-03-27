@@ -34,6 +34,7 @@ export interface HotPoint {
   signals: SignalBreakdown;
   clip_filename: string | null;
   vertical_filename: string | null;
+  clip_name: string;
   llm: LlmAnalysis | null;
   chat_mood: string | null;
   chat_message_count: number | null;
@@ -87,11 +88,14 @@ export interface JobSummary {
 // Adonis returns camelCase; frontend interfaces use snake_case from old FastAPI.
 
 function mapJobResponse(raw: any): JobResponse {
+  const hotPoints = raw.hotPoints
+    ? (raw.hotPoints as any[]).map((hp) => ({ ...hp, clip_name: hp.clip_name ?? "" }))
+    : null;
   return {
     job_id: raw.id,
     status: raw.status,
     progress: raw.progress ?? null,
-    hot_points: raw.hotPoints ?? null,
+    hot_points: hotPoints,
     error: raw.error ?? null,
     vod_title: raw.vodTitle ?? null,
     vod_game: raw.vodGame ?? null,
@@ -158,6 +162,16 @@ export function clipUrl(jobId: string, filename: string): string {
   return `${BASE}/clips/${jobId}/${filename}`;
 }
 
+export async function renameClip(jobId: string, clipFilename: string, clipName: string): Promise<{ clip_name: string }> {
+  const res = await fetch(`${BASE}/jobs/${jobId}/clips/${clipFilename}/name`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ clip_name: clipName }),
+  });
+  if (!res.ok) throw new Error("Failed to rename clip");
+  return res.json();
+}
+
 export async function trimClip(jobId: string, filename: string, startSeconds: number, endSeconds: number): Promise<Response> {
   return fetch(`${BASE}/clips/${jobId}/${filename}/trim`, {
     method: "POST",
@@ -217,6 +231,7 @@ export interface RenderStatus {
   render_id: string;
   job_id: string;
   clip_filename: string;
+  clip_name?: string;
   status: "rendering" | "done" | "error";
   progress: number;
   output_filename?: string;
@@ -232,11 +247,16 @@ export async function startRender(
   clipFilename: string,
   layers: unknown[],
   trim?: { trimStart: number; trimEnd: number },
+  clipName?: string,
 ): Promise<string> {
   const res = await fetch(`${BASE}/clips/${jobId}/${clipFilename}/render`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ layers, ...(trim ? { trim_start: trim.trimStart, trim_end: trim.trimEnd } : {}) }),
+    body: JSON.stringify({
+      layers,
+      ...(trim ? { trim_start: trim.trimStart, trim_end: trim.trimEnd } : {}),
+      ...(clipName ? { clip_name: clipName } : {}),
+    }),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: "Render failed" }));

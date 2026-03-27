@@ -43,7 +43,7 @@ function RenderRow({ render }: { render: RenderStatus }) {
       {/* Info */}
       <div className="flex-1 min-w-0">
         <div className="text-sm text-zinc-200 truncate">
-          {render.clip_filename}
+          {render.clip_name || render.clip_filename}
         </div>
         <div className="text-[11px] text-zinc-500 flex items-center gap-2">
           {render.vod_title && (
@@ -85,7 +85,7 @@ function RenderRow({ render }: { render: RenderStatus }) {
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement("a");
                 a.href = url;
-                a.download = render.output_filename!;
+                a.download = render.clip_name ? `${render.clip_name}.mp4` : render.output_filename!;
                 a.click();
                 URL.revokeObjectURL(url);
               }}

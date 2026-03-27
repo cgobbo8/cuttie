@@ -57,6 +57,7 @@ class HotPoint(BaseModel):
     chat_mood: str = ""  # pre-tag from chat sentiment: "hype", "fun", "rip", or ""
     clip_filename: str | None = None
     vertical_filename: str | None = None
+    clip_name: str = ""  # short display name, LLM-generated then user-editable
     llm: LlmAnalysis | None = None
 
 

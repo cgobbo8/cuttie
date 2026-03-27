@@ -1,4 +1,4 @@
-import type { LayerType, LayerTransform, LayerStyle, SubtitleData, ShapeData, AssetData, ChatData } from "./editorTypes";
+import type { LayerType, LayerTransform, LayerStyle, LayerAnimation, SubtitleData, ShapeData, AssetData, ChatData } from "./editorTypes";
 import { DEFAULT_STYLE } from "./editorTypes";
 
 /* ── Theme layer template ─────────────────────────────────── */
@@ -17,6 +17,7 @@ export interface ThemeLayerTemplate {
   chat?: Omit<ChatData, "messages">;
   shape?: ShapeData;
   asset?: AssetData;
+  animations?: LayerAnimation[];
 }
 
 export interface EditorTheme {

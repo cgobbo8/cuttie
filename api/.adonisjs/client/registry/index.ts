@@ -36,6 +36,12 @@ const routes = {
     tokens: [{"old":"/api/jobs/:id/sse","type":0,"val":"api","end":""},{"old":"/api/jobs/:id/sse","type":0,"val":"jobs","end":""},{"old":"/api/jobs/:id/sse","type":1,"val":"id","end":""},{"old":"/api/jobs/:id/sse","type":0,"val":"sse","end":""}],
     types: placeholder as Registry['jobs.stream']['types'],
   },
+  'jobs.rename_clip': {
+    methods: ["PATCH"],
+    pattern: '/api/jobs/:id/clips/:clipFilename/name',
+    tokens: [{"old":"/api/jobs/:id/clips/:clipFilename/name","type":0,"val":"api","end":""},{"old":"/api/jobs/:id/clips/:clipFilename/name","type":0,"val":"jobs","end":""},{"old":"/api/jobs/:id/clips/:clipFilename/name","type":1,"val":"id","end":""},{"old":"/api/jobs/:id/clips/:clipFilename/name","type":0,"val":"clips","end":""},{"old":"/api/jobs/:id/clips/:clipFilename/name","type":1,"val":"clipFilename","end":""},{"old":"/api/jobs/:id/clips/:clipFilename/name","type":0,"val":"name","end":""}],
+    types: placeholder as Registry['jobs.rename_clip']['types'],
+  },
   'clips.edit_env': {
     methods: ["GET","HEAD"],
     pattern: '/api/clips/:jobId/:filename/edit-env',

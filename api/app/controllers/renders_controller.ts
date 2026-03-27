@@ -18,6 +18,7 @@ function serializeRender(row: any) {
     render_id: row.id,
     job_id: row.job_id,
     clip_filename: row.clip_filename,
+    clip_name: row.clip_name ?? undefined,
     status: row.status,
     progress: row.progress,
     output_filename: row.output_filename ?? undefined,
@@ -36,8 +37,8 @@ export default class RendersController {
   /** POST /api/clips/:jobId/:filename/render */
   async store({ params, request, response }: HttpContext) {
     const { jobId, filename } = params
-    const body = request.body() as { layers: unknown[]; trim_start?: number; trim_end?: number }
-    const { layers, trim_start, trim_end } = body
+    const body = request.body() as { layers: unknown[]; trim_start?: number; trim_end?: number; clip_name?: string }
+    const { layers, trim_start, trim_end, clip_name } = body
 
     if (!layers || !Array.isArray(layers)) {
       return response.badRequest({ error: 'layers array required' })
@@ -57,6 +58,7 @@ export default class RendersController {
       id: renderId,
       job_id: jobId,
       clip_filename: filename,
+      clip_name: clip_name || null,
       status: 'rendering',
       progress: 0,
       created_at: now,
@@ -94,7 +96,8 @@ export default class RendersController {
     }
     const filePath = path.join(CLIPS_BASE, row.job_id, row.output_filename)
     if (!existsSync(filePath)) return response.notFound({ error: 'file not found' })
-    response.header('Content-Disposition', `attachment; filename="${row.output_filename}"`)
+    const downloadName = row.clip_name ? `${row.clip_name}.mp4` : row.output_filename
+    response.header('Content-Disposition', `attachment; filename="${downloadName}"`)
     return response.download(filePath)
   }
 }

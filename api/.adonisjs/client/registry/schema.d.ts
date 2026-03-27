@@ -67,6 +67,18 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/jobs_controller').default['stream']>>>
     }
   }
+  'jobs.rename_clip': {
+    methods: ["PATCH"]
+    pattern: '/api/jobs/:id/clips/:clipFilename/name'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue, ParamValue]
+      params: { id: ParamValue; clipFilename: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/jobs_controller').default['renameClip']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/jobs_controller').default['renameClip']>>>
+    }
+  }
   'clips.edit_env': {
     methods: ["GET","HEAD"]
     pattern: '/api/clips/:jobId/:filename/edit-env'

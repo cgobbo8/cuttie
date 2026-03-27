@@ -89,6 +89,32 @@ export const BOX_SHADOW_PRESETS: Record<string, { label: string; value: string }
   outline: { label: "Outline", value: "inset 0 0 0 3px rgba(255,255,255,0.3)" },
 };
 
+/* ── Animation system ──────────────────────────────────── */
+
+export type AnimationCategory = "in" | "out";
+
+export type AnimationType =
+  | "fadeIn" | "fadeOut"
+  | "scaleIn" | "scaleOut"
+  | "bounceIn" | "bounceOut"
+  | "slideInLeft" | "slideInRight" | "slideInTop" | "slideInBottom"
+  | "slideOutLeft" | "slideOutRight" | "slideOutTop" | "slideOutBottom";
+
+export type EasingPreset =
+  | "linear"
+  | "easeIn" | "easeOut" | "easeInOut"
+  | "easeIn.power3" | "easeOut.power3" | "easeInOut.power3"
+  | "easeIn.power4" | "easeOut.power4" | "easeInOut.power4"
+  | "bounce" | "elastic";
+
+export interface LayerAnimation {
+  id: string;
+  type: AnimationType;
+  time: number;      // seconds — when the animation starts
+  duration: number;   // seconds
+  easing: EasingPreset;
+}
+
 export interface Layer {
   id: string;
   name: string;
@@ -102,4 +128,5 @@ export interface Layer {
   asset?: AssetData;
   shape?: ShapeData;
   chat?: ChatData;
+  animations?: LayerAnimation[];
 }

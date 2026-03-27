@@ -313,12 +313,37 @@ def _rotate_bgra(img: np.ndarray, angle: float, canvas_w: int, canvas_h: int, cx
     return rotated, new_x, new_y
 
 
+def _decode_gif_frames(path: str, w: int, h: int) -> tuple[list[np.ndarray], list[float]]:
+    """Decode all frames of an animated GIF as BGRA numpy arrays.
+
+    Returns (frames, durations) where durations[i] is in seconds.
+    """
+    from PIL import Image, ImageSequence
+
+    pil_img = Image.open(path)
+    frames: list[np.ndarray] = []
+    durations: list[float] = []
+
+    for frame in ImageSequence.Iterator(pil_img):
+        rgba = frame.convert("RGBA")
+        arr = np.array(rgba)
+        bgra = cv2.cvtColor(arr, cv2.COLOR_RGBA2BGRA)
+        bgra = cv2.resize(bgra, (w, h), interpolation=cv2.INTER_AREA)
+        frames.append(bgra)
+        # GIF frame duration in ms, default 100ms if missing
+        dur_ms = frame.info.get("duration", 100) or 100
+        durations.append(dur_ms / 1000.0)
+
+    return frames, durations
+
+
 class _PreparedLayer:
     """Pre-computed data for a layer to avoid per-frame recomputation."""
     __slots__ = (
         "ltype", "x", "y", "w", "h", "opacity", "blur_ksize",
         "border_radius", "alpha_mask", "static_image",
         "video_crop", "box_shadow", "rotation",
+        "gif_frames", "gif_durations", "gif_total_duration",
     )
 
     def __init__(self):
@@ -335,6 +360,9 @@ class _PreparedLayer:
         self.video_crop: tuple[int, int, int, int] | None = None  # (x, y, w, h)
         self.box_shadow: str = "none"
         self.rotation: float = 0.0  # degrees
+        self.gif_frames: list[np.ndarray] | None = None
+        self.gif_durations: list[float] | None = None
+        self.gif_total_duration: float = 0.0
 
 
 def _prepare_layers(
@@ -395,11 +423,27 @@ def _prepare_layers(
                 local_path = src
 
             if os.path.isfile(local_path):
-                img = cv2.imread(local_path, cv2.IMREAD_UNCHANGED)
-                if img is not None:
-                    if img.shape[2] == 3:
-                        img = cv2.cvtColor(img, cv2.COLOR_BGR2BGRA)
-                    pl.static_image = cv2.resize(img, (pl.w, pl.h), interpolation=cv2.INTER_AREA)
+                is_gif = local_path.lower().endswith(".gif")
+                if is_gif:
+                    try:
+                        frames, durations = _decode_gif_frames(local_path, pl.w, pl.h)
+                        if len(frames) > 1:
+                            pl.gif_frames = frames
+                            pl.gif_durations = durations
+                            pl.gif_total_duration = sum(durations)
+                            logger.info(f"GIF asset: {len(frames)} frames, {pl.gif_total_duration:.2f}s loop")
+                        else:
+                            pl.static_image = frames[0] if frames else None
+                    except Exception:
+                        logger.warning(f"Failed to decode GIF: {local_path}", exc_info=True)
+                        is_gif = False
+
+                if not is_gif or (not pl.gif_frames and pl.static_image is None):
+                    img = cv2.imread(local_path, cv2.IMREAD_UNCHANGED)
+                    if img is not None:
+                        if img.shape[2] == 3:
+                            img = cv2.cvtColor(img, cv2.COLOR_BGR2BGRA)
+                        pl.static_image = cv2.resize(img, (pl.w, pl.h), interpolation=cv2.INTER_AREA)
 
             if pl.border_radius > 0:
                 pl.alpha_mask = _make_rounded_mask(pl.w, pl.h, pl.border_radius)
@@ -572,19 +616,31 @@ def render_from_layers(
                         scaled = cv2.GaussianBlur(scaled, (pl.blur_ksize, pl.blur_ksize), 0)
                     comp_img = scaled
 
-                elif pl.ltype in ("shape", "asset", "text") and pl.static_image is not None:
-                    comp_img = pl.static_image
+                elif pl.ltype in ("shape", "asset", "text"):
+                    if pl.gif_frames and pl.gif_durations:
+                        # Animated GIF: pick the right frame for current time
+                        current_time = frame_num / TARGET_FPS
+                        t = current_time % pl.gif_total_duration
+                        acc = 0.0
+                        gif_idx = 0
+                        for i, dur in enumerate(pl.gif_durations):
+                            acc += dur
+                            if t < acc:
+                                gif_idx = i
+                                break
+                        comp_img = pl.gif_frames[gif_idx]
+                    elif pl.static_image is not None:
+                        comp_img = pl.static_image
 
                 if comp_img is not None:
                     # Apply rotation if needed
                     if pl.rotation != 0:
                         center_x = pl.x + pl.w // 2
                         center_y = pl.y + pl.h // 2
-                        # Ensure BGRA for rotation
                         if comp_img.shape[2] == 3:
                             comp_img = cv2.cvtColor(comp_img, cv2.COLOR_BGR2BGRA)
                         comp_img, comp_x, comp_y = _rotate_bgra(comp_img, pl.rotation, OUTPUT_WIDTH, OUTPUT_HEIGHT, center_x, center_y)
-                        comp_mask = None  # mask no longer applies after rotation
+                        comp_mask = None
 
                     _composite(canvas, comp_img, comp_x, comp_y, comp_mask, pl.opacity)
 
@@ -780,8 +836,20 @@ def _render_cpu_fallback(
                         scaled = cv2.GaussianBlur(scaled, (pl.blur_ksize, pl.blur_ksize), 0)
                     comp_img = scaled
 
-                elif pl.ltype in ("shape", "asset", "text") and pl.static_image is not None:
-                    comp_img = pl.static_image
+                elif pl.ltype in ("shape", "asset", "text"):
+                    if pl.gif_frames and pl.gif_durations:
+                        current_time = frame_num / TARGET_FPS
+                        t = current_time % pl.gif_total_duration
+                        acc = 0.0
+                        gif_idx = 0
+                        for i, dur in enumerate(pl.gif_durations):
+                            acc += dur
+                            if t < acc:
+                                gif_idx = i
+                                break
+                        comp_img = pl.gif_frames[gif_idx]
+                    elif pl.static_image is not None:
+                        comp_img = pl.static_image
 
                 if comp_img is not None:
                     if pl.rotation != 0:

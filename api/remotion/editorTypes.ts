@@ -1,13 +1,14 @@
 /* ── Layer types ─────────────────────────────────────────── */
 
 /** Category of the layer — decoupled from its name. */
-export type LayerType = "gameplay" | "facecam" | "subtitles" | "asset" | "shape" | "chat";
+export type LayerType = "gameplay" | "facecam" | "subtitles" | "asset" | "shape" | "chat" | "text";
 
 export interface LayerTransform {
   x: number;      // px in canvas space (1080×1920)
   y: number;
   width: number;
   height: number;
+  rotation?: number; // degrees, applied around center (default 0)
 }
 
 export interface LayerStyle {
@@ -92,6 +93,27 @@ export const BOX_SHADOW_PRESETS: Record<string, { label: string; value: string }
   outline: { label: "Outline", value: "inset 0 0 0 3px rgba(255,255,255,0.3)" },
 };
 
+export interface TextData {
+  content: string;
+  fontFamily: string;
+  fontSize: number;       // canvas px
+  color: string;          // hex (#RRGGBB)
+  fontWeight: "normal" | "bold";
+  textAlign: "left" | "center" | "right";
+  uppercase: boolean;
+  lineHeight: number;     // multiplier (1.0 = tight, 1.5 = normal)
+}
+
+export const TEXT_FONTS = [
+  { value: "Inter", label: "Inter" },
+  { value: "Luckiest Guy", label: "Luckiest Guy" },
+  { value: "Bebas Neue", label: "Bebas Neue" },
+  { value: "Impact", label: "Impact" },
+  { value: "Arial Black", label: "Arial Black" },
+  { value: "Georgia", label: "Georgia" },
+  { value: "Courier New", label: "Courier New" },
+];
+
 /* ── Animation system ──────────────────────────────────── */
 
 export type AnimationCategory = "in" | "out";
@@ -131,5 +153,6 @@ export interface Layer {
   asset?: AssetData;
   shape?: ShapeData;
   chat?: ChatData;
+  text?: TextData;
   animations?: LayerAnimation[];
 }

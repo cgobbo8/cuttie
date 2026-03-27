@@ -71,6 +71,7 @@
     "@aws-sdk/s3-request-presigner": "^3.1019.0",
     "@japa/api-client": "^3.2.1",
     "@remotion/bundler": "^4.0.441",
+    "@remotion/gif": "^4.0.441",
     "@remotion/google-fonts": "^4.0.441",
     "@remotion/renderer": "^4.0.441",
     "@tuyau/core": "^1.0.0",

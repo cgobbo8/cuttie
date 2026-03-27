@@ -1,5 +1,6 @@
 import React from "react";
 import { Img } from "remotion";
+import { Gif } from "@remotion/gif";
 import type { Layer } from "../editorTypes";
 
 interface Props {
@@ -10,15 +11,18 @@ export default function AssetLayer({ layer }: Props) {
   const { asset, transform } = layer;
   if (!asset) return null;
 
-  return (
-    <Img
-      src={asset.src}
-      style={{
-        width: transform.width,
-        height: transform.height,
-        objectFit: "fill",
-        display: "block",
-      }}
-    />
-  );
+  const style: React.CSSProperties = {
+    width: transform.width,
+    height: transform.height,
+    objectFit: "fill" as const,
+    display: "block",
+  };
+
+  const isGif = asset.src.toLowerCase().endsWith(".gif");
+
+  if (isGif) {
+    return <Gif src={asset.src} width={transform.width} height={transform.height} fit="fill" />;
+  }
+
+  return <Img src={asset.src} style={style} />;
 }

@@ -139,8 +139,9 @@ export async function renderClip(opts: RenderOptions): Promise<{ sizeMb: number 
     codec: 'h264',
     outputLocation: outputPath,
     inputProps: { layers: enrichedLayers },
-    ...(startFrame > 0 ? { startFrom: startFrame } : {}),
-    ...(endFrame < fullDurationInFrames ? { endAt: endFrame } : {}),
+    frameRange: (startFrame > 0 || endFrame < fullDurationInFrames)
+      ? [startFrame, endFrame - 1] as [number, number]
+      : null,
     onProgress: ({ progress }) => onProgress(Math.round(progress * 100)),
     timeoutInMilliseconds: 5 * 60 * 1000, // 5 min max
   })

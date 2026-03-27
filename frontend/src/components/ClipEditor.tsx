@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getClipWords, type LlmAnalysis, type HotPoint, type TranscriptWord } from "../lib/api";
+import { getClipWords, trimClip, type LlmAnalysis, type HotPoint, type TranscriptWord } from "../lib/api";
 
 /* ── Types ──────────────────────────────────────────────── */
 
@@ -467,14 +467,7 @@ export default function ClipEditor({
     setSaving(true);
     setError("");
     try {
-      const res = await fetch(
-        `http://localhost:8000/api/clips/${jobId}/${clipFilename}/trim`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ start_seconds: inTime, end_seconds: outTime }),
-        },
-      );
+      const res = await trimClip(jobId, clipFilename, inTime, outTime);
       if (!res.ok) {
         const err = await res.json().catch(() => ({ detail: "Trim failed" }));
         throw new Error(err.detail || "Trim failed");

@@ -13,6 +13,11 @@ function storageKey(clipKey: string) {
   return `cuttie_editor_${clipKey}`;
 }
 
+function migrateVideoSrc(src: string): string {
+  // Remap legacy port 8000 (old FastAPI) to port 3333 (Adonis)
+  return src.replace(/http:\/\/localhost:8000\//g, "http://localhost:3333/");
+}
+
 function loadLayers(clipKey: string): Layer[] | null {
   try {
     const raw = localStorage.getItem(storageKey(clipKey));
@@ -23,6 +28,8 @@ function loadLayers(clipKey: string): Layer[] | null {
       ...l,
       style: l.style ?? { ...DEFAULT_STYLE },
       type: l.type === ("video" as string) ? "gameplay" : l.type, // old "video" → "gameplay"
+      video: l.video ? { ...l.video, src: migrateVideoSrc(l.video.src) } : l.video,
+      asset: l.asset ? { ...l.asset, src: migrateVideoSrc(l.asset.src) } : l.asset,
     }));
   } catch { return null; }
 }

@@ -150,6 +150,14 @@ export function clipUrl(jobId: string, filename: string): string {
   return `${BASE}/clips/${jobId}/${filename}`;
 }
 
+export async function trimClip(jobId: string, filename: string, startSeconds: number, endSeconds: number): Promise<Response> {
+  return fetch(`${BASE}/clips/${jobId}/${filename}/trim`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ start_seconds: startSeconds, end_seconds: endSeconds }),
+  });
+}
+
 export interface TranscriptWord {
   word: string;
   start: number;

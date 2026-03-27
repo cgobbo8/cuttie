@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef } from "react";
-import { Video, User, MessageSquare, MessagesSquare, Image, Square, Eye, EyeOff, Lock, GripVertical, Copy, Trash2 } from "lucide-react";
+import { Video, User, MessageSquare, MessagesSquare, Image, Square, Type, Eye, EyeOff, Lock, GripVertical, Copy, Trash2 } from "lucide-react";
 import type { Layer, LayerType } from "../../lib/editorTypes";
 
 interface Props {
@@ -21,6 +21,7 @@ const LAYER_ICONS: Record<LayerType, typeof Video> = {
   chat: MessagesSquare,
   asset: Image,
   shape: Square,
+  text: Type,
 };
 
 function LayerIcon({ type }: { type: LayerType }) {

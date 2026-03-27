@@ -4,6 +4,7 @@ import type { LayerTransform } from "../../lib/editorTypes";
 const CANVAS_W = 1080;
 const CANVAS_H = 1920;
 const SNAP_THRESHOLD = 12; // px in canvas space
+const ROTATION_HANDLE_OFFSET = 24; // px above the top edge (in screen space)
 
 interface Props {
   transform: LayerTransform;
@@ -14,7 +15,7 @@ interface Props {
   onTransformStart?: () => void;
 }
 
-type HandleType = "move" | "nw" | "ne" | "sw" | "se" | "n" | "s" | "e" | "w";
+type HandleType = "move" | "nw" | "ne" | "sw" | "se" | "n" | "s" | "e" | "w" | "rotate";
 
 /** Snap a value to targets within threshold. Returns [snapped value, guide position or null]. */
 function snap(val: number, targets: number[]): [number, number | null] {
@@ -41,6 +42,9 @@ export default function TransformHandles({
     startX: number;
     startY: number;
     startTransform: LayerTransform;
+    /** For rotation: center of the layer in screen coords */
+    centerScreen?: { x: number; y: number };
+    startAngle?: number;
   } | null>(null);
   const [guides, setGuides] = useState<SnapGuides>({ x: null, y: null });
 
@@ -51,12 +55,30 @@ export default function TransformHandles({
       e.preventDefault();
       (e.target as HTMLElement).setPointerCapture(e.pointerId);
       onTransformStart?.();
-      setDragging({
-        type,
-        startX: e.clientX,
-        startY: e.clientY,
-        startTransform: { ...transform },
-      });
+
+      if (type === "rotate") {
+        // Compute center of the layer in screen coordinates
+        const rect = (e.target as HTMLElement).closest("[data-transform-root]")?.getBoundingClientRect();
+        if (!rect) return;
+        const centerX = rect.left + rect.width / 2;
+        const centerY = rect.top + rect.height / 2;
+        const startAngle = Math.atan2(e.clientY - centerY, e.clientX - centerX) * (180 / Math.PI);
+        setDragging({
+          type,
+          startX: e.clientX,
+          startY: e.clientY,
+          startTransform: { ...transform },
+          centerScreen: { x: centerX, y: centerY },
+          startAngle,
+        });
+      } else {
+        setDragging({
+          type,
+          startX: e.clientX,
+          startY: e.clientY,
+          startTransform: { ...transform },
+        });
+      }
     },
     [transform, locked, onTransformStart],
   );
@@ -64,12 +86,33 @@ export default function TransformHandles({
   useEffect(() => {
     if (!dragging) return;
     const { type, startX, startY, startTransform } = dragging;
-    const aspect = startTransform.width / startTransform.height;
 
     const onMove = (e: PointerEvent) => {
+      if (type === "rotate") {
+        const { centerScreen, startAngle } = dragging;
+        if (!centerScreen || startAngle === undefined) return;
+        const currentAngle = Math.atan2(e.clientY - centerScreen.y, e.clientX - centerScreen.x) * (180 / Math.PI);
+        let delta = currentAngle - startAngle;
+        let newRotation = (startTransform.rotation ?? 0) + delta;
+        // Snap to 0, 90, -90, 180 when within 5°
+        const snapAngles = [-180, -90, 0, 90, 180];
+        for (const sa of snapAngles) {
+          if (Math.abs(newRotation - sa) < 5) {
+            newRotation = sa;
+            break;
+          }
+        }
+        // Clamp to -180..180
+        while (newRotation > 180) newRotation -= 360;
+        while (newRotation < -180) newRotation += 360;
+        onTransformChange({ rotation: Math.round(newRotation) });
+        return;
+      }
+
       const dx = (e.clientX - startX) / scale;
       const dy = (e.clientY - startY) / scale;
       const freeDistort = e.shiftKey;
+      const aspect = startTransform.width / startTransform.height;
 
       if (type === "move") {
         let nx = startTransform.x + dx;
@@ -179,6 +222,8 @@ export default function TransformHandles({
     { type: "e", x: sw - halfHandle, y: sh / 2 - halfHandle, cursor: "ew-resize" },
   ];
 
+  const rotateHandleSize = handleSize;
+
   return (
     <>
       {/* Selection border */}
@@ -244,6 +289,41 @@ export default function TransformHandles({
             onPointerDown={(e) => onPointerDown(e, h.type)}
           />
         ))}
+
+      {/* Rotation handle — circle above top center, connected by a line */}
+      {!locked && (
+        <>
+          {/* Connecting line */}
+          <div
+            style={{
+              position: "absolute",
+              left: sw / 2 - 0.5,
+              top: -ROTATION_HANDLE_OFFSET,
+              width: 1,
+              height: ROTATION_HANDLE_OFFSET,
+              background: "#a855f7",
+              pointerEvents: "none",
+              zIndex: 9,
+            }}
+          />
+          {/* Handle circle */}
+          <div
+            style={{
+              position: "absolute",
+              left: sw / 2 - rotateHandleSize / 2,
+              top: -ROTATION_HANDLE_OFFSET - rotateHandleSize / 2,
+              width: rotateHandleSize,
+              height: rotateHandleSize,
+              background: "#a855f7",
+              border: `${border}px solid #fff`,
+              borderRadius: "50%",
+              cursor: "grab",
+              zIndex: 10,
+            }}
+            onPointerDown={(e) => onPointerDown(e, "rotate")}
+          />
+        </>
+      )}
     </>
   );
 }

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowLeft, Undo2, Redo2, Loader2, Download, Plus, Video, User, MessageSquare, MessagesSquare, ImagePlus, FolderOpen, Square, Circle, SlidersHorizontal, LayoutTemplate, X, Check } from "lucide-react";
+import { ArrowLeft, Undo2, Redo2, Loader2, Download, Plus, Video, User, MessageSquare, MessagesSquare, ImagePlus, FolderOpen, Square, Circle, SlidersHorizontal, LayoutTemplate, X, Check, Type } from "lucide-react";
 import { clipUrl, getEditEnvironment, startRender, uploadAsset, listAssets, assetUrl, type EditEnvironment, type HotPoint, type AssetInfo } from "../../lib/api";
 import type { Layer, SubtitleData } from "../../lib/editorTypes";
 import type { ThemeLayerTemplate } from "../../lib/editorThemes";
@@ -37,7 +37,7 @@ export default function CanvasEditor({
     currentTime, duration, playing,
     registerVideo, seek, togglePlay,
     addLayer,
-    updateTransform, commitTransform, updateStyle, updateVideoCrop, updateSubtitle, updateShape, updateChat, reorderLayers, duplicateLayer, removeLayer,
+    updateTransform, commitTransform, updateStyle, updateSubtitle, updateShape, updateChat, updateText, reorderLayers, duplicateLayer, removeLayer,
     renameLayer, toggleVisibility, toggleLock,
     undo, redo,
   } = editor;
@@ -207,6 +207,25 @@ export default function CanvasEditor({
         backgroundAlpha: 0.3,
         backdropBlur: 0,
         boxShadowPreset: "none",
+      },
+    });
+  }, [addLayer]);
+
+  const handleAddText = useCallback(() => {
+    setAddMenuOpen(false);
+    addLayer({
+      type: "text",
+      name: "Texte",
+      transform: { x: 140, y: 900, width: 800, height: 200, rotation: 0 },
+      text: {
+        content: "Texte",
+        fontFamily: "Inter",
+        fontSize: 64,
+        color: "#ffffff",
+        fontWeight: "bold",
+        textAlign: "center",
+        uppercase: false,
+        lineHeight: 1.2,
       },
     });
   }, [addLayer]);
@@ -476,6 +495,10 @@ export default function CanvasEditor({
                   <FolderOpen className="w-4 h-4 text-white shrink-0" />
                   Bibliothèque
                 </button>
+                <button onClick={handleAddText} className="w-full text-left text-xs px-3 py-2.5 hover:bg-white/[0.05] text-zinc-300 hover:text-white transition-colors flex items-center gap-2">
+                  <Type className="w-4 h-4 text-white shrink-0" />
+                  Texte
+                </button>
                 <div className="h-px bg-white/[0.06] mx-2" />
                 <button onClick={() => handleAddShape("rectangle")} className="w-full text-left text-xs px-3 py-2.5 hover:bg-white/[0.05] text-zinc-300 hover:text-white transition-colors flex items-center gap-2">
                   <Square className="w-4 h-4 text-white shrink-0" />
@@ -513,6 +536,7 @@ export default function CanvasEditor({
                   onSubtitleChange={updateSubtitle}
                   onShapeChange={updateShape}
                   onChatChange={updateChat}
+                  onTextChange={updateText}
                   onTransformChange={updateTransform}
                   onCommit={commitTransform}
                   onStartCrop={setCropEditingId}

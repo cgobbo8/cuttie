@@ -198,6 +198,9 @@ export default function NativePreviewViewport({
             const { style } = layer;
 
             const animResult = evaluateAnimations(layer, animTime, duration);
+            const rotateStr = layer.transform.rotation ? `rotate(${layer.transform.rotation}deg)` : "";
+            const animTransform = animResult.transform || "";
+            const combinedTransform = [rotateStr, animTransform].filter(Boolean).join(" ") || undefined;
             const baseStyle: React.CSSProperties = {
               position: "absolute",
               left: layer.transform.x,
@@ -205,7 +208,8 @@ export default function NativePreviewViewport({
               width: layer.transform.width,
               height: layer.transform.height,
               opacity: animResult.opacity,
-              transform: animResult.transform || undefined,
+              transform: combinedTransform,
+              transformOrigin: "center center",
               borderRadius: !layer.shape && style.borderRadius > 0 ? style.borderRadius : undefined,
               overflow: !layer.shape && style.borderRadius > 0 ? "hidden" : undefined,
               filter: style.blur > 0 ? `blur(${style.blur}px)` : undefined,
@@ -395,6 +399,35 @@ export default function NativePreviewViewport({
               );
             }
 
+            // ── Text ──
+            if (layer.type === "text" && layer.text) {
+              const { text } = layer;
+              return (
+                <div key={layer.id} style={{
+                  ...baseStyle,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: text.textAlign === "center" ? "center" : text.textAlign === "right" ? "flex-end" : "flex-start",
+                  padding: "8px 12px",
+                }}>
+                  <span style={{
+                    fontFamily: text.fontFamily,
+                    fontSize: text.fontSize,
+                    fontWeight: text.fontWeight,
+                    color: text.color,
+                    textAlign: text.textAlign,
+                    textTransform: text.uppercase ? "uppercase" : undefined,
+                    lineHeight: text.lineHeight,
+                    width: "100%",
+                    wordBreak: "break-word",
+                    whiteSpace: "pre-wrap",
+                  }}>
+                    {text.content || "Texte"}
+                  </span>
+                </div>
+              );
+            }
+
             return null;
           })}
         </div>
@@ -406,12 +439,15 @@ export default function NativePreviewViewport({
         >
           {selectedLayer && (
             <div
+              data-transform-root
               style={{
                 position: "absolute",
                 left: selectedLayer.transform.x * scale,
                 top: selectedLayer.transform.y * scale,
                 width: selectedLayer.transform.width * scale,
                 height: selectedLayer.transform.height * scale,
+                transform: selectedLayer.transform.rotation ? `rotate(${selectedLayer.transform.rotation}deg)` : undefined,
+                transformOrigin: "center center",
               }}
             >
               <TransformHandles

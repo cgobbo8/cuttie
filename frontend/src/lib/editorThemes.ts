@@ -1,4 +1,4 @@
-import type { LayerType, LayerTransform, LayerStyle, LayerAnimation, SubtitleData, ShapeData, AssetData, ChatData } from "./editorTypes";
+import type { LayerType, LayerTransform, LayerStyle, LayerAnimation, SubtitleData, ShapeData, AssetData, ChatData, TextData } from "./editorTypes";
 import { DEFAULT_STYLE } from "./editorTypes";
 
 /* ── Theme layer template ─────────────────────────────────── */
@@ -17,6 +17,7 @@ export interface ThemeLayerTemplate {
   chat?: Omit<ChatData, "messages">;
   shape?: ShapeData;
   asset?: AssetData;
+  text?: Omit<TextData, "content">;
   animations?: LayerAnimation[];
 }
 
@@ -29,7 +30,7 @@ export interface EditorTheme {
 
 /* ── Built-in themes ──────────────────────────────────────── */
 
-const GAMEPLAY_H = Math.round(1080 * 9 / 16); // 607
+const GAMEPLAY_H = Math.round(1080 * 9 / 16);
 
 export const BUILTIN_THEMES: EditorTheme[] = [
   {

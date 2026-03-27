@@ -1,6 +1,6 @@
 import { Crop } from "lucide-react";
-import type { Layer, LayerStyle, ShapeData, SubtitleData, ChatData } from "../../lib/editorTypes";
-import { SUBTITLE_FONTS, BOX_SHADOW_PRESETS } from "../../lib/editorTypes";
+import type { Layer, LayerStyle, ShapeData, SubtitleData, ChatData, TextData } from "../../lib/editorTypes";
+import { SUBTITLE_FONTS, TEXT_FONTS, BOX_SHADOW_PRESETS } from "../../lib/editorTypes";
 
 const CANVAS_W = 1080;
 const CANVAS_H = 1920;
@@ -11,6 +11,7 @@ interface Props {
   onSubtitleChange: (id: string, patch: Partial<SubtitleData>) => void;
   onShapeChange: (id: string, patch: Partial<ShapeData>) => void;
   onChatChange: (id: string, patch: Partial<ChatData>) => void;
+  onTextChange?: (id: string, patch: Partial<TextData>) => void;
   onTransformChange: (id: string, patch: Partial<Layer["transform"]>) => void;
   onCommit: () => void;
   onStartCrop?: (id: string) => void;
@@ -42,7 +43,7 @@ function Slider({
           {label}
         </span>
         <span className="text-[10px] text-zinc-500 font-mono tabular-nums">
-          {unit === "%" ? `${Math.round(value * 100)}%` : unit === "s" ? `${value.toFixed(1)}s` : `${value}${unit}`}
+          {unit === "%" ? `${Math.round(value * 100)}%` : unit === "s" ? `${value.toFixed(1)}s` : unit === "°" ? `${value}°` : `${value}${unit}`}
         </span>
       </div>
       <input
@@ -62,8 +63,8 @@ function Slider({
   );
 }
 
-export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange, onShapeChange, onChatChange, onTransformChange, onCommit, onStartCrop }: Props) {
-  const { style, transform, subtitle, shape, chat } = layer;
+export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange, onShapeChange, onChatChange, onTextChange, onTransformChange, onCommit, onStartCrop }: Props) {
+  const { style, transform, subtitle, shape, chat, text } = layer;
 
   const centerX = () => {
     onCommit();
@@ -131,6 +132,34 @@ export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange
             Recadrer la source
           </button>
         )}
+
+        {/* Rotation */}
+        <div className="flex items-end gap-1.5">
+          <div className="flex-1">
+            <Slider
+              label="Rotation"
+              value={transform.rotation ?? 0}
+              min={-180}
+              max={180}
+              step={1}
+              unit="°"
+              onChange={(v) => onTransformChange(layer.id, { rotation: v })}
+              onCommit={onCommit}
+            />
+          </div>
+          {(transform.rotation ?? 0) !== 0 && (
+            <button
+              onClick={() => {
+                onCommit();
+                onTransformChange(layer.id, { rotation: 0 });
+              }}
+              className="text-[9px] px-1.5 py-1 rounded bg-white/[0.06] hover:bg-white/[0.1] text-zinc-500 hover:text-zinc-300 transition-colors shrink-0 mb-[1px]"
+              title="Reinitialiser la rotation"
+            >
+              0°
+            </button>
+          )}
+        </div>
 
         <div className="h-px bg-white/[0.06]" />
 
@@ -496,6 +525,145 @@ export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange
                 ))}
               </div>
             </div>
+          </>
+        )}
+
+        {/* ─── Text-specific properties ─── */}
+        {text && onTextChange && (
+          <>
+            <div className="h-px bg-white/[0.06]" />
+
+            {/* Content */}
+            <div className="flex flex-col gap-1.5">
+              <span className="text-[10px] text-zinc-400 uppercase tracking-wider font-medium">
+                Contenu
+              </span>
+              <textarea
+                value={text.content}
+                onChange={(e) => onTextChange(layer.id, { content: e.target.value })}
+                onFocus={onCommit}
+                rows={2}
+                className="w-full text-xs bg-white/[0.06] text-zinc-300 rounded-md px-2 py-1.5 border border-white/[0.06] outline-none focus:border-white/[0.2] resize-none"
+                placeholder="Texte..."
+              />
+            </div>
+
+            {/* Font selector */}
+            <div className="flex flex-col gap-1.5">
+              <span className="text-[10px] text-zinc-400 uppercase tracking-wider font-medium">
+                Police
+              </span>
+              <select
+                value={text.fontFamily}
+                onChange={(e) => {
+                  onCommit();
+                  onTextChange(layer.id, { fontFamily: e.target.value });
+                }}
+                className="w-full text-xs bg-white/[0.06] text-zinc-300 rounded-md px-2 py-1.5 border border-white/[0.06] outline-none focus:border-white/[0.2] cursor-pointer"
+              >
+                {TEXT_FONTS.map((f) => (
+                  <option key={f.value} value={f.value} style={{ fontFamily: f.value }}>
+                    {f.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Font size */}
+            <Slider
+              label="Taille"
+              value={text.fontSize}
+              min={16}
+              max={200}
+              step={1}
+              unit="px"
+              onChange={(v) => onTextChange(layer.id, { fontSize: v })}
+              onCommit={onCommit}
+            />
+
+            {/* Color */}
+            <div className="flex flex-col gap-1.5">
+              <span className="text-[10px] text-zinc-400 uppercase tracking-wider font-medium">
+                Couleur
+              </span>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={text.color}
+                  onChange={(e) => onTextChange(layer.id, { color: e.target.value })}
+                  onFocus={onCommit}
+                  className="w-7 h-7 bg-transparent border border-white/[0.1] rounded-md cursor-pointer shrink-0"
+                />
+                <span className="text-[10px] text-zinc-500 font-mono">{text.color}</span>
+              </div>
+            </div>
+
+            {/* Weight + Uppercase */}
+            <div className="flex gap-1">
+              <button
+                onClick={() => {
+                  onCommit();
+                  onTextChange(layer.id, { fontWeight: text.fontWeight === "bold" ? "normal" : "bold" });
+                }}
+                className={`flex-1 text-[10px] px-2 py-1.5 rounded-md font-bold transition-colors ${
+                  text.fontWeight === "bold"
+                    ? "bg-white/[0.1] text-zinc-200"
+                    : "bg-white/[0.04] text-zinc-500"
+                }`}
+              >
+                B
+              </button>
+              <button
+                onClick={() => {
+                  onCommit();
+                  onTextChange(layer.id, { uppercase: !text.uppercase });
+                }}
+                className={`flex-1 text-[10px] px-2 py-1.5 rounded-md font-bold transition-colors ${
+                  text.uppercase
+                    ? "bg-white/[0.1] text-zinc-200"
+                    : "bg-white/[0.04] text-zinc-500"
+                }`}
+              >
+                AA
+              </button>
+            </div>
+
+            {/* Text align */}
+            <div className="flex flex-col gap-1.5">
+              <span className="text-[10px] text-zinc-400 uppercase tracking-wider font-medium">
+                Alignement
+              </span>
+              <div className="flex gap-1">
+                {(["left", "center", "right"] as const).map((align) => (
+                  <button
+                    key={align}
+                    onClick={() => {
+                      onCommit();
+                      onTextChange(layer.id, { textAlign: align });
+                    }}
+                    className={`flex-1 text-[10px] px-2 py-1.5 rounded-md font-medium transition-colors ${
+                      text.textAlign === align
+                        ? "bg-white/[0.1] text-zinc-200"
+                        : "bg-white/[0.04] text-zinc-500 hover:text-zinc-300"
+                    }`}
+                  >
+                    {align === "left" ? "Gauche" : align === "center" ? "Centre" : "Droite"}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Line height */}
+            <Slider
+              label="Interligne"
+              value={text.lineHeight}
+              min={0.8}
+              max={2.5}
+              step={0.05}
+              unit=""
+              onChange={(v) => onTextChange(layer.id, { lineHeight: v })}
+              onCommit={onCommit}
+            />
           </>
         )}
       </div>

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { AssetData, ChatData, Layer, LayerAnimation, LayerType, ShapeData, SubtitleData, VideoLayerData } from "../../lib/editorTypes";
+import type { AssetData, ChatData, Layer, LayerAnimation, LayerType, ShapeData, SubtitleData, TextData, VideoLayerData } from "../../lib/editorTypes";
 import { DEFAULT_STYLE } from "../../lib/editorTypes";
 
 const MAX_HISTORY = 50;
@@ -27,6 +27,7 @@ function loadLayers(clipKey: string): Layer[] | null {
     return parsed.map((l) => ({
       ...l,
       style: l.style ?? { ...DEFAULT_STYLE },
+      transform: { ...l.transform, rotation: l.transform.rotation ?? 0 }, // backfill rotation for old saves
       type: l.type === ("video" as string) ? "gameplay" : l.type, // old "video" → "gameplay"
       video: l.video ? { ...l.video, src: migrateVideoSrc(l.video.src) } : l.video,
       asset: l.asset ? { ...l.asset, src: migrateVideoSrc(l.asset.src) } : l.asset,
@@ -56,7 +57,7 @@ export function useEditorState(clipKey: string) {
   /** Push current layers onto the undo stack (call BEFORE mutating). */
   const pushHistory = useCallback(() => {
     setLayers((cur) => {
-      historyRef.current = [...historyRef.current.slice(-(MAX_HISTORY - 1)), cur.map((l) => ({ ...l, transform: { ...l.transform }, style: { ...l.style }, subtitle: l.subtitle ? { ...l.subtitle } : undefined, shape: l.shape ? { ...l.shape } : undefined }))];
+      historyRef.current = [...historyRef.current.slice(-(MAX_HISTORY - 1)), cur.map((l) => ({ ...l, transform: { ...l.transform }, style: { ...l.style }, subtitle: l.subtitle ? { ...l.subtitle } : undefined, shape: l.shape ? { ...l.shape } : undefined, text: l.text ? { ...l.text } : undefined }))];
       futureRef.current = [];
       return cur; // no mutation — just capture snapshot
     });
@@ -142,6 +143,7 @@ export function useEditorState(clipKey: string) {
     asset?: AssetData;
     shape?: ShapeData;
     chat?: ChatData;
+    text?: TextData;
   }) => {
     pushHistory();
     const id = uid();
@@ -151,13 +153,14 @@ export function useEditorState(clipKey: string) {
       type: opts.type,
       visible: true,
       locked: false,
-      transform: opts.transform,
+      transform: { ...opts.transform, rotation: opts.transform.rotation ?? 0 },
       style: { ...DEFAULT_STYLE, ...opts.style },
       video: opts.video ?? (opts.clipUrl ? { src: opts.clipUrl } : undefined),
       subtitle: opts.subtitle,
       asset: opts.asset,
       shape: opts.shape,
       chat: opts.chat,
+      text: opts.text,
     };
     setLayers((prev) => [...prev, layer]);
     setSelectedId(id);
@@ -219,6 +222,15 @@ export function useEditorState(clipKey: string) {
     setLayers((prev) =>
       prev.map((l) =>
         l.id === id && l.chat ? { ...l, chat: { ...l.chat, ...patch } } : l,
+      ),
+    );
+  }, []);
+
+  /** Live text property update (no history push). */
+  const updateText = useCallback((id: string, patch: Partial<TextData>) => {
+    setLayers((prev) =>
+      prev.map((l) =>
+        l.id === id && l.text ? { ...l, text: { ...l.text, ...patch } } : l,
       ),
     );
   }, []);
@@ -348,6 +360,7 @@ export function useEditorState(clipKey: string) {
     updateSubtitle,
     updateShape,
     updateChat,
+    updateText,
     addAnimation,
     updateAnimation,
     removeAnimation,

@@ -7,6 +7,7 @@ import SubtitleLayer from "./layers/SubtitleLayer";
 import ChatLayer from "./layers/ChatLayer";
 import ShapeLayer from "./layers/ShapeLayer";
 import AssetLayer from "./layers/AssetLayer";
+import TextLayer from "./layers/TextLayer";
 
 export interface CuttieCompositionProps {
   layers: Layer[];
@@ -20,6 +21,7 @@ function LayerContent({ layer }: { layer: Layer }) {
     case "chat":      return <ChatLayer layer={layer} />;
     case "shape":     return <ShapeLayer layer={layer} />;
     case "asset":     return <AssetLayer layer={layer} />;
+    case "text":      return <TextLayer layer={layer} />;
     default:          return null;
   }
 }
@@ -64,6 +66,8 @@ export default function CuttieComposition({ layers }: CuttieCompositionProps) {
               top: layer.transform.y,
               width: layer.transform.width,
               height: layer.transform.height,
+              transform: layer.transform.rotation ? `rotate(${layer.transform.rotation}deg)` : undefined,
+              transformOrigin: "center center",
             }}
           >
             <AnimatedLayerWrapper layer={layer}>

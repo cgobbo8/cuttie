@@ -222,12 +222,103 @@ def _composite(canvas: np.ndarray, layer: np.ndarray, x: int, y: int, alpha_mask
 
 # ── Layer preparation (pre-compute static data) ─────────────
 
+def _render_text_image(text_data: dict, w: int, h: int) -> np.ndarray:
+    """Render text layer to a BGRA image using PIL for proper font rendering."""
+    try:
+        from PIL import Image, ImageDraw, ImageFont
+    except ImportError:
+        # Fallback: empty transparent image
+        return np.zeros((h, w, 4), dtype=np.uint8)
+
+    content = text_data.get("content", "")
+    font_family = text_data.get("fontFamily", "Inter")
+    font_size = int(text_data.get("fontSize", 64))
+    color_hex = text_data.get("color", "#ffffff")
+    font_weight = text_data.get("fontWeight", "bold")
+    text_align = text_data.get("textAlign", "center")
+    uppercase = text_data.get("uppercase", False)
+
+    if uppercase:
+        content = content.upper()
+
+    r, g, b = _hex_to_rgb(color_hex)
+
+    # Create transparent PIL image
+    img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+
+    # Try to load font, fall back to default
+    font = None
+    try:
+        font_path = os.path.join(FONTS_DIR, f"{font_family.replace(' ', '')}-Regular.ttf")
+        if font_weight == "bold":
+            bold_path = os.path.join(FONTS_DIR, f"{font_family.replace(' ', '')}-Bold.ttf")
+            if os.path.isfile(bold_path):
+                font_path = bold_path
+        if os.path.isfile(font_path):
+            font = ImageFont.truetype(font_path, font_size)
+    except Exception:
+        pass
+
+    if font is None:
+        try:
+            font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", font_size)
+        except Exception:
+            font = ImageFont.load_default()
+
+    # Draw text centered vertically
+    padding_x = 12
+    padding_y = 8
+    text_area_w = w - 2 * padding_x
+    draw.multiline_text(
+        (padding_x, padding_y),
+        content,
+        font=font,
+        fill=(r, g, b, 255),
+        align=text_align,
+    )
+
+    # Convert PIL RGBA to OpenCV BGRA
+    arr = np.array(img)
+    bgra = cv2.cvtColor(arr, cv2.COLOR_RGBA2BGRA)
+    return bgra
+
+
+def _rotate_bgra(img: np.ndarray, angle: float, canvas_w: int, canvas_h: int, cx: int, cy: int) -> tuple[np.ndarray, int, int]:
+    """Rotate a BGRA image around a point on the canvas.
+
+    Returns (rotated_image, new_x, new_y) where new_x/new_y is the top-left
+    position of the rotated bounding box on the canvas.
+    """
+    h, w = img.shape[:2]
+    # Rotation matrix around the center of the image
+    M = cv2.getRotationMatrix2D((w / 2, h / 2), -angle, 1.0)
+
+    # Compute new bounding box size
+    cos = abs(M[0, 0])
+    sin = abs(M[0, 1])
+    new_w = int(h * sin + w * cos)
+    new_h = int(h * cos + w * sin)
+
+    # Adjust translation
+    M[0, 2] += (new_w - w) / 2
+    M[1, 2] += (new_h - h) / 2
+
+    rotated = cv2.warpAffine(img, M, (new_w, new_h), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT, borderValue=(0, 0, 0, 0))
+
+    # New top-left position: the center stays at (cx, cy)
+    new_x = cx - new_w // 2
+    new_y = cy - new_h // 2
+
+    return rotated, new_x, new_y
+
+
 class _PreparedLayer:
     """Pre-computed data for a layer to avoid per-frame recomputation."""
     __slots__ = (
         "ltype", "x", "y", "w", "h", "opacity", "blur_ksize",
         "border_radius", "alpha_mask", "static_image",
-        "video_crop", "box_shadow",
+        "video_crop", "box_shadow", "rotation",
     )
 
     def __init__(self):
@@ -243,6 +334,7 @@ class _PreparedLayer:
         self.static_image: np.ndarray | None = None
         self.video_crop: tuple[int, int, int, int] | None = None  # (x, y, w, h)
         self.box_shadow: str = "none"
+        self.rotation: float = 0.0  # degrees
 
 
 def _prepare_layers(
@@ -270,6 +362,7 @@ def _prepare_layers(
         pl.h = max(2, int(transform.get("height", 100)))
         pl.opacity = float(style.get("opacity", 1.0))
         pl.border_radius = int(style.get("borderRadius", 0))
+        pl.rotation = float(transform.get("rotation", 0))
 
         # Convert blur to OpenCV kernel size (must be odd)
         blur_val = int(style.get("blur", 0))
@@ -318,6 +411,10 @@ def _prepare_layers(
                 crop = layer.get("video", {}).get("crop")
                 if crop:
                     pl.video_crop = (int(crop["x"]), int(crop["y"]), int(crop["w"]), int(crop["h"]))
+
+        elif ltype == "text":
+            text_data = layer.get("text", {})
+            pl.static_image = _render_text_image(text_data, pl.w, pl.h)
 
         result.append(pl)
     return result
@@ -456,6 +553,10 @@ def render_from_layers(
 
             # Compose each layer
             for pl in prepared:
+                comp_x, comp_y = pl.x, pl.y
+                comp_mask = pl.alpha_mask
+                comp_img: np.ndarray | None = None
+
                 if pl.ltype in ("gameplay", "facecam"):
                     frame = current_source_frame
                     if pl.video_crop:
@@ -466,20 +567,26 @@ def render_from_layers(
                         ch = max(1, min(ch, input_h - cy))
                         frame = frame[cy:cy + ch, cx:cx + cw]
 
-                    # Scale to layer size
                     scaled = cv2.resize(frame, (pl.w, pl.h), interpolation=cv2.INTER_AREA)
-
-                    # Blur
                     if pl.blur_ksize > 0:
                         scaled = cv2.GaussianBlur(scaled, (pl.blur_ksize, pl.blur_ksize), 0)
+                    comp_img = scaled
 
-                    _composite(canvas, scaled, pl.x, pl.y, pl.alpha_mask, pl.opacity)
+                elif pl.ltype in ("shape", "asset", "text") and pl.static_image is not None:
+                    comp_img = pl.static_image
 
-                elif pl.ltype == "shape" and pl.static_image is not None:
-                    _composite(canvas, pl.static_image, pl.x, pl.y, pl.alpha_mask, pl.opacity)
+                if comp_img is not None:
+                    # Apply rotation if needed
+                    if pl.rotation != 0:
+                        center_x = pl.x + pl.w // 2
+                        center_y = pl.y + pl.h // 2
+                        # Ensure BGRA for rotation
+                        if comp_img.shape[2] == 3:
+                            comp_img = cv2.cvtColor(comp_img, cv2.COLOR_BGR2BGRA)
+                        comp_img, comp_x, comp_y = _rotate_bgra(comp_img, pl.rotation, OUTPUT_WIDTH, OUTPUT_HEIGHT, center_x, center_y)
+                        comp_mask = None  # mask no longer applies after rotation
 
-                elif pl.ltype == "asset" and pl.static_image is not None:
-                    _composite(canvas, pl.static_image, pl.x, pl.y, pl.alpha_mask, pl.opacity)
+                    _composite(canvas, comp_img, comp_x, comp_y, comp_mask, pl.opacity)
 
             # Write frame to FFmpeg
             proc.stdin.write(canvas.tobytes())
@@ -654,6 +761,10 @@ def _render_cpu_fallback(
             canvas = np.zeros((OUTPUT_HEIGHT, OUTPUT_WIDTH, 3), dtype=np.uint8)
 
             for pl in prepared:
+                comp_x, comp_y = pl.x, pl.y
+                comp_mask = pl.alpha_mask
+                comp_img: np.ndarray | None = None
+
                 if pl.ltype in ("gameplay", "facecam"):
                     frame = current_source_frame
                     if pl.video_crop:
@@ -665,17 +776,23 @@ def _render_cpu_fallback(
                         frame = frame[cy:cy + ch, cx:cx + cw]
 
                     scaled = cv2.resize(frame, (pl.w, pl.h), interpolation=cv2.INTER_AREA)
-
                     if pl.blur_ksize > 0:
                         scaled = cv2.GaussianBlur(scaled, (pl.blur_ksize, pl.blur_ksize), 0)
+                    comp_img = scaled
 
-                    _composite(canvas, scaled, pl.x, pl.y, pl.alpha_mask, pl.opacity)
+                elif pl.ltype in ("shape", "asset", "text") and pl.static_image is not None:
+                    comp_img = pl.static_image
 
-                elif pl.ltype == "shape" and pl.static_image is not None:
-                    _composite(canvas, pl.static_image, pl.x, pl.y, pl.alpha_mask, pl.opacity)
+                if comp_img is not None:
+                    if pl.rotation != 0:
+                        center_x = pl.x + pl.w // 2
+                        center_y = pl.y + pl.h // 2
+                        if comp_img.shape[2] == 3:
+                            comp_img = cv2.cvtColor(comp_img, cv2.COLOR_BGR2BGRA)
+                        comp_img, comp_x, comp_y = _rotate_bgra(comp_img, pl.rotation, OUTPUT_WIDTH, OUTPUT_HEIGHT, center_x, center_y)
+                        comp_mask = None
 
-                elif pl.ltype == "asset" and pl.static_image is not None:
-                    _composite(canvas, pl.static_image, pl.x, pl.y, pl.alpha_mask, pl.opacity)
+                    _composite(canvas, comp_img, comp_x, comp_y, comp_mask, pl.opacity)
 
             proc.stdin.write(canvas.tobytes())
             source_frame_idx += frame_step

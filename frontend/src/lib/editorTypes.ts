@@ -1,13 +1,14 @@
 /* ── Layer types ─────────────────────────────────────────── */
 
 /** Category of the layer — decoupled from its name. */
-export type LayerType = "gameplay" | "facecam" | "subtitles" | "asset" | "shape" | "chat";
+export type LayerType = "gameplay" | "facecam" | "subtitles" | "asset" | "shape" | "chat" | "text";
 
 export interface LayerTransform {
   x: number;      // px in canvas space (1080×1920)
   y: number;
   width: number;
   height: number;
+  rotation?: number; // degrees, applied around center (default 0)
 }
 
 export interface LayerStyle {
@@ -79,6 +80,27 @@ export interface ShapeData {
   boxShadowPreset: string;    // key from BOX_SHADOW_PRESETS
 }
 
+export interface TextData {
+  content: string;
+  fontFamily: string;
+  fontSize: number;       // canvas px
+  color: string;          // hex (#RRGGBB)
+  fontWeight: "normal" | "bold";
+  textAlign: "left" | "center" | "right";
+  uppercase: boolean;
+  lineHeight: number;     // multiplier (1.0 = tight, 1.5 = normal)
+}
+
+export const TEXT_FONTS = [
+  { value: "Inter", label: "Inter" },
+  { value: "Luckiest Guy", label: "Luckiest Guy" },
+  { value: "Bebas Neue", label: "Bebas Neue" },
+  { value: "Impact", label: "Impact" },
+  { value: "Arial Black", label: "Arial Black" },
+  { value: "Georgia", label: "Georgia" },
+  { value: "Courier New", label: "Courier New" },
+];
+
 export const BOX_SHADOW_PRESETS: Record<string, { label: string; value: string }> = {
   none: { label: "Aucune", value: "none" },
   soft: { label: "Douce", value: "0 4px 20px rgba(0,0,0,0.25)" },
@@ -128,5 +150,6 @@ export interface Layer {
   asset?: AssetData;
   shape?: ShapeData;
   chat?: ChatData;
+  text?: TextData;
   animations?: LayerAnimation[];
 }

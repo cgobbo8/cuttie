@@ -5,6 +5,7 @@ import SubtitleLayer from "./SubtitleLayer";
 import ChatLayer from "./ChatLayer";
 import AssetLayer from "./AssetLayer";
 import ShapeLayer from "./ShapeLayer";
+import TextLayer from "./TextLayer";
 import TransformHandles from "./TransformHandles";
 
 const CANVAS_W = 1080;
@@ -93,12 +94,15 @@ export default function CanvasViewport({
           return (
             <div
               key={layer.id}
+              data-transform-root
               style={{
                 position: "absolute",
                 left: layer.transform.x,
                 top: layer.transform.y,
                 width: layer.transform.width,
                 height: layer.transform.height,
+                transform: layer.transform.rotation ? `rotate(${layer.transform.rotation}deg)` : undefined,
+                transformOrigin: "center center",
                 zIndex: 1,
               }}
               onClick={(e) => {
@@ -133,6 +137,9 @@ export default function CanvasViewport({
                 )}
                 {layer.chat && (
                   <ChatLayer layer={layer} currentTime={currentTime} />
+                )}
+                {layer.text && (
+                  <TextLayer layer={layer} />
                 )}
               </div>
 

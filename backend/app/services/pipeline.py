@@ -96,7 +96,7 @@ def _run_clipping_and_analysis(
 
         # Submit all group downloads in parallel
         dl_futures = {
-            dl_pool.submit(extract_group, url, group, clip_dir): group
+            dl_pool.submit(extract_group, url, group, clip_dir, job_id): group
             for group in groups
         }
 
@@ -313,6 +313,16 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
         # Cleanup temp audio files (but keep clips/)
         if os.path.exists(output_dir):
             shutil.rmtree(output_dir, ignore_errors=True)
+
+        # Cleanup local clip MP4s (already uploaded to S3, keep JSON metadata)
+        clip_dir = os.path.join("clips", job_id)
+        if os.path.isdir(clip_dir):
+            for f in os.listdir(clip_dir):
+                if f.endswith(".mp4"):
+                    try:
+                        os.remove(os.path.join(clip_dir, f))
+                    except OSError:
+                        pass
 
 
 def _reattach_clips(job_id: str, hot_points: list) -> None:

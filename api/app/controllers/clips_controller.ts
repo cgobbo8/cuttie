@@ -1,9 +1,10 @@
 import type { HttpContext } from '@adonisjs/core/http'
-import { createReadStream, existsSync, readFileSync, statSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { execFile } from 'node:child_process'
 import path from 'node:path'
 import { promisify } from 'node:util'
 import Job from '#models/job'
+import { getPresignedUrl } from '#services/s3'
 
 const execFileAsync = promisify(execFile)
 const CLIPS_BASE = path.resolve('..', 'backend', 'clips')
@@ -18,46 +19,60 @@ const CAM_MARGIN_TOP = 40
 const CAM_BORDER_RADIUS = 20
 const BLUR_SIGMA = 40
 
-async function verifyJobOwnership(jobId: string, auth: HttpContext['auth'], response: HttpContext['response']) {
+async function verifyJobOwnership(jobId: string, auth: HttpContext['auth']) {
   const user = auth.getUserOrFail()
   const job = await Job.find(jobId)
-  if (!job || job.userId !== user.id) {
-    response.notFound({ error: 'clip not found' })
-    return false
+  if (!job || job.userId !== user.id) return null
+  return job
+}
+
+/** Read clip dimensions from probe JSON (written by Python worker) or fallback to ffprobe */
+async function getClipDimensions(
+  jobId: string,
+  clipFilename: string
+): Promise<{ width: number; height: number }> {
+  const base = path.basename(clipFilename, path.extname(clipFilename))
+  const probePath = path.join(CLIPS_BASE, jobId, `${base}_probe.json`)
+
+  if (existsSync(probePath)) {
+    try {
+      const probe = JSON.parse(readFileSync(probePath, 'utf-8'))
+      return { width: probe.width ?? 1920, height: probe.height ?? 1080 }
+    } catch {}
   }
-  return true
+
+  // Fallback: try ffprobe on local file (for legacy clips not yet migrated)
+  const clipPath = path.join(CLIPS_BASE, jobId, clipFilename)
+  if (existsSync(clipPath)) {
+    const { stdout } = await execFileAsync('ffprobe', [
+      '-v', 'quiet', '-print_format', 'json', '-show_streams', '-select_streams', 'v:0', clipPath,
+    ])
+    const stream = JSON.parse(stdout).streams?.[0] ?? {}
+    return { width: stream.width ?? 1920, height: stream.height ?? 1080 }
+  }
+
+  return { width: 1920, height: 1080 }
 }
 
 export default class ClipsController {
   // GET /api/clips/:jobId/:filename/edit-env
   async editEnv({ params, response, auth }: HttpContext) {
     const safeJobId = params.jobId.replace(/[^a-zA-Z0-9_-]/g, '')
-
-    if (!(await verifyJobOwnership(safeJobId, auth, response))) return
-
-    const safeFilename = path.basename(params.filename)
-    const clipPath = path.join(CLIPS_BASE, safeJobId, safeFilename)
-
-    if (!existsSync(clipPath)) {
+    if (!(await verifyJobOwnership(safeJobId, auth))) {
       return response.notFound({ error: 'clip not found' })
     }
 
-    // 1. Probe clip dimensions
-    const { stdout } = await execFileAsync('ffprobe', [
-      '-v', 'quiet', '-print_format', 'json', '-show_streams', '-select_streams', 'v:0', clipPath,
-    ])
-    const stream = JSON.parse(stdout).streams?.[0] ?? {}
-    const inputW: number = stream.width ?? 1920
-    const inputH: number = stream.height ?? 1080
+    const safeFilename = path.basename(params.filename)
+    const { width: inputW, height: inputH } = await getClipDimensions(safeJobId, safeFilename)
 
-    // 2. Facecam (from cached facecam.json)
+    // Facecam (from cached facecam.json)
     const facecamPath = path.join(CLIPS_BASE, safeJobId, 'facecam.json')
     let facecam: { x: number; y: number; w: number; h: number } | null = null
     if (existsSync(facecamPath)) {
       try { facecam = JSON.parse(readFileSync(facecamPath, 'utf-8')) } catch {}
     }
 
-    // 3. Game crop math (mirrors vertical_clipper.py _build_filtergraph)
+    // Game crop math (mirrors vertical_clipper.py _build_filtergraph)
     const gameH = Math.floor(OUTPUT_HEIGHT * GAME_HEIGHT_RATIO)
     const gameAspect = OUTPUT_WIDTH / gameH
     let cropH = inputH
@@ -70,7 +85,7 @@ export default class ClipsController {
     const cropY = Math.floor((inputH - cropH) / 2)
     const gameY = OUTPUT_HEIGHT - gameH - GAME_MARGIN_BOTTOM
 
-    // 4. Words (from cached *_words.json)
+    // Words (from cached *_words.json)
     const base = path.basename(safeFilename, path.extname(safeFilename))
     const verticalBase = base.replace('clip_', 'vertical_')
     const wordsPath = path.join(CLIPS_BASE, safeJobId, `${verticalBase}_words.json`)
@@ -80,6 +95,7 @@ export default class ClipsController {
     }
 
     // Lazy transcription: call Python Whisper if no cached words
+    const clipPath = path.join(CLIPS_BASE, safeJobId, safeFilename)
     if (words.length === 0 && existsSync(clipPath)) {
       const BACKEND = path.resolve('../backend')
       try {
@@ -91,14 +107,14 @@ export default class ClipsController {
       } catch { /* non-critical */ }
     }
 
-    // 5. Dominant color (from cached dominant_color.json)
+    // Dominant color (from cached dominant_color.json)
     const dominantPath = path.join(CLIPS_BASE, safeJobId, 'dominant_color.json')
     let dominantColor: { r: number; g: number; b: number } | null = null
     if (existsSync(dominantPath)) {
       try { dominantColor = JSON.parse(readFileSync(dominantPath, 'utf-8')) } catch {}
     }
 
-    // 6. Chat messages (filtered to clip window, timestamps relative to clip start)
+    // Chat messages (filtered to clip window, timestamps relative to clip start)
     const clipNumber = base.match(/clip_(\d+)/)?.[1] ?? null
     const metaPath = clipNumber ? path.join(CLIPS_BASE, safeJobId, `clip_${clipNumber}_meta.json`) : null
     const chatPath = path.join(CLIPS_BASE, safeJobId, 'chat.json')
@@ -136,41 +152,22 @@ export default class ClipsController {
   }
 
   // GET /api/clips/:jobId/:filename
-  async show({ params, request, response, auth }: HttpContext) {
+  async show({ params, response, auth }: HttpContext) {
     const { jobId, filename } = params
-
     const safeJobId = jobId.replace(/[^a-zA-Z0-9_-]/g, '')
 
-    if (!(await verifyJobOwnership(safeJobId, auth, response))) return
-
-    const safeFilename = path.basename(filename)
-    const filePath = path.join(CLIPS_BASE, safeJobId, safeFilename)
-
-    if (!existsSync(filePath)) {
+    if (!(await verifyJobOwnership(safeJobId, auth))) {
       return response.notFound({ error: 'clip not found' })
     }
 
-    const stat = statSync(filePath)
-    const fileSize = stat.size
-    const range = request.header('range')
+    const safeFilename = path.basename(filename)
 
-    // Range requests for video seeking
-    if (range) {
-      const [startStr, endStr] = range.replace(/bytes=/, '').split('-')
-      const start = parseInt(startStr, 10)
-      const end = endStr ? parseInt(endStr, 10) : fileSize - 1
-      const chunkSize = end - start + 1
+    // Determine S3 key based on filename prefix
+    const s3Key = safeFilename.startsWith('render_')
+      ? `renders/${safeJobId}/${safeFilename}`
+      : `clips/${safeJobId}/${safeFilename}`
 
-      response.status(206)
-      response.header('Content-Range', `bytes ${start}-${end}/${fileSize}`)
-      response.header('Accept-Ranges', 'bytes')
-      response.header('Content-Length', String(chunkSize))
-      response.header('Content-Type', 'video/mp4')
-      response.stream(createReadStream(filePath, { start, end }))
-    } else {
-      response.header('Accept-Ranges', 'bytes')
-      response.header('Content-Type', 'video/mp4')
-      return response.download(filePath)
-    }
+    const presignedUrl = await getPresignedUrl(s3Key)
+    return response.redirect(presignedUrl)
   }
 }

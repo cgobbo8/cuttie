@@ -67,6 +67,8 @@
     "@adonisjs/redis": "^10.0.0",
     "@adonisjs/session": "^8.0.0",
     "@adonisjs/shield": "^9.0.0",
+    "@aws-sdk/client-s3": "^3.1019.0",
+    "@aws-sdk/s3-request-presigner": "^3.1019.0",
     "@japa/api-client": "^3.2.1",
     "@remotion/bundler": "^4.0.441",
     "@remotion/google-fonts": "^4.0.441",

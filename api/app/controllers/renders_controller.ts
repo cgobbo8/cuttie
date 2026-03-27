@@ -1,9 +1,10 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import { randomUUID } from 'node:crypto'
-import { existsSync } from 'node:fs'
+import { unlinkSync } from 'node:fs'
 import path from 'node:path'
 import db from '@adonisjs/lucid/services/db'
 import { renderClip } from '#services/remotion_renderer'
+import { uploadFile, getPresignedDownloadUrl } from '#services/s3'
 
 const CLIPS_BASE = path.resolve('../backend/clips')
 
@@ -24,7 +25,7 @@ function serializeRender(row: any) {
     output_filename: row.output_filename ?? undefined,
     size_mb: row.size_mb ?? undefined,
     url: row.output_filename
-      ? `/api/clips/${row.job_id}/${row.output_filename}`
+      ? `/api/renders/${row.id}/download`
       : undefined,
     error: row.error ?? undefined,
     vod_title: row.vod_title ?? undefined,
@@ -102,11 +103,11 @@ export default class RendersController {
     if (!row || row.user_id !== user.id || !row.output_filename) {
       return response.notFound({ error: 'render not ready' })
     }
-    const filePath = path.join(CLIPS_BASE, row.job_id, row.output_filename)
-    if (!existsSync(filePath)) return response.notFound({ error: 'file not found' })
+
     const downloadName = row.clip_name ? `${row.clip_name}.mp4` : row.output_filename
-    response.header('Content-Disposition', `attachment; filename="${downloadName}"`)
-    return response.download(filePath)
+    const s3Key = `renders/${row.job_id}/${row.output_filename}`
+    const presignedUrl = await getPresignedDownloadUrl(s3Key, downloadName)
+    return response.redirect(presignedUrl)
   }
 }
 
@@ -142,6 +143,13 @@ async function runRender(opts: {
         await updateRender({ progress: pct })
       },
     })
+
+    // Upload render output to S3
+    const s3Key = `renders/${jobId}/${outputFilename}`
+    await uploadFile(s3Key, outputPath, 'video/mp4')
+
+    // Delete local render file
+    try { unlinkSync(outputPath) } catch {}
 
     await updateRender({
       status: 'done',

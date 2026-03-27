@@ -5,18 +5,16 @@
 
 import { bundle } from '@remotion/bundler'
 import { renderMedia, selectComposition } from '@remotion/renderer'
-import { execFile } from 'node:child_process'
-import { existsSync, readdirSync, statSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import path from 'node:path'
-import { promisify } from 'node:util'
 import type { Layer } from '../../remotion/editorTypes.js'
-
-const execFileAsync = promisify(execFile)
+import { getPresignedUrl } from '#services/s3'
 
 // Cached bundle — auto-invalidates when remotion/ source files change
 let bundleUrl: string | null = null
 let bundleTimestamp = 0
 const REMOTION_DIR = path.resolve('./remotion')
+const CLIPS_BASE = path.resolve('../backend/clips')
 
 function latestMtime(dir: string): number {
   let latest = 0
@@ -45,28 +43,27 @@ async function getBundle(): Promise<string> {
   return bundleUrl
 }
 
-/** Get video duration + dimensions via ffprobe */
-export async function probeVideo(
-  filePath: string
-): Promise<{ durationSeconds: number; width: number; height: number }> {
-  const { stdout } = await execFileAsync('ffprobe', [
-    '-v', 'quiet',
-    '-print_format', 'json',
-    '-show_streams',
-    '-select_streams', 'v:0',
-    filePath,
-  ])
-  const data = JSON.parse(stdout)
-  const stream = data.streams?.[0]
-  if (!stream) throw new Error(`ffprobe: no video stream in ${filePath}`)
+/** Read clip probe data from local JSON (written by Python worker) */
+function readProbe(jobId: string, clipFilename: string): {
+  durationSeconds: number
+  width: number
+  height: number
+} {
+  const base = path.basename(clipFilename, path.extname(clipFilename))
+  const probePath = path.join(CLIPS_BASE, jobId, `${base}_probe.json`)
 
-  const [_num, _den] = (stream.r_frame_rate ?? '30/1').split('/').map(Number)
-  const duration = parseFloat(stream.duration ?? '0')
-  return {
-    durationSeconds: duration,
-    width: stream.width ?? 1920,
-    height: stream.height ?? 1080,
+  if (existsSync(probePath)) {
+    try {
+      const probe = JSON.parse(readFileSync(probePath, 'utf-8'))
+      return {
+        durationSeconds: probe.duration ?? 0,
+        width: probe.width ?? 1920,
+        height: probe.height ?? 1080,
+      }
+    } catch {}
   }
+
+  throw new Error(`Probe file not found: ${probePath}. Run the pipeline again to generate it.`)
 }
 
 export interface RenderOptions {
@@ -74,7 +71,7 @@ export interface RenderOptions {
   layers: Layer[]
   jobId: string
   clipFilename: string
-  /** Absolute path where the output MP4 should be written */
+  /** Absolute path where the output MP4 should be written (local temp) */
   outputPath: string
   /** Optional trim range in seconds */
   trim?: { start: number; end: number }
@@ -84,15 +81,8 @@ export interface RenderOptions {
 export async function renderClip(opts: RenderOptions): Promise<{ sizeMb: number }> {
   const { layers, jobId, clipFilename, outputPath, trim, onProgress } = opts
 
-  const CLIPS_BASE = path.resolve('../backend/clips')
-  const videoPath = path.join(CLIPS_BASE, jobId, clipFilename)
-
-  if (!existsSync(videoPath)) {
-    throw new Error(`Source clip not found: ${videoPath}`)
-  }
-
-  // Probe source video for duration + native dimensions
-  const { durationSeconds, width: nativeW, height: nativeH } = await probeVideo(videoPath)
+  // Read dimensions from probe JSON (no ffprobe, no local clip needed)
+  const { durationSeconds, width: nativeW, height: nativeH } = readProbe(jobId, clipFilename)
   const fps = 30
   const fullDurationInFrames = Math.ceil(durationSeconds * fps)
 
@@ -100,22 +90,40 @@ export async function renderClip(opts: RenderOptions): Promise<{ sizeMb: number 
   const startFrame = trim ? Math.floor(trim.start * fps) : 0
   const endFrame = trim ? Math.ceil(trim.end * fps) : fullDurationInFrames
 
-  // Enrich video layers: use staticFile path served from public/ dir (symlinked to clips)
-  const clipStaticUrl = `/clips/${jobId}/${clipFilename}`
-  const enrichedLayers: Layer[] = layers.map((layer) => {
-    if ((layer.type === 'gameplay' || layer.type === 'facecam') && layer.video) {
-      return {
-        ...layer,
-        video: {
-          ...layer.video,
-          src: clipStaticUrl,
-          nativeWidth: nativeW,
-          nativeHeight: nativeH,
-        },
+  // Generate presigned S3 URL for the source clip (1 hour, plenty for a render)
+  const clipPresignedUrl = await getPresignedUrl(`clips/${jobId}/${clipFilename}`, 3600)
+
+  // Enrich layers: replace video src with presigned S3 URL, resolve asset URLs
+  const enrichedLayers: Layer[] = await Promise.all(
+    layers.map(async (layer) => {
+      // Video layers (gameplay, facecam) → presigned clip URL
+      if ((layer.type === 'gameplay' || layer.type === 'facecam') && layer.video) {
+        return {
+          ...layer,
+          video: {
+            ...layer.video,
+            src: clipPresignedUrl,
+            nativeWidth: nativeW,
+            nativeHeight: nativeH,
+          },
+        }
       }
-    }
-    return layer
-  })
+
+      // Asset layers → presigned S3 URL if src is an API path
+      if (layer.type === 'asset' && layer.asset?.src) {
+        const assetMatch = layer.asset.src.match(/\/api\/assets\/(.+)$/)
+        if (assetMatch) {
+          const assetPresignedUrl = await getPresignedUrl(`assets/${assetMatch[1]}`, 3600)
+          return {
+            ...layer,
+            asset: { ...layer.asset, src: assetPresignedUrl },
+          }
+        }
+      }
+
+      return layer
+    })
+  )
 
   const serveUrl = await getBundle()
 

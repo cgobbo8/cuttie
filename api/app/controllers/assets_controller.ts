@@ -1,24 +1,17 @@
 import type { HttpContext } from '@adonisjs/core/http'
-import { existsSync, mkdirSync, readdirSync } from 'node:fs'
 import { randomBytes } from 'node:crypto'
 import path from 'node:path'
-
-const ASSETS_DIR = path.resolve('..', 'backend', 'clips', '_assets')
-
-function ensureDir() {
-  if (!existsSync(ASSETS_DIR)) mkdirSync(ASSETS_DIR, { recursive: true })
-}
+import { uploadFile, getPresignedUrl, listObjects } from '#services/s3'
+import app from '@adonisjs/core/services/app'
 
 export default class AssetsController {
   // GET /api/assets
   async index({ response }: HttpContext) {
-    if (!existsSync(ASSETS_DIR)) return response.json([])
-
-    const files = readdirSync(ASSETS_DIR)
-      .filter((f) => !f.startsWith('.'))
-      .sort()
-      .map((f) => ({ filename: f, url: `/api/assets/${f}` }))
-
+    const keys = await listObjects('assets/')
+    const files = keys.map((key) => {
+      const filename = key.replace('assets/', '')
+      return { filename, url: `/api/assets/${filename}` }
+    })
     return response.json(files)
   }
 
@@ -32,13 +25,21 @@ export default class AssetsController {
     if (!file) return response.badRequest({ error: 'No file provided' })
     if (!file.isValid) return response.badRequest({ error: file.errors[0]?.message ?? 'Invalid file' })
 
-    ensureDir()
-
     const ext = path.extname(file.clientName || 'img.png') || '.png'
-    const assetId = randomBytes(6).toString('hex') // 12-char hex
+    const assetId = randomBytes(6).toString('hex')
     const filename = `${assetId}${ext}`
 
-    await file.move(ASSETS_DIR, { name: filename, overwrite: false })
+    // Move to temp, upload to S3, delete local
+    const tmpDir = app.tmpPath('uploads')
+    await file.move(tmpDir, { name: filename, overwrite: true })
+    const tmpPath = path.join(tmpDir, filename)
+
+    const contentType = file.headers['content-type'] ?? 'application/octet-stream'
+    await uploadFile(`assets/${filename}`, tmpPath, contentType)
+
+    // Clean up local temp file
+    const { unlinkSync } = await import('node:fs')
+    try { unlinkSync(tmpPath) } catch {}
 
     return response.created({ id: assetId, filename, url: `/api/assets/${filename}` })
   }
@@ -46,11 +47,7 @@ export default class AssetsController {
   // GET /api/assets/:filename
   async show({ params, response }: HttpContext) {
     const filename = path.basename(params.filename)
-    const filePath = path.join(ASSETS_DIR, filename)
-
-    if (!existsSync(filePath)) return response.notFound({ error: 'Asset not found' })
-
-    response.header('Cache-Control', 'public, max-age=31536000')
-    return response.download(filePath)
+    const presignedUrl = await getPresignedUrl(`assets/${filename}`)
+    return response.redirect(presignedUrl)
   }
 }

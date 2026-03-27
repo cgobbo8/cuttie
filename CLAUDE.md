@@ -26,7 +26,13 @@ cd frontend && npm run build   # production
 Fichier `backend/.env` :
 ```
 OPENAI_API_KEY=sk-proj-...
+S3_ENDPOINT=http://localhost:9000
+S3_BUCKET=cuttie
+S3_ACCESS_KEY=cuttie
+S3_SECRET_KEY=cuttieminio
 ```
+
+Fichier `api/.env` (S3 identique + variables AdonisJS + Google OAuth)
 
 ## Architecture
 

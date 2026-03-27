@@ -15,8 +15,50 @@ import numpy as np
 
 from app.models.schemas import HotPoint
 from app.services.db import update_hot_point_clip
+from app.services.s3_storage import upload_file as s3_upload
 
 logger = logging.getLogger(__name__)
+
+
+def _write_probe_and_upload(clip_dir: str, job_id: str, filename: str, filepath: str):
+    """Write probe JSON (ffprobe dimensions/duration) and upload clip to S3."""
+    rank_str = filename.replace("clip_", "").replace(".mp4", "")
+    try:
+        result = subprocess.run(
+            [
+                "ffprobe", "-v", "quiet", "-print_format", "json",
+                "-show_streams", "-select_streams", "v:0", filepath,
+            ],
+            capture_output=True, text=True, timeout=15,
+        )
+        stream = json.loads(result.stdout).get("streams", [{}])[0]
+
+        # Get duration from format section (more reliable)
+        dur_result = subprocess.run(
+            [
+                "ffprobe", "-v", "quiet", "-print_format", "json",
+                "-show_format", filepath,
+            ],
+            capture_output=True, text=True, timeout=15,
+        )
+        fmt = json.loads(dur_result.stdout).get("format", {})
+
+        probe_data = {
+            "width": stream.get("width", 1920),
+            "height": stream.get("height", 1080),
+            "duration": float(fmt.get("duration", stream.get("duration", 0))),
+        }
+        probe_path = os.path.join(clip_dir, f"clip_{rank_str}_probe.json")
+        with open(probe_path, "w") as f:
+            json.dump(probe_data, f)
+        logger.debug(f"Probe written: {probe_path}")
+    except Exception as e:
+        logger.warning(f"Failed to write probe for {filename}: {e}")
+
+    try:
+        s3_upload(filepath, f"clips/{job_id}/{filename}")
+    except Exception as e:
+        logger.error(f"S3 upload failed for {filename}: {e}")
 
 CLIPS_DIR = "clips"
 MAX_CLIPS = 20
@@ -270,6 +312,7 @@ def _extract_single_clip(
             meta_path = os.path.join(clip_dir, f"clip_{rank:02d}_meta.json")
             with open(meta_path, "w") as f:
                 json.dump({"vod_start": start, "vod_end": end}, f)
+            _write_probe_and_upload(clip_dir, job_id, filename, filepath)
             return rank, filename
         else:
             logger.warning(f"Clip {rank}: compressed file not created")
@@ -420,6 +463,7 @@ def extract_group(
     url: str,
     group: dict,
     clip_dir: str,
+    job_id: str = "",
 ) -> list[tuple[int, int, str | None]]:
     """Download and extract clips for a download group.
 
@@ -459,6 +503,7 @@ def extract_group(
                 meta_path = os.path.join(clip_dir, f"clip_{rank:02d}_meta.json")
                 with open(meta_path, "w") as mf:
                     json.dump({"vod_start": start, "vod_end": end}, mf)
+                _write_probe_and_upload(clip_dir, job_id, filename, filepath)
                 results.append((rank, idx, filename))
             else:
                 results.append((rank, idx, None))
@@ -528,6 +573,7 @@ def extract_group(
                         meta_path = os.path.join(clip_dir, f"clip_{rank:02d}_meta.json")
                         with open(meta_path, "w") as mf:
                             json.dump({"vod_start": c["start"], "vod_end": c["end"]}, mf)
+                        _write_probe_and_upload(clip_dir, job_id, filename, filepath)
                         results.append((rank, idx, filename))
                     else:
                         results.append((rank, idx, None))

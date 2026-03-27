@@ -29,6 +29,13 @@ export default await Env.create(new URL('../', import.meta.url), {
   REDIS_PORT: Env.schema.number(),
   REDIS_PASSWORD: Env.schema.secret.optional(),
 
+  // S3 / Minio
+  S3_ENDPOINT: Env.schema.string(),
+  S3_BUCKET: Env.schema.string(),
+  S3_ACCESS_KEY: Env.schema.string(),
+  S3_SECRET_KEY: Env.schema.string(),
+  S3_REGION: Env.schema.string.optional(),
+
   // Frontend URL (for OAuth redirects)
   FRONTEND_URL: Env.schema.string.optional(),
 

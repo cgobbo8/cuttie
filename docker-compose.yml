@@ -14,5 +14,38 @@ services:
       timeout: 3s
       retries: 5
 
+  minio:
+    image: minio/minio
+    container_name: cuttie_minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    environment:
+      MINIO_ROOT_USER: cuttie
+      MINIO_ROOT_PASSWORD: cuttieminio
+    command: server /data --console-address ":9001"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  createbuckets:
+    image: minio/mc
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set cuttie http://minio:9000 cuttie cuttieminio;
+      mc mb --ignore-existing cuttie/cuttie;
+      mc anonymous set download cuttie/cuttie;
+      echo 'Bucket ready';
+      "
+
 volumes:
   redis_data:
+  minio_data:

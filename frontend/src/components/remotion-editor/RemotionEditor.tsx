@@ -506,7 +506,8 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if ((e.target as HTMLElement).tagName === "INPUT") return;
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA") return;
       if (e.key === " ") { e.preventDefault(); togglePlay(); }
       if (e.key === "Escape") onClose();
       if (e.key === "ArrowLeft") { e.preventDefault(); seek(playerTime - (e.shiftKey ? 1 / 30 : 5)); }

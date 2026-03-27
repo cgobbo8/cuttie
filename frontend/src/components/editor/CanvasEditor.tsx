@@ -363,7 +363,8 @@ export default function CanvasEditor({
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if ((e.target as HTMLElement).tagName === "INPUT") return;
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA") return;
       if (e.key === " ") { e.preventDefault(); togglePlay(); }
       if (e.key === "Escape") onClose();
       if ((e.key === "Delete" || e.key === "Backspace") && selectedId && !selected?.locked) {

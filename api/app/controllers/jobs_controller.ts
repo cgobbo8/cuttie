@@ -1,0 +1,103 @@
+import type { HttpContext } from '@adonisjs/core/http'
+import { randomUUID } from 'node:crypto'
+import Job from '#models/job'
+import redis from '@adonisjs/redis/services/main'
+import jobStatusBus, { type JobStatusUpdate } from '#services/job_status_bus'
+
+export default class JobsController {
+  // POST /api/analyze
+  async store({ request, response }: HttpContext) {
+    const body = request.body() as { url?: string }
+    const url = body.url?.trim()
+    if (!url) return response.badRequest({ error: 'url is required' })
+
+    const job = await Job.create({
+      id: randomUUID(),
+      url,
+      status: 'PENDING',
+      progress: 0,
+    })
+
+    // Push to Redis list — Python worker does BRPOP on this
+    await redis.lpush('cuttie:jobs_queue', JSON.stringify({ job_id: job.id, url }))
+
+    return response.created({ job_id: job.id })
+  }
+
+  // GET /api/jobs
+  async index() {
+    return Job.query().orderBy('created_at', 'desc')
+  }
+
+  // GET /api/jobs/:id
+  async show({ params, response }: HttpContext) {
+    const job = await Job.find(params.id)
+    if (!job) return response.notFound({ error: 'job not found' })
+    return job
+  }
+
+  // POST /api/jobs/:id/retry
+  async retry({ params, response }: HttpContext) {
+    const job = await Job.find(params.id)
+    if (!job) return response.notFound({ error: 'job not found' })
+
+    job.status = 'PENDING'
+    job.error = null
+    job.progress = 0
+    await job.save()
+
+    await redis.lpush('cuttie:jobs_queue', JSON.stringify({ job_id: job.id, url: job.url, retry: true }))
+    return { job_id: job.id }
+  }
+
+  // GET /api/jobs/:id/sse  — Server-Sent Events for real-time status
+  async stream({ params, response }: HttpContext) {
+    const job = await Job.find(params.id)
+    if (!job) return response.notFound({ error: 'job not found' })
+
+    const res = response.response
+    res.setHeader('Content-Type', 'text/event-stream')
+    res.setHeader('Cache-Control', 'no-cache')
+    res.setHeader('Connection', 'keep-alive')
+    res.setHeader('X-Accel-Buffering', 'no') // disable nginx buffering
+    res.flushHeaders()
+
+    const send = (data: object) => {
+      if (!res.writableEnded) {
+        res.write(`data: ${JSON.stringify(data)}\n\n`)
+      }
+    }
+
+    // Send current state immediately
+    send(job.serialize())
+
+    // If already terminal, close immediately
+    if (job.status === 'DONE' || job.status === 'ERROR') {
+      res.end()
+      return
+    }
+
+    const onUpdate = (update: JobStatusUpdate) => {
+      send(update)
+      if (update.status === 'DONE' || update.status === 'ERROR') {
+        cleanup()
+        res.end()
+      }
+    }
+
+    jobStatusBus.on(params.id, onUpdate)
+
+    // Heartbeat every 25s to keep the connection alive through proxies
+    const heartbeat = setInterval(() => {
+      if (res.writableEnded) return cleanup()
+      res.write(': ping\n\n')
+    }, 25_000)
+
+    const cleanup = () => {
+      clearInterval(heartbeat)
+      jobStatusBus.off(params.id, onUpdate)
+    }
+
+    res.on('close', cleanup)
+  }
+}

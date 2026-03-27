@@ -11,6 +11,7 @@ export default function GameplayLayer({ layer }: Props) {
   return (
     <Video
       src={layer.video.src}
+      muted
       style={{
         width: layer.transform.width,
         height: layer.transform.height,

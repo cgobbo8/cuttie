@@ -15,6 +15,7 @@ export default function FacecamLayer({ layer }: Props) {
     return (
       <Video
         src={video.src}
+        muted
         style={{
           width: transform.width,
           height: transform.height,
@@ -32,6 +33,7 @@ export default function FacecamLayer({ layer }: Props) {
     <div style={{ width: transform.width, height: transform.height, overflow: "hidden" }}>
       <Video
         src={video.src}
+        muted
         style={{
           display: "block",
           maxWidth: "none",

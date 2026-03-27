@@ -33,7 +33,7 @@ export class AuthAccessTokenSchema extends BaseModel {
 }
 
 export class JobSchema extends BaseModel {
-  static $columns = ['clips', 'createdAt', 'error', 'hotPoints', 'id', 'progress', 'status', 'updatedAt', 'url'] as const
+  static $columns = ['clips', 'createdAt', 'error', 'hotPoints', 'id', 'progress', 'status', 'updatedAt', 'url', 'vodTitle'] as const
   $columns = JobSchema.$columns
   @column()
   declare clips: any | null
@@ -53,6 +53,8 @@ export class JobSchema extends BaseModel {
   declare updatedAt: DateTime | null
   @column()
   declare url: string
+  @column()
+  declare vodTitle: string | null
 }
 
 export class UserSchema extends BaseModel {

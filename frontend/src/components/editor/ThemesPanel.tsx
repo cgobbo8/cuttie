@@ -41,6 +41,10 @@ export default function ThemesPanel({ layers, onApplyTheme }: Props) {
         const { words: _w, autoColor: _a, ...rest } = l.subtitle;
         tpl.subtitle = rest;
       }
+      if (l.chat) {
+        const { messages: _m, ...rest } = l.chat;
+        tpl.chat = rest;
+      }
       if (l.shape) tpl.shape = { ...l.shape };
       if (l.asset) tpl.asset = { ...l.asset };
       return tpl;

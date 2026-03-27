@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { AssetData, Layer, LayerType, ShapeData, SubtitleData, VideoLayerData } from "../../lib/editorTypes";
+import type { AssetData, ChatData, Layer, LayerType, ShapeData, SubtitleData, VideoLayerData } from "../../lib/editorTypes";
 import { DEFAULT_STYLE } from "../../lib/editorTypes";
 
 const MAX_HISTORY = 50;
@@ -141,6 +141,7 @@ export function useEditorState(clipKey: string) {
     subtitle?: SubtitleData;
     asset?: AssetData;
     shape?: ShapeData;
+    chat?: ChatData;
   }) => {
     pushHistory();
     const id = uid();
@@ -156,6 +157,7 @@ export function useEditorState(clipKey: string) {
       subtitle: opts.subtitle,
       asset: opts.asset,
       shape: opts.shape,
+      chat: opts.chat,
     };
     setLayers((prev) => [...prev, layer]);
     setSelectedId(id);
@@ -208,6 +210,15 @@ export function useEditorState(clipKey: string) {
     setLayers((prev) =>
       prev.map((l) =>
         l.id === id && l.shape ? { ...l, shape: { ...l.shape, ...patch } } : l,
+      ),
+    );
+  }, []);
+
+  /** Live chat property update (no history push). */
+  const updateChat = useCallback((id: string, patch: Partial<ChatData>) => {
+    setLayers((prev) =>
+      prev.map((l) =>
+        l.id === id && l.chat ? { ...l, chat: { ...l.chat, ...patch } } : l,
       ),
     );
   }, []);
@@ -286,6 +297,7 @@ export function useEditorState(clipKey: string) {
     updateVideoCrop,
     updateSubtitle,
     updateShape,
+    updateChat,
     moveLayer,
     duplicateLayer,
     removeLayer,

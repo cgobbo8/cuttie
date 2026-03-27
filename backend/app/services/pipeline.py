@@ -1,5 +1,6 @@
 """Pipeline orchestrator — runs the full analysis in a background thread."""
 
+import json
 import logging
 import os
 import shutil
@@ -74,6 +75,13 @@ def _run_clipping_and_analysis(
     """
     clip_dir = os.path.join(CLIPS_DIR, job_id)
     os.makedirs(clip_dir, exist_ok=True)
+
+    # Persist chat messages for editor chat layer
+    if chat_messages:
+        chat_path = os.path.join(clip_dir, "chat.json")
+        if not os.path.isfile(chat_path):
+            with open(chat_path, "w", encoding="utf-8") as f:
+                json.dump(chat_messages, f, ensure_ascii=False)
 
     groups = plan_downloads(hot_points, vod_duration, audio_features)
     total_clips = sum(len(g["clips"]) for g in groups)

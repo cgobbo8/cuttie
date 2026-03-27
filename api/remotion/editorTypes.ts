@@ -24,6 +24,9 @@ export interface VideoLayerData {
   src: string;
   /** Source-resolution crop rect (facecam only) */
   crop?: { x: number; y: number; w: number; h: number };
+  /** Native video dimensions — resolved server-side for crop calculation */
+  nativeWidth?: number;
+  nativeHeight?: number;
 }
 
 export interface SubtitleWord {
@@ -53,15 +56,15 @@ export const SUBTITLE_FONTS = [
 export interface ChatMessage {
   author: string;
   text: string;
-  timestamp: number; // seconds relative to clip start
+  timestamp: number;
 }
 
 export interface ChatData {
   messages: ChatMessage[];
-  maxVisible: number;   // max messages shown at once
-  fontSize: number;     // canvas px
+  maxVisible: number;
+  fontSize: number;
   fontFamily: string;
-  showDuration: number; // seconds a message stays visible
+  showDuration: number;
 }
 
 export interface AssetData {

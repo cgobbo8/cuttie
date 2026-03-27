@@ -69,6 +69,31 @@ export class JobSchema extends BaseModel {
   declare vodTitle: string | null
 }
 
+export class RenderSchema extends BaseModel {
+  static $columns = ['clipFilename', 'createdAt', 'error', 'id', 'jobId', 'outputFilename', 'progress', 'sizeMb', 'status', 'updatedAt'] as const
+  $columns = RenderSchema.$columns
+  @column()
+  declare clipFilename: string
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime | null
+  @column()
+  declare error: string | null
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare jobId: string
+  @column()
+  declare outputFilename: string | null
+  @column()
+  declare progress: number
+  @column()
+  declare sizeMb: number | null
+  @column()
+  declare status: string
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime | null
+}
+
 export class UserSchema extends BaseModel {
   static $columns = ['createdAt', 'email', 'fullName', 'id', 'password', 'updatedAt'] as const
   $columns = UserSchema.$columns

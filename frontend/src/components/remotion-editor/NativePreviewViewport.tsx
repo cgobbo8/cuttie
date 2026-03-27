@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Layer, SubtitleWord } from "../../lib/editorTypes";
+import type { Layer, SubtitleWord, ChatMessage } from "../../lib/editorTypes";
 import { BOX_SHADOW_PRESETS } from "../../lib/editorTypes";
 import { animatedOpacity } from "../../lib/animations";
 import TransformHandles from "../editor/TransformHandles";
@@ -38,6 +38,18 @@ function hexToRgba(hex: string, alpha: number): string {
   const g = parseInt(hex.slice(3, 5), 16);
   const b = parseInt(hex.slice(5, 7), 16);
   return `rgba(${r},${g},${b},${alpha})`;
+}
+
+// ── Chat helpers ──────────────────────────────────────────────────────────
+
+function chatAuthorColor(name: string): string {
+  const COLORS = [
+    "#FF4A4A", "#FF7F50", "#FFD700", "#7CFC00", "#00CED1",
+    "#1E90FF", "#DA70D6", "#FF69B4", "#00FA9A", "#FFA500",
+  ];
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
+  return COLORS[hash % COLORS.length];
 }
 
 // ── Props ─────────────────────────────────────────────────────────────────
@@ -334,6 +346,45 @@ export default function NativePreviewViewport({
                     alt=""
                     style={{ width: "100%", height: "100%", objectFit: "fill", display: "block", maxWidth: "none" }}
                   />
+                </div>
+              );
+            }
+
+            // ── Chat ──
+            if (layer.type === "chat" && layer.chat) {
+              const { chat } = layer;
+              const visible = chat.messages
+                .filter((m: ChatMessage) => m.timestamp <= animTime && m.timestamp + chat.showDuration > animTime)
+                .slice(-chat.maxVisible);
+              return (
+                <div key={layer.id} style={{
+                  ...baseStyle,
+                  display: "flex",
+                  flexDirection: "column",
+                  justifyContent: "flex-end",
+                  gap: Math.max(2, chat.fontSize * 0.3),
+                  overflow: "hidden",
+                  pointerEvents: "none",
+                }}>
+                  {visible.map((msg: ChatMessage, i: number) => (
+                    <div key={`${msg.timestamp}-${i}`} style={{
+                      display: "flex",
+                      alignItems: "baseline",
+                      gap: "0.4em",
+                      fontFamily: `"${chat.fontFamily}", sans-serif`,
+                      fontSize: chat.fontSize,
+                      lineHeight: 1.3,
+                      textShadow: "1px 1px 3px rgba(0,0,0,0.9)",
+                      opacity: 0.95,
+                    }}>
+                      <span style={{ color: chatAuthorColor(msg.author), fontWeight: 700, whiteSpace: "nowrap" }}>
+                        {msg.author}
+                      </span>
+                      <span style={{ color: "#ffffff", fontWeight: 500, wordBreak: "break-word" as const }}>
+                        {msg.text}
+                      </span>
+                    </div>
+                  ))}
                 </div>
               );
             }

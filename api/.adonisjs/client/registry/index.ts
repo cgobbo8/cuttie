@@ -36,6 +36,12 @@ const routes = {
     tokens: [{"old":"/api/jobs/:id/sse","type":0,"val":"api","end":""},{"old":"/api/jobs/:id/sse","type":0,"val":"jobs","end":""},{"old":"/api/jobs/:id/sse","type":1,"val":"id","end":""},{"old":"/api/jobs/:id/sse","type":0,"val":"sse","end":""}],
     types: placeholder as Registry['jobs.stream']['types'],
   },
+  'clips.edit_env': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/clips/:jobId/:filename/edit-env',
+    tokens: [{"old":"/api/clips/:jobId/:filename/edit-env","type":0,"val":"api","end":""},{"old":"/api/clips/:jobId/:filename/edit-env","type":0,"val":"clips","end":""},{"old":"/api/clips/:jobId/:filename/edit-env","type":1,"val":"jobId","end":""},{"old":"/api/clips/:jobId/:filename/edit-env","type":1,"val":"filename","end":""},{"old":"/api/clips/:jobId/:filename/edit-env","type":0,"val":"edit-env","end":""}],
+    types: placeholder as Registry['clips.edit_env']['types'],
+  },
   'clips.show': {
     methods: ["GET","HEAD"],
     pattern: '/api/clips/:jobId/:filename',
@@ -59,6 +65,30 @@ const routes = {
     pattern: '/api/assets/:filename',
     tokens: [{"old":"/api/assets/:filename","type":0,"val":"api","end":""},{"old":"/api/assets/:filename","type":0,"val":"assets","end":""},{"old":"/api/assets/:filename","type":1,"val":"filename","end":""}],
     types: placeholder as Registry['assets.show']['types'],
+  },
+  'renders.store': {
+    methods: ["POST"],
+    pattern: '/api/clips/:jobId/:filename/render',
+    tokens: [{"old":"/api/clips/:jobId/:filename/render","type":0,"val":"api","end":""},{"old":"/api/clips/:jobId/:filename/render","type":0,"val":"clips","end":""},{"old":"/api/clips/:jobId/:filename/render","type":1,"val":"jobId","end":""},{"old":"/api/clips/:jobId/:filename/render","type":1,"val":"filename","end":""},{"old":"/api/clips/:jobId/:filename/render","type":0,"val":"render","end":""}],
+    types: placeholder as Registry['renders.store']['types'],
+  },
+  'renders.index': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/renders',
+    tokens: [{"old":"/api/renders","type":0,"val":"api","end":""},{"old":"/api/renders","type":0,"val":"renders","end":""}],
+    types: placeholder as Registry['renders.index']['types'],
+  },
+  'renders.show': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/renders/:renderId',
+    tokens: [{"old":"/api/renders/:renderId","type":0,"val":"api","end":""},{"old":"/api/renders/:renderId","type":0,"val":"renders","end":""},{"old":"/api/renders/:renderId","type":1,"val":"renderId","end":""}],
+    types: placeholder as Registry['renders.show']['types'],
+  },
+  'renders.download': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/renders/:renderId/download',
+    tokens: [{"old":"/api/renders/:renderId/download","type":0,"val":"api","end":""},{"old":"/api/renders/:renderId/download","type":0,"val":"renders","end":""},{"old":"/api/renders/:renderId/download","type":1,"val":"renderId","end":""},{"old":"/api/renders/:renderId/download","type":0,"val":"download","end":""}],
+    types: placeholder as Registry['renders.download']['types'],
   },
 } as const satisfies Record<string, AdonisEndpoint>
 

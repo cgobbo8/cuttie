@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import { Video, User, MessageSquare, Image, Square, Eye, EyeOff, Lock } from "lucide-react";
+import { Video, User, MessageSquare, MessagesSquare, Image, Square, Eye, EyeOff, Lock } from "lucide-react";
 import type { Layer, LayerType } from "../../lib/editorTypes";
 
 interface Props {
@@ -18,6 +18,7 @@ const LAYER_ICONS: Record<LayerType, typeof Video> = {
   gameplay: Video,
   facecam: User,
   subtitles: MessageSquare,
+  chat: MessagesSquare,
   asset: Image,
   shape: Square,
 };

@@ -23,11 +23,18 @@ router
     router.get('/jobs/:id/sse', [() => import('#controllers/jobs_controller'), 'stream'])
 
     // Clip serving
+    router.get('/clips/:jobId/:filename/edit-env', [() => import('#controllers/clips_controller'), 'editEnv'])
     router.get('/clips/:jobId/:filename', [() => import('#controllers/clips_controller'), 'show'])
 
     // Assets
     router.get('/assets', [() => import('#controllers/assets_controller'), 'index'])
     router.post('/assets/upload', [() => import('#controllers/assets_controller'), 'store'])
     router.get('/assets/:filename', [() => import('#controllers/assets_controller'), 'show'])
+
+    // Renders
+    router.post('/clips/:jobId/:filename/render', [() => import('#controllers/renders_controller'), 'store'])
+    router.get('/renders', [() => import('#controllers/renders_controller'), 'index'])
+    router.get('/renders/:renderId', [() => import('#controllers/renders_controller'), 'show'])
+    router.get('/renders/:renderId/download', [() => import('#controllers/renders_controller'), 'download'])
   })
   .prefix('/api')

@@ -155,6 +155,11 @@ function ClipCard({
                   Viral {Math.round(point.llm.virality_score * 100)}%
                 </span>
               )}
+              {point.chat_message_count != null && point.chat_message_count > 0 && (
+                <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-400">
+                  {point.chat_message_count} msg
+                </span>
+              )}
             </div>
           </div>
           <svg

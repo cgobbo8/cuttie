@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowLeft, Undo2, Redo2, Loader2, Download, Plus, Video, User, MessageSquare, ImagePlus, FolderOpen, Square, Circle, SlidersHorizontal, LayoutTemplate, X, Check } from "lucide-react";
+import { ArrowLeft, Undo2, Redo2, Loader2, Download, Plus, Video, User, MessageSquare, MessagesSquare, ImagePlus, FolderOpen, Square, Circle, SlidersHorizontal, LayoutTemplate, X, Check } from "lucide-react";
 import { clipUrl, getEditEnvironment, startRender, uploadAsset, listAssets, assetUrl, type EditEnvironment, type HotPoint, type AssetInfo } from "../../lib/api";
 import type { Layer, SubtitleData } from "../../lib/editorTypes";
 import type { ThemeLayerTemplate } from "../../lib/editorThemes";
@@ -32,7 +32,7 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
     layers, setLayers, selectedId, setSelectedId, selected,
     currentTime, duration,
     addLayer,
-    updateTransform, commitTransform, updateStyle, updateVideoCrop, updateSubtitle, updateShape, moveLayer, duplicateLayer, removeLayer,
+    updateTransform, commitTransform, updateStyle, updateVideoCrop, updateSubtitle, updateShape, updateChat, moveLayer, duplicateLayer, removeLayer,
     renameLayer, toggleVisibility, toggleLock,
     undo, redo,
   } = editor;
@@ -155,6 +155,24 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
     });
   }, [addLayer, fetchEditEnv]);
 
+  const handleAddChat = useCallback(async () => {
+    setAddMenuOpen(false);
+    const env = await fetchEditEnv();
+    if (!env) return;
+    addLayer({
+      type: "chat",
+      name: "Chat Twitch",
+      transform: { x: 40, y: 800, width: 500, height: 400 },
+      chat: {
+        messages: env.chat_messages ?? [],
+        maxVisible: 6,
+        fontSize: 28,
+        fontFamily: "Inter",
+        showDuration: 5,
+      },
+    });
+  }, [addLayer, fetchEditEnv]);
+
   const addAssetFromUrl = useCallback((url: string, name: string) => {
     const img = new Image();
     img.onload = () => {
@@ -224,7 +242,7 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
   const handleApplyTheme = useCallback(async (templates: ThemeLayerTemplate[]) => {
     commitTransform();
     let env: EditEnvironment | null = null;
-    const needsEnv = templates.some((t) => t.type === "facecam" || t.type === "subtitles");
+    const needsEnv = templates.some((t) => t.type === "facecam" || t.type === "subtitles" || t.type === "chat");
     if (needsEnv) env = await fetchEditEnv();
 
     const dc = env?.dominant_color;
@@ -259,6 +277,15 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
         base.subtitle = sub;
       } else if (tpl.type === "shape" && tpl.shape) {
         base.shape = { ...tpl.shape };
+      } else if (tpl.type === "chat") {
+        base.chat = {
+          maxVisible: 6,
+          fontSize: 28,
+          fontFamily: "Inter",
+          showDuration: 5,
+          ...tpl.chat,
+          messages: env?.chat_messages ?? [],
+        };
       } else if (tpl.type === "asset" && tpl.asset) {
         base.asset = { ...tpl.asset };
       }
@@ -352,7 +379,17 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
   /* ── Render ─────────────────────────────────────────────── */
 
   return (
-    <div className="h-screen bg-zinc-950 flex flex-col overflow-hidden">
+    <div className="h-screen bg-zinc-950 flex flex-col overflow-hidden relative">
+      {/* Loading overlay */}
+      {editEnvLoading && (
+        <div className="absolute inset-0 z-[100] bg-zinc-950/70 flex items-center justify-center backdrop-blur-sm">
+          <div className="flex items-center gap-3 text-sm text-zinc-300">
+            <Loader2 className="w-5 h-5 animate-spin text-purple-400" />
+            Chargement des donnees du clip...
+          </div>
+        </div>
+      )}
+
       {/* ─── Top bar ─── */}
       <div className="shrink-0 h-11 border-b border-white/[0.06] flex items-center justify-between px-4">
         <div className="flex items-center gap-4">
@@ -426,6 +463,9 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
                 <button onClick={handleAddSubtitles} disabled={editEnvLoading} className="w-full text-left text-xs px-3 py-2.5 hover:bg-white/[0.05] text-zinc-300 hover:text-white transition-colors flex items-center gap-2 disabled:opacity-40">
                   <MessageSquare className="w-4 h-4 text-purple-400 shrink-0" />Sous-titres
                 </button>
+                <button onClick={handleAddChat} disabled={editEnvLoading} className="w-full text-left text-xs px-3 py-2.5 hover:bg-white/[0.05] text-zinc-300 hover:text-white transition-colors flex items-center gap-2 disabled:opacity-40">
+                  <MessagesSquare className="w-4 h-4 text-purple-400 shrink-0" />Chat Twitch
+                </button>
                 <button onClick={handleAddAsset} className="w-full text-left text-xs px-3 py-2.5 hover:bg-white/[0.05] text-zinc-300 hover:text-white transition-colors flex items-center gap-2">
                   <ImagePlus className="w-4 h-4 text-purple-400 shrink-0" />Importer image
                 </button>
@@ -469,6 +509,7 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
                   onStyleChange={updateStyle}
                   onSubtitleChange={updateSubtitle}
                   onShapeChange={updateShape}
+                  onChatChange={updateChat}
                   onTransformChange={updateTransform}
                   onCommit={commitTransform}
                   onStartCrop={setCropEditingId}

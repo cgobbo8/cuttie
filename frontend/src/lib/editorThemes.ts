@@ -1,4 +1,4 @@
-import type { LayerType, LayerTransform, LayerStyle, SubtitleData, ShapeData, AssetData } from "./editorTypes";
+import type { LayerType, LayerTransform, LayerStyle, SubtitleData, ShapeData, AssetData, ChatData } from "./editorTypes";
 import { DEFAULT_STYLE } from "./editorTypes";
 
 /* ── Theme layer template ─────────────────────────────────── */
@@ -13,6 +13,8 @@ export interface ThemeLayerTemplate {
   videoCrop?: { x: number; y: number; w: number; h: number };
   /** Subtitle settings (words + autoColor are filled at apply time). */
   subtitle?: Omit<SubtitleData, "words" | "autoColor">;
+  /** Chat settings (messages are filled at apply time). */
+  chat?: Omit<ChatData, "messages">;
   shape?: ShapeData;
   asset?: AssetData;
 }

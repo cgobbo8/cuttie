@@ -67,6 +67,18 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/jobs_controller').default['stream']>>>
     }
   }
+  'clips.edit_env': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/clips/:jobId/:filename/edit-env'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue, ParamValue]
+      params: { jobId: ParamValue; filename: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/clips_controller').default['editEnv']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/clips_controller').default['editEnv']>>>
+    }
+  }
   'clips.show': {
     methods: ["GET","HEAD"]
     pattern: '/api/clips/:jobId/:filename'
@@ -113,6 +125,54 @@ export interface Registry {
       query: {}
       response: ExtractResponse<Awaited<ReturnType<import('#controllers/assets_controller').default['show']>>>
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/assets_controller').default['show']>>>
+    }
+  }
+  'renders.store': {
+    methods: ["POST"]
+    pattern: '/api/clips/:jobId/:filename/render'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue, ParamValue]
+      params: { jobId: ParamValue; filename: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/renders_controller').default['store']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/renders_controller').default['store']>>>
+    }
+  }
+  'renders.index': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/renders'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/renders_controller').default['index']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/renders_controller').default['index']>>>
+    }
+  }
+  'renders.show': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/renders/:renderId'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { renderId: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/renders_controller').default['show']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/renders_controller').default['show']>>>
+    }
+  }
+  'renders.download': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/renders/:renderId/download'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { renderId: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/renders_controller').default['download']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/renders_controller').default['download']>>>
     }
   }
 }

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Layer } from "../../lib/editorTypes";
 import VideoLayer from "./VideoLayer";
 import SubtitleLayer from "./SubtitleLayer";
+import ChatLayer from "./ChatLayer";
 import AssetLayer from "./AssetLayer";
 import ShapeLayer from "./ShapeLayer";
 import TransformHandles from "./TransformHandles";
@@ -129,6 +130,9 @@ export default function CanvasViewport({
                 )}
                 {layer.shape && (
                   <ShapeLayer layer={layer} />
+                )}
+                {layer.chat && (
+                  <ChatLayer layer={layer} currentTime={currentTime} />
                 )}
               </div>
 

@@ -1,10 +1,6 @@
-import { useMemo } from "react";
+import React, { useMemo } from "react";
 import { useCurrentFrame, useVideoConfig } from "remotion";
-import type { Layer, SubtitleWord } from "../../../lib/editorTypes";
-
-interface Props {
-  layer: Layer;
-}
+import type { Layer, SubtitleWord } from "../editorTypes";
 
 function chunkWords(words: SubtitleWord[], maxWords = 4, maxDuration = 3.0): SubtitleWord[][] {
   const chunks: SubtitleWord[][] = [];
@@ -23,14 +19,23 @@ function chunkWords(words: SubtitleWord[], maxWords = 4, maxDuration = 3.0): Sub
   return chunks;
 }
 
-function tintWhite(hex: string, strength = 0.15): string {
+function hexToRgb(hex: string): [number, number, number] {
   const r = parseInt(hex.slice(1, 3), 16);
   const g = parseInt(hex.slice(3, 5), 16);
   const b = parseInt(hex.slice(5, 7), 16);
+  return [r, g, b];
+}
+
+function tintWhite(hex: string, strength = 0.15): string {
+  const [r, g, b] = hexToRgb(hex);
   const tr = Math.round(255 * (1 - strength) + r * strength);
   const tg = Math.round(255 * (1 - strength) + g * strength);
   const tb = Math.round(255 * (1 - strength) + b * strength);
   return `rgb(${tr},${tg},${tb})`;
+}
+
+interface Props {
+  layer: Layer;
 }
 
 export default function SubtitleLayer({ layer }: Props) {
@@ -39,9 +44,9 @@ export default function SubtitleLayer({ layer }: Props) {
   const { fps } = useVideoConfig();
   const currentTime = frame / fps;
 
-  if (!subtitle) return null;
+  const chunks = useMemo(() => (subtitle ? chunkWords(subtitle.words) : []), [subtitle]);
 
-  const chunks = useMemo(() => chunkWords(subtitle.words), [subtitle.words]);
+  if (!subtitle) return null;
 
   const baseColor = subtitle.colorMode === "auto" ? subtitle.autoColor : subtitle.customColor;
   const highlightColor = tintWhite(baseColor);
@@ -78,11 +83,7 @@ export default function SubtitleLayer({ layer }: Props) {
           wordBreak: "break-word",
         }}
       >
-        {showPlaceholder ? (
-          <span style={{ color: highlightColor, opacity: 0.5 }}>
-            {subtitle.uppercase ? "SOUS-TITRES" : "Sous-titres"}
-          </span>
-        ) : (
+        {showPlaceholder ? null : (
           activeChunk!
             .filter((word) => word.start <= currentTime + 0.2)
             .map((word, i, visible) => {

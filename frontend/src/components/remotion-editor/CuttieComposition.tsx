@@ -4,6 +4,7 @@ import { animatedOpacity } from "../../lib/animations";
 import GameplayLayer from "./layers/GameplayLayer";
 import FacecamLayer from "./layers/FacecamLayer";
 import SubtitleLayer from "./layers/SubtitleLayer";
+import ChatLayer from "./layers/ChatLayer";
 import ShapeLayer from "./layers/ShapeLayer";
 import AssetLayer from "./layers/AssetLayer";
 
@@ -16,6 +17,7 @@ function LayerContent({ layer }: { layer: Layer }) {
     case "gameplay":  return <GameplayLayer layer={layer} />;
     case "facecam":   return <FacecamLayer layer={layer} />;
     case "subtitles": return <SubtitleLayer layer={layer} />;
+    case "chat":      return <ChatLayer layer={layer} />;
     case "shape":     return <ShapeLayer layer={layer} />;
     case "asset":     return <AssetLayer layer={layer} />;
     default:          return null;

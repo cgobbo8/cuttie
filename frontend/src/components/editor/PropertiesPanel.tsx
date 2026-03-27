@@ -1,5 +1,5 @@
 import { Crop } from "lucide-react";
-import type { Layer, LayerStyle, ShapeData, SubtitleData } from "../../lib/editorTypes";
+import type { Layer, LayerStyle, ShapeData, SubtitleData, ChatData } from "../../lib/editorTypes";
 import { SUBTITLE_FONTS, BOX_SHADOW_PRESETS } from "../../lib/editorTypes";
 
 const CANVAS_W = 1080;
@@ -10,6 +10,7 @@ interface Props {
   onStyleChange: (id: string, patch: Partial<LayerStyle>) => void;
   onSubtitleChange: (id: string, patch: Partial<SubtitleData>) => void;
   onShapeChange: (id: string, patch: Partial<ShapeData>) => void;
+  onChatChange: (id: string, patch: Partial<ChatData>) => void;
   onTransformChange: (id: string, patch: Partial<Layer["transform"]>) => void;
   onCommit: () => void;
   onStartCrop?: (id: string) => void;
@@ -61,8 +62,8 @@ function Slider({
   );
 }
 
-export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange, onShapeChange, onTransformChange, onCommit, onStartCrop }: Props) {
-  const { style, transform, subtitle, shape } = layer;
+export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange, onShapeChange, onChatChange, onTransformChange, onCommit, onStartCrop }: Props) {
+  const { style, transform, subtitle, shape, chat } = layer;
 
   const centerX = () => {
     onCommit();
@@ -310,6 +311,70 @@ export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange
                   />
                 )}
               </div>
+            </div>
+          </>
+        )}
+
+        {/* ─── Chat-specific properties ─── */}
+        {chat && (
+          <>
+            <div className="h-px bg-white/[0.06]" />
+
+            <div className="flex flex-col gap-1.5">
+              <span className="text-[10px] text-zinc-400 uppercase tracking-wider font-medium">
+                Police
+              </span>
+              <select
+                value={chat.fontFamily}
+                onChange={(e) => {
+                  onCommit();
+                  onChatChange(layer.id, { fontFamily: e.target.value });
+                }}
+                className="w-full text-xs bg-white/[0.06] text-zinc-300 rounded-md px-2 py-1.5 border border-white/[0.06] outline-none focus:border-purple-500/50 cursor-pointer"
+              >
+                {SUBTITLE_FONTS.map((f) => (
+                  <option key={f.value} value={f.value} style={{ fontFamily: f.value }}>
+                    {f.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <Slider
+              label="Taille texte"
+              value={chat.fontSize}
+              min={16}
+              max={48}
+              step={1}
+              unit="px"
+              onChange={(v) => onChatChange(layer.id, { fontSize: v })}
+              onCommit={onCommit}
+            />
+
+            <Slider
+              label="Messages visibles"
+              value={chat.maxVisible}
+              min={1}
+              max={15}
+              step={1}
+              unit=""
+              onChange={(v) => onChatChange(layer.id, { maxVisible: v })}
+              onCommit={onCommit}
+            />
+
+            <Slider
+              label="Duree affichage"
+              value={chat.showDuration}
+              min={1}
+              max={15}
+              step={0.5}
+              unit="s"
+              onChange={(v) => onChatChange(layer.id, { showDuration: v })}
+              onCommit={onCommit}
+            />
+
+            <div className="text-[10px] text-zinc-500">
+              {chat.messages.length} messages dans le clip
             </div>
           </>
         )}

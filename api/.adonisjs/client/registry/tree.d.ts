@@ -10,11 +10,18 @@ export interface ApiDefinition {
     stream: typeof routes['jobs.stream']
   }
   clips: {
+    editEnv: typeof routes['clips.edit_env']
     show: typeof routes['clips.show']
   }
   assets: {
     index: typeof routes['assets.index']
     store: typeof routes['assets.store']
     show: typeof routes['assets.show']
+  }
+  renders: {
+    store: typeof routes['renders.store']
+    index: typeof routes['renders.index']
+    show: typeof routes['renders.show']
+    download: typeof routes['renders.download']
   }
 }

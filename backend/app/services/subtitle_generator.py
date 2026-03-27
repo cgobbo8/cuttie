@@ -27,6 +27,50 @@ def _get_client() -> OpenAI:
     return OpenAI()
 
 
+def _fix_timestamps_with_vad(words: list[dict], audio_path: str) -> list[dict]:
+    """Correct word start timestamps using voice activity detection.
+
+    Whisper sometimes places word.start in silence before the word is spoken
+    (the classic "JE flotte 4 secondes" bug). We use librosa to detect voiced
+    regions and snap any word whose start falls in silence to the next speech onset.
+    """
+    try:
+        import librosa
+        y, sr = librosa.load(audio_path, sr=16000, mono=True)
+        # Non-silent intervals: list of [start_frame, end_frame]
+        intervals = librosa.effects.split(y, top_db=32)
+    except Exception as e:
+        logger.warning(f"VAD timestamp correction failed, skipping: {e}")
+        return words
+
+    if len(intervals) == 0:
+        return words
+
+    # Convert frame indices to seconds
+    voiced = [(int(s) / sr, int(e) / sr) for s, e in intervals]
+
+    def in_speech(t: float) -> bool:
+        return any(s - 0.05 <= t <= e + 0.05 for s, e in voiced)
+
+    def next_speech_start(after: float) -> float | None:
+        candidates = [s for s, _ in voiced if s > after]
+        return min(candidates) if candidates else None
+
+    result = []
+    for w in words:
+        corrected_start = w["start"]
+        if not in_speech(w["start"]):
+            nxt = next_speech_start(w["start"])
+            if nxt is not None:
+                gap = nxt - w["start"]
+                # Correct only if the gap is meaningful (>150ms) and not absurd (>6s)
+                if 0.15 < gap < 6.0:
+                    corrected_start = nxt
+        result.append({**w, "start": corrected_start})
+
+    return result
+
+
 def transcribe_with_words(clip_path: str) -> tuple[str, float, list[dict]]:
     """Transcribe clip and get word-level timestamps.
 
@@ -70,8 +114,10 @@ def transcribe_with_words(clip_path: str) -> tuple[str, float, list[dict]]:
                     "end": w.end,
                 })
 
-        # Fix French accents, apostrophes, word boundaries
         if words:
+            # 1. Snap timestamps that fall in silence to next speech onset
+            words = _fix_timestamps_with_vad(words, audio_path)
+            # 2. Fix French accents, apostrophes, word boundaries
             words = _rewrite_words_with_llm(words)
             text = " ".join(w["word"] for w in words)
 

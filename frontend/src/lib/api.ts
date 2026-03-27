@@ -36,6 +36,7 @@ export interface HotPoint {
   vertical_filename: string | null;
   llm: LlmAnalysis | null;
   chat_mood: string | null;
+  chat_message_count: number | null;
 }
 
 export type JobStatusType =
@@ -195,6 +196,7 @@ export interface EditEnvironment {
     game_margin_bottom: number;
   };
   words: TranscriptWord[];
+  chat_messages: { author: string; text: string; timestamp: number }[];
 }
 
 export async function getEditEnvironment(jobId: string, clipFilename: string): Promise<EditEnvironment> {

@@ -85,21 +85,23 @@ export default function SubtitleLayer({ layer, currentTime }: Props) {
             {subtitle.uppercase ? "SOUS-TITRES" : "Sous-titres"}
           </span>
         ) : (
-          activeChunk!.map((word, i) => {
-            const isFilled = currentTime >= word.start;
-            return (
-              <span
-                key={`${word.start}-${i}`}
-                style={{
-                  color: isFilled ? highlightColor : baseColor,
-                  transition: "color 0.08s",
-                }}
-              >
-                {subtitle.uppercase ? word.word.toUpperCase() : word.word}
-                {i < activeChunk!.length - 1 ? " " : ""}
-              </span>
-            );
-          })
+          activeChunk!
+            .filter((word) => word.start <= currentTime + 0.2)
+            .map((word, i, visible) => {
+              const isFilled = currentTime >= word.start;
+              return (
+                <span
+                  key={`${word.start}-${i}`}
+                  style={{
+                    color: isFilled ? highlightColor : baseColor,
+                    transition: "color 0.08s",
+                  }}
+                >
+                  {subtitle.uppercase ? word.word.toUpperCase() : word.word}
+                  {i < visible.length - 1 ? " " : ""}
+                </span>
+              );
+            })
         )}
       </p>
     </div>

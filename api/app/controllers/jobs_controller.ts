@@ -1,8 +1,12 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import { randomUUID } from 'node:crypto'
+import { existsSync, readFileSync } from 'node:fs'
+import path from 'node:path'
 import Job from '#models/job'
 import redis from '@adonisjs/redis/services/main'
 import jobStatusBus, { type JobStatusUpdate } from '#services/job_status_bus'
+
+const CLIPS_BASE = path.resolve('../backend/clips')
 
 export default class JobsController {
   // POST /api/analyze
@@ -32,7 +36,37 @@ export default class JobsController {
   async show({ params, response }: HttpContext) {
     const job = await Job.find(params.id)
     if (!job) return response.notFound({ error: 'job not found' })
-    return job
+
+    const data = job.serialize()
+
+    // Enrich hotPoints with chatMessageCount per clip
+    if (data.hotPoints?.length) {
+      const chatPath = path.join(CLIPS_BASE, job.id, 'chat.json')
+      let allChat: { timestamp: number }[] = []
+      try {
+        if (existsSync(chatPath)) {
+          allChat = JSON.parse(readFileSync(chatPath, 'utf-8'))
+        }
+      } catch {}
+
+      for (const hp of data.hotPoints) {
+        hp.chat_message_count = 0
+        if (!hp.clip_filename || allChat.length === 0) continue
+        const clipNum = hp.clip_filename.match(/clip_(\d+)/)?.[1]
+        if (!clipNum) continue
+        const metaPath = path.join(CLIPS_BASE, job.id, `clip_${clipNum}_meta.json`)
+        try {
+          if (existsSync(metaPath)) {
+            const { vod_start, vod_end } = JSON.parse(readFileSync(metaPath, 'utf-8'))
+            hp.chat_message_count = allChat.filter(
+              (m: { timestamp: number }) => m.timestamp >= vod_start && m.timestamp <= vod_end
+            ).length
+          }
+        } catch {}
+      }
+    }
+
+    return data
   }
 
   // POST /api/jobs/:id/retry

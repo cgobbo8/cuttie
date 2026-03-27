@@ -5,6 +5,7 @@ Dynamic clip boundaries: uses the RMS energy curve to find natural IN/OUT points
 - OUT: extend forward while the streamer is still reacting (don't cut mid-dialogue)
 """
 
+import json
 import logging
 import os
 import subprocess
@@ -266,6 +267,10 @@ def _extract_single_clip(
         if os.path.isfile(filepath):
             size_mb = os.path.getsize(filepath) / (1024 * 1024)
             logger.info(f"Clip {rank} saved: {filepath} ({size_mb:.1f}MB)")
+            # Save VOD timing metadata for editor/chat filtering
+            meta_path = os.path.join(clip_dir, f"clip_{rank:02d}_meta.json")
+            with open(meta_path, "w") as f:
+                json.dump({"vod_start": start, "vod_end": end}, f)
             return rank, filename
         else:
             logger.warning(f"Clip {rank}: compressed file not created")
@@ -452,6 +457,10 @@ def extract_group(
             if os.path.isfile(raw_file) and _compress_clip(raw_file, filepath):
                 size_mb = os.path.getsize(filepath) / (1024 * 1024)
                 logger.info(f"Clip {rank}: {filepath} ({size_mb:.1f}MB)")
+                # Save VOD timing metadata for editor chat layer
+                meta_path = os.path.join(clip_dir, f"clip_{rank:02d}_meta.json")
+                with open(meta_path, "w") as mf:
+                    json.dump({"vod_start": start, "vod_end": end}, mf)
                 results.append((rank, idx, filename))
             else:
                 results.append((rank, idx, None))
@@ -518,6 +527,10 @@ def extract_group(
                     if os.path.isfile(filepath):
                         size_mb = os.path.getsize(filepath) / (1024 * 1024)
                         logger.info(f"Clip {rank} split: {filepath} ({size_mb:.1f}MB)")
+                        # Save VOD timing metadata for editor chat layer
+                        meta_path = os.path.join(clip_dir, f"clip_{rank:02d}_meta.json")
+                        with open(meta_path, "w") as mf:
+                            json.dump({"vod_start": c["start"], "vod_end": c["end"]}, mf)
                         results.append((rank, idx, filename))
                     else:
                         results.append((rank, idx, None))

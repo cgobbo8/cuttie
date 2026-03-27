@@ -449,7 +449,6 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
           layers={layers}
           selectedId={selectedId}
           videoRef={videoRef}
-          currentTime={playerTime}
           duration={videoDuration ?? 0}
           onSelect={setSelectedId}
           onTransformChange={updateTransform}

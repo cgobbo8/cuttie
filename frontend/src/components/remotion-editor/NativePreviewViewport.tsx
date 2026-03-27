@@ -46,7 +46,6 @@ interface Props {
   layers: Layer[];
   selectedId: string | null;
   videoRef: React.MutableRefObject<HTMLVideoElement | null>;
-  currentTime: number;
   duration: number;
   onSelect: (id: string | null) => void;
   onTransformChange: (id: string, patch: Partial<Layer["transform"]>) => void;
@@ -61,7 +60,6 @@ export default function NativePreviewViewport({
   layers,
   selectedId,
   videoRef,
-  currentTime,
   duration,
   onSelect,
   onTransformChange,
@@ -74,6 +72,10 @@ export default function NativePreviewViewport({
   const containerRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(0.3);
   const secondaryRefs = useRef<Map<string, HTMLVideoElement>>(new Map());
+
+  // High-frequency time for smooth animations (60 Hz via rAF when playing)
+  const [animTime, setAnimTime] = useState(0);
+  const rafRef = useRef<number>(0);
 
   // Scale to fit container
   useEffect(() => {
@@ -91,30 +93,39 @@ export default function NativePreviewViewport({
 
   // Primary video event handlers
   const handleTimeUpdate = useCallback((e: React.SyntheticEvent<HTMLVideoElement>) => {
-    const t = e.currentTarget.currentTime;
-    onTimeUpdate(t);
-    // Drift correction for secondary videos (facecam etc.)
+    // Low-frequency update (4 Hz) — only for PlaybackBar in parent
+    onTimeUpdate(e.currentTarget.currentTime);
+    // Drift correction for secondary videos
     secondaryRefs.current.forEach((vid) => {
-      if (Math.abs(vid.currentTime - t) > 0.15) vid.currentTime = t;
+      if (Math.abs(vid.currentTime - e.currentTarget.currentTime) > 0.15) {
+        vid.currentTime = e.currentTarget.currentTime;
+      }
     });
   }, [onTimeUpdate]);
 
   const handlePlay = useCallback((e: React.SyntheticEvent<HTMLVideoElement>) => {
     onPlay();
     const t = e.currentTarget.currentTime;
-    secondaryRefs.current.forEach((vid) => {
-      vid.currentTime = t;
-      vid.play().catch(() => {});
-    });
+    secondaryRefs.current.forEach((vid) => { vid.currentTime = t; vid.play().catch(() => {}); });
+    // Start 60 Hz rAF loop for smooth animation rendering
+    const video = e.currentTarget;
+    const tick = () => {
+      setAnimTime(video.currentTime);
+      rafRef.current = requestAnimationFrame(tick);
+    };
+    rafRef.current = requestAnimationFrame(tick);
   }, [onPlay]);
 
-  const handlePause = useCallback(() => {
+  const handlePause = useCallback((e: React.SyntheticEvent<HTMLVideoElement>) => {
     onPause();
+    cancelAnimationFrame(rafRef.current);
+    setAnimTime(e.currentTarget.currentTime);
     secondaryRefs.current.forEach((vid) => vid.pause());
   }, [onPause]);
 
   const handleSeeked = useCallback((e: React.SyntheticEvent<HTMLVideoElement>) => {
     const t = e.currentTarget.currentTime;
+    setAnimTime(t);
     secondaryRefs.current.forEach((vid) => { vid.currentTime = t; });
   }, []);
 
@@ -169,7 +180,7 @@ export default function NativePreviewViewport({
             if (!layer.visible) return null;
             const { style } = layer;
 
-            const effectiveOpacity = animatedOpacity(style, currentTime, duration);
+            const effectiveOpacity = animatedOpacity(style, animTime, duration);
             const baseStyle: React.CSSProperties = {
               position: "absolute",
               left: layer.transform.x,
@@ -255,7 +266,7 @@ export default function NativePreviewViewport({
               const baseColor = subtitle.colorMode === "auto" ? subtitle.autoColor : subtitle.customColor;
               const highlightColor = tintWhite(baseColor);
               const activeChunk = chunks.find(
-                (c) => currentTime >= c[0].start - 0.05 && currentTime <= c[c.length - 1].end + 0.05,
+                (c) => animTime >= c[0].start - 0.05 && animTime <= c[c.length - 1].end + 0.05,
               );
               const showPlaceholder = subtitle.words.length === 0 || !activeChunk;
               return (
@@ -284,7 +295,7 @@ export default function NativePreviewViewport({
                       activeChunk!.map((word, i) => (
                         <span
                           key={`${word.start}-${i}`}
-                          style={{ color: currentTime >= word.start ? highlightColor : baseColor }}
+                          style={{ color: animTime >= word.start ? highlightColor : baseColor }}
                         >
                           {subtitle.uppercase ? word.word.toUpperCase() : word.word}
                           {i < activeChunk!.length - 1 ? " " : ""}

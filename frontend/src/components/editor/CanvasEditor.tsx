@@ -561,8 +561,11 @@ export default function CanvasEditor({
         currentTime={currentTime}
         duration={duration}
         playing={playing}
+        trimStart={0}
+        trimEnd={duration}
         onSeek={seek}
         onTogglePlay={togglePlay}
+        onTrimChange={() => {}}
       />
 
       {/* Hidden file input for asset upload */}

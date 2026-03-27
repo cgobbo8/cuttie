@@ -36,11 +36,17 @@ export default class RendersController {
   /** POST /api/clips/:jobId/:filename/render */
   async store({ params, request, response }: HttpContext) {
     const { jobId, filename } = params
-    const { layers } = request.body() as { layers: unknown[] }
+    const body = request.body() as { layers: unknown[]; trim_start?: number; trim_end?: number }
+    const { layers, trim_start, trim_end } = body
 
     if (!layers || !Array.isArray(layers)) {
       return response.badRequest({ error: 'layers array required' })
     }
+
+    const trim =
+      trim_start != null && trim_end != null
+        ? { start: trim_start, end: trim_end }
+        : undefined
 
     const renderId = randomUUID()
     const outputFilename = `render_${renderId}.mp4`
@@ -58,7 +64,7 @@ export default class RendersController {
     })
 
     // Fire-and-forget — render runs asynchronously
-    runRender({ renderId, jobId, clipFilename: filename, layers: layers as any, outputPath, outputFilename })
+    runRender({ renderId, jobId, clipFilename: filename, layers: layers as any, outputPath, outputFilename, trim })
 
     return response.created({ render_id: renderId })
   }
@@ -102,8 +108,9 @@ async function runRender(opts: {
   layers: any[]
   outputPath: string
   outputFilename: string
+  trim?: { start: number; end: number }
 }) {
-  const { renderId, jobId, clipFilename, layers, outputPath, outputFilename } = opts
+  const { renderId, jobId, clipFilename, layers, outputPath, outputFilename, trim } = opts
 
   const updateRender = async (fields: Record<string, any>) => {
     await db.from('renders').where('id', renderId).update({
@@ -119,6 +126,7 @@ async function runRender(opts: {
       jobId,
       clipFilename,
       outputPath,
+      trim,
       onProgress: async (pct) => {
         await updateRender({ progress: pct })
       },

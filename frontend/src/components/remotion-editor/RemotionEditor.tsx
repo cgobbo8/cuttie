@@ -30,7 +30,6 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
   const editor = useEditorState(clipKey);
   const {
     layers, setLayers, selectedId, setSelectedId, selected,
-    currentTime, duration,
     addLayer,
     updateTransform, commitTransform, updateStyle, updateVideoCrop, updateSubtitle, updateShape, updateChat, reorderLayers, duplicateLayer, removeLayer,
     renameLayer, toggleVisibility, toggleLock,
@@ -58,27 +57,126 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
     return () => { vid.src = ""; };
   }, [rawClipUrl]);
 
+  // ── Trim state (persisted separately from layers) ──
+  const trimKey = `cuttie_trim_${clipKey}`;
+  const [trimStart, setTrimStart] = useState<number>(() => {
+    try { const v = localStorage.getItem(trimKey); if (v) { const p = JSON.parse(v); return p.start ?? 0; } } catch {} return 0;
+  });
+  const [trimEnd, setTrimEnd] = useState<number>(() => {
+    try { const v = localStorage.getItem(trimKey); if (v) { const p = JSON.parse(v); return p.end ?? Infinity; } } catch {} return Infinity;
+  });
+
+  // Resolve trimEnd once duration is known
+  const effectiveTrimEnd = trimEnd === Infinity ? (videoDuration ?? 0) : trimEnd;
+
+  // Persist trim
+  useEffect(() => {
+    if (videoDuration === null) return;
+    try {
+      localStorage.setItem(trimKey, JSON.stringify({ start: trimStart, end: effectiveTrimEnd }));
+    } catch {}
+  }, [trimKey, trimStart, effectiveTrimEnd, videoDuration]);
+
+  // Initialize trimEnd to full duration once known
+  useEffect(() => {
+    if (videoDuration !== null && trimEnd === Infinity) setTrimEnd(videoDuration);
+  }, [videoDuration, trimEnd]);
+
+  const handleTrimChange = useCallback((start: number, end: number) => {
+    setTrimStart(start);
+    setTrimEnd(end);
+    // Push playhead if it falls outside new trim bounds
+    const video = videoRef.current;
+    if (video) {
+      if (video.currentTime < start) { video.currentTime = start; setPlayerTime(start); }
+      else if (video.currentTime > end) { video.currentTime = end; setPlayerTime(end); }
+    }
+  }, []);
+
+  // ── Waveform extraction (Web Audio API) ──
+  const [waveform, setWaveform] = useState<Float32Array | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const resp = await fetch(rawClipUrl);
+        if (cancelled) return;
+        const buf = await resp.arrayBuffer();
+        if (cancelled) return;
+        const ctx = new OfflineAudioContext(1, 1, 44100);
+        const audio = await ctx.decodeAudioData(buf);
+        if (cancelled) return;
+        const raw = audio.getChannelData(0);
+        // Downsample to ~500 peaks
+        const PEAK_COUNT = 500;
+        const blockSize = Math.floor(raw.length / PEAK_COUNT);
+        const peaks = new Float32Array(PEAK_COUNT);
+        for (let i = 0; i < PEAK_COUNT; i++) {
+          let max = 0;
+          const start = i * blockSize;
+          for (let j = start; j < start + blockSize && j < raw.length; j++) {
+            const v = Math.abs(raw[j]);
+            if (v > max) max = v;
+          }
+          peaks[i] = max;
+        }
+        if (!cancelled) setWaveform(peaks);
+      } catch {
+        // Audio extraction failed — no waveform, that's fine
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [rawClipUrl]);
+
+  // ── Derive chat timestamps + subtitle words from layers ──
+  const chatTimestamps = layers
+    .filter((l) => l.type === "chat" && l.chat)
+    .flatMap((l) => l.chat!.messages.map((m) => m.timestamp));
+
+  const subtitleWords = layers
+    .filter((l) => l.type === "subtitles" && l.subtitle)
+    .flatMap((l) => l.subtitle!.words.map((w) => ({ start: w.start, end: w.end })));
+
   // Playback state — driven by native video events from NativePreviewViewport
   const [playerTime, setPlayerTime] = useState(0);
   const [playing, setPlaying] = useState(false);
 
-  const handleTimeUpdate = useCallback((t: number) => setPlayerTime(t), []);
+  const handleTimeUpdate = useCallback((t: number) => {
+    setPlayerTime(t);
+    // Pause at trim end
+    if (t >= effectiveTrimEnd - 0.05) {
+      const video = videoRef.current;
+      if (video && !video.paused) {
+        video.pause();
+        video.currentTime = effectiveTrimEnd;
+      }
+    }
+  }, [effectiveTrimEnd]);
   const handlePlay = useCallback(() => setPlaying(true), []);
   const handlePause = useCallback(() => setPlaying(false), []);
   const handleDuration = useCallback((d: number) => setVideoDuration(d), []);
 
   const seek = useCallback((t: number) => {
-    const clamped = Math.max(0, Math.min(t, videoDuration ?? 0));
+    const clamped = Math.max(trimStart, Math.min(t, effectiveTrimEnd));
     if (videoRef.current) videoRef.current.currentTime = clamped;
     setPlayerTime(clamped);
-  }, [videoDuration]);
+  }, [trimStart, effectiveTrimEnd]);
 
   const togglePlay = useCallback(() => {
     const video = videoRef.current;
     if (!video) return;
-    if (playing) video.pause();
-    else video.play().catch(() => {});
-  }, [playing]);
+    if (playing) {
+      video.pause();
+    } else {
+      // If at trim end, jump to trim start before playing
+      if (video.currentTime >= effectiveTrimEnd - 0.05) {
+        video.currentTime = trimStart;
+        setPlayerTime(trimStart);
+      }
+      video.play().catch(() => {});
+    }
+  }, [playing, trimStart, effectiveTrimEnd]);
 
   // Cache edit-env
   const editEnvRef = useRef<EditEnvironment | null>(null);
@@ -332,7 +430,8 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
           updateSubtitle(subLayer.id, { words: env.words });
         }
       }
-      await startRender(jobId, hotPoint.clip_filename!, exportLayers);
+      const hasTrim = trimStart > 0 || effectiveTrimEnd < (videoDuration ?? 0);
+      await startRender(jobId, hotPoint.clip_filename!, exportLayers, hasTrim ? { trimStart, trimEnd: effectiveTrimEnd } : undefined);
       setExportToast(true);
       setTimeout(() => setExportToast(false), 6000);
     } catch (err) {
@@ -340,7 +439,7 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
     } finally {
       setExporting(false);
     }
-  }, [exporting, layers, jobId, hotPoint.clip_filename, updateSubtitle]);
+  }, [exporting, layers, jobId, hotPoint.clip_filename, updateSubtitle, trimStart, effectiveTrimEnd, videoDuration]);
 
   /* ── Popups & keyboard ──────────────────────────────────── */
 
@@ -358,15 +457,17 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
       if ((e.target as HTMLElement).tagName === "INPUT") return;
       if (e.key === " ") { e.preventDefault(); togglePlay(); }
       if (e.key === "Escape") onClose();
-      if (e.key === "ArrowLeft") { e.preventDefault(); seek(playerTime - 5); }
-      if (e.key === "ArrowRight") { e.preventDefault(); seek(playerTime + 5); }
+      if (e.key === "ArrowLeft") { e.preventDefault(); seek(playerTime - (e.shiftKey ? 1 / 30 : 5)); }
+      if (e.key === "ArrowRight") { e.preventDefault(); seek(playerTime + (e.shiftKey ? 1 / 30 : 5)); }
+      if (e.key === "i" || e.key === "I") { e.preventDefault(); handleTrimChange(playerTime, effectiveTrimEnd); }
+      if (e.key === "o" || e.key === "O") { e.preventDefault(); handleTrimChange(trimStart, playerTime); }
       if ((e.key === "Delete" || e.key === "Backspace") && selectedId && !selected?.locked) removeLayer(selectedId);
       if ((e.metaKey || e.ctrlKey) && e.key === "z" && !e.shiftKey) { e.preventDefault(); undo(); }
       if ((e.metaKey || e.ctrlKey) && e.key === "z" && e.shiftKey) { e.preventDefault(); redo(); }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [togglePlay, onClose, selectedId, selected, removeLayer, undo, redo, seek, playerTime]);
+  }, [togglePlay, onClose, selectedId, selected, removeLayer, undo, redo, seek, playerTime, handleTrimChange, trimStart, effectiveTrimEnd]);
 
   /* ── Loading state ─────────────────────────────────────── */
 
@@ -550,8 +651,14 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
         currentTime={playerTime}
         duration={videoDuration}
         playing={playing}
+        trimStart={trimStart}
+        trimEnd={effectiveTrimEnd}
         onSeek={seek}
         onTogglePlay={togglePlay}
+        onTrimChange={handleTrimChange}
+        waveform={waveform}
+        chatTimestamps={chatTimestamps.length > 0 ? chatTimestamps : undefined}
+        subtitleWords={subtitleWords.length > 0 ? subtitleWords : undefined}
       />
 
       {/* Hidden file input */}

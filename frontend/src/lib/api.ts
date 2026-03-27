@@ -231,11 +231,12 @@ export async function startRender(
   jobId: string,
   clipFilename: string,
   layers: unknown[],
+  trim?: { trimStart: number; trimEnd: number },
 ): Promise<string> {
   const res = await fetch(`${BASE}/clips/${jobId}/${clipFilename}/render`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ layers }),
+    body: JSON.stringify({ layers, ...(trim ? { trim_start: trim.trimStart, trim_end: trim.trimEnd } : {}) }),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: "Render failed" }));

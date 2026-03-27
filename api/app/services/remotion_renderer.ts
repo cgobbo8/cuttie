@@ -76,11 +76,13 @@ export interface RenderOptions {
   clipFilename: string
   /** Absolute path where the output MP4 should be written */
   outputPath: string
+  /** Optional trim range in seconds */
+  trim?: { start: number; end: number }
   onProgress: (pct: number) => void
 }
 
 export async function renderClip(opts: RenderOptions): Promise<{ sizeMb: number }> {
-  const { layers, jobId, clipFilename, outputPath, onProgress } = opts
+  const { layers, jobId, clipFilename, outputPath, trim, onProgress } = opts
 
   const CLIPS_BASE = path.resolve('../backend/clips')
   const videoPath = path.join(CLIPS_BASE, jobId, clipFilename)
@@ -92,7 +94,11 @@ export async function renderClip(opts: RenderOptions): Promise<{ sizeMb: number 
   // Probe source video for duration + native dimensions
   const { durationSeconds, width: nativeW, height: nativeH } = await probeVideo(videoPath)
   const fps = 30
-  const durationInFrames = Math.ceil(durationSeconds * fps)
+  const fullDurationInFrames = Math.ceil(durationSeconds * fps)
+
+  // Calculate frame range from trim
+  const startFrame = trim ? Math.floor(trim.start * fps) : 0
+  const endFrame = trim ? Math.ceil(trim.end * fps) : fullDurationInFrames
 
   const API_BASE = process.env.API_BASE_URL ?? 'http://localhost:3333/api'
 
@@ -121,11 +127,13 @@ export async function renderClip(opts: RenderOptions): Promise<{ sizeMb: number 
   })
 
   await renderMedia({
-    composition: { ...composition, durationInFrames, fps, width: 1080, height: 1920 },
+    composition: { ...composition, durationInFrames: fullDurationInFrames, fps, width: 1080, height: 1920 },
     serveUrl,
     codec: 'h264',
     outputLocation: outputPath,
     inputProps: { layers: enrichedLayers },
+    ...(startFrame > 0 ? { startFrom: startFrame } : {}),
+    ...(endFrame < fullDurationInFrames ? { endAt: endFrame } : {}),
     onProgress: ({ progress }) => onProgress(Math.round(progress * 100)),
     timeoutInMilliseconds: 5 * 60 * 1000, // 5 min max
   })

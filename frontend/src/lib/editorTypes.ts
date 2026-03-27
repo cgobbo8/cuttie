@@ -14,9 +14,11 @@ export interface LayerStyle {
   opacity: number;       // 0–1
   blur: number;          // px (CSS blur)
   borderRadius: number;  // px
+  fadeIn: number;        // seconds — fade from 0 to opacity at start
+  fadeOut: number;       // seconds — fade from opacity to 0 at end
 }
 
-export const DEFAULT_STYLE: LayerStyle = { opacity: 1, blur: 0, borderRadius: 0 };
+export const DEFAULT_STYLE: LayerStyle = { opacity: 1, blur: 0, borderRadius: 0, fadeIn: 0, fadeOut: 0 };
 
 export interface VideoLayerData {
   src: string;

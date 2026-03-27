@@ -450,6 +450,7 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
           selectedId={selectedId}
           videoRef={videoRef}
           currentTime={playerTime}
+          duration={videoDuration ?? 0}
           onSelect={setSelectedId}
           onTransformChange={updateTransform}
           onTransformStart={commitTransform}

@@ -6,6 +6,24 @@ import TransformHandles from "../editor/TransformHandles";
 const CANVAS_W = 1080;
 const CANVAS_H = 1920;
 
+// ── Animation helpers ─────────────────────────────────────────────────────
+
+/** Compute animated opacity from currentTime, matching Remotion's interpolate logic. */
+function animatedOpacity(
+  opacity: number,
+  fadeIn: number,
+  fadeOut: number,
+  currentTime: number,
+  duration: number,
+): number {
+  let result = opacity;
+  if (fadeIn > 0 && currentTime < fadeIn) result *= currentTime / fadeIn;
+  if (fadeOut > 0 && duration > 0 && currentTime > duration - fadeOut) {
+    result *= Math.max(0, (duration - currentTime) / fadeOut);
+  }
+  return Math.max(0, result);
+}
+
 // ── Subtitle helpers ──────────────────────────────────────────────────────
 
 function chunkWords(words: SubtitleWord[], maxWords = 4, maxDuration = 3.0): SubtitleWord[][] {
@@ -46,6 +64,7 @@ interface Props {
   selectedId: string | null;
   videoRef: React.MutableRefObject<HTMLVideoElement | null>;
   currentTime: number;
+  duration: number;
   onSelect: (id: string | null) => void;
   onTransformChange: (id: string, patch: Partial<Layer["transform"]>) => void;
   onTransformStart?: () => void;
@@ -60,6 +79,7 @@ export default function NativePreviewViewport({
   selectedId,
   videoRef,
   currentTime,
+  duration,
   onSelect,
   onTransformChange,
   onTransformStart,
@@ -166,13 +186,14 @@ export default function NativePreviewViewport({
             if (!layer.visible) return null;
             const { style } = layer;
 
+            const effectiveOpacity = animatedOpacity(style.opacity, style.fadeIn, style.fadeOut, currentTime, duration);
             const baseStyle: React.CSSProperties = {
               position: "absolute",
               left: layer.transform.x,
               top: layer.transform.y,
               width: layer.transform.width,
               height: layer.transform.height,
-              opacity: style.opacity,
+              opacity: effectiveOpacity,
               borderRadius: !layer.shape && style.borderRadius > 0 ? style.borderRadius : undefined,
               overflow: !layer.shape && style.borderRadius > 0 ? "hidden" : undefined,
               filter: style.blur > 0 ? `blur(${style.blur}px)` : undefined,

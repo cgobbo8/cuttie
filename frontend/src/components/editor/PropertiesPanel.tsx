@@ -41,7 +41,7 @@ function Slider({
           {label}
         </span>
         <span className="text-[10px] text-zinc-500 font-mono tabular-nums">
-          {unit === "%" ? `${Math.round(value * 100)}%` : `${value}${unit}`}
+          {unit === "%" ? `${Math.round(value * 100)}%` : unit === "s" ? `${value.toFixed(1)}s` : `${value}${unit}`}
         </span>
       </div>
       <input
@@ -169,6 +169,30 @@ export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange
             onCommit={onCommit}
           />
         )}
+
+        <div className="h-px bg-white/[0.06]" />
+
+        {/* Fade animations */}
+        <Slider
+          label="Fade in (s)"
+          value={style.fadeIn ?? 0}
+          min={0}
+          max={5}
+          step={0.1}
+          unit="s"
+          onChange={(v) => onStyleChange(layer.id, { fadeIn: v })}
+          onCommit={onCommit}
+        />
+        <Slider
+          label="Fade out (s)"
+          value={style.fadeOut ?? 0}
+          min={0}
+          max={5}
+          step={0.1}
+          unit="s"
+          onChange={(v) => onStyleChange(layer.id, { fadeOut: v })}
+          onCommit={onCommit}
+        />
 
         {/* ─── Subtitle-specific properties ─── */}
         {subtitle && (

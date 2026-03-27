@@ -37,7 +37,7 @@ export default function CanvasEditor({
     currentTime, duration, playing,
     registerVideo, seek, togglePlay,
     addLayer,
-    updateTransform, commitTransform, updateStyle, updateVideoCrop, updateSubtitle, updateShape, updateChat, moveLayer, duplicateLayer, removeLayer,
+    updateTransform, commitTransform, updateStyle, updateVideoCrop, updateSubtitle, updateShape, updateChat, reorderLayers, duplicateLayer, removeLayer,
     renameLayer, toggleVisibility, toggleLock,
     undo, redo,
   } = editor;
@@ -431,7 +431,7 @@ export default function CanvasEditor({
             onSelect={setSelectedId}
             onToggleVisibility={toggleVisibility}
             onToggleLock={toggleLock}
-            onMove={moveLayer}
+            onReorder={reorderLayers}
             onDuplicate={duplicateLayer}
             onRemove={removeLayer}
             onRename={renameLayer}

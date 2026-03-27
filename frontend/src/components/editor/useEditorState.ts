@@ -236,6 +236,18 @@ export function useEditorState(clipKey: string) {
     });
   }, [pushHistory]);
 
+  /** Reorder layers by moving a layer from one index to another (array indices, not reversed). */
+  const reorderLayers = useCallback((fromIdx: number, toIdx: number) => {
+    if (fromIdx === toIdx) return;
+    pushHistory();
+    setLayers((prev) => {
+      const next = [...prev];
+      const [moved] = next.splice(fromIdx, 1);
+      next.splice(toIdx, 0, moved);
+      return next;
+    });
+  }, [pushHistory]);
+
   const duplicateLayer = useCallback((id: string) => {
     pushHistory();
     setLayers((prev) => {
@@ -271,9 +283,14 @@ export function useEditorState(clipKey: string) {
   }, []);
 
   const toggleLock = useCallback((id: string) => {
-    setLayers((prev) =>
-      prev.map((l) => (l.id === id ? { ...l, locked: !l.locked } : l)),
-    );
+    setLayers((prev) => {
+      const target = prev.find((l) => l.id === id);
+      if (target && !target.locked) {
+        // About to lock → deselect if selected
+        setSelectedId((sel) => (sel === id ? null : sel));
+      }
+      return prev.map((l) => (l.id === id ? { ...l, locked: !l.locked } : l));
+    });
   }, []);
 
   const selected = layers.find((l) => l.id === selectedId) ?? null;
@@ -299,6 +316,7 @@ export function useEditorState(clipKey: string) {
     updateShape,
     updateChat,
     moveLayer,
+    reorderLayers,
     duplicateLayer,
     removeLayer,
     renameLayer,

@@ -32,7 +32,7 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
     layers, setLayers, selectedId, setSelectedId, selected,
     currentTime, duration,
     addLayer,
-    updateTransform, commitTransform, updateStyle, updateVideoCrop, updateSubtitle, updateShape, updateChat, moveLayer, duplicateLayer, removeLayer,
+    updateTransform, commitTransform, updateStyle, updateVideoCrop, updateSubtitle, updateShape, updateChat, reorderLayers, duplicateLayer, removeLayer,
     renameLayer, toggleVisibility, toggleLock,
     undo, redo,
   } = editor;
@@ -358,13 +358,15 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
       if ((e.target as HTMLElement).tagName === "INPUT") return;
       if (e.key === " ") { e.preventDefault(); togglePlay(); }
       if (e.key === "Escape") onClose();
+      if (e.key === "ArrowLeft") { e.preventDefault(); seek(playerTime - 5); }
+      if (e.key === "ArrowRight") { e.preventDefault(); seek(playerTime + 5); }
       if ((e.key === "Delete" || e.key === "Backspace") && selectedId && !selected?.locked) removeLayer(selectedId);
       if ((e.metaKey || e.ctrlKey) && e.key === "z" && !e.shiftKey) { e.preventDefault(); undo(); }
       if ((e.metaKey || e.ctrlKey) && e.key === "z" && e.shiftKey) { e.preventDefault(); redo(); }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [togglePlay, onClose, selectedId, selected, removeLayer, undo, redo]);
+  }, [togglePlay, onClose, selectedId, selected, removeLayer, undo, redo, seek, playerTime]);
 
   /* ── Loading state ─────────────────────────────────────── */
 
@@ -429,14 +431,14 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
       {/* ─── Main area ─── */}
       <div className="flex-1 flex min-h-0">
         {/* Left: Layer panel */}
-        <div className="w-56 shrink-0 border-r border-white/[0.06] flex flex-col">
+        <div className="w-64 shrink-0 border-r border-white/[0.06] flex flex-col">
           <LayerPanel
             layers={layers}
             selectedId={selectedId}
             onSelect={setSelectedId}
             onToggleVisibility={toggleVisibility}
             onToggleLock={toggleLock}
-            onMove={moveLayer}
+            onReorder={reorderLayers}
             onDuplicate={duplicateLayer}
             onRemove={removeLayer}
             onRename={renameLayer}

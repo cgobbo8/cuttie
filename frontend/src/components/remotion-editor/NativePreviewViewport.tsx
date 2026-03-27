@@ -145,15 +145,14 @@ export default function NativePreviewViewport({
     onDuration(e.currentTarget.duration);
   }, [onDuration]);
 
-  // Click-to-select in canvas coordinates
+  // Click-to-select in canvas coordinates — always hit-test by position
   const handleOverlayClick = useCallback((e: React.MouseEvent) => {
-    if (e.target !== e.currentTarget) return;
-    const rect = (e.target as HTMLElement).getBoundingClientRect();
+    const rect = e.currentTarget.getBoundingClientRect();
     const cx = (e.clientX - rect.left) / scale;
     const cy = (e.clientY - rect.top) / scale;
     for (let i = layers.length - 1; i >= 0; i--) {
       const l = layers[i];
-      if (!l.visible) continue;
+      if (!l.visible || l.locked) continue;
       const t = l.transform;
       if (cx >= t.x && cx <= t.x + t.width && cy >= t.y && cy <= t.y + t.height) {
         onSelect(l.id);
@@ -168,11 +167,17 @@ export default function NativePreviewViewport({
   // Track whether we've attached the primary video ref (first gameplay layer)
   let primaryAttached = false;
 
+  // Click outside canvas → deselect
+  const handleContainerClick = useCallback((e: React.MouseEvent) => {
+    if (e.target === e.currentTarget) onSelect(null);
+  }, [onSelect]);
+
   return (
     <div
       ref={containerRef}
       className="flex-1 flex items-center justify-center overflow-hidden"
       style={{ background: "#18181b" }}
+      onClick={handleContainerClick}
     >
       <div style={{ position: "relative", width: CANVAS_W * scale, height: CANVAS_H * scale, flexShrink: 0 }}>
 
@@ -407,7 +412,6 @@ export default function NativePreviewViewport({
                 width: selectedLayer.transform.width * scale,
                 height: selectedLayer.transform.height * scale,
               }}
-              onClick={(e) => e.stopPropagation()}
             >
               <TransformHandles
                 transform={selectedLayer.transform}

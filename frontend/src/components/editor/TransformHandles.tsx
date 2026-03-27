@@ -130,9 +130,18 @@ export default function TransformHandles({
           }
         }
 
-        // Recompute anchored position
+        // Anchor at opposite point
         if (type.includes("w")) x = startTransform.x + startTransform.width - width;
         if (type.includes("n")) y = startTransform.y + startTransform.height - height;
+
+        // Edge handles: center cross-axis around the opposite midpoint
+        if (isHorizontal) {
+          const centerY = startTransform.y + startTransform.height / 2;
+          y = centerY - height / 2;
+        } else if (isVertical) {
+          const centerX = startTransform.x + startTransform.width / 2;
+          x = centerX - width / 2;
+        }
       }
 
       setGuides({ x: null, y: null });

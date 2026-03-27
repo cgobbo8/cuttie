@@ -37,7 +37,8 @@ function serializeRender(row: any) {
 
 export default class RendersController {
   /** POST /api/clips/:jobId/:filename/render */
-  async store({ params, request, response }: HttpContext) {
+  async store({ params, request, response, auth }: HttpContext) {
+    const user = auth.getUserOrFail()
     const { jobId, filename } = params
     const body = request.body() as { layers: unknown[]; trim_start?: number; trim_end?: number; clip_name?: string }
     const { layers, trim_start, trim_end, clip_name } = body
@@ -63,6 +64,7 @@ export default class RendersController {
       clip_name: clip_name || null,
       status: 'rendering',
       progress: 0,
+      user_id: user.id,
       created_at: now,
       updated_at: now,
     })
@@ -74,26 +76,30 @@ export default class RendersController {
   }
 
   /** GET /api/renders */
-  async index({ response }: HttpContext) {
+  async index({ response, auth }: HttpContext) {
+    const user = auth.getUserOrFail()
     const rows = await db
       .from('renders')
       .join('jobs', 'renders.job_id', 'jobs.id')
       .select('renders.*', 'jobs.vod_title', 'jobs.vod_game')
+      .where('renders.user_id', user.id)
       .orderBy('renders.created_at', 'desc')
     return response.json(rows.map(serializeRender))
   }
 
   /** GET /api/renders/:renderId */
-  async show({ params, response }: HttpContext) {
+  async show({ params, response, auth }: HttpContext) {
+    const user = auth.getUserOrFail()
     const row = await getRender(params.renderId)
-    if (!row) return response.notFound({ error: 'render not found' })
+    if (!row || row.user_id !== user.id) return response.notFound({ error: 'render not found' })
     return response.json(serializeRender(row))
   }
 
   /** GET /api/renders/:renderId/download */
-  async download({ params, response }: HttpContext) {
+  async download({ params, response, auth }: HttpContext) {
+    const user = auth.getUserOrFail()
     const row = await getRender(params.renderId)
-    if (!row || !row.output_filename) {
+    if (!row || row.user_id !== user.id || !row.output_filename) {
       return response.notFound({ error: 'render not ready' })
     }
     const filePath = path.join(CLIPS_BASE, row.job_id, row.output_filename)

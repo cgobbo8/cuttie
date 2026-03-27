@@ -255,7 +255,7 @@ def get_job(job_id: str) -> JobResponse | None:
                     signals=signals,
                     clip_filename=hp["clip_filename"],
                     vertical_filename=hp["vertical_filename"] if "vertical_filename" in hp.keys() else None,
-                    clip_name=hp["clip_name"] if "clip_name" in hp.keys() else "",
+                    clip_name=(hp["clip_name"] or "") if "clip_name" in hp.keys() else "",
                     llm=llm,
                     chat_mood=hp["chat_mood"] or "",
                 )

@@ -229,7 +229,7 @@ def _extract_single_clip(
                 "yt-dlp",
                 "--download-sections", f"*{_fmt_time(start)}-{_fmt_time(end)}",
                 "--force-keyframes-at-cuts",
-                "-f", "bestvideo+bestaudio/best",
+                "-f", "best",
                 "-o", raw_file,
                 "--no-warnings",
                 url,
@@ -446,7 +446,7 @@ def extract_group(
                 [
                     "yt-dlp",
                     "--download-sections", f"*{_fmt_time(start)}-{_fmt_time(end)}",
-                    "--force-keyframes-at-cuts", "-f", "bestvideo+bestaudio/best",
+                    "--force-keyframes-at-cuts", "-f", "best",
                     "-o", raw_file, "--no-warnings", url,
                 ],
                 check=True, timeout=180, capture_output=True, text=True,
@@ -486,7 +486,7 @@ def extract_group(
                 [
                     "yt-dlp",
                     "--download-sections", f"*{_fmt_time(g_start)}-{_fmt_time(g_end)}",
-                    "--force-keyframes-at-cuts", "-f", "bestvideo+bestaudio/best",
+                    "--force-keyframes-at-cuts", "-f", "best",
                     "-o", group_file, "--no-warnings", url,
                 ],
                 check=True, timeout=300, capture_output=True, text=True,

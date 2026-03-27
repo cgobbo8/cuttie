@@ -169,7 +169,7 @@ export default function JobPage() {
         className="inline-flex items-center gap-1.5 text-sm text-zinc-500 hover:text-zinc-300 transition-colors mb-6"
       >
         <ArrowLeft className="w-4 h-4" />
-        Creations
+        Projets
       </Link>
 
       {/* Progress bar while processing */}

@@ -10,15 +10,18 @@ const CLIPS_BASE = path.resolve('../backend/clips')
 
 export default class JobsController {
   // POST /api/analyze
-  async store({ request, response }: HttpContext) {
+  async store({ request, response, auth }: HttpContext) {
     const body = request.body() as { url?: string }
     const url = body.url?.trim()
     if (!url) return response.badRequest({ error: 'url is required' })
+
+    const user = auth.getUserOrFail()
 
     const job = await Job.create({
       id: randomUUID(),
       url,
       status: 'PENDING',
+      userId: user.id,
     })
 
     // Push to Redis list — Python worker does BRPOP on this
@@ -28,14 +31,16 @@ export default class JobsController {
   }
 
   // GET /api/jobs
-  async index() {
-    return Job.query().orderBy('created_at', 'desc')
+  async index({ auth }: HttpContext) {
+    const user = auth.getUserOrFail()
+    return Job.query().where('user_id', user.id).orderBy('created_at', 'desc')
   }
 
   // GET /api/jobs/:id
-  async show({ params, response }: HttpContext) {
+  async show({ params, response, auth }: HttpContext) {
+    const user = auth.getUserOrFail()
     const job = await Job.find(params.id)
-    if (!job) return response.notFound({ error: 'job not found' })
+    if (!job || job.userId !== user.id) return response.notFound({ error: 'job not found' })
 
     const data = job.serialize()
 
@@ -70,9 +75,10 @@ export default class JobsController {
   }
 
   // POST /api/jobs/:id/retry
-  async retry({ params, response }: HttpContext) {
+  async retry({ params, response, auth }: HttpContext) {
+    const user = auth.getUserOrFail()
     const job = await Job.find(params.id)
-    if (!job) return response.notFound({ error: 'job not found' })
+    if (!job || job.userId !== user.id) return response.notFound({ error: 'job not found' })
 
     job.status = 'PENDING'
     job.error = null
@@ -84,9 +90,10 @@ export default class JobsController {
   }
 
   // PATCH /api/jobs/:id/clips/:clipFilename/name
-  async renameClip({ params, request, response }: HttpContext) {
+  async renameClip({ params, request, response, auth }: HttpContext) {
+    const user = auth.getUserOrFail()
     const job = await Job.find(params.id)
-    if (!job) return response.notFound({ error: 'job not found' })
+    if (!job || job.userId !== user.id) return response.notFound({ error: 'job not found' })
 
     const body = request.body() as { clip_name?: string }
     const clipName = body.clip_name?.trim()
@@ -104,9 +111,10 @@ export default class JobsController {
   }
 
   // GET /api/jobs/:id/sse  — Server-Sent Events for real-time status
-  async stream({ params, response }: HttpContext) {
+  async stream({ params, response, auth }: HttpContext) {
+    const user = auth.getUserOrFail()
     const job = await Job.find(params.id)
-    if (!job) return response.notFound({ error: 'job not found' })
+    if (!job || job.userId !== user.id) return response.notFound({ error: 'job not found' })
 
     const res = response.response
     res.setHeader('Content-Type', 'text/event-stream')

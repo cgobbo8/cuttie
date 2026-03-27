@@ -1,4 +1,39 @@
-const BASE = "http://localhost:3333/api";
+const BASE = "/api";
+
+// ── Auth API ────────────────────────────────────────────────────────────────
+
+export interface AuthUser {
+  id: number;
+  fullName: string | null;
+  email: string;
+  initials: string;
+}
+
+export async function login(email: string, password: string): Promise<AuthUser> {
+  const res = await fetch(`${BASE}/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password }),
+  });
+  if (!res.ok) throw new Error("Invalid credentials");
+  const json = await res.json();
+  const data = json.data ?? json;
+  return data.user;
+}
+
+export async function logout(): Promise<void> {
+  await fetch(`${BASE}/auth/logout`, { method: "DELETE" }).catch(() => {});
+}
+
+export async function getMe(): Promise<AuthUser> {
+  const res = await fetch(`${BASE}/auth/me`);
+  if (!res.ok) throw new Error("Not authenticated");
+  const json = await res.json();
+  const data = json.data ?? json;
+  return data.user;
+}
+
+// ── Data interfaces ─────────────────────────────────────────────────────────
 
 export interface SignalBreakdown {
   rms: number;
@@ -55,8 +90,8 @@ export type JobStatusType =
   | "ERROR";
 
 export interface StepTiming {
-  start: number; // unix timestamp (seconds)
-  duration_seconds: number | null; // null while step is running
+  start: number;
+  duration_seconds: number | null;
 }
 
 export interface JobResponse {
@@ -85,7 +120,6 @@ export interface JobSummary {
 }
 
 // ── Adonis response mappers ──────────────────────────────────────────────────
-// Adonis returns camelCase; frontend interfaces use snake_case from old FastAPI.
 
 function mapJobResponse(raw: any): JobResponse {
   const hotPoints = raw.hotPoints
@@ -119,7 +153,7 @@ function mapJobSummary(raw: any): JobSummary {
   };
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ── Job API ─────────────────────────────────────────────────────────────────
 
 export async function submitVod(url: string): Promise<{ job_id: string }> {
   const res = await fetch(`${BASE}/analyze`, {
@@ -131,7 +165,7 @@ export async function submitVod(url: string): Promise<{ job_id: string }> {
     const err = await res.json().catch(() => ({ detail: "Request failed" }));
     throw new Error(err.detail || "Request failed");
   }
-  return res.json(); // Adonis returns { job_id } directly
+  return res.json();
 }
 
 export async function getJobStatus(jobId: string): Promise<JobResponse> {
@@ -177,7 +211,6 @@ export interface SSEStatusUpdate {
   error?: string | null;
   step_timings?: Record<string, StepTiming>;
   hot_points?: HotPoint[];
-  // VOD meta that may arrive during processing
   vod_title?: string | null;
   vod_game?: string | null;
   vod_duration_seconds?: number | null;
@@ -213,7 +246,6 @@ export function subscribeJobSSE(
         return;
       }
 
-      // Status update — map hot_points if present
       const update: SSEStatusUpdate = {
         status: data.status,
         progress: data.progress,

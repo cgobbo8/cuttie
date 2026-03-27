@@ -6,6 +6,36 @@ import type { ApiDefinition } from './tree.d.ts'
 const placeholder: any = {}
 
 const routes = {
+  'access_token.store': {
+    methods: ["POST"],
+    pattern: '/api/auth/login',
+    tokens: [{"old":"/api/auth/login","type":0,"val":"api","end":""},{"old":"/api/auth/login","type":0,"val":"auth","end":""},{"old":"/api/auth/login","type":0,"val":"login","end":""}],
+    types: placeholder as Registry['access_token.store']['types'],
+  },
+  'google_auth.redirect': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/auth/google/redirect',
+    tokens: [{"old":"/api/auth/google/redirect","type":0,"val":"api","end":""},{"old":"/api/auth/google/redirect","type":0,"val":"auth","end":""},{"old":"/api/auth/google/redirect","type":0,"val":"google","end":""},{"old":"/api/auth/google/redirect","type":0,"val":"redirect","end":""}],
+    types: placeholder as Registry['google_auth.redirect']['types'],
+  },
+  'google_auth.callback': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/auth/google/callback',
+    tokens: [{"old":"/api/auth/google/callback","type":0,"val":"api","end":""},{"old":"/api/auth/google/callback","type":0,"val":"auth","end":""},{"old":"/api/auth/google/callback","type":0,"val":"google","end":""},{"old":"/api/auth/google/callback","type":0,"val":"callback","end":""}],
+    types: placeholder as Registry['google_auth.callback']['types'],
+  },
+  'access_token.destroy': {
+    methods: ["DELETE"],
+    pattern: '/api/auth/logout',
+    tokens: [{"old":"/api/auth/logout","type":0,"val":"api","end":""},{"old":"/api/auth/logout","type":0,"val":"auth","end":""},{"old":"/api/auth/logout","type":0,"val":"logout","end":""}],
+    types: placeholder as Registry['access_token.destroy']['types'],
+  },
+  'auth_me.show': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/auth/me',
+    tokens: [{"old":"/api/auth/me","type":0,"val":"api","end":""},{"old":"/api/auth/me","type":0,"val":"auth","end":""},{"old":"/api/auth/me","type":0,"val":"me","end":""}],
+    types: placeholder as Registry['auth_me.show']['types'],
+  },
   'jobs.store': {
     methods: ["POST"],
     pattern: '/api/analyze',

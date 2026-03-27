@@ -6,7 +6,9 @@
 export const controllers = {
   AccessToken: () => import('#controllers/access_token_controller'),
   Assets: () => import('#controllers/assets_controller'),
+  AuthMe: () => import('#controllers/auth_me_controller'),
   Clips: () => import('#controllers/clips_controller'),
+  GoogleAuth: () => import('#controllers/google_auth_controller'),
   Jobs: () => import('#controllers/jobs_controller'),
   NewAccount: () => import('#controllers/new_account_controller'),
   Profile: () => import('#controllers/profile_controller'),

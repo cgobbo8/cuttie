@@ -135,15 +135,31 @@ Checkpoints resumables : CLIPPING, VERTICAL, TRANSCRIBING, LLM_ANALYSIS.
 - Couleur base : couleur dominante (k-means sur 3 frames)
 - Font : Luckiest Guy, bold, uppercase, outline noire
 
+## Authentification
+
+- Auth token-based via AdonisJS (`@adonisjs/auth` access tokens)
+- Google OAuth via `@adonisjs/ally`
+- User par defaut : `admin@cuttie.com` / `admin`
+- Tous les endpoints API sont proteges (sauf login et OAuth)
+- SSE : token passe en query param `?token=xxx` (EventSource ne supporte pas les headers)
+- `user_id` (nullable) sur tables `jobs` et `renders` — filtre par ownership
+- Le Python worker ne connait pas les users (il fait des UPDATE, jamais de INSERT sur jobs)
+
 ## API
 
-| Endpoint                          | Methode | Description                      |
-|-----------------------------------|---------|----------------------------------|
-| `/api/analyze`                    | POST    | Soumettre une URL Twitch         |
-| `/api/jobs`                       | GET     | Lister les analyses              |
-| `/api/jobs/{id}`                  | GET     | Status + hot points d'un job     |
-| `/api/jobs/{id}/retry`            | POST    | Relancer depuis un checkpoint    |
-| `/api/clips/{id}/{filename}`      | GET     | Telecharger un clip              |
+| Endpoint                              | Methode | Auth     | Description                      |
+|---------------------------------------|---------|----------|----------------------------------|
+| `/api/auth/login`                     | POST    | Public   | Login email/password             |
+| `/api/auth/logout`                    | DELETE  | Token    | Logout (supprime le token)       |
+| `/api/auth/me`                        | GET     | Token    | User courant                     |
+| `/api/auth/google/redirect`           | GET     | Public   | Demarre le flow OAuth Google     |
+| `/api/auth/google/callback`           | GET     | Public   | Callback OAuth Google            |
+| `/api/analyze`                        | POST    | Token    | Soumettre une URL Twitch         |
+| `/api/jobs`                           | GET     | Token    | Lister les analyses (du user)    |
+| `/api/jobs/{id}`                      | GET     | Token    | Status + hot points d'un job     |
+| `/api/jobs/{id}/retry`                | POST    | Token    | Relancer depuis un checkpoint    |
+| `/api/jobs/{id}/sse`                  | GET     | SSE Token| SSE temps reel                   |
+| `/api/clips/{id}/{filename}`          | GET     | Token    | Telecharger un clip              |
 
 ## Conventions
 

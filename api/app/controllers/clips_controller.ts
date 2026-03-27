@@ -3,6 +3,7 @@ import { createReadStream, existsSync, readFileSync, statSync } from 'node:fs'
 import { execFile } from 'node:child_process'
 import path from 'node:path'
 import { promisify } from 'node:util'
+import Job from '#models/job'
 
 const execFileAsync = promisify(execFile)
 const CLIPS_BASE = path.resolve('..', 'backend', 'clips')
@@ -17,10 +18,23 @@ const CAM_MARGIN_TOP = 40
 const CAM_BORDER_RADIUS = 20
 const BLUR_SIGMA = 40
 
+async function verifyJobOwnership(jobId: string, auth: HttpContext['auth'], response: HttpContext['response']) {
+  const user = auth.getUserOrFail()
+  const job = await Job.find(jobId)
+  if (!job || job.userId !== user.id) {
+    response.notFound({ error: 'clip not found' })
+    return false
+  }
+  return true
+}
+
 export default class ClipsController {
   // GET /api/clips/:jobId/:filename/edit-env
-  async editEnv({ params, response }: HttpContext) {
+  async editEnv({ params, response, auth }: HttpContext) {
     const safeJobId = params.jobId.replace(/[^a-zA-Z0-9_-]/g, '')
+
+    if (!(await verifyJobOwnership(safeJobId, auth, response))) return
+
     const safeFilename = path.basename(params.filename)
     const clipPath = path.join(CLIPS_BASE, safeJobId, safeFilename)
 
@@ -122,11 +136,14 @@ export default class ClipsController {
   }
 
   // GET /api/clips/:jobId/:filename
-  async show({ params, request, response }: HttpContext) {
+  async show({ params, request, response, auth }: HttpContext) {
     const { jobId, filename } = params
 
-    const safeFilename = path.basename(filename)
     const safeJobId = jobId.replace(/[^a-zA-Z0-9_-]/g, '')
+
+    if (!(await verifyJobOwnership(safeJobId, auth, response))) return
+
+    const safeFilename = path.basename(filename)
     const filePath = path.join(CLIPS_BASE, safeJobId, safeFilename)
 
     if (!existsSync(filePath)) {

@@ -11,6 +11,8 @@ export type ScannedRoutes = {
   }
   POST: {
   }
+  DELETE: {
+  }
   PATCH: {
   }
 }

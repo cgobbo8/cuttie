@@ -15,7 +15,7 @@ import subprocess
 from openai import OpenAI
 
 from app.models.schemas import HotPoint, KeyMoment, LlmAnalysis
-from app.services.db import save_hot_points, update_job
+from app.services.db import publish_clip_ready, save_hot_points, update_job
 from app.services.frame_extractor import extract_frames
 from app.services.vision_analyzer import analyze_clip_frames
 
@@ -304,6 +304,9 @@ def analyze_single_clip(
         f"  → {llm.category} | viral={llm.virality_score:.0%} | "
         f"final={hp.final_score:.0%} | {len(llm.key_moments)} moments"
     )
+
+    # Publish immediately so frontend can show this clip without waiting for others
+    publish_clip_ready(job_id, clip_index, hp)
 
 
 MAX_LLM_WORKERS = 3  # Parallel clip analyses (API-bound, not CPU-bound)

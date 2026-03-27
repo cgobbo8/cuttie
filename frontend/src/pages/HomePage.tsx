@@ -155,7 +155,7 @@ export default function HomePage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-semibold text-white tracking-tight">
-            Creations
+            Projets
           </h1>
           <p className="text-sm text-zinc-500 mt-0.5">
             {jobs.length} analyse{jobs.length !== 1 ? "s" : ""}
@@ -184,10 +184,10 @@ export default function HomePage() {
         <div className="text-center py-20">
           <FolderOpen className="w-8 h-8 text-zinc-700 mx-auto mb-3" />
           <p className="text-sm text-zinc-500">
-            {search ? "Aucun resultat" : "Aucune creation"}
+            {search ? "Aucun resultat" : "Aucun projet"}
           </p>
           <p className="text-xs text-zinc-600 mt-1">
-            Utilise le bouton "Nouvelle creation" pour commencer.
+            Utilise le bouton "Nouveau projet" pour commencer.
           </p>
         </div>
       ) : (

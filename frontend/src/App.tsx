@@ -1,24 +1,71 @@
-import { BrowserRouter, Routes, Route } from "react-router";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router";
+import { AuthProvider, useAuth } from "./lib/AuthContext";
 import Layout from "./components/Layout";
 import HomePage from "./pages/HomePage";
 import JobPage from "./pages/JobPage";
 import EditPageOld from "./pages/EditPage";
 import EditPage from "./pages/RemotionEditPage";
 import ExportsPage from "./pages/ExportsPage";
+import LoginPage from "./pages/LoginPage";
+import type { ReactNode } from "react";
+
+function ProtectedRoute({ children }: { children: ReactNode }) {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#09090b]">
+        <div className="w-5 h-5 border-2 border-zinc-600 border-t-white rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (!user) return <Navigate to="/login" replace />;
+  return children;
+}
+
+function AppRoutes() {
+  return (
+    <Routes>
+      <Route path="/login" element={<LoginPage />} />
+      <Route
+        element={
+          <ProtectedRoute>
+            <Layout />
+          </ProtectedRoute>
+        }
+      >
+        <Route index element={<HomePage />} />
+        <Route path="exports" element={<ExportsPage />} />
+        <Route path=":jobId" element={<JobPage />} />
+      </Route>
+      {/* Edit pages: fullscreen, outside the standard layout */}
+      <Route
+        path=":jobId/edit-old"
+        element={
+          <ProtectedRoute>
+            <EditPageOld />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path=":jobId/edit"
+        element={
+          <ProtectedRoute>
+            <EditPage />
+          </ProtectedRoute>
+        }
+      />
+    </Routes>
+  );
+}
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route element={<Layout />}>
-          <Route index element={<HomePage />} />
-          <Route path="exports" element={<ExportsPage />} />
-          <Route path=":jobId" element={<JobPage />} />
-        </Route>
-        {/* Edit page: fullscreen, outside the standard layout */}
-        <Route path=":jobId/edit-old" element={<EditPageOld />} />
-        <Route path=":jobId/edit" element={<EditPage />} />
-      </Routes>
-    </BrowserRouter>
+    <AuthProvider>
+      <BrowserRouter>
+        <AppRoutes />
+      </BrowserRouter>
+    </AuthProvider>
   );
 }

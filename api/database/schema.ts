@@ -33,7 +33,7 @@ export class AuthAccessTokenSchema extends BaseModel {
 }
 
 export class JobSchema extends BaseModel {
-  static $columns = ['clips', 'createdAt', 'error', 'hotPoints', 'id', 'progress', 'status', 'stepTimings', 'streamDate', 'streamer', 'updatedAt', 'url', 'viewCount', 'vodDurationSeconds', 'vodGame', 'vodTitle'] as const
+  static $columns = ['clips', 'createdAt', 'error', 'hotPoints', 'id', 'progress', 'status', 'stepTimings', 'streamDate', 'streamer', 'updatedAt', 'url', 'userId', 'viewCount', 'vodDurationSeconds', 'vodGame', 'vodTitle'] as const
   $columns = JobSchema.$columns
   @column()
   declare clips: any | null
@@ -60,6 +60,8 @@ export class JobSchema extends BaseModel {
   @column()
   declare url: string
   @column()
+  declare userId: number | null
+  @column()
   declare viewCount: number | null
   @column()
   declare vodDurationSeconds: number | null
@@ -70,7 +72,7 @@ export class JobSchema extends BaseModel {
 }
 
 export class RenderSchema extends BaseModel {
-  static $columns = ['clipFilename', 'clipName', 'createdAt', 'error', 'id', 'jobId', 'outputFilename', 'progress', 'sizeMb', 'status', 'updatedAt'] as const
+  static $columns = ['clipFilename', 'clipName', 'createdAt', 'error', 'id', 'jobId', 'outputFilename', 'progress', 'sizeMb', 'status', 'updatedAt', 'userId'] as const
   $columns = RenderSchema.$columns
   @column()
   declare clipFilename: string
@@ -94,6 +96,21 @@ export class RenderSchema extends BaseModel {
   declare status: string
   @column.dateTime({ autoCreate: true, autoUpdate: true })
   declare updatedAt: DateTime | null
+  @column()
+  declare userId: number | null
+}
+
+export class SessionSchema extends BaseModel {
+  static $columns = ['data', 'expiresAt', 'id', 'userId'] as const
+  $columns = SessionSchema.$columns
+  @column()
+  declare data: string
+  @column.dateTime()
+  declare expiresAt: DateTime
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare userId: string | null
 }
 
 export class UserSchema extends BaseModel {

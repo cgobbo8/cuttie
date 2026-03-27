@@ -2,6 +2,17 @@
 import type { routes } from './index.ts'
 
 export interface ApiDefinition {
+  accessToken: {
+    store: typeof routes['access_token.store']
+    destroy: typeof routes['access_token.destroy']
+  }
+  googleAuth: {
+    redirect: typeof routes['google_auth.redirect']
+    callback: typeof routes['google_auth.callback']
+  }
+  authMe: {
+    show: typeof routes['auth_me.show']
+  }
   jobs: {
     store: typeof routes['jobs.store']
     index: typeof routes['jobs.index']

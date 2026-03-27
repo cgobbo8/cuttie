@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 CLIPS_DIR = "clips"
 MAX_CLIPS = 20
-MAX_CLIP_WORKERS = 3
+MAX_CLIP_WORKERS = 5
 
 # Default boundaries (used as starting point for dynamic adjustment)
 PRE_PEAK_WINDOW = 20   # default seconds before peak
@@ -41,6 +41,9 @@ ACTIVITY_THRESHOLD_FACTOR = 0.3
 
 # Number of consecutive quiet windows to confirm "calm" for OUT point
 CALM_CONFIRM_WINDOWS = 2
+
+# Batch download: merge clips closer than this gap into one yt-dlp call
+BATCH_GAP_SEC = 15
 
 
 def _build_rms_lookup(audio_features: list[dict] | None) -> tuple[np.ndarray, np.ndarray, float, float]:
@@ -324,3 +327,214 @@ def _fmt_time(seconds: float) -> str:
     h, remainder = divmod(int(seconds), 3600)
     m, s = divmod(remainder, 60)
     return f"{h:02d}:{m:02d}:{s:02d}"
+
+
+def _compress_clip(raw_path: str, output_path: str) -> bool:
+    """Compress a raw clip to 480p h264. Returns True on success."""
+    try:
+        subprocess.run(
+            [
+                "ffmpeg", "-y",
+                "-i", raw_path,
+                "-vf", "scale=-2:480",
+                "-c:v", "libx264", "-preset", "fast",
+                "-b:v", "1M", "-maxrate", "1.5M", "-bufsize", "2M",
+                "-c:a", "aac", "-b:a", "96k",
+                "-movflags", "+faststart",
+                output_path,
+            ],
+            check=True,
+            timeout=120,
+            capture_output=True,
+            text=True,
+        )
+        return os.path.isfile(output_path)
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
+        logger.error(f"Compression failed: {e}")
+        return False
+
+
+def plan_downloads(
+    hot_points: list[HotPoint],
+    vod_duration: float,
+    audio_features: list[dict] | None = None,
+) -> list[dict]:
+    """Pre-compute clip boundaries and group nearby clips for batch download.
+
+    Clips within BATCH_GAP_SEC of each other are merged into a single yt-dlp
+    call, reducing connection overhead.
+
+    Returns list of download groups, each with:
+    - start/end: download time range
+    - clips: list of {rank, index, hp, start, end}
+    """
+    rms_times, rms_values, _, rms_threshold = _build_rms_lookup(audio_features)
+    to_clip = hot_points[:MAX_CLIPS]
+
+    clips_with_bounds = []
+    for i, hp in enumerate(to_clip):
+        start, end = _compute_clip_boundaries(
+            hp, vod_duration, to_clip,
+            rms_times, rms_values, rms_threshold,
+        )
+        clips_with_bounds.append({
+            "rank": i + 1, "index": i, "hp": hp,
+            "start": start, "end": end,
+        })
+
+    if not clips_with_bounds:
+        return []
+
+    # Sort by start time and group nearby clips
+    sorted_clips = sorted(clips_with_bounds, key=lambda c: c["start"])
+
+    groups: list[dict] = []
+    current = [sorted_clips[0]]
+    g_start = sorted_clips[0]["start"]
+    g_end = sorted_clips[0]["end"]
+
+    for clip in sorted_clips[1:]:
+        if clip["start"] <= g_end + BATCH_GAP_SEC:
+            current.append(clip)
+            g_end = max(g_end, clip["end"])
+        else:
+            groups.append({"start": g_start, "end": g_end, "clips": current})
+            current = [clip]
+            g_start = clip["start"]
+            g_end = clip["end"]
+    groups.append({"start": g_start, "end": g_end, "clips": current})
+
+    single = sum(1 for g in groups if len(g["clips"]) == 1)
+    batched = sum(1 for g in groups if len(g["clips"]) > 1)
+    logger.info(
+        f"Download plan: {len(clips_with_bounds)} clips -> "
+        f"{len(groups)} groups ({single} single, {batched} batched)"
+    )
+    return groups
+
+
+def extract_group(
+    url: str,
+    group: dict,
+    clip_dir: str,
+) -> list[tuple[int, int, str | None]]:
+    """Download and extract clips for a download group.
+
+    Single-clip groups: direct yt-dlp download + compress.
+    Multi-clip groups: one yt-dlp call for the merged range, then FFmpeg split.
+
+    Returns: [(rank, index, filename | None), ...]
+    """
+    clips = group["clips"]
+    results: list[tuple[int, int, str | None]] = []
+
+    if len(clips) == 1:
+        c = clips[0]
+        rank, idx = c["rank"], c["index"]
+        start, end = c["start"], c["end"]
+        raw_file = os.path.join(clip_dir, f"raw_{rank:02d}.mp4")
+        filename = f"clip_{rank:02d}.mp4"
+        filepath = os.path.join(clip_dir, filename)
+
+        logger.info(f"Clip {rank}: {_fmt_time(start)}-{_fmt_time(end)} ({end-start:.0f}s)")
+
+        try:
+            subprocess.run(
+                [
+                    "yt-dlp",
+                    "--download-sections", f"*{_fmt_time(start)}-{_fmt_time(end)}",
+                    "--force-keyframes-at-cuts", "-f", "best",
+                    "-o", raw_file, "--no-warnings", url,
+                ],
+                check=True, timeout=180, capture_output=True, text=True,
+            )
+
+            if os.path.isfile(raw_file) and _compress_clip(raw_file, filepath):
+                size_mb = os.path.getsize(filepath) / (1024 * 1024)
+                logger.info(f"Clip {rank}: {filepath} ({size_mb:.1f}MB)")
+                results.append((rank, idx, filename))
+            else:
+                results.append((rank, idx, None))
+
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
+            logger.error(f"Clip {rank} failed: {e}")
+            results.append((rank, idx, None))
+
+        finally:
+            if os.path.isfile(raw_file):
+                os.remove(raw_file)
+
+    else:
+        # Multi-clip group: download merged range, then split + compress each
+        g_start, g_end = group["start"], group["end"]
+        group_file = os.path.join(clip_dir, f"group_{clips[0]['rank']:02d}.mp4")
+
+        logger.info(
+            f"Batch {len(clips)} clips: {_fmt_time(g_start)}-{_fmt_time(g_end)} "
+            f"({g_end-g_start:.0f}s)"
+        )
+
+        try:
+            subprocess.run(
+                [
+                    "yt-dlp",
+                    "--download-sections", f"*{_fmt_time(g_start)}-{_fmt_time(g_end)}",
+                    "--force-keyframes-at-cuts", "-f", "best",
+                    "-o", group_file, "--no-warnings", url,
+                ],
+                check=True, timeout=300, capture_output=True, text=True,
+            )
+
+            if not os.path.isfile(group_file):
+                for c in clips:
+                    results.append((c["rank"], c["index"], None))
+                return results
+
+            # Split each clip from the group file
+            for c in clips:
+                rank, idx = c["rank"], c["index"]
+                local_start = c["start"] - g_start
+                duration = c["end"] - c["start"]
+                filename = f"clip_{rank:02d}.mp4"
+                filepath = os.path.join(clip_dir, filename)
+
+                try:
+                    subprocess.run(
+                        [
+                            "ffmpeg", "-y",
+                            "-ss", str(local_start),
+                            "-i", group_file,
+                            "-t", str(duration),
+                            "-vf", "scale=-2:480",
+                            "-c:v", "libx264", "-preset", "fast",
+                            "-b:v", "1M", "-maxrate", "1.5M", "-bufsize", "2M",
+                            "-c:a", "aac", "-b:a", "96k",
+                            "-movflags", "+faststart",
+                            filepath,
+                        ],
+                        check=True, timeout=120, capture_output=True, text=True,
+                    )
+
+                    if os.path.isfile(filepath):
+                        size_mb = os.path.getsize(filepath) / (1024 * 1024)
+                        logger.info(f"Clip {rank} split: {filepath} ({size_mb:.1f}MB)")
+                        results.append((rank, idx, filename))
+                    else:
+                        results.append((rank, idx, None))
+
+                except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
+                    logger.error(f"Clip {rank} split failed: {e}")
+                    if os.path.isfile(filepath):
+                        os.remove(filepath)
+                    results.append((rank, idx, None))
+
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
+            logger.error(f"Group download failed: {e}")
+            for c in clips:
+                results.append((c["rank"], c["index"], None))
+
+        finally:
+            if os.path.isfile(group_file):
+                os.remove(group_file)
+
+    return results

@@ -18,13 +18,10 @@ function formatNumber(n: number): string {
   return String(n);
 }
 
-function twitchBoxArt(gameName: string, width = 285, height = 380): string {
-  return `https://static-cdn.jtvnbs.net/ttv-boxart/${encodeURIComponent(gameName)}-${width}x${height}.jpg`;
-}
-
 function GameCard({ game, onClick }: { game: GameSummary; onClick: () => void }) {
   const { t } = useTranslation();
   const [imgError, setImgError] = useState(false);
+  const thumbnailUrl = game.thumbnail || null;
 
   return (
     <div
@@ -34,9 +31,9 @@ function GameCard({ game, onClick }: { game: GameSummary; onClick: () => void })
       <div className="flex items-start gap-4 p-4">
         {/* Game thumbnail */}
         <div className="w-[80px] h-[107px] rounded-lg overflow-hidden bg-white/[0.04] shrink-0">
-          {!imgError ? (
+          {thumbnailUrl && !imgError ? (
             <img
-              src={twitchBoxArt(game.name)}
+              src={thumbnailUrl}
               alt={game.name}
               className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
               onError={() => setImgError(true)}

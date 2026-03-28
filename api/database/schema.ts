@@ -33,7 +33,7 @@ export class AuthAccessTokenSchema extends BaseModel {
 }
 
 export class JobSchema extends BaseModel {
-  static $columns = ['clips', 'createdAt', 'error', 'hotPoints', 'id', 'progress', 'status', 'stepTimings', 'streamDate', 'streamer', 'updatedAt', 'url', 'userId', 'viewCount', 'vodDurationSeconds', 'vodGame', 'vodTitle'] as const
+  static $columns = ['clips', 'createdAt', 'error', 'hotPoints', 'id', 'progress', 'status', 'stepTimings', 'streamDate', 'streamer', 'updatedAt', 'url', 'userId', 'viewCount', 'vodDurationSeconds', 'vodGame', 'vodGameId', 'vodGameThumbnail', 'vodTitle'] as const
   $columns = JobSchema.$columns
   @column()
   declare clips: any | null
@@ -67,6 +67,10 @@ export class JobSchema extends BaseModel {
   declare vodDurationSeconds: number | null
   @column()
   declare vodGame: string | null
+  @column()
+  declare vodGameId: string | null
+  @column()
+  declare vodGameThumbnail: string | null
   @column()
   declare vodTitle: string | null
 }

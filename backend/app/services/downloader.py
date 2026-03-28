@@ -48,16 +48,55 @@ def download_audio(url: str, output_dir: str) -> tuple[str, dict]:
     if upload_date_raw and len(upload_date_raw) == 8:
         stream_date = f"{upload_date_raw[:4]}-{upload_date_raw[4:6]}-{upload_date_raw[6:]}"
 
+    # Fetch game ID + box art from Twitch GQL using VOD ID
+    vod_id = info.get("id", "")
+    game_id, game_thumbnail = _fetch_game_info(vod_id)
+
     metadata = {
         "title": info.get("title", "Unknown"),
         "duration": info.get("duration", 0),
-        "id": info.get("id", ""),
+        "id": vod_id,
         "game": game,
+        "game_id": game_id,
+        "game_thumbnail": game_thumbnail,
         "streamer": info.get("uploader", ""),
         "view_count": info.get("view_count", 0),
         "stream_date": stream_date,
     }
     return audio_path, metadata
+
+
+def _fetch_game_info(vod_id: str) -> tuple[str, str]:
+    """Fetch game ID and box art URL from Twitch GQL for a given VOD."""
+    import requests
+
+    if not vod_id:
+        return "", ""
+
+    gql_url = "https://gql.twitch.tv/gql"
+    headers = {"Client-ID": "kimne78kx3ncx6brgo4mv6wki5h1ko"}
+
+    query = """query {
+        video(id: "%s") {
+            game {
+                id
+                displayName
+                boxArtURL(width: 285, height: 380)
+            }
+        }
+    }""" % vod_id
+
+    try:
+        resp = requests.post(gql_url, json={"query": query}, headers=headers, timeout=10)
+        data = resp.json()
+        game_data = data.get("data", {}).get("video", {}).get("game") or {}
+        game_id = game_data.get("id", "")
+        box_art = game_data.get("boxArtURL", "")
+        logger.info(f"Twitch GQL game info: id={game_id}, boxArt={'yes' if box_art else 'no'}")
+        return game_id, box_art
+    except Exception as e:
+        logger.warning(f"Failed to fetch game info from Twitch GQL: {e}")
+        return "", ""
 
 
 def download_chat(url: str) -> list[dict]:

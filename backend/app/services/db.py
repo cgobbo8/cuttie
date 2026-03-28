@@ -126,6 +126,8 @@ def init_db() -> None:
         ("jobs", "stream_date", "TEXT"),
         ("jobs", "step_timings", "TEXT"),
         ("hot_points", "clip_name", "TEXT"),
+        ("jobs", "vod_game_id", "TEXT"),
+        ("jobs", "vod_game_thumbnail", "TEXT"),
     ]
 
     # Allowlists derived from the migration tuples above — update both lists

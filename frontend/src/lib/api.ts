@@ -215,6 +215,8 @@ function mapJobSummary(raw: ServerJobSummary): JobSummary {
 
 export interface GameSummary {
   name: string;
+  game_id: string | null;
+  thumbnail: string | null;
   vod_count: number;
   streamer_count: number;
   avg_views: number;

@@ -13,6 +13,9 @@ backend/frames/
 backend/cuttie.db
 backend/screenshots/
 
+# API data
+api/database/
+
 # Frontend
 frontend/node_modules/
 frontend/.svelte-kit/

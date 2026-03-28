@@ -1,9 +1,11 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router";
 import { AuthProvider, useAuth } from "./lib/AuthContext";
+import { CreatorWorkspaceProvider } from "./lib/CreatorWorkspaceContext";
 import { TooltipProvider } from "./components/ui/Tooltip";
 import { ToastProvider } from "./components/Toast";
 import Layout from "./components/Layout";
 import HomePage from "./pages/HomePage";
+import ProjectsPage from "./pages/ProjectsPage";
 import JobPage from "./pages/JobPage";
 import EditPageOld from "./pages/EditPage";
 import EditPage from "./pages/RemotionEditPage";
@@ -41,6 +43,7 @@ function AppRoutes() {
         }
       >
         <Route index element={<HomePage />} />
+        <Route path="projects" element={<ProjectsPage />} />
         <Route path="games" element={<GamesPage />} />
         <Route path="creators" element={<CreatorsPage />} />
         <Route path="exports" element={<ExportsPage />} />
@@ -74,7 +77,9 @@ export default function App() {
       <TooltipProvider>
         <ToastProvider>
           <BrowserRouter>
-            <AppRoutes />
+            <CreatorWorkspaceProvider>
+              <AppRoutes />
+            </CreatorWorkspaceProvider>
           </BrowserRouter>
         </ToastProvider>
       </TooltipProvider>

@@ -36,6 +36,12 @@ const routes = {
     tokens: [{"old":"/api/auth/me","type":0,"val":"api","end":""},{"old":"/api/auth/me","type":0,"val":"auth","end":""},{"old":"/api/auth/me","type":0,"val":"me","end":""}],
     types: placeholder as Registry['auth_me.show']['types'],
   },
+  'dashboard.index': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/dashboard',
+    tokens: [{"old":"/api/dashboard","type":0,"val":"api","end":""},{"old":"/api/dashboard","type":0,"val":"dashboard","end":""}],
+    types: placeholder as Registry['dashboard.index']['types'],
+  },
   'games.index': {
     methods: ["GET","HEAD"],
     pattern: '/api/games',

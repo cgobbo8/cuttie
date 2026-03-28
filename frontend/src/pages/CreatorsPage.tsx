@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router";
 import { listCreators, type CreatorSummary } from "../lib/api";
+import { useCreatorWorkspace } from "../lib/CreatorWorkspaceContext";
 import { useTranslation } from "react-i18next";
 import {
   Search,
@@ -103,7 +104,13 @@ function CreatorCard({ creator, onClick }: { creator: CreatorSummary; onClick: (
 export default function CreatorsPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { isAllMode, setCreator } = useCreatorWorkspace();
   const [creators, setCreators] = useState<CreatorSummary[]>([]);
+
+  // Redirect to dashboard when in creator mode
+  useEffect(() => {
+    if (!isAllMode) navigate("/", { replace: true });
+  }, [isAllMode, navigate]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
 
@@ -184,7 +191,7 @@ export default function CreatorsPage() {
             <CreatorCard
               key={creator.id}
               creator={creator}
-              onClick={() => navigate(`/?streamer=${encodeURIComponent(creator.display_name)}`)}
+              onClick={() => { setCreator(creator); navigate("/"); }}
             />
           ))}
         </div>

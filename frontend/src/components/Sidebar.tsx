@@ -1,14 +1,17 @@
 import { NavLink, useNavigate } from "react-router";
 import { useState } from "react";
-import { Film, FolderOpen, Gamepad2, LogOut, Plus, Users } from "lucide-react";
+import { Film, FolderOpen, Gamepad2, Home, LogOut, Plus, Users } from "lucide-react";
 import NewProjectModal from "./NewProjectModal";
+import CreatorSelector from "./CreatorSelector";
 import { useAuth } from "../lib/AuthContext";
+import { useCreatorWorkspace } from "../lib/CreatorWorkspaceContext";
 import { useTranslation } from "react-i18next";
 
 export default function Sidebar() {
   const { t } = useTranslation();
   const [modalOpen, setModalOpen] = useState(false);
   const { user, logout } = useAuth();
+  const { isAllMode } = useCreatorWorkspace();
   const navigate = useNavigate();
 
   const navClass = ({ isActive }: { isActive: boolean }) =>
@@ -35,6 +38,11 @@ export default function Sidebar() {
           </NavLink>
         </div>
 
+        {/* Creator workspace selector */}
+        <div className="px-3 mb-2">
+          <CreatorSelector />
+        </div>
+
         {/* New project button */}
         <div className="px-3 mb-1">
           <button
@@ -49,6 +57,10 @@ export default function Sidebar() {
         {/* Navigation */}
         <nav className="flex-1 px-3 py-3 space-y-0.5">
           <NavLink to="/" end className={navClass}>
+            <Home className="w-4 h-4" />
+            {t("sidebar.dashboard")}
+          </NavLink>
+          <NavLink to="/projects" className={navClass}>
             <FolderOpen className="w-4 h-4" />
             {t("sidebar.projects")}
           </NavLink>
@@ -56,10 +68,12 @@ export default function Sidebar() {
             <Gamepad2 className="w-4 h-4" />
             {t("sidebar.games")}
           </NavLink>
-          <NavLink to="/creators" className={navClass}>
-            <Users className="w-4 h-4" />
-            {t("sidebar.creators")}
-          </NavLink>
+          {isAllMode && (
+            <NavLink to="/creators" className={navClass}>
+              <Users className="w-4 h-4" />
+              {t("sidebar.creators")}
+            </NavLink>
+          )}
           <NavLink to="/exports" className={navClass}>
             <Film className="w-4 h-4" />
             {t("sidebar.exports")}

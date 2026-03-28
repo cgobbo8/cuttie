@@ -32,11 +32,34 @@
 
   "sidebar": {
     "newProject": "New project",
+    "dashboard": "Dashboard",
     "projects": "Projects",
     "games": "Games",
     "creators": "Creators",
     "exports": "Exports",
     "profile": "Profile"
+  },
+
+  "workspace": {
+    "allCreators": "All creators",
+    "searchCreator": "Search creator..."
+  },
+
+  "dashboard": {
+    "welcomeBack": "Welcome back",
+    "topCreators": "Top creators",
+    "topGames": "Top games",
+    "latestProjects": "Latest projects",
+    "latestExports": "Latest exports",
+    "seeAll": "See all",
+    "totalProjects": "projects",
+    "totalExports": "exports",
+    "totalCreators": "creators",
+    "totalAnalyses": "analyses",
+    "totalGames": "games",
+    "avgViews": "avg views",
+    "noData": "No data yet",
+    "noDataHint": "Start analyzing VODs to see your dashboard."
   },
 
   "home": {

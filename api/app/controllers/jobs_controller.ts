@@ -40,8 +40,13 @@ export default class JobsController {
     const status = (request.input('status') as string || '').trim()
     const game = (request.input('game') as string || '').trim()
     const streamer = (request.input('streamer') as string || '').trim()
+    const creatorId = request.input('creator_id') ? Number(request.input('creator_id')) : null
 
     const query = Job.query().where('user_id', user.id)
+
+    if (creatorId) {
+      query.where('creator_id', creatorId)
+    }
 
     if (search) {
       const q = `%${search}%`

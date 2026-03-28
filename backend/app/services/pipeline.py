@@ -13,7 +13,7 @@ from app.services.audio_classifier import classify_audio
 from app.services.chat_analyzer import analyze_chat
 from app.services.clipper import CLIPS_DIR, extract_group, plan_downloads
 from app.services.db import get_job, save_hot_points, update_hot_point_clip, update_job
-from app.services.downloader import download_audio, download_chat
+from app.services.downloader import extract_metadata, download_audio, download_chat
 from app.services.llm_analyzer import analyze_hot_points, analyze_single_clip
 from app.services.scorer import compute_scores
 from app.services.triage import run_triage
@@ -187,16 +187,12 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
 
         # Steps 1-6: Download + Analysis + Triage (skip if resuming from later step)
         if not resume_from or resume_from in ("DOWNLOADING_AUDIO", "DOWNLOADING_CHAT", "ANALYZING_AUDIO", "ANALYZING_CHAT", "SCORING", "TRIAGE"):
-            # 1 & 2. Download audio + chat in parallel (both I/O bound)
+            # 1 & 2. Extract metadata first (fast, ~2s), then download audio + chat in parallel
             timer.start("DOWNLOADING_AUDIO")
-            update_job(job_id, status="DOWNLOADING_AUDIO", progress="Downloading audio + chat...", step_timings=timer.timings)
-            with ThreadPoolExecutor(max_workers=2) as dl_pool:
-                audio_future = dl_pool.submit(download_audio, url, output_dir)
-                chat_future = dl_pool.submit(download_chat, url)
+            update_job(job_id, status="DOWNLOADING_AUDIO", progress="Fetching VOD metadata...", step_timings=timer.timings)
 
-                audio_path, metadata = audio_future.result()
-                chat_messages = chat_future.result()
-
+            # Fast metadata extraction (no download) — publishes streamer/game immediately
+            metadata = extract_metadata(url)
             duration = metadata.get("duration", 0)
             vod_title = metadata.get("title", "")
             vod_game = metadata.get("game", "")
@@ -218,6 +214,17 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
                 view_count=view_count,
                 stream_date=stream_date,
             )
+            logger.info(f"Metadata extracted: {streamer} — {vod_game} — {vod_title}")
+
+            # Now download audio + chat in parallel (slow I/O bound)
+            update_job(job_id, progress="Downloading audio + chat...")
+            with ThreadPoolExecutor(max_workers=2) as dl_pool:
+                audio_future = dl_pool.submit(download_audio, url, output_dir)
+                chat_future = dl_pool.submit(download_chat, url)
+
+                audio_path = audio_future.result()
+                chat_messages = chat_future.result()
+
             logger.info(f"Downloaded {len(chat_messages)} chat messages")
 
             # 3. Analyze audio signals + classify audio events in parallel

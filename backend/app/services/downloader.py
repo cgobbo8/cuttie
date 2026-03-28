@@ -10,7 +10,48 @@ logger = logging.getLogger(__name__)
 TWITCH_CLIENT_ID = os.getenv("TWITCH_CLIENT_ID", "kimne78kx3ncx6brgo4mv6wki5h1ko")
 
 
-def download_audio(url: str, output_dir: str) -> tuple[str, dict]:
+def extract_metadata(url: str) -> dict:
+    """Extract VOD metadata without downloading (fast, ~2s)."""
+    opts = {"quiet": True, "no_warnings": True, "skip_download": True}
+
+    with yt_dlp.YoutubeDL(opts) as ydl:
+        info = ydl.extract_info(url, download=False)
+
+    # Extract game name from chapters
+    game = ""
+    chapters = info.get("chapters") or []
+    if chapters:
+        from collections import Counter
+        game_counts = Counter(c.get("title", "") for c in chapters if c.get("title"))
+        if game_counts:
+            game = game_counts.most_common(1)[0][0]
+
+    # Format upload date
+    upload_date_raw = info.get("upload_date", "")
+    stream_date = ""
+    if upload_date_raw and len(upload_date_raw) == 8:
+        stream_date = f"{upload_date_raw[:4]}-{upload_date_raw[4:6]}-{upload_date_raw[6:]}"
+
+    vod_id = info.get("id", "")
+    game_id, game_thumbnail = _fetch_game_info(vod_id)
+    streamer_login = info.get("uploader", "")
+    streamer_thumbnail = _fetch_streamer_thumbnail(streamer_login)
+
+    return {
+        "title": info.get("title", "Unknown"),
+        "duration": info.get("duration", 0),
+        "id": vod_id,
+        "game": game,
+        "game_id": game_id,
+        "game_thumbnail": game_thumbnail,
+        "streamer": streamer_login,
+        "streamer_thumbnail": streamer_thumbnail,
+        "view_count": info.get("view_count", 0),
+        "stream_date": stream_date,
+    }
+
+
+def download_audio(url: str, output_dir: str) -> str:
     """Download audio from a Twitch VOD as WAV, downsampled to 11025Hz mono."""
     os.makedirs(output_dir, exist_ok=True)
 
@@ -29,46 +70,9 @@ def download_audio(url: str, output_dir: str) -> tuple[str, dict]:
     }
 
     with yt_dlp.YoutubeDL(opts) as ydl:
-        info = ydl.extract_info(url, download=True)
+        ydl.extract_info(url, download=True)
 
-    audio_path = os.path.join(output_dir, "audio.wav")
-    # Extract game name from chapters (Twitch puts game changes as chapters)
-    game = ""
-    chapters = info.get("chapters") or []
-    if chapters:
-        # Use the most common chapter title (= the main game)
-        from collections import Counter
-        game_counts = Counter(c.get("title", "") for c in chapters if c.get("title"))
-        if game_counts:
-            game = game_counts.most_common(1)[0][0]
-
-    # Format upload date
-    upload_date_raw = info.get("upload_date", "")
-    stream_date = ""
-    if upload_date_raw and len(upload_date_raw) == 8:
-        stream_date = f"{upload_date_raw[:4]}-{upload_date_raw[4:6]}-{upload_date_raw[6:]}"
-
-    # Fetch game ID + box art from Twitch GQL using VOD ID
-    vod_id = info.get("id", "")
-    game_id, game_thumbnail = _fetch_game_info(vod_id)
-
-    # Fetch streamer profile picture
-    streamer_login = info.get("uploader", "")
-    streamer_thumbnail = _fetch_streamer_thumbnail(streamer_login)
-
-    metadata = {
-        "title": info.get("title", "Unknown"),
-        "duration": info.get("duration", 0),
-        "id": vod_id,
-        "game": game,
-        "game_id": game_id,
-        "game_thumbnail": game_thumbnail,
-        "streamer": streamer_login,
-        "streamer_thumbnail": streamer_thumbnail,
-        "view_count": info.get("view_count", 0),
-        "stream_date": stream_date,
-    }
-    return audio_path, metadata
+    return os.path.join(output_dir, "audio.wav")
 
 
 def _fetch_game_info(vod_id: str) -> tuple[str, str]:

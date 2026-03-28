@@ -9,6 +9,7 @@ export const controllers = {
   AuthMe: () => import('#controllers/auth_me_controller'),
   Clips: () => import('#controllers/clips_controller'),
   Creators: () => import('#controllers/creators_controller'),
+  Dashboard: () => import('#controllers/dashboard_controller'),
   Games: () => import('#controllers/games_controller'),
   GoogleAuth: () => import('#controllers/google_auth_controller'),
   Jobs: () => import('#controllers/jobs_controller'),

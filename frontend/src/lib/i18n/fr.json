@@ -32,11 +32,34 @@
 
   "sidebar": {
     "newProject": "Nouveau projet",
+    "dashboard": "Dashboard",
     "projects": "Projets",
     "games": "Jeux",
     "creators": "Créateurs",
     "exports": "Exports",
     "profile": "Profil"
+  },
+
+  "workspace": {
+    "allCreators": "Tous les créateurs",
+    "searchCreator": "Rechercher un créateur..."
+  },
+
+  "dashboard": {
+    "welcomeBack": "Bienvenue",
+    "topCreators": "Top créateurs",
+    "topGames": "Top jeux",
+    "latestProjects": "Derniers projets",
+    "latestExports": "Derniers exports",
+    "seeAll": "Voir tout",
+    "totalProjects": "projets",
+    "totalExports": "exports",
+    "totalCreators": "créateurs",
+    "totalAnalyses": "analyses",
+    "totalGames": "jeux",
+    "avgViews": "vues moy.",
+    "noData": "Pas encore de données",
+    "noDataHint": "Commence à analyser des VODs pour voir ton dashboard."
   },
 
   "home": {

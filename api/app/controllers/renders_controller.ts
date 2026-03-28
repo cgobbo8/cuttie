@@ -95,14 +95,21 @@ export default class RendersController {
   }
 
   /** GET /api/renders */
-  async index({ response, auth }: HttpContext) {
+  async index({ response, auth, request }: HttpContext) {
     const user = auth.getUserOrFail()
-    const rows = await db
+    const creatorId = request.input('creator_id') ? Number(request.input('creator_id')) : null
+
+    const query = db
       .from('renders')
       .join('jobs', 'renders.job_id', 'jobs.id')
       .select('renders.*', 'jobs.vod_title', 'jobs.vod_game')
       .where('renders.user_id', user.id)
-      .orderBy('renders.created_at', 'desc')
+
+    if (creatorId) {
+      query.where('jobs.creator_id', creatorId)
+    }
+
+    const rows = await query.orderBy('renders.created_at', 'desc')
     return response.json(rows.map(serializeRender))
   }
 

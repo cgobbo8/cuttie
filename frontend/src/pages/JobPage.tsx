@@ -15,12 +15,14 @@ import HotPoints from "../components/HotPoints";
 import { ArrowLeft, RotateCcw, Loader2, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useToast } from "../components/Toast";
+import { useCreatorWorkspace } from "../lib/CreatorWorkspaceContext";
 
 export default function JobPage() {
   const { t } = useTranslation();
   const toast = useToast();
   const { jobId } = useParams<{ jobId: string }>();
   const navigate = useNavigate();
+  const { selectByStreamer } = useCreatorWorkspace();
 
   const [loading, setLoading] = useState(true);
 
@@ -51,14 +53,17 @@ export default function JobPage() {
     if (job.vod_title) setVodTitle(job.vod_title);
     if (job.vod_game) setVodGame(job.vod_game);
     if (job.vod_duration_seconds) setVodDuration(job.vod_duration_seconds);
-    if (job.streamer) setStreamer(job.streamer);
+    if (job.streamer) {
+      setStreamer(job.streamer);
+      selectByStreamer(job.streamer);
+    }
     if (job.view_count) setViewCount(job.view_count);
     if (job.stream_date) setStreamDate(job.stream_date);
     if (job.error) setError(job.error);
     if (job.hot_points?.length) {
       setClips(job.hot_points);
     }
-  }, []);
+  }, [selectByStreamer]);
 
   const parseClipsTotal = useCallback((prog: string) => {
     const match = prog.match(/(\d+)\/(\d+)/);
@@ -95,7 +100,10 @@ export default function JobPage() {
     if (update.vod_title) setVodTitle(update.vod_title);
     if (update.vod_game) setVodGame(update.vod_game);
     if (update.vod_duration_seconds) setVodDuration(update.vod_duration_seconds);
-    if (update.streamer) setStreamer(update.streamer);
+    if (update.streamer) {
+      setStreamer(update.streamer);
+      selectByStreamer(update.streamer);
+    }
     if (update.view_count) setViewCount(update.view_count);
     if (update.stream_date) setStreamDate(update.stream_date);
     if (update.error) setError(update.error);
@@ -104,7 +112,7 @@ export default function JobPage() {
       setIsFinalSort(true);
       setTimeout(() => setClips(update.hot_points!), 300);
     }
-  }, [parseClipsTotal]);
+  }, [parseClipsTotal, selectByStreamer]);
 
   useEffect(() => {
     if (!jobId) return;

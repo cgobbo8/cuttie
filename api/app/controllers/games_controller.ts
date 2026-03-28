@@ -3,16 +3,23 @@ import db from '@adonisjs/lucid/services/db'
 
 export default class GamesController {
   // GET /api/games
-  async index({ auth }: HttpContext) {
+  async index({ auth, request }: HttpContext) {
     const user = auth.getUserOrFail()
+    const creatorId = request.input('creator_id') ? Number(request.input('creator_id')) : null
 
     // Group by game_id when available, fall back to game name
-    const rows = await db
+    const baseQuery = db
       .from('jobs')
       .where('user_id', user.id)
       .where('status', 'DONE')
       .whereNotNull('vod_game')
       .where('vod_game', '!=', '')
+
+    if (creatorId) {
+      baseQuery.where('creator_id', creatorId)
+    }
+
+    const rows = await baseQuery
       .select(
         db.raw("COALESCE(NULLIF(vod_game_id, ''), vod_game) as game_key"),
         db.raw('MAX(vod_game) as vod_game'),
@@ -43,12 +50,18 @@ export default class GamesController {
     }))
 
     // Distinct streamers with latest thumbnail
-    const streamerRows = await db
+    const streamerQuery = db
       .from('jobs')
       .where('user_id', user.id)
       .where('status', 'DONE')
       .whereNotNull('streamer')
       .where('streamer', '!=', '')
+
+    if (creatorId) {
+      streamerQuery.where('creator_id', creatorId)
+    }
+
+    const streamerRows = await streamerQuery
       .select(
         'streamer',
         db.raw('MAX(streamer_thumbnail) as streamer_thumbnail'),

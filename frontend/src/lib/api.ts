@@ -239,8 +239,9 @@ export interface GamesResponse {
   streamers: StreamerSummary[];
 }
 
-export async function listGamesAndStreamers(): Promise<GamesResponse> {
-  const res = await fetch(`${BASE}/games`);
+export async function listGamesAndStreamers(creatorId?: number): Promise<GamesResponse> {
+  const qs = creatorId ? `?creator_id=${creatorId}` : "";
+  const res = await fetch(`${BASE}/games${qs}`);
   if (!res.ok) throw new Error("Failed to fetch games");
   const json = await res.json();
   return {
@@ -249,8 +250,8 @@ export async function listGamesAndStreamers(): Promise<GamesResponse> {
   };
 }
 
-export async function listGames(): Promise<GameSummary[]> {
-  const { games } = await listGamesAndStreamers();
+export async function listGames(creatorId?: number): Promise<GameSummary[]> {
+  const { games } = await listGamesAndStreamers(creatorId);
   return games;
 }
 
@@ -274,6 +275,57 @@ export async function listCreators(): Promise<CreatorSummary[]> {
   if (!res.ok) throw new Error("Failed to fetch creators");
   const json = await res.json();
   return json.data ?? [];
+}
+
+// ── Dashboard API ───────────────────────────────────────────────────────────
+
+export interface DashboardProject {
+  id: string;
+  vod_title: string | null;
+  streamer: string | null;
+  streamer_thumbnail: string | null;
+  vod_game: string | null;
+  created_at: string;
+}
+
+export interface DashboardExport {
+  render_id: string;
+  clip_name: string | null;
+  status: string;
+  vod_title: string | null;
+  vod_game: string | null;
+  created_at: string;
+}
+
+export interface DashboardCreator {
+  id: number;
+  display_name: string;
+  thumbnail: string | null;
+  login: string;
+  vod_count: number;
+}
+
+export interface DashboardGame {
+  name: string;
+  thumbnail: string | null;
+  vod_count: number;
+  avg_views: number;
+}
+
+export interface DashboardData {
+  stats: Record<string, number>;
+  top_creators?: DashboardCreator[];
+  creator?: { id: number; display_name: string; thumbnail: string | null; login: string; twitch_id: string | null };
+  top_games?: DashboardGame[];
+  latest_projects: DashboardProject[];
+  latest_exports: DashboardExport[];
+}
+
+export async function getDashboard(creatorId?: number): Promise<DashboardData> {
+  const qs = creatorId ? `?creator_id=${creatorId}` : "";
+  const res = await fetch(`${BASE}/dashboard${qs}`);
+  if (!res.ok) throw new Error("Failed to fetch dashboard");
+  return res.json();
 }
 
 // ── Job API ─────────────────────────────────────────────────────────────────
@@ -304,6 +356,7 @@ export interface ListJobsParams {
   status?: string;
   game?: string;
   streamer?: string;
+  creator_id?: number;
 }
 
 export async function listJobs(params?: ListJobsParams): Promise<PaginatedJobs> {
@@ -314,6 +367,7 @@ export async function listJobs(params?: ListJobsParams): Promise<PaginatedJobs> 
   if (params?.status) qs.set("status", params.status);
   if (params?.game) qs.set("game", params.game);
   if (params?.streamer) qs.set("streamer", params.streamer);
+  if (params?.creator_id) qs.set("creator_id", String(params.creator_id));
   const suffix = qs.toString() ? `?${qs}` : "";
   const res = await fetch(`${BASE}/jobs${suffix}`);
   if (!res.ok) throw new Error("Failed to fetch jobs");
@@ -540,8 +594,9 @@ export async function getRenderStatus(renderId: string): Promise<RenderStatus> {
   return res.json();
 }
 
-export async function listRenders(): Promise<RenderStatus[]> {
-  const res = await fetch(`${BASE}/renders`);
+export async function listRenders(creatorId?: number): Promise<RenderStatus[]> {
+  const qs = creatorId ? `?creator_id=${creatorId}` : "";
+  const res = await fetch(`${BASE}/renders${qs}`);
   if (!res.ok) throw new Error("Failed to fetch renders");
   return res.json();
 }

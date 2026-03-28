@@ -13,6 +13,9 @@ export interface ApiDefinition {
   authMe: {
     show: typeof routes['auth_me.show']
   }
+  dashboard: {
+    index: typeof routes['dashboard.index']
+  }
   games: {
     index: typeof routes['games.index']
   }

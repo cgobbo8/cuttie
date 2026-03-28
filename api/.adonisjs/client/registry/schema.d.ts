@@ -67,6 +67,18 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/auth_me_controller').default['show']>>>
     }
   }
+  'dashboard.index': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/dashboard'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/dashboard_controller').default['index']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/dashboard_controller').default['index']>>>
+    }
+  }
   'games.index': {
     methods: ["GET","HEAD"]
     pattern: '/api/games'

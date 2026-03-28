@@ -32,6 +32,9 @@ router
         router.delete('/auth/logout', [() => import('#controllers/access_token_controller'), 'destroy'])
         router.get('/auth/me', [() => import('#controllers/auth_me_controller'), 'show'])
 
+        // Dashboard
+        router.get('/dashboard', [() => import('#controllers/dashboard_controller'), 'index'])
+
         // Games
         router.get('/games', [() => import('#controllers/games_controller'), 'index'])
 

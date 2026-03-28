@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router";
 import { listGames, type GameSummary } from "../lib/api";
+import { useCreatorWorkspace } from "../lib/CreatorWorkspaceContext";
 import { useTranslation } from "react-i18next";
 import {
   Search,
@@ -110,20 +111,21 @@ function GameCard({ game, onClick }: { game: GameSummary; onClick: () => void })
 export default function GamesPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { creator } = useCreatorWorkspace();
   const [games, setGames] = useState<GameSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
 
   const fetchGames = useCallback(async () => {
     try {
-      const data = await listGames();
+      const data = await listGames(creator?.id);
       setGames(data);
     } catch {
       setGames([]);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [creator?.id]);
 
   useEffect(() => {
     fetchGames();
@@ -190,7 +192,7 @@ export default function GamesPage() {
             <GameCard
               key={game.game_id || game.name}
               game={game}
-              onClick={() => navigate(`/?game=${encodeURIComponent(game.name)}`)}
+              onClick={() => navigate(`/projects?game=${encodeURIComponent(game.name)}`)}
             />
           ))}
         </div>

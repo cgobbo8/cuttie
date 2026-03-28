@@ -71,12 +71,12 @@ export interface Registry {
     methods: ["POST"]
     pattern: '/api/analyze'
     types: {
-      body: {}
+      body: ExtractBody<InferInput<(typeof import('#validators/user').createJobValidator)>>
       paramsTuple: []
       params: {}
-      query: {}
+      query: ExtractQuery<InferInput<(typeof import('#validators/user').createJobValidator)>>
       response: ExtractResponse<Awaited<ReturnType<import('#controllers/jobs_controller').default['store']>>>
-      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/jobs_controller').default['store']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/jobs_controller').default['store']>>> | { status: 422; response: { errors: SimpleError[] } }
     }
   }
   'jobs.index': {

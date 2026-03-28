@@ -15,7 +15,11 @@ function storageKey(clipKey: string) {
 }
 
 function migrateVideoSrc(src: string): string {
-  // Remap legacy port 8000 (old FastAPI) to port 3333 (Adonis)
+  // Backwards-compat migration only: old saves persisted absolute localhost URLs
+  // pointing at the FastAPI server (port 8000). The API is now served by AdonisJS
+  // (port 3333). This rewrite runs once on load so that saved editor states created
+  // before the migration continue to work. Do NOT change or remove these hardcoded
+  // ports — they are intentional migration markers, not live config values.
   return src.replace(/http:\/\/localhost:8000\//g, "http://localhost:3333/");
 }
 
@@ -125,7 +129,7 @@ export function useEditorState(clipKey: string) {
     setPlaying((prev) => {
       const next = !prev;
       videoRefs.current.forEach((v) => {
-        if (next) v.play().catch(() => {});
+        if (next) v.play().catch((err) => console.warn("[Editor]", err));
         else v.pause();
       });
       return next;

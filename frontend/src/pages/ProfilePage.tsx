@@ -2,6 +2,7 @@ import { useTranslation } from "react-i18next";
 import { useAuth } from "../lib/AuthContext";
 import { Globe, Lock, Mail } from "lucide-react";
 import { LANGUAGE_STORAGE_KEY } from "../lib/i18n";
+import { useToast } from "../components/Toast";
 
 const LANGUAGES = [
   { code: "fr", labelKey: "profile.french" },
@@ -12,6 +13,7 @@ const LANGUAGES = [
 export default function ProfilePage() {
   const { t, i18n } = useTranslation();
   const { user } = useAuth();
+  const toast = useToast();
 
   const handleLanguageChange = (code: string) => {
     i18n.changeLanguage(code);
@@ -19,7 +21,7 @@ export default function ProfilePage() {
   };
 
   const handleChangePassword = () => {
-    window.alert(t("profile.changePasswordAlert"));
+    toast.success(t("profile.changePasswordAlert"));
   };
 
   return (

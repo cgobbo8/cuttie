@@ -1,5 +1,6 @@
 import logging
 import os
+import pathlib
 import re
 import subprocess
 import uuid
@@ -18,6 +19,29 @@ router = APIRouter()
 
 TWITCH_VOD_PATTERN = re.compile(r"twitch\.tv/videos/(\d+)")
 CLIPS_DIR = "clips"
+
+# Path-traversal guards: only allow alphanumeric, hyphen, underscore (and dots
+# for filenames). These patterns deliberately reject path separators and other
+# special characters that could be used to escape the clips directory.
+SAFE_JOB_ID = re.compile(r"^[a-zA-Z0-9_-]+$")
+SAFE_FILENAME = re.compile(r"^[a-zA-Z0-9_.\-]+$")
+
+
+def _resolve_clip_path(job_id: str, filename: str) -> pathlib.Path:
+    """Return an absolute, resolved path and assert it stays inside CLIPS_DIR.
+
+    Raises HTTPException 400 on invalid identifiers and 404 if the final path
+    escapes the clips root (directory traversal attempt).
+    """
+    if not SAFE_JOB_ID.match(job_id):
+        raise HTTPException(status_code=400, detail="Invalid job ID")
+    if not SAFE_FILENAME.match(filename):
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    clips_root = pathlib.Path(CLIPS_DIR).resolve()
+    target = (clips_root / job_id / filename).resolve()
+    if not str(target).startswith(str(clips_root) + os.sep):
+        raise HTTPException(status_code=400, detail="Invalid path")
+    return target
 
 
 @router.post("/analyze")
@@ -38,6 +62,8 @@ def get_all_jobs() -> list[dict]:
 
 @router.get("/jobs/{job_id}")
 def get_job_status(job_id: str) -> JobResponse:
+    if not SAFE_JOB_ID.match(job_id):
+        raise HTTPException(status_code=400, detail="Invalid job ID")
     job = get_job(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
@@ -47,6 +73,8 @@ def get_job_status(job_id: str) -> JobResponse:
 @router.post("/jobs/{job_id}/retry")
 async def retry_job(job_id: str, bg: BackgroundTasks) -> dict:
     """Retry a failed job from the last failed step."""
+    if not SAFE_JOB_ID.match(job_id):
+        raise HTTPException(status_code=400, detail="Invalid job ID")
     job = get_job(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
@@ -79,18 +107,27 @@ async def retry_job(job_id: str, bg: BackgroundTasks) -> dict:
 
 @router.get("/clips/{job_id}/{filename}")
 def get_clip(job_id: str, filename: str) -> FileResponse:
-    filepath = os.path.join(CLIPS_DIR, job_id, filename)
-    if not os.path.isfile(filepath):
+    filepath = _resolve_clip_path(job_id, filename)
+    if not filepath.is_file():
         raise HTTPException(status_code=404, detail="Clip not found")
-    return FileResponse(filepath, media_type="video/mp4")
+    return FileResponse(str(filepath), media_type="video/mp4")
 
 
 @router.get("/clips/{job_id}/{filename}/words")
 def get_clip_words(job_id: str, filename: str) -> JSONResponse:
     """Return word-level timestamps for a clip's transcript."""
+    # Validate identifiers; the words file is derived from filename so the
+    # same path-traversal guard applies.
+    _resolve_clip_path(job_id, filename)  # raises on invalid identifiers
     base, _ = os.path.splitext(filename)
-    words_path = os.path.join(CLIPS_DIR, job_id, f"{base}_words.json")
-    if not os.path.isfile(words_path):
+    words_filename = f"{base}_words.json"
+    if not SAFE_FILENAME.match(words_filename):
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    clips_root = pathlib.Path(CLIPS_DIR).resolve()
+    words_path = (clips_root / job_id / words_filename).resolve()
+    if not str(words_path).startswith(str(clips_root) + os.sep):
+        raise HTTPException(status_code=400, detail="Invalid path")
+    if not words_path.is_file():
         return JSONResponse(content=[])
     import json
     with open(words_path, encoding="utf-8") as f:
@@ -106,8 +143,9 @@ def get_edit_environment(job_id: str, clip_filename: str) -> JSONResponse:
     """
     import json
 
-    clip_path = os.path.join(CLIPS_DIR, job_id, clip_filename)
-    if not os.path.isfile(clip_path):
+    clip_path_obj = _resolve_clip_path(job_id, clip_filename)
+    clip_path = str(clip_path_obj)
+    if not clip_path_obj.is_file():
         raise HTTPException(status_code=404, detail="Clip not found")
 
     # Probe clip dimensions
@@ -227,17 +265,22 @@ class TrimRequest(BaseModel):
 @router.post("/clips/{job_id}/{filename}/trim")
 def trim_clip(job_id: str, filename: str, req: TrimRequest) -> dict:
     """Trim a clip using FFmpeg stream copy (instant, no re-encode)."""
-    input_path = os.path.join(CLIPS_DIR, job_id, filename)
-    if not os.path.isfile(input_path):
+    input_path_obj = _resolve_clip_path(job_id, filename)
+    input_path = str(input_path_obj)
+    if not input_path_obj.is_file():
         raise HTTPException(status_code=404, detail="Clip not found")
 
     if req.start_seconds >= req.end_seconds:
         raise HTTPException(status_code=400, detail="start must be < end")
 
-    # Output: same name with _trimmed suffix
+    # Output: same name with _trimmed suffix — resolve and contain within clips root
     base, ext = os.path.splitext(filename)
     trimmed_name = f"{base}_trimmed{ext}"
-    output_path = os.path.join(CLIPS_DIR, job_id, trimmed_name)
+    clips_root = pathlib.Path(CLIPS_DIR).resolve()
+    output_path_obj = (clips_root / job_id / trimmed_name).resolve()
+    if not str(output_path_obj).startswith(str(clips_root) + os.sep):
+        raise HTTPException(status_code=400, detail="Invalid path")
+    output_path = str(output_path_obj)
 
     try:
         result = subprocess.run(
@@ -332,7 +375,12 @@ def list_assets() -> JSONResponse:
 @router.get("/assets/{filename}")
 def get_asset(filename: str) -> FileResponse:
     """Serve an uploaded asset."""
-    path = os.path.join(ASSETS_DIR, filename)
-    if not os.path.isfile(path):
+    if not SAFE_FILENAME.match(filename):
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    assets_root = pathlib.Path(ASSETS_DIR).resolve()
+    path = (assets_root / filename).resolve()
+    if not str(path).startswith(str(assets_root) + os.sep):
+        raise HTTPException(status_code=400, detail="Invalid path")
+    if not path.is_file():
         raise HTTPException(status_code=404, detail="Asset not found")
-    return FileResponse(path)
+    return FileResponse(str(path))

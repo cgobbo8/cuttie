@@ -1,3 +1,4 @@
+import app from '@adonisjs/core/services/app'
 import { defineConfig } from '@adonisjs/shield'
 
 const shieldConfig = defineConfig({
@@ -6,46 +7,36 @@ const shieldConfig = defineConfig({
    * to learn more.
    */
   csp: {
-    /**
-     * Enable the Content-Security-Policy header.
-     */
-    enabled: false,
+    enabled: app.inProduction,
 
-    /**
-     * Per-resource CSP directives.
-     */
-    directives: {},
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", 'data:', 'https:'],
+      connectSrc: ["'self'", 'https://accounts.google.com'],
+      fontSrc: ["'self'", 'https://fonts.gstatic.com'],
+      mediaSrc: ["'self'", 'blob:'],
+    },
 
-    /**
-     * Report violations without blocking resources.
-     */
     reportOnly: false,
   },
 
   /**
    * Configure CSRF protection options. Refer documentation
    * to learn more.
+   *
+   * Note: CSRF is disabled because this is a token-based API consumed
+   * by a SPA. The auth token already provides CSRF-equivalent protection.
+   * If session-based auth is added for server-rendered pages, enable this.
    */
   csrf: {
-    /**
-     * Enable CSRF token verification for state-changing requests.
-     */
     enabled: false,
 
-    /**
-     * Route patterns to exclude from CSRF checks.
-     * Useful for external webhooks or API endpoints.
-     */
     exceptRoutes: [],
 
-    /**
-     * Expose an encrypted XSRF-TOKEN cookie for frontend HTTP clients.
-     */
     enableXsrfCookie: true,
 
-    /**
-     * HTTP methods protected by CSRF validation.
-     */
     methods: ['POST', 'PUT', 'PATCH', 'DELETE'],
   },
 

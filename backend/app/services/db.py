@@ -111,7 +111,10 @@ def init_db() -> None:
 
         CREATE INDEX IF NOT EXISTS idx_renders_job ON renders(job_id);
     """)
-    # Migrations: add columns if they don't exist (for existing DBs)
+    # Migrations: add columns if they don't exist (for existing DBs).
+    # Table names and column names are interpolated directly into SQL (SQLite
+    # does not support parameterized DDL), so we validate them against an
+    # explicit allowlist before use.
     migrations = [
         ("hot_points", "llm_json", "TEXT"),
         ("hot_points", "final_score", "REAL"),
@@ -124,7 +127,24 @@ def init_db() -> None:
         ("jobs", "step_timings", "TEXT"),
         ("hot_points", "clip_name", "TEXT"),
     ]
+
+    # Allowlists derived from the migration tuples above — update both lists
+    # whenever a new migration is added.
+    VALID_TABLES = {"jobs", "hot_points", "renders"}
+    VALID_COLUMNS = {
+        "llm_json", "final_score", "chat_mood", "vertical_filename",
+        "vod_game", "streamer", "view_count", "stream_date", "step_timings",
+        "clip_name",
+    }
+    VALID_COL_TYPES = {"TEXT", "REAL", "INTEGER", "BLOB", "NUMERIC"}
+
     for table, col, col_type in migrations:
+        if table not in VALID_TABLES:
+            raise ValueError(f"Invalid table name in migration: {table!r}")
+        if col not in VALID_COLUMNS:
+            raise ValueError(f"Invalid column name in migration: {col!r}")
+        if col_type not in VALID_COL_TYPES:
+            raise ValueError(f"Invalid column type in migration: {col_type!r}")
         try:
             conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {col_type}")
             conn.commit()

@@ -5,6 +5,7 @@ import path from 'node:path'
 import db from '@adonisjs/lucid/services/db'
 import { renderClip } from '#services/remotion_renderer'
 import { uploadFile, getPresignedDownloadUrl, deleteObject } from '#services/s3'
+import type { Layer } from '../../remotion/editorTypes.js'
 
 const CLIPS_BASE = path.resolve('../backend/clips')
 
@@ -14,7 +15,23 @@ async function getRender(id: string) {
   return db.from('renders').where('id', id).first()
 }
 
-function serializeRender(row: any) {
+interface RenderRow {
+  id: string
+  job_id: string
+  clip_filename: string
+  clip_name: string | null
+  status: string
+  progress: number
+  output_filename: string | null
+  size_mb: number | null
+  error: string | null
+  user_id: number
+  vod_title?: string | null
+  vod_game?: string | null
+  created_at: string
+}
+
+function serializeRender(row: RenderRow) {
   return {
     render_id: row.id,
     job_id: row.job_id,
@@ -71,7 +88,8 @@ export default class RendersController {
     })
 
     // Fire-and-forget — render runs asynchronously
-    runRender({ renderId, jobId, clipFilename: filename, layers: layers as any, outputPath, outputFilename, trim })
+    // layers structure is validated by Remotion at render time
+    runRender({ renderId, jobId, clipFilename: filename, layers: layers as Layer[], outputPath, outputFilename, trim })
 
     return response.created({ render_id: renderId })
   }
@@ -135,14 +153,14 @@ async function runRender(opts: {
   renderId: string
   jobId: string
   clipFilename: string
-  layers: any[]
+  layers: Layer[]
   outputPath: string
   outputFilename: string
   trim?: { start: number; end: number }
 }) {
   const { renderId, jobId, clipFilename, layers, outputPath, outputFilename, trim } = opts
 
-  const updateRender = async (fields: Record<string, any>) => {
+  const updateRender = async (fields: Record<string, unknown>) => {
     await db.from('renders').where('id', renderId).update({
       ...fields,
       updated_at: new Date().toISOString(),

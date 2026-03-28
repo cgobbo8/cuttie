@@ -91,7 +91,8 @@
     "starting": "Iniciando...",
     "errorOccurred": "Se produjo un error",
     "retry": "Reintentar",
-    "back": "Volver"
+    "back": "Volver",
+    "retryFailed": "Error al reintentar"
   },
 
   "newProject": {
@@ -100,6 +101,8 @@
     "youtube": "YouTube",
     "upload": "Subir",
     "invalidUrl": "URL de Twitch inválida",
+    "invalidTwitchVod": "La URL debe ser una VOD de Twitch (twitch.tv/videos/...)",
+    "submitError": "Error al enviar",
     "placeholder": "https://www.twitch.tv/videos/...",
     "analyzing": "Analizando...",
     "analyze": "Analizar",

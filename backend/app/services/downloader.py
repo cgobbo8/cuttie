@@ -5,6 +5,10 @@ import yt_dlp
 
 logger = logging.getLogger(__name__)
 
+# Well-known public Twitch GQL Client-ID kept as the default so existing
+# deployments continue to work without explicit configuration.
+TWITCH_CLIENT_ID = os.getenv("TWITCH_CLIENT_ID", "kimne78kx3ncx6brgo4mv6wki5h1ko")
+
 
 def download_audio(url: str, output_dir: str) -> tuple[str, dict]:
     """Download audio from a Twitch VOD as WAV, downsampled to 11025Hz mono."""
@@ -71,7 +75,7 @@ def download_chat(url: str) -> list[dict]:
 
     video_id = match.group(1)
     gql_url = "https://gql.twitch.tv/gql"
-    headers = {"Client-ID": "kimne78kx3ncx6brgo4mv6wki5h1ko"}
+    headers = {"Client-ID": TWITCH_CLIENT_ID}
 
     # First, get VOD duration to know when to stop
     duration_query = """query { video(id: "%s") { lengthSeconds } }""" % video_id

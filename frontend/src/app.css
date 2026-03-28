@@ -1,11 +1,109 @@
 @import "tailwindcss";
 
 @theme {
+  /* ─── Typography ─────────────────────────────────────────── */
   --font-sans: "Inter", system-ui, sans-serif;
+
+  /* ─── Background levels ──────────────────────────────────── */
+  /* Base app background (zinc-950) */
+  --color-bg-base: #09090b;
+  /* Elevated panel backgrounds: modals, dropdowns, tooltips (zinc-900) */
+  --color-bg-panel: #18181b;
+  /* Editor workspace background (zinc-950 variant) */
+  --color-bg-editor: #09090b;
+
+  /* ─── Surface (glass card system) ───────────────────────── */
+  /* Used by .surface and .surface-static */
   --color-surface: rgba(255, 255, 255, 0.03);
   --color-surface-hover: rgba(255, 255, 255, 0.06);
+  /* Input/field background (slightly lighter than surface) */
+  --color-surface-input: rgba(255, 255, 255, 0.04);
+  /* Button/control resting state */
+  --color-surface-control: rgba(255, 255, 255, 0.06);
+  /* Button/control hover state */
+  --color-surface-control-hover: rgba(255, 255, 255, 0.10);
+  /* Active / pressed state */
+  --color-surface-active: rgba(255, 255, 255, 0.08);
+  /* Subtle highlight used on table rows and list items */
+  --color-surface-subtle: rgba(255, 255, 255, 0.02);
+  /* Faint fill for skeleton / progress track */
+  --color-surface-muted: rgba(255, 255, 255, 0.03);
+
+  /* ─── Borders ────────────────────────────────────────────── */
+  /* Default card / section border */
   --color-border: rgba(255, 255, 255, 0.08);
   --color-border-hover: rgba(255, 255, 255, 0.14);
+  /* Subtle divider inside panels and between rows */
+  --color-border-subtle: rgba(255, 255, 255, 0.06);
+  /* Focus ring on inputs */
+  --color-border-focus: rgba(255, 255, 255, 0.20);
+
+  /* ─── Text scale (maps to zinc Tailwind scale) ───────────── */
+  --color-text-primary: #ffffff;
+  --color-text-secondary: #e4e4e7;   /* zinc-200 */
+  --color-text-tertiary: #d4d4d8;    /* zinc-300 */
+  --color-text-muted: #a1a1aa;       /* zinc-400 */
+  --color-text-subtle: #71717a;      /* zinc-500 */
+  --color-text-faint: #52525b;       /* zinc-600 */
+  --color-text-disabled: #3f3f46;    /* zinc-700 */
+  --color-text-placeholder: #52525b; /* zinc-600 — used in inputs */
+
+  /* ─── Semantic colors ────────────────────────────────────── */
+  /* Primary accent (emerald) — success, done, CTAs */
+  --color-primary: #10b981;          /* emerald-500 */
+  --color-primary-light: #34d399;    /* emerald-400 */
+  --color-primary-bg: rgba(16, 185, 129, 0.08);
+  --color-primary-border: rgba(16, 185, 129, 0.15);
+
+  /* Danger (red) — errors, destructive actions */
+  --color-danger: #ef4444;           /* red-500 */
+  --color-danger-light: #f87171;     /* red-400 */
+  --color-danger-bg: rgba(239, 68, 68, 0.08);
+  --color-danger-border: rgba(239, 68, 68, 0.15);
+  /* Deeper danger bg for hover states */
+  --color-danger-bg-hover: rgba(239, 68, 68, 0.20);
+
+  /* Warning (amber) — warnings, in-progress indicators */
+  --color-warning: #f59e0b;          /* amber-500 */
+  --color-warning-light: #fbbf24;    /* amber-400 */
+  --color-warning-bg: rgba(245, 158, 11, 0.08);
+
+  /* Info / chat (blue) — chat dots on timeline, info states */
+  --color-info: #3b82f6;             /* blue-500 */
+  --color-info-light: #60a5fa;       /* blue-400 */
+  --color-info-bg: rgba(59, 130, 246, 0.10);
+  --color-info-border: rgba(59, 130, 246, 0.30);
+
+  /* Orange — "out" animation category badge */
+  --color-accent-orange: #f97316;    /* orange-500 */
+  --color-accent-orange-light: #fb923c; /* orange-400 */
+  --color-accent-orange-bg: rgba(249, 115, 22, 0.10);
+
+  /* ─── Shadows ────────────────────────────────────────────── */
+  /* Floating elements: modals, toasts, dropdowns */
+  --shadow-float: 0 25px 50px -12px rgba(0, 0, 0, 0.8);
+  /* Elevated panels: tooltips, popovers */
+  --shadow-elevated: 0 20px 25px -5px rgba(0, 0, 0, 0.6), 0 8px 10px -6px rgba(0, 0, 0, 0.4);
+
+  /* ─── Border radius ──────────────────────────────────────── */
+  /* Cards, modals, large panels */
+  --radius-card: 0.75rem;    /* 12px — rounded-xl */
+  /* Buttons, inputs, standard controls */
+  --radius-control: 0.5rem;  /* 8px  — rounded-lg */
+  /* Small controls: badges, mini-buttons, select */
+  --radius-sm: 0.375rem;     /* 6px  — rounded-md */
+  /* Micro elements: scrollbar thumb, tiny badges */
+  --radius-xs: 0.25rem;      /* 4px  — rounded */
+
+  /* ─── Transition timings ─────────────────────────────────── */
+  /* Default for color/bg transitions (used everywhere as transition-colors) */
+  --duration-fast: 150ms;
+  /* Used for progress bars and position animations */
+  --duration-base: 200ms;
+  /* Used for progress bar width and clip animations */
+  --duration-slow: 350ms;
+  /* Modal / clip-enter animation */
+  --ease-spring: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 body {

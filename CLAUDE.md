@@ -1,24 +1,40 @@
 # Cuttie
 
-Outil d'extraction automatique des moments forts de VODs Twitch. URL in -> clips verticaux (9:16) avec facecam + sous-titres out.
+Outil d'extraction automatique des moments forts de VODs Twitch. URL in -> clips verticaux (9:16) avec facecam + sous-titres out. Editeur de clips integre avec export Remotion.
 
 ## Stack
 
-- **Backend** : Python 3.10+, FastAPI, SQLite (WAL), uv
-- **Frontend** : Svelte 5, TypeScript, Tailwind CSS 4, Vite 8
+- **API** : AdonisJS 7 (TypeScript), SQLite (better-sqlite3), Redis (SSE + sessions)
+- **Worker** : Python 3.10+, FastAPI, SQLite (WAL), uv
+- **Frontend** : React 19, TypeScript 5.9, Tailwind CSS 4, Vite 8, React Router 7
+- **Editor** : Remotion 4 (player + renderer), canvas editor custom
 - **ML/Audio** : librosa (11025 Hz), PANNs CNN14 (AudioSet), MediaPipe (face detection)
 - **LLM** : OpenAI — Whisper (transcription), GPT-4.5 (analyse), gpt-4o-mini (correction sous-titres)
 - **Video** : FFmpeg, OpenCV, yt-dlp
+- **Storage** : S3/Minio (clips, assets, renders)
+- **Tests** : Vitest (frontend + backend unit/functional)
 
 ## Commandes
 
 ```bash
-# Backend
+# API (AdonisJS)
+cd api && node ace serve --watch    # dev (port 3333)
+cd api && node ace build            # production
+
+# Worker (Python)
 cd backend && uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 # Frontend
-cd frontend && npm run dev     # dev (port 5173)
-cd frontend && npm run build   # production
+cd frontend && npm run dev          # dev (port 5173)
+cd frontend && npm run build        # production
+
+# Tests
+cd frontend && npx vitest           # frontend tests
+cd backend && uv run pytest         # backend tests
+cd api && node ace test             # API tests
+
+# Infrastructure
+docker compose up -d                # Redis + Minio
 ```
 
 ## Variables d'environnement
@@ -28,57 +44,101 @@ Fichier `backend/.env` :
 OPENAI_API_KEY=sk-proj-...
 S3_ENDPOINT=http://localhost:9000
 S3_BUCKET=cuttie
-S3_ACCESS_KEY=cuttie
-S3_SECRET_KEY=cuttieminio
+S3_ACCESS_KEY=...
+S3_SECRET_KEY=...
+CORS_ORIGINS=http://localhost:5173
+TWITCH_CLIENT_ID=...
 ```
 
-Fichier `api/.env` (S3 identique + variables AdonisJS + Google OAuth)
+Fichier `api/.env` : voir `api/.env.example`
 
 ## Architecture
 
 ```
 cuttie/
-├── backend/
+├── api/                               # AdonisJS — API principale, auth, SSE
 │   ├── app/
-│   │   ├── main.py                   # FastAPI app + CORS
-│   │   ├── routers/
-│   │   │   └── analyze.py            # POST /api/analyze, GET /api/jobs, etc.
+│   │   ├── controllers/
+│   │   │   ├── access_token_controller.ts    # Login/logout
+│   │   │   ├── auth_me_controller.ts         # GET /auth/me
+│   │   │   ├── google_auth_controller.ts     # OAuth Google
+│   │   │   ├── jobs_controller.ts            # CRUD jobs + SSE
+│   │   │   ├── clips_controller.ts           # Download clips + edit-env
+│   │   │   ├── renders_controller.ts         # Remotion renders
+│   │   │   ├── assets_controller.ts          # Upload/serve assets
+│   │   │   └── profile_controller.ts         # Profil utilisateur
 │   │   ├── models/
-│   │   │   └── schemas.py            # Pydantic v2 : JobStatus, HotPoint, SignalBreakdown, LlmAnalysis
-│   │   └── services/
-│   │       ├── pipeline.py           # Orchestrateur principal (10 etapes)
-│   │       ├── downloader.py         # yt-dlp : audio WAV + chat Twitch GQL
-│   │       ├── audio_analyzer.py     # librosa : RMS, flux, pitch, centroid, ZCR, onset
-│   │       ├── audio_classifier.py   # PANNs CNN14 : events audio (cris, rires, explosions)
-│   │       ├── chat_analyzer.py      # Sentiment chat : vitesse, burst, emotes, mood (hype/fun/rip)
-│   │       ├── scorer.py             # Score composite + peak detection (scipy)
-│   │       ├── triage.py             # Whisper + LLM light scoring : 50 candidats -> 20
-│   │       ├── clipper.py            # Extraction clips video (bornes dynamiques RMS)
-│   │       ├── vertical_clipper.py   # Generation 9:16 : facecam + game + sous-titres
-│   │       ├── facecam_detector.py   # MediaPipe + Canny + HoughLinesP
-│   │       ├── subtitle_generator.py # Whisper words -> LLM rewrite -> ASS karaoke
-│   │       ├── frame_extractor.py    # Extraction frames pour vision
-│   │       ├── vision_analyzer.py    # GPT-4.5 vision sur frames
-│   │       ├── llm_analyzer.py       # Analyse complete : vision + synthese + scoring
-│   │       └── db.py                 # SQLite persistence (WAL, busy_timeout=5s)
-│   ├── assets/fonts/
-│   │   └── LuckiestGuy-Regular.ttf   # Font sous-titres
-│   ├── pyproject.toml
-│   ├── cuttie.db                      # SQLite auto-cree au premier lancement
-│   ├── clips/                         # Clips generes par job
-│   └── data/                          # Fichiers temporaires (audio, frames)
+│   │   │   ├── user.ts                       # User + auth + access tokens
+│   │   │   └── job.ts                        # Job + JSON columns
+│   │   ├── middleware/                        # Auth, SSE auth, silent auth, JSON
+│   │   ├── services/
+│   │   │   ├── s3.ts                         # S3/Minio client
+│   │   │   ├── job_status_bus.ts             # Redis pub/sub pour SSE
+│   │   │   └── remotion_renderer.ts          # Bundle + render Remotion
+│   │   ├── validators/user.ts                # VineJS validation
+│   │   └── transformers/user_transformer.ts
+│   ├── database/migrations/                   # 10 migrations SQLite
+│   ├── remotion/                              # Compositions Remotion (server-side)
+│   ├── config/                                # AdonisJS config (auth, cors, shield, etc.)
+│   └── start/routes.ts                        # Routes centralisees
 │
-└── frontend/
+├── backend/                           # Python Worker — analyse VOD + generation clips
+│   ├── app/
+│   │   ├── main.py                            # FastAPI app + CORS
+│   │   ├── routers/analyze.py                 # Endpoints clips, renders, assets
+│   │   ├── models/schemas.py                  # Pydantic v2
+│   │   └── services/
+│   │       ├── pipeline.py                    # Orchestrateur (10 etapes)
+│   │       ├── downloader.py                  # yt-dlp : audio WAV + chat Twitch GQL
+│   │       ├── audio_analyzer.py              # librosa : RMS, flux, pitch, centroid, ZCR, onset
+│   │       ├── audio_classifier.py            # PANNs CNN14 : events audio
+│   │       ├── chat_analyzer.py               # Sentiment chat : vitesse, burst, emotes, mood
+│   │       ├── scorer.py                      # Score composite + peak detection (scipy)
+│   │       ├── triage.py                      # Whisper + LLM light scoring : 50 -> 20
+│   │       ├── clipper.py                     # Extraction clips video
+│   │       ├── vertical_clipper.py            # Generation 9:16 : facecam + game + sous-titres
+│   │       ├── facecam_detector.py            # MediaPipe + Canny + HoughLinesP
+│   │       ├── subtitle_generator.py          # Whisper -> LLM rewrite -> ASS karaoke
+│   │       ├── frame_extractor.py             # Extraction frames pour vision
+│   │       ├── vision_analyzer.py             # GPT-4.5 vision
+│   │       ├── llm_analyzer.py                # Synthese narrative + scoring
+│   │       ├── s3_storage.py                  # Upload S3/Minio
+│   │       └── db.py                          # SQLite persistence (WAL)
+│   ├── assets/fonts/LuckiestGuy-Regular.ttf
+│   └── pyproject.toml
+│
+└── frontend/                          # React SPA
     └── src/
-        ├── App.svelte                 # Composant racine (SPA)
-        ├── lib/
-        │   ├── api.ts                 # Client REST type-safe
-        │   └── components/
-        │       ├── UrlForm.svelte     # Input URL
-        │       ├── JobStatus.svelte   # Barre de progression + polling 2s
-        │       ├── HotPoints.svelte   # Grille resultats (videos, signaux, timeline)
-        │       └── JobList.svelte     # Historique des analyses
-        └── app.css                    # Tailwind + styles custom
+        ├── App.tsx                            # Router principal
+        ├── main.tsx                           # Entry point + providers
+        ├── app.css                            # Tailwind @theme + animations custom
+        ├── pages/
+        │   ├── HomePage.tsx                   # Liste des projets
+        │   ├── LoginPage.tsx                  # Auth
+        │   ├── JobPage.tsx                    # Detail job + hot points
+        │   ├── EditPage.tsx                   # Editeur canvas
+        │   ├── RemotionEditPage.tsx           # Editeur Remotion
+        │   ├── ExportsPage.tsx                # Liste renders/exports
+        │   └── ProfilePage.tsx                # Profil + langue
+        ├── components/
+        │   ├── Layout.tsx                     # Shell : sidebar + main
+        │   ├── Sidebar.tsx                    # Navigation
+        │   ├── HotPoints.tsx                  # Grille clips analysés
+        │   ├── JobStatus.tsx                  # Progression job
+        │   ├── NewProjectModal.tsx            # Modal creation projet
+        │   ├── ClipEditor.tsx                 # Editeur clip inline
+        │   ├── Toast.tsx                      # Systeme de notifications
+        │   ├── ConfirmModal.tsx               # Dialog confirmation
+        │   ├── ui/Tooltip.tsx                 # Radix tooltip wrapper
+        │   ├── editor/                        # Canvas editor (layers, panels, viewport)
+        │   └── remotion-editor/               # Remotion composition + layers
+        └── lib/
+            ├── api.ts                         # Client REST type-safe + SSE
+            ├── AuthContext.tsx                 # Auth context + session
+            ├── editorTypes.ts                 # Types editeur (layers, state)
+            ├── editorThemes.ts                # Themes pre-definis
+            ├── animations.ts                  # Animations Remotion
+            └── i18n/index.ts                  # i18next (fr/en/es)
 ```
 
 ## Pipeline (10 etapes)
@@ -111,18 +171,18 @@ Checkpoints resumables : CLIPPING, VERTICAL, TRANSCRIBING, LLM_ANALYSIS.
 ## Layout vertical (1080x1920)
 
 ```
-┌──────────────────┐
-│   (blurred bg)   │
-│  ┌────────────┐  │
-│  │  facecam   │  │  560px, top center, border-radius 20px
-│  └────────────┘  │
-│                  │
-│  ┌────────────┐  │
-│  │   game     │  │  70% hauteur, centre
-│  │  (cropped) │  │
-│  └────────────┘  │
-│  (bande floue)   │  marge bottom 60px
-└──────────────────┘
++--------------------+
+|   (blurred bg)     |
+|  +-------------+   |
+|  |  facecam    |   |  560px, top center, border-radius 20px
+|  +-------------+   |
+|                    |
+|  +-------------+   |
+|  |   game      |   |  70% hauteur, centre
+|  |  (cropped)  |   |
+|  +-------------+   |
+|  (bande floue)     |  marge bottom 60px
++--------------------+
 ```
 
 ## Detection facecam
@@ -166,13 +226,24 @@ Checkpoints resumables : CLIPPING, VERTICAL, TRANSCRIBING, LLM_ANALYSIS.
 | `/api/jobs/{id}/retry`                | POST    | Token    | Relancer depuis un checkpoint    |
 | `/api/jobs/{id}/sse`                  | GET     | SSE Token| SSE temps reel                   |
 | `/api/clips/{id}/{filename}`          | GET     | Token    | Telecharger un clip              |
+| `/api/clips/{id}/{filename}/edit-env` | GET     | Token    | Donnees editeur                  |
+| `/api/clips/{id}/{filename}/trim`     | POST    | Token    | Trim clip FFmpeg                 |
+| `/api/renders`                        | GET     | Token    | Liste des exports                |
+| `/api/renders`                        | POST    | Token    | Lancer un export Remotion        |
+| `/api/renders/{id}`                   | GET     | Token    | Status d'un export               |
+| `/api/assets`                         | GET     | Token    | Liste des assets                 |
+| `/api/assets/upload`                  | POST    | Token    | Upload asset                     |
 
 ## Conventions
 
 - Langue du code : anglais (variables, fonctions, commentaires techniques)
 - Langue du contenu/UI : francais
-- Pas de tests unitaires pour le moment (MVP)
+- Tests : Vitest (unit + functional), pytest (backend)
 - Logs via `logging` standard Python
-- Frontend : Svelte 5 runes ($state, $derived, $effect)
+- Frontend : React 19 (hooks, context, React Router 7)
+- Composants : functional components + TypeScript interfaces Props
+- State : React Context (auth, toast) + custom hooks (useEditorState)
+- i18n : i18next avec fr/en/es
 - Gestion deps backend : uv
 - Gestion deps frontend : npm
+- Gestion deps API : npm

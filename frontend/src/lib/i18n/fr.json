@@ -91,7 +91,8 @@
     "starting": "Démarrage...",
     "errorOccurred": "Une erreur est survenue",
     "retry": "Reprendre",
-    "back": "Retour"
+    "back": "Retour",
+    "retryFailed": "Échec de la reprise"
   },
 
   "newProject": {
@@ -100,6 +101,8 @@
     "youtube": "YouTube",
     "upload": "Upload",
     "invalidUrl": "URL Twitch invalide",
+    "invalidTwitchVod": "L'URL doit être une VOD Twitch (twitch.tv/videos/...)",
+    "submitError": "Erreur lors de la soumission",
     "placeholder": "https://www.twitch.tv/videos/...",
     "analyzing": "Analyse...",
     "analyze": "Analyser",

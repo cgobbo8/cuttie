@@ -22,6 +22,7 @@ export async function login(email: string, password: string): Promise<AuthUser> 
 }
 
 export async function logout(): Promise<void> {
+  // Intentionally silent: logout is best-effort — the token is discarded locally regardless
   await fetch(`${BASE}/auth/logout`, { method: "DELETE" }).catch(() => {});
 }
 
@@ -138,9 +139,44 @@ export interface PaginatedJobs {
 
 // ── Adonis response mappers ──────────────────────────────────────────────────
 
-function mapJobResponse(raw: any): JobResponse {
+interface ServerJobResponse {
+  id: string;
+  status: JobStatusType;
+  progress?: string | null;
+  hotPoints?: ServerHotPoint[] | null;
+  error?: string | null;
+  vodTitle?: string | null;
+  vodGame?: string | null;
+  vodDurationSeconds?: number | null;
+  streamer?: string | null;
+  viewCount?: number | null;
+  streamDate?: string | null;
+  stepTimings?: Record<string, StepTiming> | null;
+}
+
+interface ServerHotPoint {
+  clip_name?: string | null;
+  [key: string]: unknown;
+}
+
+interface ServerJobSummary {
+  id: string;
+  url: string;
+  status: string;
+  vodTitle?: string | null;
+  vodGame?: string | null;
+  vodDurationSeconds?: number | null;
+  streamer?: string | null;
+  viewCount?: number | null;
+  streamDate?: string | null;
+  chatMessageCount?: number | null;
+  createdAt: string;
+  error?: string | null;
+}
+
+function mapJobResponse(raw: ServerJobResponse): JobResponse {
   const hotPoints = raw.hotPoints
-    ? (raw.hotPoints as any[]).map((hp) => ({ ...hp, clip_name: hp.clip_name ?? "" }))
+    ? raw.hotPoints.map((hp) => ({ ...hp, clip_name: hp.clip_name ?? "" } as HotPoint))
     : null;
   return {
     job_id: raw.id,
@@ -158,7 +194,7 @@ function mapJobResponse(raw: any): JobResponse {
   };
 }
 
-function mapJobSummary(raw: any): JobSummary {
+function mapJobSummary(raw: ServerJobSummary): JobSummary {
   return {
     job_id: raw.id,
     url: raw.url,
@@ -214,7 +250,7 @@ export async function listJobs(params?: ListJobsParams): Promise<PaginatedJobs> 
   if (!res.ok) throw new Error("Failed to fetch jobs");
   const json = await res.json();
   return {
-    data: (json.data ?? []).map(mapJobSummary),
+    data: ((json.data ?? []) as ServerJobSummary[]).map(mapJobSummary),
     meta: json.meta,
   };
 }
@@ -269,8 +305,8 @@ export interface SSEStatusUpdate {
 
 export type SSEEvent = SSEClipReady | SSEStatusUpdate;
 
-function mapSSEHotPoint(raw: any): HotPoint {
-  return { ...raw, clip_name: raw.clip_name ?? "" };
+function mapSSEHotPoint(raw: ServerHotPoint): HotPoint {
+  return { ...raw, clip_name: raw.clip_name ?? "" } as HotPoint;
 }
 
 export function subscribeJobSSE(

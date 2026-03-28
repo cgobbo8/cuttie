@@ -7,15 +7,14 @@ import db from '@adonisjs/lucid/services/db'
 import redis from '@adonisjs/redis/services/main'
 import jobStatusBus, { type JobStatusUpdate } from '#services/job_status_bus'
 import { listObjects, deleteObject } from '#services/s3'
+import { createJobValidator } from '#validators/user'
 
 const CLIPS_BASE = path.resolve('../backend/clips')
 
 export default class JobsController {
   // POST /api/analyze
   async store({ request, response, auth }: HttpContext) {
-    const body = request.body() as { url?: string }
-    const url = body.url?.trim()
-    if (!url) return response.badRequest({ error: 'url is required' })
+    const { url } = await request.validateUsing(createJobValidator)
 
     const user = auth.getUserOrFail()
 
@@ -205,7 +204,7 @@ export default class JobsController {
     if (!clipName) return response.badRequest({ error: 'clip_name is required' })
 
     const hotPoints = job.hotPoints ?? []
-    const hp = hotPoints.find((h: any) => h.clip_filename === params.clipFilename)
+    const hp = hotPoints.find((h: Record<string, unknown>) => h.clip_filename === params.clipFilename)
     if (!hp) return response.notFound({ error: 'clip not found in hot_points' })
 
     hp.clip_name = clipName

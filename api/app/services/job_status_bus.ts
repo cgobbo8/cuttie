@@ -12,14 +12,25 @@ import env from '#start/env'
 import Job from '#models/job'
 import { Redis } from 'ioredis'
 
+export interface HotPointData {
+  clip_filename: string
+  rank?: number
+  clip_name?: string
+  score?: number
+  [key: string]: unknown
+}
+
 export interface JobStatusUpdate {
   job_id: string
   status: string
   progress?: string
   error?: string | null
-  hot_points?: any[]
-  clips?: any[]
+  hot_points?: HotPointData[]
+  clips?: string[]
   step?: string
+  type?: 'clip_ready' | 'status_update'
+  rank?: number
+  hot_point?: HotPointData
   vod_title?: string | null
   vod_duration_seconds?: number | null
   vod_game?: string | null
@@ -77,11 +88,10 @@ class JobStatusBus extends EventEmitter {
     if (!job) return
 
     // clip_ready: merge a single enriched hot point into the existing array
-    if ((update as any).type === 'clip_ready') {
-      const rank: number = (update as any).rank
-      const hp: any = (update as any).hot_point
+    if (update.type === 'clip_ready' && update.hot_point) {
+      const hp = update.hot_point
       const hotPoints = job.hotPoints ?? []
-      const idx = hotPoints.findIndex((h: any) => h.clip_filename === hp.clip_filename)
+      const idx = hotPoints.findIndex((h: Record<string, unknown>) => h.clip_filename === hp.clip_filename)
       if (idx >= 0) {
         hotPoints[idx] = hp
       } else {

@@ -1,4 +1,5 @@
 import logging
+import os
 from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
@@ -21,11 +22,20 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Cuttie API", lifespan=lifespan)
 
+# CORS_ORIGINS is a comma-separated list of allowed origins.
+# Override it in backend/.env for production deployments.
+cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:5173").split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=cors_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 app.include_router(analyze.router, prefix="/api")
+
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}

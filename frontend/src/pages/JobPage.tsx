@@ -14,9 +14,11 @@ import JobStatus from "../components/JobStatus";
 import HotPoints from "../components/HotPoints";
 import { ArrowLeft, RotateCcw, Loader2, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { useToast } from "../components/Toast";
 
 export default function JobPage() {
   const { t } = useTranslation();
+  const toast = useToast();
   const { jobId } = useParams<{ jobId: string }>();
   const navigate = useNavigate();
 
@@ -148,7 +150,7 @@ export default function JobPage() {
       const cleanup = subscribeJobSSE(jobId, handleSSEEvent);
       sseCleanupRef.current = cleanup;
     } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : "Retry failed");
+      toast.error(e instanceof Error ? e.message : t("job.retryFailed"));
     }
   }, [jobId, handleSSEEvent, t]);
 

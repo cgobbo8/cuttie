@@ -7,6 +7,13 @@ const email = () => vine.string().email().maxLength(254)
 const password = () => vine.string().minLength(8).maxLength(32)
 
 /**
+ * Validator for job creation (POST /api/analyze)
+ */
+export const createJobValidator = vine.create({
+  url: vine.string().url().maxLength(2048),
+})
+
+/**
  * Validator to use when performing self-signup
  */
 export const signupValidator = vine.create({
@@ -22,5 +29,5 @@ export const signupValidator = vine.create({
  */
 export const loginValidator = vine.create({
   email: email(),
-  password: vine.string(),
+  password: vine.string().minLength(1).maxLength(255),
 })

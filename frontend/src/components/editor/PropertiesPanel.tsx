@@ -158,32 +158,6 @@ export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange
               </button>
             </div>
 
-            <div className="flex items-end gap-1.5">
-              <div className="flex-1">
-                <Slider
-                  label="Vitesse GIF"
-                  value={asset.gifSpeed ?? 1}
-                  min={0.1}
-                  max={3}
-                  step={0.05}
-                  unit=""
-                  onChange={(v) => onAssetChange(layer.id, { gifSpeed: v })}
-                  onCommit={onCommit}
-                />
-              </div>
-              {(asset.gifSpeed ?? 1) !== 1 && (
-                <button
-                  onClick={() => {
-                    onCommit();
-                    onAssetChange(layer.id, { gifSpeed: 1 });
-                  }}
-                  className="text-[9px] px-1.5 py-1 rounded bg-white/[0.06] hover:bg-white/[0.1] text-zinc-500 hover:text-zinc-300 transition-colors shrink-0 mb-[1px]"
-                  title="Reinitialiser"
-                >
-                  1x
-                </button>
-              )}
-            </div>
           </>
         )}
 

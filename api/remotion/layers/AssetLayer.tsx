@@ -1,6 +1,5 @@
 import React from "react";
-import { Img } from "remotion";
-import { Gif } from "@remotion/gif";
+import { Img, OffthreadVideo } from "remotion";
 import type { Layer } from "../editorTypes";
 
 interface Props {
@@ -11,27 +10,30 @@ export default function AssetLayer({ layer }: Props) {
   const { asset, transform } = layer;
   if (!asset) return null;
 
-  const style: React.CSSProperties = {
-    width: transform.width,
-    height: transform.height,
-    objectFit: "fill" as const,
-    display: "block",
-  };
-
-  const isGif = asset.src.toLowerCase().endsWith(".gif");
-
-  if (isGif) {
+  // GIF assets are pre-converted to WebM (VP9 + alpha) by the render service
+  if (asset.gifVideoSrc) {
     return (
-      <Gif
-        src={asset.src}
-        width={transform.width}
-        height={transform.height}
-        fit="fill"
-        playbackRate={asset.gifSpeed ?? 1}
-        loopBehavior={asset.gifLoop === false ? "pause-after-finish" : "loop"}
+      <OffthreadVideo
+        src={asset.gifVideoSrc}
+        transparent
+        style={{
+          width: transform.width,
+          height: transform.height,
+          objectFit: "fill",
+        }}
       />
     );
   }
 
-  return <Img src={asset.src} style={style} />;
+  return (
+    <Img
+      src={asset.src}
+      style={{
+        width: transform.width,
+        height: transform.height,
+        objectFit: "fill",
+        display: "block",
+      }}
+    />
+  );
 }

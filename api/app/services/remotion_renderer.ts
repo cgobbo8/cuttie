@@ -5,10 +5,12 @@
 
 import { bundle } from '@remotion/bundler'
 import { renderMedia, selectComposition } from '@remotion/renderer'
-import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync, statSync, mkdtempSync, unlinkSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { execSync } from 'node:child_process'
 import path from 'node:path'
 import type { Layer } from '../../remotion/editorTypes.js'
-import { getPresignedUrl } from '#services/s3'
+import { getPresignedUrl, uploadFile } from '#services/s3'
 
 // Cached bundle — auto-invalidates when remotion/ source files change
 let bundleUrl: string | null = null
@@ -66,6 +68,54 @@ function readProbe(jobId: string, clipFilename: string): {
   throw new Error(`Probe file not found: ${probePath}. Run the pipeline again to generate it.`)
 }
 
+/**
+ * Convert a GIF to WebM (VP9 + alpha) using ffmpeg.
+ * For looping: extends the video to fill clipDuration by repeating.
+ * For one-shot: plays once then freezes on the last frame for the remaining duration.
+ */
+async function convertGifToWebm(
+  gifUrl: string,
+  clipDuration: number,
+  loop: boolean,
+  s3Key: string,
+): Promise<string> {
+  const tmp = mkdtempSync(path.join(tmpdir(), 'cuttie-gif-'))
+  const gifPath = path.join(tmp, 'input.gif')
+  const webmPath = path.join(tmp, 'output.webm')
+
+  try {
+    // Download GIF
+    const resp = await fetch(gifUrl)
+    if (!resp.ok) throw new Error(`Failed to download GIF: ${resp.status}`)
+    const buf = Buffer.from(await resp.arrayBuffer())
+    writeFileSync(gifPath, buf)
+
+    if (loop) {
+      // Loop enough times to fill the clip duration
+      execSync(
+        `ffmpeg -y -ignore_loop 0 -i "${gifPath}" -t ${clipDuration} -c:v libvpx-vp9 -pix_fmt yuva420p -auto-alt-ref 0 -b:v 2M -an "${webmPath}"`,
+        { timeout: 30000, stdio: 'pipe' },
+      )
+    } else {
+      // Play once, then freeze last frame for the rest of the clip
+      execSync(
+        `ffmpeg -y -i "${gifPath}" -c:v libvpx-vp9 -pix_fmt yuva420p -auto-alt-ref 0 -b:v 2M -an -vf "tpad=stop_mode=clone:stop_duration=${Math.ceil(clipDuration)}" "${webmPath}"`,
+        { timeout: 30000, stdio: 'pipe' },
+      )
+    }
+
+    // Upload to S3
+    await uploadFile(s3Key, webmPath, 'video/webm')
+    const presignedUrl = await getPresignedUrl(s3Key, 3600)
+
+    return presignedUrl
+  } finally {
+    try { unlinkSync(gifPath) } catch {}
+    try { unlinkSync(webmPath) } catch {}
+    try { unlinkSync(tmp) } catch {} // rmdir
+  }
+}
+
 export interface RenderOptions {
   renderId: string
   layers: Layer[]
@@ -113,7 +163,26 @@ export async function renderClip(opts: RenderOptions): Promise<{ sizeMb: number 
       if (layer.type === 'asset' && layer.asset?.src) {
         const assetMatch = layer.asset.src.match(/\/api\/assets\/(.+)$/)
         if (assetMatch) {
-          const assetPresignedUrl = await getPresignedUrl(`assets/${assetMatch[1]}`, 3600)
+          const assetFilename = assetMatch[1]
+          const assetPresignedUrl = await getPresignedUrl(`assets/${assetFilename}`, 3600)
+          const isGif = assetFilename.toLowerCase().endsWith('.gif')
+
+          if (isGif) {
+            try {
+              const gifLoop = layer.asset.gifLoop !== false
+              const webmS3Key = `renders/${jobId}/gif_${assetFilename.replace(/\.gif$/i, '')}_${Date.now()}.webm`
+              const webmUrl = await convertGifToWebm(assetPresignedUrl, durationSeconds, gifLoop, webmS3Key)
+              console.log(`[Remotion] Converted GIF → WebM: ${assetFilename} (loop=${gifLoop})`)
+              return {
+                ...layer,
+                asset: { ...layer.asset, src: assetPresignedUrl, gifVideoSrc: webmUrl },
+              }
+            } catch (err: any) {
+              console.error(`[Remotion] GIF→WebM conversion failed: ${err.message}`)
+              // Fall back to static image
+            }
+          }
+
           return {
             ...layer,
             asset: { ...layer.asset, src: assetPresignedUrl },

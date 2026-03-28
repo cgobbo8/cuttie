@@ -71,10 +71,10 @@ export interface ChatData {
 export interface AssetData {
   /** Data URL (base64) or object URL for the image */
   src: string;
-  /** GIF playback speed multiplier (default 1). Lower = slower. */
-  gifSpeed?: number;
   /** Whether GIF should loop (default true). false = play once then freeze on last frame. */
   gifLoop?: boolean;
+  /** Server-set: presigned URL to a WebM (VP9+alpha) converted from the GIF */
+  gifVideoSrc?: string;
 }
 
 export type ShapeType = "rectangle" | "circle";

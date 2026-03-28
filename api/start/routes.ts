@@ -37,6 +37,10 @@ router
         router.get('/jobs/:id/sse', [() => import('#controllers/jobs_controller'), 'stream'])
         router.patch('/jobs/:id/clips/:clipFilename/name', [() => import('#controllers/jobs_controller'), 'renameClip'])
 
+        // Streamers
+        router.get('/streamers', [() => import('#controllers/streamers_controller'), 'index'])
+        router.get('/streamers/:id', [() => import('#controllers/streamers_controller'), 'show'])
+
         // Clips
         router.get('/clips/:jobId/:filename/edit-env', [() => import('#controllers/clips_controller'), 'editEnv'])
         router.get('/clips/:jobId/:filename', [() => import('#controllers/clips_controller'), 'show'])

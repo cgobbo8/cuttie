@@ -33,7 +33,7 @@ export class AuthAccessTokenSchema extends BaseModel {
 }
 
 export class JobSchema extends BaseModel {
-  static $columns = ['clips', 'createdAt', 'error', 'hotPoints', 'id', 'progress', 'status', 'stepTimings', 'streamDate', 'streamer', 'updatedAt', 'url', 'userId', 'viewCount', 'vodDurationSeconds', 'vodGame', 'vodTitle'] as const
+  static $columns = ['clips', 'createdAt', 'error', 'hotPoints', 'id', 'progress', 'status', 'stepTimings', 'streamDate', 'streamer', 'streamerId', 'updatedAt', 'url', 'userId', 'viewCount', 'vodDurationSeconds', 'vodGame', 'vodTitle'] as const
   $columns = JobSchema.$columns
   @column()
   declare clips: any | null
@@ -55,6 +55,8 @@ export class JobSchema extends BaseModel {
   declare streamDate: string | null
   @column()
   declare streamer: string | null
+  @column()
+  declare streamerId: number | null
   @column.dateTime({ autoCreate: true, autoUpdate: true })
   declare updatedAt: DateTime | null
   @column()
@@ -72,7 +74,7 @@ export class JobSchema extends BaseModel {
 }
 
 export class RenderSchema extends BaseModel {
-  static $columns = ['clipFilename', 'clipName', 'createdAt', 'error', 'id', 'jobId', 'outputFilename', 'progress', 'sizeMb', 'status', 'updatedAt', 'userId'] as const
+  static $columns = ['clipFilename', 'clipName', 'createdAt', 'error', 'id', 'jobId', 'outputFilename', 'progress', 'sizeMb', 'status', 'streamerId', 'updatedAt', 'userId'] as const
   $columns = RenderSchema.$columns
   @column()
   declare clipFilename: string
@@ -94,10 +96,32 @@ export class RenderSchema extends BaseModel {
   declare sizeMb: number | null
   @column()
   declare status: string
+  @column()
+  declare streamerId: number | null
   @column.dateTime({ autoCreate: true, autoUpdate: true })
   declare updatedAt: DateTime | null
   @column()
   declare userId: number | null
+}
+
+export class StreamerSchema extends BaseModel {
+  static table = 'streamers'
+  static $columns = ['avatarUrl', 'createdAt', 'displayName', 'id', 'twitchLogin', 'updatedAt', 'userId'] as const
+  $columns = StreamerSchema.$columns
+  @column()
+  declare avatarUrl: string | null
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column()
+  declare displayName: string
+  @column({ isPrimary: true })
+  declare id: number
+  @column()
+  declare twitchLogin: string
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime
+  @column()
+  declare userId: number
 }
 
 export class SessionSchema extends BaseModel {

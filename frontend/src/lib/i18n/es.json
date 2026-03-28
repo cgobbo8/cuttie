@@ -356,6 +356,10 @@
     "classic": "Clásico"
   },
 
+  "streamer": {
+    "select": "Seleccionar un streamer"
+  },
+
   "profile": {
     "title": "Perfil",
     "emailLabel": "Dirección de correo",

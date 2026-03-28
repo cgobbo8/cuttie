@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { unlinkSync } from 'node:fs'
 import path from 'node:path'
 import db from '@adonisjs/lucid/services/db'
+import Job from '#models/job'
 import { renderClip } from '#services/remotion_renderer'
 import { uploadFile, getPresignedDownloadUrl, deleteObject } from '#services/s3'
 
@@ -53,6 +54,10 @@ export default class RendersController {
         ? { start: trim_start, end: trim_end }
         : undefined
 
+    // Get streamer_id from the parent job
+    const job = await Job.find(jobId)
+    const jobStreamerId = job?.streamerId ?? null
+
     const renderId = randomUUID()
     const outputFilename = `render_${renderId}.mp4`
     const outputPath = path.join(CLIPS_BASE, jobId, outputFilename)
@@ -66,6 +71,7 @@ export default class RendersController {
       status: 'rendering',
       progress: 0,
       user_id: user.id,
+      streamer_id: jobStreamerId,
       created_at: now,
       updated_at: now,
     })
@@ -77,14 +83,22 @@ export default class RendersController {
   }
 
   /** GET /api/renders */
-  async index({ response, auth }: HttpContext) {
+  async index({ response, auth, request }: HttpContext) {
     const user = auth.getUserOrFail()
-    const rows = await db
+    const streamerId = request.input('streamer_id') ? Number(request.input('streamer_id')) : null
+
+    const query = db
       .from('renders')
       .join('jobs', 'renders.job_id', 'jobs.id')
       .select('renders.*', 'jobs.vod_title', 'jobs.vod_game')
       .where('renders.user_id', user.id)
       .orderBy('renders.created_at', 'desc')
+
+    if (streamerId) {
+      query.where('renders.streamer_id', streamerId)
+    }
+
+    const rows = await query
     return response.json(rows.map(serializeRender))
   }
 

@@ -10,6 +10,7 @@
 import EventEmitter from 'node:events'
 import env from '#start/env'
 import Job from '#models/job'
+import Streamer from '#models/streamer'
 import { Redis } from 'ioredis'
 
 export interface JobStatusUpdate {
@@ -104,6 +105,32 @@ class JobStatusBus extends EventEmitter {
     if (update.view_count !== undefined) job.viewCount = update.view_count ?? null
     if (update.stream_date !== undefined) job.streamDate = update.stream_date ?? null
     if (update.step_timings !== undefined) job.stepTimings = update.step_timings ?? null
+
+    // Auto-create/link streamer when streamer name arrives and job has no streamer_id yet
+    if (update.streamer && !job.streamerId && job.userId) {
+      try {
+        const login = update.streamer.toLowerCase().replace(/\s+/g, '')
+
+        // Find existing streamer for THIS user with same twitch_login
+        let streamer = await Streamer.query()
+          .where('userId', job.userId)
+          .where('twitchLogin', login)
+          .first()
+
+        if (!streamer) {
+          streamer = await Streamer.create({
+            userId: job.userId,
+            twitchLogin: login,
+            displayName: update.streamer,
+          })
+        }
+
+        job.streamerId = streamer.id
+      } catch (err) {
+        console.error('[JobStatusBus] Failed to link streamer:', err)
+      }
+    }
+
     await job.save()
   }
 }

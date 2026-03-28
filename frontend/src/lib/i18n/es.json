@@ -196,6 +196,8 @@
 
   "editor": {
     "layers": "Capas",
+    "hotpoints": "Momentos clave",
+    "transcription": "Transcripción",
     "hide": "Ocultar",
     "show": "Mostrar",
     "duplicate": "Duplicar",

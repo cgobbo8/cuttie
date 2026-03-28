@@ -196,6 +196,8 @@
 
   "editor": {
     "layers": "Layers",
+    "hotpoints": "Hot Points",
+    "transcription": "Transcription",
     "hide": "Hide",
     "show": "Show",
     "duplicate": "Duplicate",

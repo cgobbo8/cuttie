@@ -196,6 +196,8 @@
 
   "editor": {
     "layers": "Calques",
+    "hotpoints": "Temps forts",
+    "transcription": "Transcription",
     "hide": "Masquer",
     "show": "Afficher",
     "duplicate": "Dupliquer",

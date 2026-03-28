@@ -1,5 +1,5 @@
 import { Crop } from "lucide-react";
-import type { Layer, LayerStyle, ShapeData, SubtitleData, ChatData, TextData } from "../../lib/editorTypes";
+import type { Layer, LayerStyle, ShapeData, SubtitleData, ChatData, TextData, AssetData } from "../../lib/editorTypes";
 import { SUBTITLE_FONTS, TEXT_FONTS, BOX_SHADOW_PRESETS } from "../../lib/editorTypes";
 
 const CANVAS_W = 1080;
@@ -11,6 +11,7 @@ interface Props {
   onSubtitleChange: (id: string, patch: Partial<SubtitleData>) => void;
   onShapeChange: (id: string, patch: Partial<ShapeData>) => void;
   onChatChange: (id: string, patch: Partial<ChatData>) => void;
+  onAssetChange?: (id: string, patch: Partial<AssetData>) => void;
   onTextChange?: (id: string, patch: Partial<TextData>) => void;
   onTransformChange: (id: string, patch: Partial<Layer["transform"]>) => void;
   onCommit: () => void;
@@ -63,8 +64,8 @@ function Slider({
   );
 }
 
-export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange, onShapeChange, onChatChange, onTextChange, onTransformChange, onCommit, onStartCrop }: Props) {
-  const { style, transform, subtitle, shape, chat, text } = layer;
+export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange, onShapeChange, onChatChange, onAssetChange, onTextChange, onTransformChange, onCommit, onStartCrop }: Props) {
+  const { style, transform, subtitle, shape, chat, text, asset } = layer;
 
   const centerX = () => {
     onCommit();
@@ -131,6 +132,28 @@ export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange
             <Crop className="w-3.5 h-3.5" />
             Recadrer la source
           </button>
+        )}
+
+        {/* GIF loop toggle (asset layers with .gif source) */}
+        {asset && onAssetChange && asset.src.toLowerCase().endsWith(".gif") && (
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] text-zinc-400 uppercase tracking-wider font-medium">
+              Boucler le GIF
+            </span>
+            <button
+              onClick={() => {
+                onCommit();
+                onAssetChange(layer.id, { gifLoop: asset.gifLoop === false ? true : false });
+              }}
+              className={`text-[10px] px-2.5 py-1 rounded-md font-medium transition-colors ${
+                asset.gifLoop !== false
+                  ? "bg-white/[0.1] text-zinc-200"
+                  : "bg-white/[0.04] text-zinc-500"
+              }`}
+            >
+              {asset.gifLoop !== false ? "Oui" : "Non"}
+            </button>
+          </div>
         )}
 
         {/* Rotation */}

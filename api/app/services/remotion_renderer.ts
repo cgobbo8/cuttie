@@ -89,8 +89,14 @@ function computeGifPlaybackRate(buffer: Buffer): number {
   // Compute actual total duration (as declared in the GIF)
   const declaredTotal = delays.reduce((sum, d) => sum + d, 0)
 
-  // Compute browser-equivalent duration (with clamping: delays < 20ms → 100ms)
-  const browserTotal = delays.reduce((sum, d) => sum + (d < 20 ? 100 : d), 0)
+  // Compute browser-equivalent duration:
+  // 1. Delays < 20ms are clamped to 100ms (browser standard behavior)
+  // 2. All delays are quantized to the next refresh cycle (~16.7ms at 60fps)
+  const REFRESH = 1000 / 60 // ~16.67ms
+  const browserTotal = delays.reduce((sum, d) => {
+    const clamped = d < 20 ? 100 : d
+    return sum + Math.ceil(clamped / REFRESH) * REFRESH
+  }, 0)
 
   if (declaredTotal <= 0 || browserTotal <= 0) return 1
 

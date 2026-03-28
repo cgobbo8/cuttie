@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { AssetData, ChatData, Layer, LayerAnimation, LayerType, ShapeData, SubtitleData, TextData, VideoLayerData } from "../../lib/editorTypes";
+type AssetPatch = Partial<Omit<AssetData, "src">>;
 import { DEFAULT_STYLE } from "../../lib/editorTypes";
 
 const MAX_HISTORY = 50;
@@ -226,6 +227,15 @@ export function useEditorState(clipKey: string) {
     );
   }, []);
 
+  /** Live asset property update (no history push). */
+  const updateAsset = useCallback((id: string, patch: AssetPatch) => {
+    setLayers((prev) =>
+      prev.map((l) =>
+        l.id === id && l.asset ? { ...l, asset: { ...l.asset, ...patch } } : l,
+      ),
+    );
+  }, []);
+
   /** Live text property update (no history push). */
   const updateText = useCallback((id: string, patch: Partial<TextData>) => {
     setLayers((prev) =>
@@ -360,6 +370,7 @@ export function useEditorState(clipKey: string) {
     updateSubtitle,
     updateShape,
     updateChat,
+    updateAsset,
     updateText,
     addAnimation,
     updateAnimation,

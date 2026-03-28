@@ -73,6 +73,8 @@ export interface AssetData {
   src: string;
   /** Computed playback rate for GIF assets (browser-equivalent speed) */
   gifPlaybackRate?: number;
+  /** Whether GIF should loop (default true). false = play once then freeze on last frame. */
+  gifLoop?: boolean;
 }
 
 export type ShapeType = "rectangle" | "circle";

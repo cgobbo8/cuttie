@@ -32,7 +32,7 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
   const {
     layers, setLayers, selectedId, setSelectedId, selected,
     addLayer,
-    updateTransform, commitTransform, updateStyle, updateSubtitle, updateShape, updateChat, updateText,
+    updateTransform, commitTransform, updateStyle, updateSubtitle, updateShape, updateChat, updateAsset, updateText,
     addAnimation, updateAnimation, removeAnimation,
     reorderLayers, duplicateLayer, removeLayer, renameLayer, toggleVisibility, toggleLock,
     undo, redo,
@@ -687,6 +687,7 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
                   onSubtitleChange={updateSubtitle}
                   onShapeChange={updateShape}
                   onChatChange={updateChat}
+                  onAssetChange={updateAsset}
                   onTextChange={updateText}
                   onTransformChange={updateTransform}
                   onCommit={commitTransform}

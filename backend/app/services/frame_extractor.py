@@ -103,7 +103,8 @@ def _get_duration(clip_path: str) -> float:
             timeout=10,
         )
         return float(result.stdout.strip())
-    except (ValueError, subprocess.TimeoutExpired):
+    except (ValueError, subprocess.TimeoutExpired) as e:
+        logger.warning("Failed to get duration for %s: %s", clip_path, e)
         return 0.0
 
 
@@ -124,5 +125,6 @@ def _extract_single_frame(clip_path: str, timestamp: float, output_path: str) ->
             capture_output=True,
         )
         return os.path.isfile(output_path)
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
+        logger.warning("Failed to extract frame at %.1fs from %s: %s", timestamp, clip_path, e)
         return False

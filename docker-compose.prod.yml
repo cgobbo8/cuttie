@@ -1,0 +1,77 @@
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: cuttie_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  minio:
+    image: minio/minio
+    container_name: cuttie_minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY:-cuttie}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:-cuttieminio}
+    command: server /data --console-address ":9001"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  createbuckets:
+    image: minio/mc
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set cuttie http://minio:9000 $${S3_ACCESS_KEY:-cuttie} $${S3_SECRET_KEY:-cuttieminio};
+      mc mb --ignore-existing cuttie/$${S3_BUCKET:-cuttie};
+      mc anonymous set download cuttie/$${S3_BUCKET:-cuttie};
+      echo 'Bucket ready';
+      "
+
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    container_name: cuttie_api
+    ports:
+      - "3333:3333"
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 3333
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      S3_ENDPOINT: http://minio:9000
+      S3_BUCKET: ${S3_BUCKET:-cuttie}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-cuttie}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-cuttieminio}
+    env_file:
+      - ./api/.env
+    depends_on:
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  redis_data:
+  minio_data:

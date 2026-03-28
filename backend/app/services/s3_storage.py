@@ -54,5 +54,5 @@ def upload_and_cleanup(local_path: str, s3_key: str, content_type: str = "video/
     try:
         os.remove(local_path)
         logger.debug(f"Deleted local file: {local_path}")
-    except OSError:
-        pass
+    except OSError as e:
+        logger.debug("Failed to delete local file %s: %s", local_path, e)

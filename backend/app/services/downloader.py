@@ -83,7 +83,8 @@ def download_chat(url: str) -> list[dict]:
     try:
         dr = requests.post(gql_url, json={"query": duration_query}, headers=headers, timeout=10)
         vod_duration = dr.json().get("data", {}).get("video", {}).get("lengthSeconds", 0) or 0
-    except Exception:
+    except Exception as e:
+        logger.warning("Failed to fetch VOD duration for %s: %s", video_id, e)
         vod_duration = 36000  # fallback 10h
 
     query = """query VideoCommentsByOffsetOrCursor($videoID: ID!, $cursor: Cursor, $contentOffsetSeconds: Int) {
@@ -153,8 +154,8 @@ def download_chat(url: str) -> list[dict]:
             # Always offset-based (cursor pagination fails with integrity check)
             content_offset = last_ts + 1
 
-    except Exception:
-        pass  # Return whatever we got so far
+    except Exception as e:
+        logger.warning("Chat download interrupted after %d messages: %s", len(messages), e)
 
     logger.info(f"Chat download: {len(messages)} messages over {vod_duration}s VOD")
     return messages

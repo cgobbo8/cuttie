@@ -51,7 +51,8 @@ def _extract_audio_segment(
             capture_output=True,
         )
         return os.path.isfile(output_path)
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
+        logger.warning("Failed to extract triage audio segment %s: %s", output_path, e)
         return False
 
 

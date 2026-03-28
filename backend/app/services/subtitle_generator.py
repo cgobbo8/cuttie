@@ -88,7 +88,8 @@ def transcribe_with_words(clip_path: str) -> tuple[str, float, list[dict]]:
             ],
             check=True, timeout=30, capture_output=True,
         )
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
+        logger.warning("Failed to extract audio for subtitles from %s: %s", clip_path, e)
         return "", 0.0, []
 
     try:

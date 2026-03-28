@@ -8,8 +8,12 @@ Analyzes audio in overlapping windows and extracts:
 - Zero Crossing Rate (noise/screams detection)
 """
 
+import logging
+
 import librosa
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 # Processing constants
 DEFAULT_SR = 11025
@@ -65,7 +69,8 @@ def _compute_pitch_variance_for_window(y_window: np.ndarray, sr: int) -> float:
         )
         var = float(np.nanvar(f0))
         return var if not np.isnan(var) else 0.0
-    except Exception:
+    except Exception as e:
+        logger.warning("Pitch variance computation failed for window: %s", e)
         return 0.0
 
 

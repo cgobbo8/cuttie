@@ -148,8 +148,8 @@ def init_db() -> None:
         try:
             conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {col_type}")
             conn.commit()
-        except sqlite3.OperationalError:
-            pass  # Column already exists
+        except sqlite3.OperationalError as e:
+            logger.debug("Migration %s.%s skipped: %s", table, col, e)
     conn.close()
 
 
@@ -288,8 +288,8 @@ def get_job(job_id: str) -> JobResponse | None:
         try:
             parsed = json.loads(raw_timings)
             step_timings = {k: StepTiming(**v) for k, v in parsed.items()}
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("Failed to parse step_timings for job %s: %s", row["job_id"], e)
 
     return JobResponse(
         job_id=row["job_id"],

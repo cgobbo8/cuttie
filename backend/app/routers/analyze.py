@@ -179,8 +179,8 @@ def get_edit_environment(job_id: str, clip_filename: str) -> JSONResponse:
                     facecam = {k: int(v) for k, v in raw.items()}
                     with open(facecam_path, "w", encoding="utf-8") as f:
                         json.dump(facecam, f)
-        except Exception:
-            pass  # Non-critical — frontend has its own fallback
+        except Exception as e:
+            logger.debug("Facecam detection skipped for %s: %s", job_id, e)
 
     # Compute game crop (same logic as _build_filtergraph)
     from app.services.vertical_clipper import (
@@ -233,8 +233,8 @@ def get_edit_environment(job_id: str, clip_filename: str) -> JSONResponse:
             dominant_color = {"r": r, "g": g, "b": b}
             with open(dominant_path, "w", encoding="utf-8") as f:
                 json.dump(dominant_color, f)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Dominant color extraction skipped for %s: %s", clip_filename, e)
 
     return JSONResponse(content={
         "clip_width": input_w,

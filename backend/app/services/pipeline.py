@@ -321,8 +321,8 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
                 if f.endswith(".mp4"):
                     try:
                         os.remove(os.path.join(clip_dir, f))
-                    except OSError:
-                        pass
+                    except OSError as e:
+                        logger.debug("Failed to delete temp clip %s: %s", f, e)
 
 
 def _reattach_clips(job_id: str, hot_points: list) -> None:

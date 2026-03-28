@@ -9,17 +9,21 @@
 
 import router from '@adonisjs/core/services/router'
 import { middleware } from '#start/kernel'
+import { rateLimit } from '#middleware/rate_limit_middleware'
 
 router.get('/', () => {
   return { status: 'ok' }
 })
 
+// Rate limit: 5 login attempts per 15 minutes per IP
+const authRateLimit = rateLimit(5, 15 * 60 * 1000)
+
 router
   .group(() => {
-    // ── Auth (public) ──────────────────────────────────────────────────────
-    router.post('/auth/login', [() => import('#controllers/access_token_controller'), 'store'])
+    // ── Auth (public, rate-limited) ────────────────────────────────────────
+    router.post('/auth/login', [() => import('#controllers/access_token_controller'), 'store']).use(authRateLimit)
     router.get('/auth/google/redirect', [() => import('#controllers/google_auth_controller'), 'redirect'])
-    router.get('/auth/google/callback', [() => import('#controllers/google_auth_controller'), 'callback'])
+    router.get('/auth/google/callback', [() => import('#controllers/google_auth_controller'), 'callback']).use(authRateLimit)
 
     // ── All protected routes (session cookie auth) ─────────────────────────
     router

@@ -26,7 +26,8 @@ def _encode_frame(path: str) -> str | None:
         with open(path, "rb") as f:
             data = base64.b64encode(f.read()).decode("utf-8")
         return f"data:image/jpeg;base64,{data}"
-    except OSError:
+    except OSError as e:
+        logger.debug("Failed to encode frame %s: %s", path, e)
         return None
 
 

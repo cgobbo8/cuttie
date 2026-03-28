@@ -41,7 +41,8 @@ def _extract_audio_segment(clip_path: str, output_path: str) -> bool:
             capture_output=True,
         )
         return True
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
+        logger.warning("Failed to extract audio from %s: %s", clip_path, e)
         return False
 
 

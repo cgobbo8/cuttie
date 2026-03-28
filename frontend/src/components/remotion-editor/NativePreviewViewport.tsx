@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { Layer, SubtitleWord, ChatMessage } from "../../lib/editorTypes";
 import { BOX_SHADOW_PRESETS } from "../../lib/editorTypes";
 import { evaluateAnimations } from "../../lib/animations";
@@ -81,6 +82,7 @@ export default function NativePreviewViewport({
   onPause,
   onDuration,
 }: Props) {
+  const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(0.3);
   const secondaryRefs = useRef<Map<string, HTMLVideoElement>>(new Map());
@@ -311,7 +313,7 @@ export default function NativePreviewViewport({
                   }}>
                     {showPlaceholder ? (
                       <span style={{ color: highlightColor, opacity: 0.5 }}>
-                        {subtitle.uppercase ? "SOUS-TITRES" : "Sous-titres"}
+                        {subtitle.uppercase ? t("editor.subtitles").toUpperCase() : t("editor.subtitles")}
                       </span>
                     ) : (
                       activeChunk!.map((word, i) => (
@@ -422,7 +424,7 @@ export default function NativePreviewViewport({
                     wordBreak: "break-word",
                     whiteSpace: "pre-wrap",
                   }}>
-                    {text.content || "Texte"}
+                    {text.content || t("editor.text")}
                   </span>
                 </div>
               );
@@ -466,7 +468,7 @@ export default function NativePreviewViewport({
 
         {layers.length === 0 && (
           <div className="absolute inset-0 flex items-center justify-center" style={{ pointerEvents: "none" }}>
-            <p className="text-zinc-700 text-sm">Canvas vide — ajoute un calque</p>
+            <p className="text-zinc-700 text-sm">{t("editor.emptyCanvas")}</p>
           </div>
         )}
       </div>

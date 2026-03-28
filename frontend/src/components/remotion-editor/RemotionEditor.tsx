@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ArrowLeft, Undo2, Redo2, Loader2, Download, Plus, Video, User, MessageSquare, MessagesSquare, ImagePlus, FolderOpen, Square, Circle, SlidersHorizontal, LayoutTemplate, Sparkles, X, Check, Pencil, Type } from "lucide-react";
 import { clipUrl, getEditEnvironment, startRender, renameClip, uploadAsset, listAssets, assetUrl, type EditEnvironment, type HotPoint, type AssetInfo } from "../../lib/api";
 import type { Layer, SubtitleData } from "../../lib/editorTypes";
@@ -27,6 +28,7 @@ function applyUid() {
 }
 
 export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
+  const { t } = useTranslation();
   const clipKey = `${jobId}_${hotPoint.clip_filename}`;
   const editor = useEditorState(clipKey);
   const {
@@ -487,7 +489,7 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
       setExportToast(true);
       setTimeout(() => setExportToast(false), 6000);
     } catch (err) {
-      alert(`Export échoué: ${err instanceof Error ? err.message : "erreur inconnue"}`);
+      alert(t("editor.exportFailed", { error: err instanceof Error ? err.message : "erreur inconnue" }));
     } finally {
       setExporting(false);
     }
@@ -541,7 +543,7 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
         <div className="absolute inset-0 z-[100] bg-zinc-950/70 flex items-center justify-center backdrop-blur-sm">
           <div className="flex items-center gap-3 text-sm text-zinc-300">
             <Loader2 className="w-5 h-5 animate-spin text-white" />
-            Chargement des donnees du clip...
+            {t("editor.loadingClipData")}
           </div>
         </div>
       )}
@@ -551,7 +553,7 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
         <div className="flex items-center gap-4">
           <button onClick={onClose} className="text-zinc-500 hover:text-white transition-colors flex items-center gap-1.5 text-xs">
             <ArrowLeft className="w-4 h-4" />
-            Retour
+            {t("clipEditor.back")}
           </button>
           <div className="h-5 w-px bg-white/[0.06]" />
           {editingName ? (
@@ -568,7 +570,7 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
             <button
               onClick={() => { setNameInput(clipName); setEditingName(true); }}
               className="text-sm font-semibold text-white hover:text-zinc-200 transition-colors flex items-center gap-1.5 group"
-              title="Renommer le clip"
+              title={t("editor.renameClip")}
             >
               {clipName}
               <Pencil className="w-3 h-3 text-zinc-600 group-hover:text-white transition-colors" />
@@ -576,10 +578,10 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
           )}
           <div className="h-5 w-px bg-white/[0.06]" />
           <div className="flex gap-0.5">
-            <button onClick={undo} className="text-zinc-500 hover:text-white transition-colors p-1 rounded hover:bg-white/[0.05]" title="Annuler (⌘Z)">
+            <button onClick={undo} className="text-zinc-500 hover:text-white transition-colors p-1 rounded hover:bg-white/[0.05]" title={t("editor.undo")}>
               <Undo2 className="w-4 h-4" />
             </button>
-            <button onClick={redo} className="text-zinc-500 hover:text-white transition-colors p-1 rounded hover:bg-white/[0.05]" title="Rétablir (⌘⇧Z)">
+            <button onClick={redo} className="text-zinc-500 hover:text-white transition-colors p-1 rounded hover:bg-white/[0.05]" title={t("editor.redo")}>
               <Redo2 className="w-4 h-4" />
             </button>
           </div>
@@ -592,9 +594,9 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
             className="text-xs px-3 py-1.5 rounded-lg bg-white hover:bg-zinc-200 text-black font-medium transition-colors flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {exporting ? (
-              <><Loader2 className="w-3.5 h-3.5 animate-spin" />Export...</>
+              <><Loader2 className="w-3.5 h-3.5 animate-spin" />{t("editor.exporting")}</>
             ) : (
-              <><Download className="w-3.5 h-3.5" />Exporter</>
+              <><Download className="w-3.5 h-3.5" />{t("editor.export")}</>
             )}
           </button>
         </div>
@@ -623,38 +625,38 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
               className="w-full text-xs px-3 py-2 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] text-zinc-200 hover:text-zinc-100 transition-colors flex items-center justify-center gap-2 font-medium"
             >
               <Plus className="w-4 h-4" />
-              Ajouter layer
+              {t("editor.addLayer")}
             </button>
 
             {addMenuOpen && (
               <div className="absolute bottom-full left-2 right-2 mb-1 bg-zinc-900 border border-white/[0.08] rounded-lg shadow-xl overflow-hidden z-50">
                 <button onClick={handleAddGameplay} className="w-full text-left text-xs px-3 py-2.5 hover:bg-white/[0.05] text-zinc-300 hover:text-white transition-colors flex items-center gap-2">
-                  <Video className="w-4 h-4 text-white shrink-0" />Gameplay
+                  <Video className="w-4 h-4 text-white shrink-0" />{t("editor.gameplay")}
                 </button>
                 <button onClick={handleAddFacecam} disabled={editEnvLoading} className="w-full text-left text-xs px-3 py-2.5 hover:bg-white/[0.05] text-zinc-300 hover:text-white transition-colors flex items-center gap-2 disabled:opacity-40">
-                  <User className="w-4 h-4 text-white shrink-0" />Facecam
+                  <User className="w-4 h-4 text-white shrink-0" />{t("editor.facecam")}
                 </button>
                 <button onClick={handleAddSubtitles} disabled={editEnvLoading} className="w-full text-left text-xs px-3 py-2.5 hover:bg-white/[0.05] text-zinc-300 hover:text-white transition-colors flex items-center gap-2 disabled:opacity-40">
-                  <MessageSquare className="w-4 h-4 text-white shrink-0" />Sous-titres
+                  <MessageSquare className="w-4 h-4 text-white shrink-0" />{t("editor.subtitles")}
                 </button>
                 <button onClick={handleAddChat} disabled={editEnvLoading} className="w-full text-left text-xs px-3 py-2.5 hover:bg-white/[0.05] text-zinc-300 hover:text-white transition-colors flex items-center gap-2 disabled:opacity-40">
-                  <MessagesSquare className="w-4 h-4 text-white shrink-0" />Chat Twitch
+                  <MessagesSquare className="w-4 h-4 text-white shrink-0" />{t("editor.twitchChat")}
                 </button>
                 <button onClick={handleAddAsset} className="w-full text-left text-xs px-3 py-2.5 hover:bg-white/[0.05] text-zinc-300 hover:text-white transition-colors flex items-center gap-2">
-                  <ImagePlus className="w-4 h-4 text-white shrink-0" />Importer image
+                  <ImagePlus className="w-4 h-4 text-white shrink-0" />{t("editor.importImage")}
                 </button>
                 <button onClick={handleOpenLibrary} className="w-full text-left text-xs px-3 py-2.5 hover:bg-white/[0.05] text-zinc-300 hover:text-white transition-colors flex items-center gap-2">
-                  <FolderOpen className="w-4 h-4 text-white shrink-0" />Bibliothèque
+                  <FolderOpen className="w-4 h-4 text-white shrink-0" />{t("editor.library")}
                 </button>
                 <button onClick={handleAddText} className="w-full text-left text-xs px-3 py-2.5 hover:bg-white/[0.05] text-zinc-300 hover:text-white transition-colors flex items-center gap-2">
-                  <Type className="w-4 h-4 text-white shrink-0" />Texte
+                  <Type className="w-4 h-4 text-white shrink-0" />{t("editor.text")}
                 </button>
                 <div className="h-px bg-white/[0.06] mx-2" />
                 <button onClick={() => handleAddShape("rectangle")} className="w-full text-left text-xs px-3 py-2.5 hover:bg-white/[0.05] text-zinc-300 hover:text-white transition-colors flex items-center gap-2">
-                  <Square className="w-4 h-4 text-white shrink-0" />Rectangle
+                  <Square className="w-4 h-4 text-white shrink-0" />{t("editor.rectangle")}
                 </button>
                 <button onClick={() => handleAddShape("circle")} className="w-full text-left text-xs px-3 py-2.5 hover:bg-white/[0.05] text-zinc-300 hover:text-white transition-colors flex items-center gap-2">
-                  <Circle className="w-4 h-4 text-white shrink-0" />Cercle
+                  <Circle className="w-4 h-4 text-white shrink-0" />{t("editor.circle")}
                 </button>
               </div>
             )}
@@ -695,7 +697,7 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
                 />
               ) : (
                 <div className="flex-1 flex items-center justify-center px-4">
-                  <p className="text-[11px] text-zinc-600 text-center">Sélectionne un calque pour voir ses propriétés</p>
+                  <p className="text-[11px] text-zinc-600 text-center">{t("editor.selectLayerProperties")}</p>
                 </div>
               )
             )}
@@ -711,7 +713,7 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
                 />
               ) : (
                 <div className="flex-1 flex items-center justify-center px-4">
-                  <p className="text-[11px] text-zinc-600 text-center">Sélectionne un calque pour gérer ses animations</p>
+                  <p className="text-[11px] text-zinc-600 text-center">{t("editor.selectLayerAnimations")}</p>
                 </div>
               )
             )}
@@ -723,21 +725,21 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
             <button
               onClick={() => setRightTab("properties")}
               className={`w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${rightTab === "properties" ? "bg-white/[0.08] text-zinc-200" : "text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.05]"}`}
-              title="Propriétés"
+              title={t("editor.properties")}
             >
               <SlidersHorizontal className="w-4 h-4" />
             </button>
             <button
               onClick={() => setRightTab("animations")}
               className={`w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${rightTab === "animations" ? "bg-white/[0.08] text-zinc-200" : "text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.05]"}`}
-              title="Animations"
+              title={t("editor.animations")}
             >
               <Sparkles className="w-4 h-4" />
             </button>
             <button
               onClick={() => setRightTab("themes")}
               className={`w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${rightTab === "themes" ? "bg-white/[0.08] text-zinc-200" : "text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.05]"}`}
-              title="Thèmes"
+              title={t("editor.themes")}
             >
               <LayoutTemplate className="w-4 h-4" />
             </button>
@@ -771,14 +773,14 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60" onClick={() => setAssetLibraryOpen(false)}>
           <div className="bg-zinc-900 border border-white/[0.08] rounded-xl shadow-2xl w-[480px] max-h-[70vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.06]">
-              <h3 className="text-sm font-semibold text-white">Bibliothèque d'assets</h3>
+              <h3 className="text-sm font-semibold text-white">{t("editor.assetLibrary")}</h3>
               <button onClick={() => setAssetLibraryOpen(false)} className="text-zinc-500 hover:text-white transition-colors">
                 <X className="w-4 h-4" />
               </button>
             </div>
             <div className="flex-1 overflow-y-auto p-4">
               {assetLibrary.length === 0 ? (
-                <p className="text-xs text-zinc-500 text-center py-8">Aucun asset importé pour l'instant.</p>
+                <p className="text-xs text-zinc-500 text-center py-8">{t("editor.noAssets")}</p>
               ) : (
                 <div className="grid grid-cols-4 gap-2">
                   {assetLibrary.map((a) => (
@@ -801,7 +803,7 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
                 onClick={() => { setAssetLibraryOpen(false); fileInputRef.current?.click(); }}
                 className="w-full text-xs px-3 py-2 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] text-zinc-200 hover:text-zinc-100 transition-colors flex items-center justify-center gap-2 font-medium"
               >
-                <Plus className="w-4 h-4" />Importer une nouvelle image
+                <Plus className="w-4 h-4" />{t("editor.importNewImage")}
               </button>
             </div>
           </div>
@@ -815,11 +817,11 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
             <Check className="w-4 h-4 text-white" />
           </div>
           <div>
-            <p className="text-sm text-white font-medium">Export lance</p>
-            <p className="text-[11px] text-zinc-400">Tu peux suivre la progression et telecharger dans la page Exports.</p>
+            <p className="text-sm text-white font-medium">{t("editor.exportStarted")}</p>
+            <p className="text-[11px] text-zinc-400">{t("editor.exportStartedHint")}</p>
           </div>
           <a href="/exports" className="text-xs px-3 py-1.5 rounded-lg bg-white/[0.08] hover:bg-white/[0.12] text-zinc-200 hover:text-zinc-100 transition-colors font-medium whitespace-nowrap">
-            Voir les exports
+            {t("editor.viewExports")}
           </a>
           <button onClick={() => setExportToast(false)} className="text-zinc-600 hover:text-white transition-colors ml-1">
             <X className="w-4 h-4" />

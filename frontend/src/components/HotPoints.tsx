@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { Link } from "react-router";
 import { clipUrl, type HotPoint } from "../lib/api";
+import { useTranslation } from "react-i18next";
 import {
   ChevronDown,
   Pencil,
@@ -27,31 +28,18 @@ interface Props {
 }
 
 interface SignalInfo {
-  label: string;
+  labelKey: string;
   key: keyof HotPoint["signals"];
 }
 
 const SIGNALS: SignalInfo[] = [
-  { label: "Volume", key: "rms" },
-  { label: "Chat", key: "chat_speed" },
-  { label: "Flux spectral", key: "spectral_flux" },
-  { label: "Pitch", key: "pitch_variance" },
-  { label: "Brillance", key: "spectral_centroid" },
-  { label: "ZCR", key: "zcr" },
+  { labelKey: "signals.rms", key: "rms" },
+  { labelKey: "signals.chat_speed", key: "chat_speed" },
+  { labelKey: "signals.spectral_flux", key: "spectral_flux" },
+  { labelKey: "signals.pitch_variance", key: "pitch_variance" },
+  { labelKey: "signals.spectral_centroid", key: "spectral_centroid" },
+  { labelKey: "signals.zcr", key: "zcr" },
 ];
-
-const CATEGORY_STYLES: Record<string, string> = {
-  fun: "Fun",
-  rage: "Rage",
-  clutch: "Clutch",
-  skill: "Skill",
-  fail: "Fail",
-  emotional: "Emotional",
-  reaction: "Reaction",
-  storytelling: "Story",
-  awkward: "Awkward",
-  hype: "Hype",
-};
 
 function formatDuration(seconds: number): string {
   const h = Math.floor(seconds / 3600);
@@ -80,6 +68,7 @@ function SignalBars({
   signals: HotPoint["signals"];
   activeSignals: SignalInfo[];
 }) {
+  const { t } = useTranslation();
   return (
     <div className="space-y-2">
       {activeSignals.map((signal) => {
@@ -87,7 +76,7 @@ function SignalBars({
         return (
           <div key={signal.key} className="flex items-center gap-3">
             <span className="text-[11px] text-zinc-500 w-20 text-right shrink-0">
-              {signal.label}
+              {t(signal.labelKey)}
             </span>
             <div className="flex-1 h-1 bg-white/[0.04] rounded-full overflow-hidden">
               <div
@@ -183,6 +172,7 @@ function ClipCard({
   activeSignals: SignalInfo[];
   isNew?: boolean;
 }) {
+  const { t } = useTranslation();
   const [showSkeleton, setShowSkeleton] = useState(isNew === true);
   const [expanded, setExpanded] = useState(false);
   const [activeMoment, setActiveMoment] = useState<number | null>(null);
@@ -191,8 +181,8 @@ function ClipCard({
 
   useEffect(() => {
     if (!showSkeleton) return;
-    const t = setTimeout(() => setShowSkeleton(false), 2500);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => setShowSkeleton(false), 2500);
+    return () => clearTimeout(timer);
   }, [showSkeleton]);
 
   const displayScore = point.final_score ?? point.score;
@@ -241,14 +231,14 @@ function ClipCard({
             className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-black bg-white hover:bg-zinc-200 rounded-lg transition-colors"
           >
             <Pencil className="w-3.5 h-3.5" />
-            Editer
+            {t("hotPoints.edit")}
           </Link>
           <button
             onClick={handleDownload}
             className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-zinc-300 bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.08] rounded-lg transition-colors"
           >
             <Download className="w-3.5 h-3.5" />
-            Clip brut
+            {t("hotPoints.rawClip")}
           </button>
         </div>
       )}
@@ -272,13 +262,13 @@ function ClipCard({
           <div className="flex flex-wrap items-center gap-1.5 mb-3">
             {point.llm?.category && (
               <Tag>
-                {CATEGORY_STYLES[point.llm.category] || point.llm.category}
+                {t(`categories.${point.llm.category}`, { defaultValue: point.llm.category })}
               </Tag>
             )}
             {point.chat_mood && <Tag>{point.chat_mood}</Tag>}
             {point.chat_message_count != null &&
               point.chat_message_count > 0 && (
-                <Tag>{point.chat_message_count} msg</Tag>
+                <Tag>{point.chat_message_count} {t("hotPoints.msg")}</Tag>
               )}
             {point.clip_name && (
               <span className="text-[11px] font-mono text-zinc-600">
@@ -297,14 +287,14 @@ function ClipCard({
           {/* Score line — descriptive */}
           <div className="flex flex-wrap items-center gap-3 text-xs text-zinc-500 mb-4">
             <span>
-              Score de viralite :{" "}
+              {t("hotPoints.viralityScore")}{" "}
               <span className="text-white font-semibold">
                 {Math.round(displayScore * 100)}%
               </span>
             </span>
             {point.llm && point.llm.virality_score > 0 && (
               <span>
-                Potentiel viral :{" "}
+                {t("hotPoints.viralPotential")}{" "}
                 <span className="text-zinc-300">
                   {Math.round(point.llm.virality_score * 100)}%
                 </span>
@@ -343,7 +333,7 @@ function ClipCard({
             <ChevronDown
               className={`w-3.5 h-3.5 transition-transform ${expanded ? "rotate-180" : ""}`}
             />
-            {expanded ? "Masquer les details" : "Voir les details"}
+            {expanded ? t("hotPoints.hideDetails") : t("hotPoints.showDetails")}
           </button>
         </div>
       </div>
@@ -357,7 +347,7 @@ function ClipCard({
               {point.llm?.narrative && (
                 <div>
                   <h4 className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider mb-2">
-                    Recit
+                    {t("hotPoints.narrative")}
                   </h4>
                   <p className="text-sm text-zinc-300 leading-relaxed">
                     {point.llm.narrative}
@@ -368,7 +358,7 @@ function ClipCard({
               {point.llm?.transcript && (
                 <div>
                   <h4 className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider mb-2">
-                    Transcription
+                    {t("hotPoints.transcript")}
                   </h4>
                   <p className="text-sm text-zinc-500 leading-relaxed italic">
                     {point.llm.transcript}
@@ -379,21 +369,21 @@ function ClipCard({
               {/* Score breakdown */}
               <div>
                 <h4 className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider mb-2">
-                  Decomposition du score
+                  {t("hotPoints.scoreBreakdown")}
                 </h4>
                 <div className="space-y-1.5 text-xs text-zinc-500">
                   <div className="flex justify-between">
-                    <span>Score final</span>
+                    <span>{t("hotPoints.finalScore")}</span>
                     <span className="text-white font-semibold">{Math.round(displayScore * 100)}%</span>
                   </div>
                   {point.final_score != null && (
                     <>
                       <div className="flex justify-between">
-                        <span>Heuristique (x0.3)</span>
+                        <span>{t("hotPoints.heuristic")}</span>
                         <span className="text-zinc-300">{Math.round(point.score * 100)}%</span>
                       </div>
                       <div className="flex justify-between">
-                        <span>LLM viralite (x0.7)</span>
+                        <span>{t("hotPoints.llmVirality")}</span>
                         <span className="text-zinc-300">
                           {point.llm
                             ? Math.round(point.llm.virality_score * 100)
@@ -409,7 +399,7 @@ function ClipCard({
             {/* Right: Signal bars */}
             <div>
               <h4 className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider mb-3">
-                Signaux
+                {t("hotPoints.signals")}
               </h4>
               <SignalBars signals={point.signals} activeSignals={activeSignals} />
             </div>
@@ -419,7 +409,7 @@ function ClipCard({
           {moments.length > 0 && (
             <div className="px-5 pb-5">
               <h4 className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider mb-2">
-                Moments cles
+                {t("hotPoints.keyMoments")}
               </h4>
               <div className="space-y-1">
                 {moments.map((moment, mi) => (
@@ -465,6 +455,7 @@ export default function HotPoints({
   animatedClips,
   isFinalSort,
 }: Props) {
+  const { t } = useTranslation();
   const activeSignals = SIGNALS.filter((signal) =>
     hotPoints.some((hp) => hp.signals[signal.key] > 0.01),
   );
@@ -494,18 +485,16 @@ export default function HotPoints({
             </span>
           )}
           <span>{formatDuration(vodDuration)}</span>
-          {viewCount > 0 && <span>{viewCount.toLocaleString()} vues</span>}
+          {viewCount > 0 && <span>{viewCount.toLocaleString()} {t("hotPoints.views")}</span>}
         </div>
         <p className="text-sm text-zinc-600 mt-2">
           {isStreaming ? (
             <span className="flex items-center gap-1.5">
               <Flame className="w-3.5 h-3.5 text-zinc-400" />
-              {hotPoints.length} clip
-              {hotPoints.length > 1 ? "s" : ""} pret
-              {hotPoints.length > 1 ? "s" : ""}
+              {t("hotPoints.clipsReady", { count: hotPoints.length })}
             </span>
           ) : (
-            `${hotPoints.length} moments forts detectes`
+            t("hotPoints.hotPointsDetected", { count: hotPoints.length })
           )}
         </p>
       </div>

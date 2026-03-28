@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router";
 import { listJobs, retryJob, type JobSummary } from "../lib/api";
+import { useTranslation } from "react-i18next";
 import {
   Search,
   ArrowUpDown,
@@ -12,9 +13,10 @@ import {
 type SortKey = "date" | "title" | "status";
 type SortDir = "asc" | "desc";
 
-function formatDate(iso: string): string {
+function formatDate(iso: string, lng: string): string {
+  const locale = lng === "es" ? "es-ES" : lng === "en" ? "en-US" : "fr-FR";
   const d = new Date(iso);
-  return d.toLocaleDateString("fr-FR", {
+  return d.toLocaleDateString(locale, {
     day: "numeric",
     month: "short",
     hour: "2-digit",
@@ -30,11 +32,12 @@ function formatDuration(seconds: number | null): string {
 }
 
 function StatusBadge({ status }: { status: string }) {
+  const { t } = useTranslation();
   if (status === "DONE") {
     return (
       <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400">
         <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-        Termine
+        {t("status.done")}
       </span>
     );
   }
@@ -42,19 +45,20 @@ function StatusBadge({ status }: { status: string }) {
     return (
       <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full bg-red-500/10 text-red-400">
         <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
-        Erreur
+        {t("status.error")}
       </span>
     );
   }
   return (
     <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full bg-white/[0.06] text-zinc-300">
       <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 animate-pulse" />
-      En cours
+      {t("status.inProgress")}
     </span>
   );
 }
 
 export default function HomePage() {
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const [jobs, setJobs] = useState<JobSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -155,10 +159,10 @@ export default function HomePage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-semibold text-white tracking-tight">
-            Projets
+            {t("home.title")}
           </h1>
           <p className="text-sm text-zinc-500 mt-0.5">
-            {jobs.length} analyse{jobs.length !== 1 ? "s" : ""}
+            {t("home.analysisCount", { count: jobs.length })}
           </p>
         </div>
       </div>
@@ -170,7 +174,7 @@ export default function HomePage() {
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Rechercher..."
+          placeholder={t("home.search")}
           className="w-full pl-10 pr-4 py-2.5 bg-white/[0.03] border border-white/[0.08] rounded-lg text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-white/[0.16] transition-colors"
         />
       </div>
@@ -184,20 +188,20 @@ export default function HomePage() {
         <div className="text-center py-20">
           <FolderOpen className="w-8 h-8 text-zinc-700 mx-auto mb-3" />
           <p className="text-sm text-zinc-500">
-            {search ? "Aucun resultat" : "Aucun projet"}
+            {search ? t("common.noResults") : t("home.noProjects")}
           </p>
           <p className="text-xs text-zinc-600 mt-1">
-            Utilise le bouton "Nouveau projet" pour commencer.
+            {t("home.noProjectsHint")}
           </p>
         </div>
       ) : (
         <div className="surface-static rounded-xl overflow-hidden">
           {/* Table header */}
           <div className="grid grid-cols-[1fr_120px_100px_140px] gap-4 px-5 py-3 border-b border-white/[0.06] bg-white/[0.02]">
-            <SortButton label="Titre" sortKeyVal="title" />
-            <SortButton label="Statut" sortKeyVal="status" />
-            <span className="text-xs font-medium text-zinc-500">Duree</span>
-            <SortButton label="Date" sortKeyVal="date" />
+            <SortButton label={t("home.colTitle")} sortKeyVal="title" />
+            <SortButton label={t("home.colStatus")} sortKeyVal="status" />
+            <span className="text-xs font-medium text-zinc-500">{t("home.colDuration")}</span>
+            <SortButton label={t("home.colDate")} sortKeyVal="date" />
           </div>
 
           {/* Rows */}
@@ -210,7 +214,7 @@ export default function HomePage() {
               {/* Title */}
               <div className="min-w-0">
                 <p className="text-sm text-zinc-300 truncate group-hover:text-white transition-colors">
-                  {job.vod_title || "VOD sans titre"}
+                  {job.vod_title || t("home.untitledVod")}
                 </p>
               </div>
 
@@ -229,13 +233,13 @@ export default function HomePage() {
               {/* Date + actions */}
               <div className="flex items-center justify-between">
                 <span className="text-xs text-zinc-500">
-                  {formatDate(job.created_at)}
+                  {formatDate(job.created_at, i18n.language)}
                 </span>
                 {job.status === "ERROR" && (
                   <button
                     onClick={(e) => handleRetry(e, job.job_id)}
                     className="p-1.5 text-zinc-500 hover:text-white hover:bg-white/[0.06] rounded-md transition-colors"
-                    title="Reprendre"
+                    title={t("home.retry")}
                   >
                     <RotateCcw className="w-3.5 h-3.5" />
                   </button>

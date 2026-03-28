@@ -2,10 +2,12 @@ import { useEffect, useState, useMemo } from "react";
 import { Link } from "react-router";
 import { Loader2, Download, AlertCircle, Film, Search, Gamepad2 } from "lucide-react";
 import { listRenders, clipUrl, type RenderStatus } from "../lib/api";
+import { useTranslation } from "react-i18next";
 
-function fmtDate(iso: string): string {
+function fmtDate(iso: string, lng: string): string {
+  const locale = lng === "es" ? "es-ES" : lng === "en" ? "en-US" : "fr-FR";
   const d = new Date(iso);
-  return d.toLocaleDateString("fr-FR", {
+  return d.toLocaleDateString(locale, {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
@@ -16,7 +18,8 @@ function fmtDate(iso: string): string {
 
 type StatusFilter = "all" | "done" | "rendering" | "error";
 
-function RenderRow({ render }: { render: RenderStatus }) {
+function RenderRow({ render, lng }: { render: RenderStatus; lng: string }) {
+  const { t } = useTranslation();
   const isRendering = render.status === "rendering";
   const isDone = render.status === "done";
   const isError = render.status === "error";
@@ -63,7 +66,7 @@ function RenderRow({ render }: { render: RenderStatus }) {
               {render.vod_game}
             </span>
           )}
-          <span className="shrink-0">{fmtDate(render.created_at)}</span>
+          <span className="shrink-0">{fmtDate(render.created_at, lng)}</span>
         </div>
       </div>
 
@@ -84,7 +87,7 @@ function RenderRow({ render }: { render: RenderStatus }) {
         )}
 
         {isError && (
-          <span className="text-[11px] text-red-400 font-medium">Erreur</span>
+          <span className="text-[11px] text-red-400 font-medium">{t("exports.error")}</span>
         )}
 
         {isDone && render.url && (
@@ -106,7 +109,7 @@ function RenderRow({ render }: { render: RenderStatus }) {
               className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] text-zinc-300 hover:text-white transition-colors font-medium border border-white/[0.08]"
             >
               <Download className="w-3.5 h-3.5" />
-              Telecharger
+              {t("exports.download")}
             </button>
           </div>
         )}
@@ -116,6 +119,7 @@ function RenderRow({ render }: { render: RenderStatus }) {
 }
 
 export default function ExportsPage() {
+  const { t, i18n } = useTranslation();
   const [renders, setRenders] = useState<RenderStatus[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -185,10 +189,10 @@ export default function ExportsPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-semibold text-white tracking-tight">
-            Exports
+            {t("exports.title")}
           </h1>
           <p className="text-sm text-zinc-500 mt-0.5">
-            {renders.length} export{renders.length !== 1 ? "s" : ""}
+            {t("exports.exportCount", { count: renders.length })}
           </p>
         </div>
       </div>
@@ -201,15 +205,15 @@ export default function ExportsPage() {
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Rechercher par nom, VOD, jeu..."
+            placeholder={t("exports.searchPlaceholder")}
             className="w-full pl-10 pr-4 py-2.5 bg-white/[0.03] border border-white/[0.08] rounded-lg text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-white/[0.16] transition-colors"
           />
         </div>
         <div className="flex items-center gap-1">
-          {filterBtn("all", "Tous")}
-          {filterBtn("done", "Termines")}
-          {filterBtn("rendering", "En cours")}
-          {filterBtn("error", "Erreurs")}
+          {filterBtn("all", t("exports.all"))}
+          {filterBtn("done", t("exports.completed"))}
+          {filterBtn("rendering", t("exports.inProgress"))}
+          {filterBtn("error", t("exports.errors"))}
         </div>
       </div>
 
@@ -223,17 +227,17 @@ export default function ExportsPage() {
             <Film className="w-8 h-8 text-zinc-700 mx-auto mb-3" />
             <p className="text-sm text-zinc-500">
               {search || statusFilter !== "all"
-                ? "Aucun resultat"
-                : "Aucun export pour l'instant."}
+                ? t("common.noResults")
+                : t("exports.noExports")}
             </p>
             {!search && statusFilter === "all" && (
               <p className="text-xs text-zinc-600 mt-1">
-                Lance un export depuis l'editeur pour le voir ici.
+                {t("exports.noExportsHint")}
               </p>
             )}
           </div>
         ) : (
-          filtered.map((r) => <RenderRow key={r.render_id} render={r} />)
+          filtered.map((r) => <RenderRow key={r.render_id} render={r} lng={i18n.language} />)
         )}
       </div>
     </div>

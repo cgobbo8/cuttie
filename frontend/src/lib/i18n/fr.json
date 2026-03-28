@@ -1,0 +1,353 @@
+{
+  "common": {
+    "loading": "Chargement...",
+    "error": "Erreur",
+    "cancel": "Annuler",
+    "save": "Enregistrer",
+    "delete": "Supprimer",
+    "back": "Retour",
+    "or": "ou",
+    "yes": "Oui",
+    "no": "Non",
+    "apply": "Appliquer",
+    "none": "Aucune",
+    "search": "Rechercher...",
+    "noResults": "Aucun resultat",
+    "comingSoon": "bientot"
+  },
+
+  "auth": {
+    "loginTitle": "Cuttie",
+    "loginSubtitle": "Connectez-vous pour continuer",
+    "email": "Email",
+    "password": "Mot de passe",
+    "login": "Se connecter",
+    "loggingIn": "Connexion...",
+    "invalidCredentials": "Identifiants invalides",
+    "continueWithGoogle": "Continuer avec Google",
+    "googleCancelled": "Connexion Google annulee",
+    "googleError": "Erreur d'authentification Google",
+    "logout": "Se deconnecter"
+  },
+
+  "sidebar": {
+    "newProject": "Nouveau projet",
+    "projects": "Projets",
+    "exports": "Exports",
+    "profile": "Profil"
+  },
+
+  "home": {
+    "title": "Projets",
+    "analysisCount_one": "{{count}} analyse",
+    "analysisCount_other": "{{count}} analyses",
+    "search": "Rechercher...",
+    "colTitle": "Titre",
+    "colStatus": "Statut",
+    "colDuration": "Duree",
+    "colDate": "Date",
+    "untitledVod": "VOD sans titre",
+    "noProjects": "Aucun projet",
+    "noProjectsHint": "Utilise le bouton \"Nouveau projet\" pour commencer.",
+    "retry": "Reprendre"
+  },
+
+  "status": {
+    "done": "Termine",
+    "error": "Erreur",
+    "inProgress": "En cours"
+  },
+
+  "jobStatus": {
+    "PENDING": "En attente...",
+    "DOWNLOADING_AUDIO": "Telechargement audio",
+    "DOWNLOADING_CHAT": "Telechargement chat",
+    "ANALYZING_AUDIO": "Analyse audio",
+    "ANALYZING_CHAT": "Analyse du chat",
+    "SCORING": "Calcul des scores",
+    "TRIAGE": "Pre-analyse LLM",
+    "CLIPPING": "Extraction des clips",
+    "TRANSCRIBING": "Transcription",
+    "LLM_ANALYSIS": "Analyse IA",
+    "DONE": "Termine !",
+    "ERROR": "Erreur"
+  },
+
+  "job": {
+    "backToProjects": "Projets",
+    "starting": "Demarrage...",
+    "errorOccurred": "Une erreur est survenue",
+    "retry": "Reprendre",
+    "back": "Retour"
+  },
+
+  "newProject": {
+    "title": "Nouveau projet",
+    "twitchVod": "Twitch VOD",
+    "youtube": "YouTube",
+    "upload": "Upload",
+    "invalidUrl": "URL Twitch invalide",
+    "placeholder": "https://www.twitch.tv/videos/...",
+    "analyzing": "Analyse...",
+    "analyze": "Analyser",
+    "cancel": "Annuler"
+  },
+
+  "hotPoints": {
+    "views": "vues",
+    "clipsReady_one": "{{count}} clip pret",
+    "clipsReady_other": "{{count}} clips prets",
+    "hotPointsDetected": "{{count}} moments forts detectes",
+    "viralityScore": "Score de viralite :",
+    "viralPotential": "Potentiel viral :",
+    "hideDetails": "Masquer les details",
+    "showDetails": "Voir les details",
+    "narrative": "Recit",
+    "transcript": "Transcription",
+    "scoreBreakdown": "Decomposition du score",
+    "finalScore": "Score final",
+    "heuristic": "Heuristique (x0.3)",
+    "llmVirality": "LLM viralite (x0.7)",
+    "signals": "Signaux",
+    "keyMoments": "Moments cles",
+    "edit": "Editer",
+    "rawClip": "Clip brut",
+    "download": "Telecharger",
+    "msg": "msg"
+  },
+
+  "signals": {
+    "rms": "Volume",
+    "chat_speed": "Chat",
+    "spectral_flux": "Flux spectral",
+    "pitch_variance": "Pitch",
+    "spectral_centroid": "Brillance",
+    "zcr": "ZCR"
+  },
+
+  "categories": {
+    "fun": "Fun",
+    "rage": "Rage",
+    "clutch": "Clutch",
+    "skill": "Skill",
+    "fail": "Fail",
+    "emotional": "Emotional",
+    "reaction": "Reaction",
+    "storytelling": "Story",
+    "awkward": "Awkward",
+    "hype": "Hype"
+  },
+
+  "exports": {
+    "title": "Exports",
+    "exportCount_one": "{{count}} export",
+    "exportCount_other": "{{count}} exports",
+    "searchPlaceholder": "Rechercher par nom, VOD, jeu...",
+    "all": "Tous",
+    "completed": "Termines",
+    "inProgress": "En cours",
+    "errors": "Erreurs",
+    "noExports": "Aucun export pour l'instant.",
+    "noExportsHint": "Lance un export depuis l'editeur pour le voir ici.",
+    "download": "Telecharger",
+    "error": "Erreur"
+  },
+
+  "editPage": {
+    "noClipAvailable": "Aucun clip disponible pour l'edition.",
+    "backToResults": "Retour aux resultats"
+  },
+
+  "clipEditor": {
+    "noKeyMoments": "Pas de moments cles",
+    "keyMoments": "Moments cles",
+    "transcript": "Transcription",
+    "noTranscript": "Pas de transcription",
+    "loading": "Chargement...",
+    "back": "Retour",
+    "exporting": "Export...",
+    "exportTrim": "Exporter le trim",
+    "inMark": "In [I]",
+    "outMark": "Out [O]",
+    "spacePlay": "play",
+    "inOut": "in/out",
+    "escape": "quitter"
+  },
+
+  "editor": {
+    "layers": "Calques",
+    "hide": "Masquer",
+    "show": "Afficher",
+    "duplicate": "Dupliquer",
+    "delete": "Supprimer",
+    "unlock": "Deverrouiller",
+    "lock": "Verrouiller",
+
+    "properties": "Proprietes",
+    "layer": "Calque",
+    "centerX": "Centrer X",
+    "centerY": "Centrer Y",
+    "cropSource": "Recadrer la source",
+    "loopGif": "Boucler le GIF",
+    "loopGifHint": "Applique uniquement au rendu exporte. Dans la preview, le GIF boucle toujours.",
+    "rotation": "Rotation",
+    "resetRotation": "Reinitialiser la rotation",
+    "opacity": "Opacite",
+    "blur": "Flou",
+    "borderRadius": "Arrondi",
+    "fadeInSeconds": "Fade in (s)",
+    "fadeOutSeconds": "Fade out (s)",
+    "font": "Police",
+    "size": "Taille",
+    "uppercase": "Majuscules",
+    "color": "Couleur",
+    "auto": "Auto",
+    "custom": "Custom",
+    "textSize": "Taille texte",
+    "visibleMessages": "Messages visibles",
+    "showDuration": "Duree affichage",
+    "messagesInClip": "{{count}} messages dans le clip",
+    "shape": "Forme",
+    "rectangle": "Rectangle",
+    "circle": "Cercle",
+    "backgroundColor": "Couleur de fond",
+    "backgroundOpacity": "Opacite fond",
+    "backdropBlur": "Backdrop blur",
+    "shadow": "Ombre",
+    "content": "Contenu",
+    "textPlaceholder": "Texte...",
+    "alignment": "Alignement",
+    "alignLeft": "Gauche",
+    "alignCenter": "Centre",
+    "alignRight": "Droite",
+    "lineHeight": "Interligne",
+    "fontWeight": "Graisse",
+    "normal": "Normal",
+    "bold": "Gras",
+
+    "themes": "Themes",
+    "default": "defaut",
+    "layerCount_one": "{{count}} calque",
+    "layerCount_other": "{{count}} calques",
+    "builtIn": "- integre",
+    "removeDefault": "Retirer par defaut",
+    "setDefault": "Definir par defaut",
+    "deleteTheme": "Supprimer",
+    "themeNamePlaceholder": "Nom du theme...",
+    "saveTheme": "Enregistrer",
+    "cancelTheme": "Annuler",
+    "saveLayout": "Sauvegarder le layout",
+
+    "animations": "Animations",
+    "noAnimations": "Aucune animation",
+    "noAnimationsHint": "Ajoute une transition d'entree ou de sortie",
+    "entrance": "Entree",
+    "exit": "Sortie",
+    "in": "IN",
+    "out": "OUT",
+    "start": "Debut",
+    "end": "Fin",
+    "duration": "Duree",
+    "easing": "Easing",
+    "addAnimation": "Ajouter animation",
+
+    "audio": "audio",
+    "chat": "chat",
+    "subtitlesToggle": "sous-titres",
+    "trim": "trim",
+
+    "gameplay": "Gameplay",
+    "facecam": "Facecam",
+    "subtitles": "Sous-titres",
+    "twitchChat": "Chat Twitch",
+    "importImage": "Importer image",
+    "library": "Bibliotheque",
+    "text": "Texte",
+
+    "loadingClipData": "Chargement des donnees du clip...",
+    "renameClip": "Renommer le clip",
+    "undo": "Annuler (⌘Z)",
+    "redo": "Retablir (⌘⇧Z)",
+    "exporting": "Export...",
+    "export": "Exporter",
+    "addLayer": "Ajouter layer",
+
+    "selectLayerProperties": "Selectionne un calque pour voir ses proprietes",
+    "selectLayerAnimations": "Selectionne un calque pour gerer ses animations",
+
+    "assetLibrary": "Bibliotheque d'assets",
+    "noAssets": "Aucun asset importe pour l'instant.",
+    "importNewImage": "Importer une nouvelle image",
+
+    "exportStarted": "Export lance",
+    "exportStartedHint": "Tu peux suivre la progression et telecharger dans la page Exports.",
+    "viewExports": "Voir les exports",
+    "exportFailed": "Export echoue: {{error}}",
+
+    "cropLoading": "Chargement...",
+    "cropHint": "Definissez la zone facecam sur la video source",
+    "cropCancel": "Annuler (Esc)",
+    "cropApply": "Appliquer (Enter)",
+
+    "emptyCanvas": "Canvas vide — ajoute un calque"
+  },
+
+  "shadows": {
+    "none": "Aucune",
+    "soft": "Douce",
+    "medium": "Moyenne",
+    "strong": "Forte",
+    "glow": "Glow",
+    "neon": "Neon",
+    "outline": "Outline"
+  },
+
+  "easings": {
+    "linear": "Lineaire",
+    "easeIn": "Ease In",
+    "easeOut": "Ease Out",
+    "easeInOut": "Ease In-Out",
+    "easeIn.power3": "Ease In (Power 3)",
+    "easeOut.power3": "Ease Out (Power 3)",
+    "easeInOut.power3": "Ease In-Out (Power 3)",
+    "easeIn.power4": "Ease In (Power 4)",
+    "easeOut.power4": "Ease Out (Power 4)",
+    "easeInOut.power4": "Ease In-Out (Power 4)",
+    "bounce": "Bounce",
+    "elastic": "Elastic"
+  },
+
+  "animations": {
+    "fadeIn": "Fondu entrant",
+    "fadeOut": "Fondu sortant",
+    "scaleIn": "Zoom entrant",
+    "scaleOut": "Zoom sortant",
+    "bounceIn": "Rebond entrant",
+    "bounceOut": "Rebond sortant",
+    "slideInLeft": "Glisse depuis gauche",
+    "slideInRight": "Glisse depuis droite",
+    "slideInTop": "Glisse depuis haut",
+    "slideInBottom": "Glisse depuis bas",
+    "slideOutLeft": "Glisse vers gauche",
+    "slideOutRight": "Glisse vers droite",
+    "slideOutTop": "Glisse vers haut",
+    "slideOutBottom": "Glisse vers bas"
+  },
+
+  "themeNames": {
+    "gameplayOnly": "Gameplay seul",
+    "classic": "Classique"
+  },
+
+  "profile": {
+    "title": "Profil",
+    "emailLabel": "Adresse email",
+    "languageLabel": "Langue",
+    "changePassword": "Changer le mot de passe",
+    "changePasswordAlert": "La modification du mot de passe sera disponible prochainement.",
+    "languageSaved": "Langue enregistree",
+    "french": "Francais",
+    "english": "Anglais",
+    "spanish": "Espagnol"
+  }
+}

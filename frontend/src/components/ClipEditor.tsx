@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getClipWords, trimClip, type LlmAnalysis, type HotPoint, type TranscriptWord } from "../lib/api";
+import { useTranslation } from "react-i18next";
 
 /* ── Types ──────────────────────────────────────────────── */
 
@@ -153,7 +154,7 @@ function Timeline({
   );
 }
 
-/* ── Left panel (Moments clés / Transcription toggle) ──── */
+/* ── Left panel (Moments / Transcription toggle) ──── */
 
 type LeftTab = "moments" | "transcript";
 
@@ -166,12 +167,13 @@ function MomentsView({
   currentTime: number;
   onSeek: (t: number) => void;
 }) {
+  const { t } = useTranslation();
   const moments = llm?.key_moments ?? [];
 
   if (moments.length === 0) {
     return (
       <div className="flex items-center justify-center h-full text-zinc-600 text-xs">
-        Pas de moments cles
+        {t("clipEditor.noKeyMoments")}
       </div>
     );
   }
@@ -256,6 +258,7 @@ function TranscriptView({
   onSeek: (t: number) => void;
   fallbackText: string;
 }) {
+  const { t } = useTranslation();
   const activeRef = useRef<HTMLButtonElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -276,7 +279,7 @@ function TranscriptView({
           <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="60" opacity="0.3" />
           <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
         </svg>
-        Chargement...
+        {t("clipEditor.loading")}
       </div>
     );
   }
@@ -291,7 +294,7 @@ function TranscriptView({
     }
     return (
       <div className="flex items-center justify-center h-full text-zinc-600 text-xs">
-        Pas de transcription
+        {t("clipEditor.noTranscript")}
       </div>
     );
   }
@@ -342,6 +345,7 @@ function LeftPanel({
   currentTime: number;
   onSeek: (t: number) => void;
 }) {
+  const { t } = useTranslation();
   const hasMoments = (llm?.key_moments?.length ?? 0) > 0;
   const [tab, setTab] = useState<LeftTab>(hasMoments ? "moments" : "transcript");
   const [words, setWords] = useState<TranscriptWord[]>([]);
@@ -364,17 +368,17 @@ function LeftPanel({
     <div className="flex flex-col h-full">
       {/* Tab toggle */}
       <div className="shrink-0 px-3 py-2.5 border-b border-white/[0.06] flex gap-1">
-        {(["moments", "transcript"] as const).map((t) => (
+        {(["moments", "transcript"] as const).map((tabKey) => (
           <button
-            key={t}
-            onClick={() => setTab(t)}
+            key={tabKey}
+            onClick={() => setTab(tabKey)}
             className={`text-[11px] px-3 py-1.5 rounded-md transition-all font-medium ${
-              tab === t
+              tab === tabKey
                 ? "bg-white/[0.08] text-zinc-200"
                 : "text-zinc-600 hover:text-zinc-300 hover:bg-white/[0.03]"
             }`}
           >
-            {t === "moments" ? "Moments cles" : "Transcription"}
+            {tabKey === "moments" ? t("clipEditor.keyMoments") : t("clipEditor.transcript")}
           </button>
         ))}
       </div>
@@ -410,6 +414,7 @@ export default function ClipEditor({
   onClose,
   onSaved,
 }: ClipEditorProps) {
+  const { t } = useTranslation();
   const videoRef = useRef<HTMLVideoElement>(null);
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
@@ -476,11 +481,11 @@ export default function ClipEditor({
       onSaved?.(data.filename);
       onClose();
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Erreur");
+      setError(e instanceof Error ? e.message : t("common.error"));
     } finally {
       setSaving(false);
     }
-  }, [jobId, clipFilename, inTime, outTime, onSaved, onClose]);
+  }, [jobId, clipFilename, inTime, outTime, onSaved, onClose, t]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -519,7 +524,7 @@ export default function ClipEditor({
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
-            Retour
+            {t("clipEditor.back")}
           </button>
           <div className="h-5 w-px bg-white/[0.06]" />
           <span className="text-sm font-semibold text-white">Cuttie</span>
@@ -533,7 +538,7 @@ export default function ClipEditor({
             disabled={saving || inTime >= outTime}
             className="text-xs px-4 py-1.5 rounded-lg bg-white hover:bg-zinc-200 text-black font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {saving ? "Export..." : "Exporter le trim"}
+            {saving ? t("clipEditor.exporting") : t("clipEditor.exportTrim")}
           </button>
         </div>
       </div>
@@ -648,13 +653,13 @@ export default function ClipEditor({
               onClick={markIn}
               className="text-[11px] px-2.5 py-1 rounded-md bg-white/[0.05] hover:bg-white/[0.1] text-zinc-400 hover:text-white transition-colors font-medium"
             >
-              In [I]
+              {t("clipEditor.inMark")}
             </button>
             <button
               onClick={markOut}
               className="text-[11px] px-2.5 py-1 rounded-md bg-white/[0.05] hover:bg-white/[0.1] text-zinc-400 hover:text-white transition-colors font-medium"
             >
-              Out [O]
+              {t("clipEditor.outMark")}
             </button>
 
             <div className="h-5 w-px bg-white/[0.06] mx-1" />
@@ -668,9 +673,9 @@ export default function ClipEditor({
           </div>
 
           <div className="flex items-center gap-3 text-[10px] text-zinc-600">
-            <span><kbd className="text-zinc-500">Space</kbd> play</span>
-            <span><kbd className="text-zinc-500">I</kbd> / <kbd className="text-zinc-500">O</kbd> in/out</span>
-            <span><kbd className="text-zinc-500">Esc</kbd> quitter</span>
+            <span><kbd className="text-zinc-500">Space</kbd> {t("clipEditor.spacePlay")}</span>
+            <span><kbd className="text-zinc-500">I</kbd> / <kbd className="text-zinc-500">O</kbd> {t("clipEditor.inOut")}</span>
+            <span><kbd className="text-zinc-500">Esc</kbd> {t("clipEditor.escape")}</span>
           </div>
         </div>
       </div>

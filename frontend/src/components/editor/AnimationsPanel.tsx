@@ -1,4 +1,5 @@
 import { useCallback, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Plus, Trash2, ChevronDown } from "lucide-react";
 import type { Layer, LayerAnimation, AnimationType, EasingPreset } from "../../lib/editorTypes";
 import { ANIMATION_DEFS, EASING_LABELS } from "../../lib/animations";
@@ -19,12 +20,12 @@ function animUid() {
 
 const ANIMATION_GROUPS = [
   {
-    label: "Entrée",
+    labelKey: "editor.entrance",
     items: (Object.entries(ANIMATION_DEFS) as [AnimationType, typeof ANIMATION_DEFS[AnimationType]][])
       .filter(([, d]) => d.category === "in"),
   },
   {
-    label: "Sortie",
+    labelKey: "editor.exit",
     items: (Object.entries(ANIMATION_DEFS) as [AnimationType, typeof ANIMATION_DEFS[AnimationType]][])
       .filter(([, d]) => d.category === "out"),
   },
@@ -77,6 +78,7 @@ function DurationInput({
 export default function AnimationsPanel({
   layer, clipDuration, onAddAnimation, onUpdateAnimation, onRemoveAnimation, onCommit,
 }: Props) {
+  const { t } = useTranslation();
   const [addMenuOpen, setAddMenuOpen] = useState(false);
   const anims = layer.animations ?? [];
 
@@ -97,15 +99,15 @@ export default function AnimationsPanel({
     <div className="flex flex-col h-full">
       <div className="shrink-0 px-3 py-2.5 border-b border-white/[0.06]">
         <h4 className="text-[10px] font-semibold text-zinc-500 uppercase tracking-widest">
-          Animations
+          {t("editor.animations")}
         </h4>
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto">
         {anims.length === 0 && (
           <div className="px-3 py-6 text-center">
-            <p className="text-[11px] text-zinc-600">Aucune animation</p>
-            <p className="text-[10px] text-zinc-700 mt-1">Ajoute une transition d'entrée ou de sortie</p>
+            <p className="text-[11px] text-zinc-600">{t("editor.noAnimations")}</p>
+            <p className="text-[10px] text-zinc-700 mt-1">{t("editor.noAnimationsHint")}</p>
           </div>
         )}
 
@@ -121,9 +123,9 @@ export default function AnimationsPanel({
                       ? "bg-emerald-500/10 text-emerald-400"
                       : "bg-orange-500/10 text-orange-400"
                   }`}>
-                    {def.category === "in" ? "IN" : "OUT"}
+                    {def.category === "in" ? t("editor.in") : t("editor.out")}
                   </span>
-                  <span className="text-[11px] text-zinc-300 font-medium">{def.label}</span>
+                  <span className="text-[11px] text-zinc-300 font-medium">{t(`animations.${anim.type}`, { defaultValue: def.label })}</span>
                 </div>
                 <button
                   onClick={() => onRemoveAnimation(layer.id, anim.id)}
@@ -136,7 +138,7 @@ export default function AnimationsPanel({
               {/* Time (Début for in, Fin for out) */}
               <div className="flex items-center gap-2 mb-1.5">
                 <label className="text-[10px] text-zinc-500 w-12 shrink-0">
-                  {def.category === "out" ? "Fin" : "Début"}
+                  {def.category === "out" ? t("editor.end") : t("editor.start")}
                 </label>
                 <input
                   type="range"
@@ -162,7 +164,7 @@ export default function AnimationsPanel({
 
               {/* Duration — number input + unit selector */}
               <div className="flex items-center gap-2 mb-1.5 min-w-0">
-                <label className="text-[10px] text-zinc-500 w-12 shrink-0">Durée</label>
+                <label className="text-[10px] text-zinc-500 w-12 shrink-0">{t("editor.duration")}</label>
                 <DurationInput
                   value={anim.duration}
                   onChange={(newDur) => {
@@ -182,7 +184,7 @@ export default function AnimationsPanel({
 
               {/* Easing */}
               <div className="flex items-center gap-2">
-                <label className="text-[10px] text-zinc-500 w-12 shrink-0">Easing</label>
+                <label className="text-[10px] text-zinc-500 w-12 shrink-0">{t("editor.easing")}</label>
                 <div className="relative flex-1">
                   <select
                     value={anim.easing}
@@ -190,7 +192,7 @@ export default function AnimationsPanel({
                     className="w-full text-[10px] bg-white/[0.05] text-zinc-300 rounded px-2 py-1 border border-white/[0.06] outline-none appearance-none cursor-pointer"
                   >
                     {EASING_OPTIONS.map(([key, label]) => (
-                      <option key={key} value={key}>{label}</option>
+                      <option key={key} value={key}>{t(`easings.${key}`, { defaultValue: label })}</option>
                     ))}
                   </select>
                   <ChevronDown className="absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 text-zinc-500 pointer-events-none" />
@@ -208,15 +210,15 @@ export default function AnimationsPanel({
           className="w-full text-xs px-3 py-2 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] text-zinc-200 hover:text-zinc-100 transition-colors flex items-center justify-center gap-2 font-medium"
         >
           <Plus className="w-4 h-4" />
-          Ajouter animation
+          {t("editor.addAnimation")}
         </button>
 
         {addMenuOpen && (
           <div className="absolute bottom-full left-2 right-2 mb-1 bg-zinc-900 border border-white/[0.08] rounded-lg shadow-xl overflow-hidden z-50 max-h-60 overflow-y-auto">
             {ANIMATION_GROUPS.map((group) => (
-              <div key={group.label}>
+              <div key={group.labelKey}>
                 <div className="px-3 py-1.5 text-[9px] font-semibold text-zinc-500 uppercase tracking-widest bg-white/[0.02]">
-                  {group.label}
+                  {t(group.labelKey)}
                 </div>
                 {group.items.map(([type, def]) => (
                   <button
@@ -224,7 +226,7 @@ export default function AnimationsPanel({
                     onClick={() => handleAdd(type)}
                     className="w-full text-left text-xs px-3 py-2 hover:bg-white/[0.05] text-zinc-300 hover:text-white transition-colors"
                   >
-                    {def.label}
+                    {t(`animations.${type}`, { defaultValue: def.label })}
                   </button>
                 ))}
               </div>

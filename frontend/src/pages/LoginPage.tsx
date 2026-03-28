@@ -1,8 +1,10 @@
 import { useState, useEffect, type FormEvent } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { useAuth } from "../lib/AuthContext";
+import { useTranslation } from "react-i18next";
 
 export default function LoginPage() {
+  const { t } = useTranslation();
   const { user, login } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -17,11 +19,11 @@ export default function LoginPage() {
     if (oauthError) {
       setError(
         oauthError === "access_denied"
-          ? "Connexion Google annulee"
-          : "Erreur d'authentification Google"
+          ? t("auth.googleCancelled")
+          : t("auth.googleError")
       );
     }
-  }, [searchParams]);
+  }, [searchParams, t]);
 
   // If already logged in, redirect
   useEffect(() => {
@@ -36,7 +38,7 @@ export default function LoginPage() {
       await login(email, password);
       navigate("/", { replace: true });
     } catch {
-      setError("Identifiants invalides");
+      setError(t("auth.invalidCredentials"));
     } finally {
       setLoading(false);
     }
@@ -47,8 +49,8 @@ export default function LoginPage() {
       <div className="w-full max-w-sm animate-fade-in">
         {/* Logo */}
         <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold tracking-tight text-white">Cuttie</h1>
-          <p className="text-sm text-zinc-500 mt-1">Connectez-vous pour continuer</p>
+          <h1 className="text-2xl font-bold tracking-tight text-white">{t("auth.loginTitle")}</h1>
+          <p className="text-sm text-zinc-500 mt-1">{t("auth.loginSubtitle")}</p>
         </div>
 
         {/* Card */}
@@ -82,13 +84,13 @@ export default function LoginPage() {
                 d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
               />
             </svg>
-            Continuer avec Google
+            {t("auth.continueWithGoogle")}
           </a>
 
           {/* Separator */}
           <div className="flex items-center gap-3">
             <div className="flex-1 h-px bg-white/[0.08]" />
-            <span className="text-xs text-zinc-500">ou</span>
+            <span className="text-xs text-zinc-500">{t("common.or")}</span>
             <div className="flex-1 h-px bg-white/[0.08]" />
           </div>
 
@@ -96,7 +98,7 @@ export default function LoginPage() {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-1.5">
               <label htmlFor="email" className="block text-sm font-medium text-zinc-300">
-                Email
+                {t("auth.email")}
               </label>
               <input
                 id="email"
@@ -112,7 +114,7 @@ export default function LoginPage() {
 
             <div className="space-y-1.5">
               <label htmlFor="password" className="block text-sm font-medium text-zinc-300">
-                Mot de passe
+                {t("auth.password")}
               </label>
               <input
                 id="password"
@@ -131,7 +133,7 @@ export default function LoginPage() {
               disabled={loading}
               className="w-full py-2 px-4 bg-white text-black text-sm font-medium rounded-lg hover:bg-zinc-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              {loading ? "Connexion..." : "Se connecter"}
+              {loading ? t("auth.loggingIn") : t("auth.login")}
             </button>
           </form>
         </div>

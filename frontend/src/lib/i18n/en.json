@@ -1,0 +1,353 @@
+{
+  "common": {
+    "loading": "Loading...",
+    "error": "Error",
+    "cancel": "Cancel",
+    "save": "Save",
+    "delete": "Delete",
+    "back": "Back",
+    "or": "or",
+    "yes": "Yes",
+    "no": "No",
+    "apply": "Apply",
+    "none": "None",
+    "search": "Search...",
+    "noResults": "No results",
+    "comingSoon": "soon"
+  },
+
+  "auth": {
+    "loginTitle": "Cuttie",
+    "loginSubtitle": "Sign in to continue",
+    "email": "Email",
+    "password": "Password",
+    "login": "Sign in",
+    "loggingIn": "Signing in...",
+    "invalidCredentials": "Invalid credentials",
+    "continueWithGoogle": "Continue with Google",
+    "googleCancelled": "Google sign-in cancelled",
+    "googleError": "Google authentication error",
+    "logout": "Log out"
+  },
+
+  "sidebar": {
+    "newProject": "New project",
+    "projects": "Projects",
+    "exports": "Exports",
+    "profile": "Profile"
+  },
+
+  "home": {
+    "title": "Projects",
+    "analysisCount_one": "{{count}} analysis",
+    "analysisCount_other": "{{count}} analyses",
+    "search": "Search...",
+    "colTitle": "Title",
+    "colStatus": "Status",
+    "colDuration": "Duration",
+    "colDate": "Date",
+    "untitledVod": "Untitled VOD",
+    "noProjects": "No projects",
+    "noProjectsHint": "Use the \"New project\" button to get started.",
+    "retry": "Retry"
+  },
+
+  "status": {
+    "done": "Done",
+    "error": "Error",
+    "inProgress": "In progress"
+  },
+
+  "jobStatus": {
+    "PENDING": "Waiting...",
+    "DOWNLOADING_AUDIO": "Downloading audio",
+    "DOWNLOADING_CHAT": "Downloading chat",
+    "ANALYZING_AUDIO": "Analyzing audio",
+    "ANALYZING_CHAT": "Analyzing chat",
+    "SCORING": "Computing scores",
+    "TRIAGE": "LLM pre-analysis",
+    "CLIPPING": "Extracting clips",
+    "TRANSCRIBING": "Transcribing",
+    "LLM_ANALYSIS": "AI analysis",
+    "DONE": "Done!",
+    "ERROR": "Error"
+  },
+
+  "job": {
+    "backToProjects": "Projects",
+    "starting": "Starting...",
+    "errorOccurred": "An error occurred",
+    "retry": "Retry",
+    "back": "Back"
+  },
+
+  "newProject": {
+    "title": "New project",
+    "twitchVod": "Twitch VOD",
+    "youtube": "YouTube",
+    "upload": "Upload",
+    "invalidUrl": "Invalid Twitch URL",
+    "placeholder": "https://www.twitch.tv/videos/...",
+    "analyzing": "Analyzing...",
+    "analyze": "Analyze",
+    "cancel": "Cancel"
+  },
+
+  "hotPoints": {
+    "views": "views",
+    "clipsReady_one": "{{count}} clip ready",
+    "clipsReady_other": "{{count}} clips ready",
+    "hotPointsDetected": "{{count}} hot points detected",
+    "viralityScore": "Virality score:",
+    "viralPotential": "Viral potential:",
+    "hideDetails": "Hide details",
+    "showDetails": "Show details",
+    "narrative": "Narrative",
+    "transcript": "Transcript",
+    "scoreBreakdown": "Score breakdown",
+    "finalScore": "Final score",
+    "heuristic": "Heuristic (x0.3)",
+    "llmVirality": "LLM virality (x0.7)",
+    "signals": "Signals",
+    "keyMoments": "Key moments",
+    "edit": "Edit",
+    "rawClip": "Raw clip",
+    "download": "Download",
+    "msg": "msg"
+  },
+
+  "signals": {
+    "rms": "Volume",
+    "chat_speed": "Chat",
+    "spectral_flux": "Spectral flux",
+    "pitch_variance": "Pitch",
+    "spectral_centroid": "Brightness",
+    "zcr": "ZCR"
+  },
+
+  "categories": {
+    "fun": "Fun",
+    "rage": "Rage",
+    "clutch": "Clutch",
+    "skill": "Skill",
+    "fail": "Fail",
+    "emotional": "Emotional",
+    "reaction": "Reaction",
+    "storytelling": "Story",
+    "awkward": "Awkward",
+    "hype": "Hype"
+  },
+
+  "exports": {
+    "title": "Exports",
+    "exportCount_one": "{{count}} export",
+    "exportCount_other": "{{count}} exports",
+    "searchPlaceholder": "Search by name, VOD, game...",
+    "all": "All",
+    "completed": "Completed",
+    "inProgress": "In progress",
+    "errors": "Errors",
+    "noExports": "No exports yet.",
+    "noExportsHint": "Start an export from the editor to see it here.",
+    "download": "Download",
+    "error": "Error"
+  },
+
+  "editPage": {
+    "noClipAvailable": "No clip available for editing.",
+    "backToResults": "Back to results"
+  },
+
+  "clipEditor": {
+    "noKeyMoments": "No key moments",
+    "keyMoments": "Key moments",
+    "transcript": "Transcript",
+    "noTranscript": "No transcript",
+    "loading": "Loading...",
+    "back": "Back",
+    "exporting": "Exporting...",
+    "exportTrim": "Export trim",
+    "inMark": "In [I]",
+    "outMark": "Out [O]",
+    "spacePlay": "play",
+    "inOut": "in/out",
+    "escape": "quit"
+  },
+
+  "editor": {
+    "layers": "Layers",
+    "hide": "Hide",
+    "show": "Show",
+    "duplicate": "Duplicate",
+    "delete": "Delete",
+    "unlock": "Unlock",
+    "lock": "Lock",
+
+    "properties": "Properties",
+    "layer": "Layer",
+    "centerX": "Center X",
+    "centerY": "Center Y",
+    "cropSource": "Crop source",
+    "loopGif": "Loop GIF",
+    "loopGifHint": "Only applies to exported render. In preview, GIF always loops.",
+    "rotation": "Rotation",
+    "resetRotation": "Reset rotation",
+    "opacity": "Opacity",
+    "blur": "Blur",
+    "borderRadius": "Rounded",
+    "fadeInSeconds": "Fade in (s)",
+    "fadeOutSeconds": "Fade out (s)",
+    "font": "Font",
+    "size": "Size",
+    "uppercase": "Uppercase",
+    "color": "Color",
+    "auto": "Auto",
+    "custom": "Custom",
+    "textSize": "Text size",
+    "visibleMessages": "Visible messages",
+    "showDuration": "Show duration",
+    "messagesInClip": "{{count}} messages in clip",
+    "shape": "Shape",
+    "rectangle": "Rectangle",
+    "circle": "Circle",
+    "backgroundColor": "Background color",
+    "backgroundOpacity": "Background opacity",
+    "backdropBlur": "Backdrop blur",
+    "shadow": "Shadow",
+    "content": "Content",
+    "textPlaceholder": "Text...",
+    "alignment": "Alignment",
+    "alignLeft": "Left",
+    "alignCenter": "Center",
+    "alignRight": "Right",
+    "lineHeight": "Line height",
+    "fontWeight": "Weight",
+    "normal": "Normal",
+    "bold": "Bold",
+
+    "themes": "Themes",
+    "default": "default",
+    "layerCount_one": "{{count}} layer",
+    "layerCount_other": "{{count}} layers",
+    "builtIn": "- built-in",
+    "removeDefault": "Remove default",
+    "setDefault": "Set as default",
+    "deleteTheme": "Delete",
+    "themeNamePlaceholder": "Theme name...",
+    "saveTheme": "Save",
+    "cancelTheme": "Cancel",
+    "saveLayout": "Save layout",
+
+    "animations": "Animations",
+    "noAnimations": "No animations",
+    "noAnimationsHint": "Add an entrance or exit transition",
+    "entrance": "Entrance",
+    "exit": "Exit",
+    "in": "IN",
+    "out": "OUT",
+    "start": "Start",
+    "end": "End",
+    "duration": "Duration",
+    "easing": "Easing",
+    "addAnimation": "Add animation",
+
+    "audio": "audio",
+    "chat": "chat",
+    "subtitlesToggle": "subtitles",
+    "trim": "trim",
+
+    "gameplay": "Gameplay",
+    "facecam": "Facecam",
+    "subtitles": "Subtitles",
+    "twitchChat": "Twitch Chat",
+    "importImage": "Import image",
+    "library": "Library",
+    "text": "Text",
+
+    "loadingClipData": "Loading clip data...",
+    "renameClip": "Rename clip",
+    "undo": "Undo (⌘Z)",
+    "redo": "Redo (⌘⇧Z)",
+    "exporting": "Exporting...",
+    "export": "Export",
+    "addLayer": "Add layer",
+
+    "selectLayerProperties": "Select a layer to view its properties",
+    "selectLayerAnimations": "Select a layer to manage its animations",
+
+    "assetLibrary": "Asset library",
+    "noAssets": "No imported assets yet.",
+    "importNewImage": "Import a new image",
+
+    "exportStarted": "Export started",
+    "exportStartedHint": "You can track progress and download on the Exports page.",
+    "viewExports": "View exports",
+    "exportFailed": "Export failed: {{error}}",
+
+    "cropLoading": "Loading...",
+    "cropHint": "Define the facecam area on the source video",
+    "cropCancel": "Cancel (Esc)",
+    "cropApply": "Apply (Enter)",
+
+    "emptyCanvas": "Empty canvas — add a layer"
+  },
+
+  "shadows": {
+    "none": "None",
+    "soft": "Soft",
+    "medium": "Medium",
+    "strong": "Strong",
+    "glow": "Glow",
+    "neon": "Neon",
+    "outline": "Outline"
+  },
+
+  "easings": {
+    "linear": "Linear",
+    "easeIn": "Ease In",
+    "easeOut": "Ease Out",
+    "easeInOut": "Ease In-Out",
+    "easeIn.power3": "Ease In (Power 3)",
+    "easeOut.power3": "Ease Out (Power 3)",
+    "easeInOut.power3": "Ease In-Out (Power 3)",
+    "easeIn.power4": "Ease In (Power 4)",
+    "easeOut.power4": "Ease Out (Power 4)",
+    "easeInOut.power4": "Ease In-Out (Power 4)",
+    "bounce": "Bounce",
+    "elastic": "Elastic"
+  },
+
+  "animations": {
+    "fadeIn": "Fade in",
+    "fadeOut": "Fade out",
+    "scaleIn": "Scale in",
+    "scaleOut": "Scale out",
+    "bounceIn": "Bounce in",
+    "bounceOut": "Bounce out",
+    "slideInLeft": "Slide from left",
+    "slideInRight": "Slide from right",
+    "slideInTop": "Slide from top",
+    "slideInBottom": "Slide from bottom",
+    "slideOutLeft": "Slide to left",
+    "slideOutRight": "Slide to right",
+    "slideOutTop": "Slide to top",
+    "slideOutBottom": "Slide to bottom"
+  },
+
+  "themeNames": {
+    "gameplayOnly": "Gameplay only",
+    "classic": "Classic"
+  },
+
+  "profile": {
+    "title": "Profile",
+    "emailLabel": "Email address",
+    "languageLabel": "Language",
+    "changePassword": "Change password",
+    "changePasswordAlert": "Password change will be available soon.",
+    "languageSaved": "Language saved",
+    "french": "French",
+    "english": "English",
+    "spanish": "Spanish"
+  }
+}

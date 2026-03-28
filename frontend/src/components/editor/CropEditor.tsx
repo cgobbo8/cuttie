@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 interface CropRect {
   x: number;
@@ -20,6 +21,7 @@ const HANDLE_SIZE = 12;
 const MIN_CROP = 20;
 
 export default function CropEditor({ videoSrc, initialCrop, onConfirm, onCancel }: Props) {
+  const { t } = useTranslation();
   const videoRef = useRef<HTMLVideoElement>(null);
   const [nativeSize, setNativeSize] = useState<{ w: number; h: number } | null>(null);
   const [crop, setCrop] = useState<CropRect>(initialCrop);
@@ -117,7 +119,7 @@ export default function CropEditor({ videoSrc, initialCrop, onConfirm, onCancel 
           preload="auto"
           className="hidden"
         />
-        <p className="text-zinc-500 text-sm">Chargement...</p>
+        <p className="text-zinc-500 text-sm">{t("editor.cropLoading")}</p>
       </div>
     );
   }
@@ -131,7 +133,7 @@ export default function CropEditor({ videoSrc, initialCrop, onConfirm, onCancel 
     <div className="fixed inset-0 z-50 bg-black/85 flex flex-col items-center justify-center gap-5">
       {/* Header */}
       <p className="text-sm text-zinc-300">
-        Definissez la zone facecam sur la video source
+        {t("editor.cropHint")}
       </p>
 
       {/* Video + crop overlay */}
@@ -260,13 +262,13 @@ export default function CropEditor({ videoSrc, initialCrop, onConfirm, onCancel 
           onClick={onCancel}
           className="px-5 py-2 text-xs rounded-lg bg-white/[0.06] hover:bg-white/[0.1] text-zinc-400 hover:text-white transition-colors"
         >
-          Annuler (Esc)
+          {t("editor.cropCancel")}
         </button>
         <button
           onClick={() => onConfirm(crop)}
           className="px-5 py-2 text-xs rounded-lg bg-white hover:bg-zinc-200 text-black transition-colors font-medium"
         >
-          Appliquer (Enter)
+          {t("editor.cropApply")}
         </button>
       </div>
     </div>

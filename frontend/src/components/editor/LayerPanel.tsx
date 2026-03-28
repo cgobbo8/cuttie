@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { Video, User, MessageSquare, MessagesSquare, Image, Square, Type, Eye, EyeOff, Lock, GripVertical, Copy, Trash2 } from "lucide-react";
 import type { Layer, LayerType } from "../../lib/editorTypes";
 
@@ -40,6 +41,7 @@ export default function LayerPanel({
   onRemove,
   onRename,
 }: Props) {
+  const { t } = useTranslation();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
 
@@ -108,7 +110,7 @@ export default function LayerPanel({
     <div className="flex flex-col h-full">
       <div className="shrink-0 px-3 py-2.5 border-b border-white/[0.06] flex items-center justify-between">
         <h4 className="text-[10px] font-semibold text-zinc-500 uppercase tracking-widest">
-          Calques
+          {t("editor.layers")}
         </h4>
         <span className="text-[10px] text-zinc-600">{layers.length}</span>
       </div>
@@ -148,7 +150,7 @@ export default function LayerPanel({
                   layer.visible ? "text-zinc-400 hover:text-white" : "text-zinc-700"
                 }`}
                 onClick={(e) => { e.stopPropagation(); onToggleVisibility(layer.id); }}
-                title={layer.visible ? "Masquer" : "Afficher"}
+                title={layer.visible ? t("editor.hide") : t("editor.show")}
               >
                 {layer.visible ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
               </button>
@@ -185,14 +187,14 @@ export default function LayerPanel({
                 <button
                   className="w-5 h-5 flex items-center justify-center rounded text-zinc-600 hover:text-zinc-300 hover:bg-white/[0.06] transition-colors"
                   onClick={(e) => { e.stopPropagation(); onDuplicate(layer.id); }}
-                  title="Dupliquer"
+                  title={t("editor.duplicate")}
                 >
                   <Copy className="w-3 h-3" />
                 </button>
                 <button
                   className="w-5 h-5 flex items-center justify-center rounded text-zinc-600 hover:text-red-400 hover:bg-red-500/10 transition-colors"
                   onClick={(e) => { e.stopPropagation(); onRemove(layer.id); }}
-                  title="Supprimer"
+                  title={t("editor.delete")}
                 >
                   <Trash2 className="w-3 h-3" />
                 </button>
@@ -204,7 +206,7 @@ export default function LayerPanel({
                   layer.locked ? "text-zinc-500" : "text-transparent group-hover:text-zinc-600"
                 }`}
                 onClick={(e) => { e.stopPropagation(); onToggleLock(layer.id); }}
-                title={layer.locked ? "Deverrouiller" : "Verrouiller"}
+                title={layer.locked ? t("editor.unlock") : t("editor.lock")}
               >
                 <Lock className="w-3 h-3" />
               </button>

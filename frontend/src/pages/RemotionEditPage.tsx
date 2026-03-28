@@ -3,8 +3,10 @@ import { useParams, useNavigate, useSearchParams } from "react-router";
 import { Loader2 } from "lucide-react";
 import { getJobStatus, type HotPoint } from "../lib/api";
 import RemotionEditor from "../components/remotion-editor/RemotionEditor";
+import { useTranslation } from "react-i18next";
 
 export default function RemotionEditPage() {
+  const { t } = useTranslation();
   const { jobId } = useParams<{ jobId: string }>();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -43,12 +45,12 @@ export default function RemotionEditPage() {
     return (
       <div className="h-screen bg-zinc-950 flex items-center justify-center">
         <div className="bg-zinc-900 border border-white/[0.08] rounded-2xl p-8 text-center">
-          <p className="text-zinc-400 mb-4">Aucun clip disponible pour l'édition.</p>
+          <p className="text-zinc-400 mb-4">{t("editPage.noClipAvailable")}</p>
           <button
             onClick={() => navigate(`/${jobId}`)}
             className="text-sm text-zinc-400 hover:text-zinc-300 transition-colors"
           >
-            Retour aux résultats
+            {t("editPage.backToResults")}
           </button>
         </div>
       </div>

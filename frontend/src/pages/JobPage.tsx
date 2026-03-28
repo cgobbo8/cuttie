@@ -13,8 +13,10 @@ import {
 import JobStatus from "../components/JobStatus";
 import HotPoints from "../components/HotPoints";
 import { ArrowLeft, RotateCcw, Loader2, X } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 export default function JobPage() {
+  const { t } = useTranslation();
   const { jobId } = useParams<{ jobId: string }>();
   const navigate = useNavigate();
 
@@ -22,7 +24,7 @@ export default function JobPage() {
 
   // Job metadata
   const [status, setStatus] = useState<JobStatusType>("PENDING");
-  const [progress, setProgress] = useState("Demarrage...");
+  const [progress, setProgress] = useState(t("job.starting"));
   const [stepTimings, setStepTimings] = useState<Record<string, StepTiming> | null>(null);
   const [vodTitle, setVodTitle] = useState("");
   const [vodGame, setVodGame] = useState("");
@@ -139,7 +141,7 @@ export default function JobPage() {
       await retryJob(jobId);
       setClips([]);
       setStatus("PENDING");
-      setProgress("Demarrage...");
+      setProgress(t("job.starting"));
       setError(null);
       setIsFinalSort(false);
       setAnimatedClips(new Set());
@@ -148,7 +150,7 @@ export default function JobPage() {
     } catch (e: unknown) {
       alert(e instanceof Error ? e.message : "Retry failed");
     }
-  }, [jobId, handleSSEEvent]);
+  }, [jobId, handleSSEEvent, t]);
 
   if (loading) {
     return (
@@ -169,7 +171,7 @@ export default function JobPage() {
         className="inline-flex items-center gap-1.5 text-sm text-zinc-500 hover:text-zinc-300 transition-colors mb-6"
       >
         <ArrowLeft className="w-4 h-4" />
-        Projets
+        {t("job.backToProjects")}
       </Link>
 
       {/* Progress bar while processing */}
@@ -194,7 +196,7 @@ export default function JobPage() {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm text-red-400 mb-4">
-                {error || "Une erreur est survenue"}
+                {error || t("job.errorOccurred")}
               </p>
               <div className="flex gap-2">
                 <button
@@ -202,13 +204,13 @@ export default function JobPage() {
                   className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.08] rounded-lg transition-colors"
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
-                  Reprendre
+                  {t("job.retry")}
                 </button>
                 <Link
                   to="/"
                   className="px-4 py-2 text-sm text-zinc-500 hover:text-zinc-300 transition-colors"
                 >
-                  Retour
+                  {t("job.back")}
                 </Link>
               </div>
             </div>

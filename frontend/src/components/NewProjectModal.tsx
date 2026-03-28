@@ -2,20 +2,21 @@ import { useState, useRef, useEffect, useCallback, type FormEvent } from "react"
 import { useNavigate } from "react-router";
 import { X, Loader2, Link as LinkIcon, Upload, MonitorPlay } from "lucide-react";
 import { submitVod } from "../lib/api";
+import { useTranslation } from "react-i18next";
 
 type ImportTab = "twitch" | "youtube" | "upload";
 
 interface Tab {
   id: ImportTab;
-  label: string;
+  labelKey: string;
   icon: React.ReactNode;
   enabled: boolean;
 }
 
 const TABS: Tab[] = [
-  { id: "twitch", label: "Twitch VOD", icon: <MonitorPlay className="w-4 h-4" />, enabled: true },
-  { id: "youtube", label: "YouTube", icon: <MonitorPlay className="w-4 h-4" />, enabled: false },
-  { id: "upload", label: "Upload", icon: <Upload className="w-4 h-4" />, enabled: false },
+  { id: "twitch", labelKey: "newProject.twitchVod", icon: <MonitorPlay className="w-4 h-4" />, enabled: true },
+  { id: "youtube", labelKey: "newProject.youtube", icon: <MonitorPlay className="w-4 h-4" />, enabled: false },
+  { id: "upload", labelKey: "newProject.upload", icon: <Upload className="w-4 h-4" />, enabled: false },
 ];
 
 interface Props {
@@ -24,6 +25,7 @@ interface Props {
 }
 
 export default function NewProjectModal({ open, onClose }: Props) {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<ImportTab>("twitch");
   const [url, setUrl] = useState("");
@@ -63,7 +65,7 @@ export default function NewProjectModal({ open, onClose }: Props) {
 
     if (activeTab === "twitch") {
       if (!url.includes("twitch.tv/videos/")) {
-        setError("URL Twitch invalide");
+        setError(t("newProject.invalidUrl"));
         return;
       }
       setLoading(true);
@@ -73,7 +75,7 @@ export default function NewProjectModal({ open, onClose }: Props) {
         onClose();
         navigate(`/${job_id}`);
       } catch (err: unknown) {
-        setError(err instanceof Error ? err.message : "Erreur");
+        setError(err instanceof Error ? err.message : t("common.error"));
       } finally {
         setLoading(false);
       }
@@ -99,7 +101,7 @@ export default function NewProjectModal({ open, onClose }: Props) {
       <div className="w-full max-w-lg mx-4 surface-static rounded-xl overflow-hidden animate-modal-enter">
         {/* Header */}
         <div className="flex items-center justify-between px-5 pt-5 pb-4">
-          <h2 className="text-base font-semibold text-white">Nouveau projet</h2>
+          <h2 className="text-base font-semibold text-white">{t("newProject.title")}</h2>
           <button
             onClick={handleClose}
             className="p-1.5 text-zinc-500 hover:text-zinc-300 transition-colors rounded-lg hover:bg-white/[0.06]"
@@ -124,9 +126,9 @@ export default function NewProjectModal({ open, onClose }: Props) {
               }`}
             >
               {tab.icon}
-              {tab.label}
+              {t(tab.labelKey)}
               {!tab.enabled && (
-                <span className="text-[10px] font-medium text-zinc-500 bg-white/[0.06] border border-white/[0.08] px-1.5 py-px rounded-full leading-none">bientot</span>
+                <span className="text-[10px] font-medium text-zinc-500 bg-white/[0.06] border border-white/[0.08] px-1.5 py-px rounded-full leading-none">{t("common.comingSoon")}</span>
               )}
             </button>
           ))}
@@ -142,7 +144,7 @@ export default function NewProjectModal({ open, onClose }: Props) {
                 type="text"
                 value={url}
                 onChange={(e) => { setUrl(e.target.value); setError(""); }}
-                placeholder="https://www.twitch.tv/videos/..."
+                placeholder={t("newProject.placeholder")}
                 disabled={loading}
                 className="w-full pl-10 pr-4 py-2.5 bg-white/[0.04] border border-white/[0.08] rounded-lg text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-white/[0.2] disabled:opacity-50 transition-colors"
               />
@@ -161,7 +163,7 @@ export default function NewProjectModal({ open, onClose }: Props) {
               disabled={loading}
               className="px-4 py-2 text-sm text-zinc-400 hover:text-zinc-200 transition-colors"
             >
-              Annuler
+              {t("newProject.cancel")}
             </button>
             <button
               type="submit"
@@ -171,10 +173,10 @@ export default function NewProjectModal({ open, onClose }: Props) {
               {loading ? (
                 <>
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  Analyse...
+                  {t("newProject.analyzing")}
                 </>
               ) : (
-                "Analyser"
+                t("newProject.analyze")
               )}
             </button>
           </div>

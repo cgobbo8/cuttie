@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { Crop } from "lucide-react";
 import { HintBadge } from "../ui/Tooltip";
 import type { Layer, LayerStyle, ShapeData, SubtitleData, ChatData, TextData, AssetData } from "../../lib/editorTypes";
@@ -66,6 +67,7 @@ function Slider({
 }
 
 export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange, onShapeChange, onChatChange, onAssetChange, onTextChange, onTransformChange, onCommit, onStartCrop }: Props) {
+  const { t } = useTranslation();
   const { style, transform, subtitle, shape, chat, text, asset } = layer;
 
   const centerX = () => {
@@ -81,7 +83,7 @@ export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange
     <div className="flex flex-col h-full">
       <div className="shrink-0 px-3 py-2.5 border-b border-white/[0.06] flex items-center justify-between">
         <h4 className="text-[10px] font-semibold text-zinc-500 uppercase tracking-widest">
-          Proprietes
+          {t("editor.properties")}
         </h4>
       </div>
 
@@ -89,7 +91,7 @@ export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange
         {/* Layer info */}
         <div className="flex flex-col gap-1">
           <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-medium">
-            Calque
+            {t("editor.layer")}
           </span>
           <span className="text-xs text-zinc-300 truncate">{layer.name}</span>
         </div>
@@ -114,13 +116,13 @@ export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange
             onClick={centerX}
             className="flex-1 text-[10px] px-2 py-1.5 rounded-md bg-white/[0.04] hover:bg-white/[0.08] text-zinc-400 hover:text-zinc-200 transition-colors font-medium"
           >
-            Centrer X
+            {t("editor.centerX")}
           </button>
           <button
             onClick={centerY}
             className="flex-1 text-[10px] px-2 py-1.5 rounded-md bg-white/[0.04] hover:bg-white/[0.08] text-zinc-400 hover:text-zinc-200 transition-colors font-medium"
           >
-            Centrer Y
+            {t("editor.centerY")}
           </button>
         </div>
 
@@ -131,7 +133,7 @@ export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange
             className="w-full text-[10px] px-2 py-1.5 rounded-md bg-white/[0.06] hover:bg-white/[0.1] text-zinc-200 hover:text-zinc-100 transition-colors font-medium flex items-center justify-center gap-1.5"
           >
             <Crop className="w-3.5 h-3.5" />
-            Recadrer la source
+            {t("editor.cropSource")}
           </button>
         )}
 
@@ -140,8 +142,8 @@ export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange
           <>
             <div className="flex items-center justify-between">
               <span className="text-[10px] text-zinc-400 uppercase tracking-wider font-medium flex items-center gap-1">
-                Boucler le GIF
-                <HintBadge tooltip="Applique uniquement au rendu exporte. Dans la preview, le GIF boucle toujours." />
+                {t("editor.loopGif")}
+                <HintBadge tooltip={t("editor.loopGifHint")} />
               </span>
               <button
                 onClick={() => {
@@ -154,7 +156,7 @@ export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange
                     : "bg-white/[0.04] text-zinc-500"
                 }`}
               >
-                {asset.gifLoop !== false ? "Oui" : "Non"}
+                {asset.gifLoop !== false ? t("common.yes") : t("common.no")}
               </button>
             </div>
 
@@ -165,7 +167,7 @@ export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange
         <div className="flex items-end gap-1.5">
           <div className="flex-1">
             <Slider
-              label="Rotation"
+              label={t("editor.rotation")}
               value={transform.rotation ?? 0}
               min={-180}
               max={180}
@@ -182,7 +184,7 @@ export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange
                 onTransformChange(layer.id, { rotation: 0 });
               }}
               className="text-[9px] px-1.5 py-1 rounded bg-white/[0.06] hover:bg-white/[0.1] text-zinc-500 hover:text-zinc-300 transition-colors shrink-0 mb-[1px]"
-              title="Reinitialiser la rotation"
+              title={t("editor.resetRotation")}
             >
               0°
             </button>
@@ -193,7 +195,7 @@ export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange
 
         {/* Style sliders */}
         <Slider
-          label="Opacite"
+          label={t("editor.opacity")}
           value={style.opacity}
           min={0}
           max={1}
@@ -204,7 +206,7 @@ export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange
         />
 
         <Slider
-          label="Flou"
+          label={t("editor.blur")}
           value={style.blur}
           min={0}
           max={50}
@@ -217,7 +219,7 @@ export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange
         {/* Hide generic border-radius for shapes — they have their own in the shape section */}
         {!shape && (
           <Slider
-            label="Arrondi"
+            label={t("editor.borderRadius")}
             value={style.borderRadius}
             min={0}
             max={100}
@@ -232,7 +234,7 @@ export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange
 
         {/* Fade animations */}
         <Slider
-          label="Fade in (s)"
+          label={t("editor.fadeInSeconds")}
           value={style.fadeIn ?? 0}
           min={0}
           max={5}
@@ -242,7 +244,7 @@ export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange
           onCommit={onCommit}
         />
         <Slider
-          label="Fade out (s)"
+          label={t("editor.fadeOutSeconds")}
           value={style.fadeOut ?? 0}
           min={0}
           max={5}
@@ -260,7 +262,7 @@ export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange
             {/* Font selector */}
             <div className="flex flex-col gap-1.5">
               <span className="text-[10px] text-zinc-400 uppercase tracking-wider font-medium">
-                Police
+                {t("editor.font")}
               </span>
               <select
                 value={subtitle.fontFamily}
@@ -280,7 +282,7 @@ export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange
 
             {/* Font size */}
             <Slider
-              label="Taille"
+              label={t("editor.size")}
               value={subtitle.fontSize}
               min={30}
               max={120}
@@ -293,7 +295,7 @@ export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange
             {/* Uppercase toggle */}
             <div className="flex items-center justify-between">
               <span className="text-[10px] text-zinc-400 uppercase tracking-wider font-medium">
-                Majuscules
+                {t("editor.uppercase")}
               </span>
               <button
                 onClick={() => {
@@ -315,7 +317,7 @@ export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange
             {/* Color mode */}
             <div className="flex flex-col gap-2">
               <span className="text-[10px] text-zinc-400 uppercase tracking-wider font-medium">
-                Couleur
+                {t("editor.color")}
               </span>
               <div className="flex gap-1">
                 <button
@@ -329,7 +331,7 @@ export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange
                       : "bg-white/[0.04] text-zinc-500 hover:text-zinc-300"
                   }`}
                 >
-                  Auto
+                  {t("editor.auto")}
                 </button>
                 <button
                   onClick={() => {
@@ -342,7 +344,7 @@ export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange
                       : "bg-white/[0.04] text-zinc-500 hover:text-zinc-300"
                   }`}
                 >
-                  Custom
+                  {t("editor.custom")}
                 </button>
               </div>
 
@@ -379,7 +381,7 @@ export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange
 
             <div className="flex flex-col gap-1.5">
               <span className="text-[10px] text-zinc-400 uppercase tracking-wider font-medium">
-                Police
+                {t("editor.font")}
               </span>
               <select
                 value={chat.fontFamily}
@@ -398,7 +400,7 @@ export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange
             </div>
 
             <Slider
-              label="Taille texte"
+              label={t("editor.textSize")}
               value={chat.fontSize}
               min={16}
               max={48}
@@ -409,7 +411,7 @@ export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange
             />
 
             <Slider
-              label="Messages visibles"
+              label={t("editor.visibleMessages")}
               value={chat.maxVisible}
               min={1}
               max={15}
@@ -420,7 +422,7 @@ export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange
             />
 
             <Slider
-              label="Duree affichage"
+              label={t("editor.showDuration")}
               value={chat.showDuration}
               min={1}
               max={15}
@@ -431,7 +433,7 @@ export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange
             />
 
             <div className="text-[10px] text-zinc-500">
-              {chat.messages.length} messages dans le clip
+              {t("editor.messagesInClip", { count: chat.messages.length })}
             </div>
           </>
         )}
@@ -444,7 +446,7 @@ export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange
             {/* Shape type toggle */}
             <div className="flex flex-col gap-1.5">
               <span className="text-[10px] text-zinc-400 uppercase tracking-wider font-medium">
-                Forme
+                {t("editor.shape")}
               </span>
               <div className="flex gap-1">
                 <button
@@ -458,7 +460,7 @@ export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange
                       : "bg-white/[0.04] text-zinc-500 hover:text-zinc-300"
                   }`}
                 >
-                  Rectangle
+                  {t("editor.rectangle")}
                 </button>
                 <button
                   onClick={() => {
@@ -471,7 +473,7 @@ export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange
                       : "bg-white/[0.04] text-zinc-500 hover:text-zinc-300"
                   }`}
                 >
-                  Cercle
+                  {t("editor.circle")}
                 </button>
               </div>
             </div>
@@ -479,7 +481,7 @@ export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange
             {/* Background color + alpha */}
             <div className="flex flex-col gap-1.5">
               <span className="text-[10px] text-zinc-400 uppercase tracking-wider font-medium">
-                Couleur de fond
+                {t("editor.backgroundColor")}
               </span>
               <div className="flex items-center gap-2">
                 <input
@@ -494,7 +496,7 @@ export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange
             </div>
 
             <Slider
-              label="Opacite fond"
+              label={t("editor.backgroundOpacity")}
               value={shape.backgroundAlpha}
               min={0}
               max={1}
@@ -505,7 +507,7 @@ export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange
             />
 
             <Slider
-              label="Backdrop blur"
+              label={t("editor.backdropBlur")}
               value={shape.backdropBlur}
               min={0}
               max={80}
@@ -518,7 +520,7 @@ export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange
             {/* Border radius (only for rectangle) */}
             {shape.shapeType === "rectangle" && (
               <Slider
-                label="Arrondi"
+                label={t("editor.borderRadius")}
                 value={style.borderRadius}
                 min={0}
                 max={200}
@@ -532,7 +534,7 @@ export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange
             {/* Box shadow presets */}
             <div className="flex flex-col gap-1.5">
               <span className="text-[10px] text-zinc-400 uppercase tracking-wider font-medium">
-                Ombre
+                {t("editor.shadow")}
               </span>
               <div className="grid grid-cols-2 gap-1">
                 {Object.entries(BOX_SHADOW_PRESETS).map(([key, preset]) => (
@@ -548,7 +550,7 @@ export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange
                         : "bg-white/[0.04] text-zinc-500 hover:text-zinc-300"
                     }`}
                   >
-                    {preset.label}
+                    {t(`shadows.${key}`, { defaultValue: preset.label })}
                   </button>
                 ))}
               </div>
@@ -564,7 +566,7 @@ export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange
             {/* Content */}
             <div className="flex flex-col gap-1.5">
               <span className="text-[10px] text-zinc-400 uppercase tracking-wider font-medium">
-                Contenu
+                {t("editor.content")}
               </span>
               <textarea
                 value={text.content}
@@ -572,14 +574,14 @@ export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange
                 onFocus={onCommit}
                 rows={2}
                 className="w-full text-xs bg-white/[0.06] text-zinc-300 rounded-md px-2 py-1.5 border border-white/[0.06] outline-none focus:border-white/[0.2] resize-none"
-                placeholder="Texte..."
+                placeholder={t("editor.textPlaceholder")}
               />
             </div>
 
             {/* Font selector */}
             <div className="flex flex-col gap-1.5">
               <span className="text-[10px] text-zinc-400 uppercase tracking-wider font-medium">
-                Police
+                {t("editor.font")}
               </span>
               <select
                 value={text.fontFamily}
@@ -599,7 +601,7 @@ export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange
 
             {/* Font size */}
             <Slider
-              label="Taille"
+              label={t("editor.size")}
               value={text.fontSize}
               min={16}
               max={200}
@@ -612,7 +614,7 @@ export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange
             {/* Color */}
             <div className="flex flex-col gap-1.5">
               <span className="text-[10px] text-zinc-400 uppercase tracking-wider font-medium">
-                Couleur
+                {t("editor.color")}
               </span>
               <div className="flex items-center gap-2">
                 <input
@@ -659,7 +661,7 @@ export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange
             {/* Text align */}
             <div className="flex flex-col gap-1.5">
               <span className="text-[10px] text-zinc-400 uppercase tracking-wider font-medium">
-                Alignement
+                {t("editor.alignment")}
               </span>
               <div className="flex gap-1">
                 {(["left", "center", "right"] as const).map((align) => (
@@ -675,7 +677,7 @@ export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange
                         : "bg-white/[0.04] text-zinc-500 hover:text-zinc-300"
                     }`}
                   >
-                    {align === "left" ? "Gauche" : align === "center" ? "Centre" : "Droite"}
+                    {align === "left" ? t("editor.alignLeft") : align === "center" ? t("editor.alignCenter") : t("editor.alignRight")}
                   </button>
                 ))}
               </div>
@@ -683,7 +685,7 @@ export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange
 
             {/* Line height */}
             <Slider
-              label="Interligne"
+              label={t("editor.lineHeight")}
               value={text.lineHeight}
               min={0.8}
               max={2.5}

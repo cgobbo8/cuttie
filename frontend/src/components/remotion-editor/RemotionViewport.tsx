@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Player, type PlayerRef } from "@remotion/player";
 import type { Layer } from "../../lib/editorTypes";
 import CuttieComposition from "./CuttieComposition";
@@ -28,6 +29,7 @@ export default function RemotionViewport({
   onTransformChange,
   onTransformStart,
 }: Props) {
+  const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(0.3);
 
@@ -143,7 +145,7 @@ export default function RemotionViewport({
             className="absolute inset-0 flex items-center justify-center"
             style={{ pointerEvents: "none" }}
           >
-            <p className="text-zinc-700 text-sm">Canvas vide — ajoute un calque</p>
+            <p className="text-zinc-700 text-sm">{t("editor.emptyCanvas")}</p>
           </div>
         )}
       </div>

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ArrowLeft, Undo2, Redo2, Loader2, Download, Plus, Video, User, MessageSquare, MessagesSquare, ImagePlus, FolderOpen, Square, Circle, SlidersHorizontal, LayoutTemplate, X, Check, Type } from "lucide-react";
 import { clipUrl, getEditEnvironment, startRender, uploadAsset, listAssets, assetUrl, type EditEnvironment, type HotPoint, type AssetInfo } from "../../lib/api";
 import type { Layer, SubtitleData } from "../../lib/editorTypes";
@@ -30,6 +31,7 @@ export default function CanvasEditor({
   hotPoint,
   onClose,
 }: Props) {
+  const { t } = useTranslation();
   const clipKey = `${jobId}_${hotPoint.clip_filename}`;
   const editor = useEditorState(clipKey);
   const {
@@ -566,7 +568,7 @@ export default function CanvasEditor({
                   ? "bg-white/[0.08] text-zinc-200"
                   : "text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.05]"
               }`}
-              title="Propriétés"
+              title={t("editor.properties")}
             >
               <SlidersHorizontal className="w-4 h-4" />
             </button>
@@ -577,7 +579,7 @@ export default function CanvasEditor({
                   ? "bg-white/[0.08] text-zinc-200"
                   : "text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.05]"
               }`}
-              title="Thèmes"
+              title={t("editor.themes")}
             >
               <LayoutTemplate className="w-4 h-4" />
             </button>

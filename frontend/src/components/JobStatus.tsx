@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import type { JobStatusType, StepTiming } from "../lib/api";
 
 interface Props {
@@ -8,21 +9,6 @@ interface Props {
   clipsReady: number;
   clipsTotal: number | null;
 }
-
-export const STATUS_LABELS: Record<JobStatusType, string> = {
-  PENDING: "En attente...",
-  DOWNLOADING_AUDIO: "Telechargement audio",
-  DOWNLOADING_CHAT: "Telechargement chat",
-  ANALYZING_AUDIO: "Analyse audio",
-  ANALYZING_CHAT: "Analyse du chat",
-  SCORING: "Calcul des scores",
-  TRIAGE: "Pre-analyse LLM",
-  CLIPPING: "Extraction des clips",
-  TRANSCRIBING: "Transcription",
-  LLM_ANALYSIS: "Analyse IA",
-  DONE: "Termine !",
-  ERROR: "Erreur",
-};
 
 const STATUS_ORDER: JobStatusType[] = [
   "PENDING",
@@ -52,11 +38,12 @@ function formatDuration(seconds: number): string {
 }
 
 export default function JobStatus({ status, progress, stepTimings, clipsReady, clipsTotal }: Props) {
+  const { t } = useTranslation();
   const [now, setNow] = useState(() => Date.now() / 1000);
 
   useEffect(() => {
-    const t = setInterval(() => setNow(Date.now() / 1000), 1000);
-    return () => clearInterval(t);
+    const timer = setInterval(() => setNow(Date.now() / 1000), 1000);
+    return () => clearInterval(timer);
   }, []);
 
   const pct = getProgress(status);
@@ -119,7 +106,7 @@ export default function JobStatus({ status, progress, stepTimings, clipsReady, c
                       : "text-zinc-700"
                 }`}
               >
-                {STATUS_LABELS[step]}
+                {t(`jobStatus.${step}`)}
                 {durationLabel && (
                   <span className={`font-mono tabular-nums ${isCurrent ? "text-zinc-300" : "text-zinc-600"}`}>
                     {durationLabel}

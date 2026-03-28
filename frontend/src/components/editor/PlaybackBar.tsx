@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Play, Pause } from "lucide-react";
 import type { Layer, LayerAnimation } from "../../lib/editorTypes";
 import { layerVisibilityAtTime, ANIMATION_DEFS } from "../../lib/animations";
@@ -287,6 +288,7 @@ export default function PlaybackBar({
   onUpdateAnimation,
   onCommitAnimation,
 }: Props) {
+  const { t } = useTranslation();
   const trackRef = useRef<HTMLDivElement>(null);
   const [dragging, setDragging] = useState(false);
   const [trimDragging, setTrimDragging] = useState<TrimDragTarget>(null);
@@ -503,7 +505,7 @@ export default function PlaybackBar({
                 }`}
               >
                 <span className={`inline-block w-1.5 h-1.5 rounded-full ${showWaveform ? "bg-white" : "bg-zinc-700"}`} />
-                audio
+                {t("editor.audio")}
               </button>
             )}
             {chatTimestamps && chatTimestamps.length > 0 && (
@@ -516,7 +518,7 @@ export default function PlaybackBar({
                 }`}
               >
                 <span className={`inline-block w-1.5 h-1.5 rounded-full ${showChat ? "bg-blue-400" : "bg-zinc-700"}`} />
-                chat
+                {t("editor.chat")}
               </button>
             )}
             {subtitleWords && subtitleWords.length > 0 && (
@@ -529,7 +531,7 @@ export default function PlaybackBar({
                 }`}
               >
                 <span className={`inline-block w-1.5 h-1.5 rounded-full ${showSubtitles ? "bg-emerald-400" : "bg-zinc-700"}`} />
-                sous-titres
+                {t("editor.subtitlesToggle")}
               </button>
             )}
           </div>
@@ -556,7 +558,7 @@ export default function PlaybackBar({
 
           {hasTrim && (
             <span className="text-[10px] font-mono text-white/70 ml-1">
-              trim {fmt(trimmedDuration)}
+              {t("editor.trim")} {fmt(trimmedDuration)}
             </span>
           )}
         </div>

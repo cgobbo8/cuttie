@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Pin, Trash2, Save } from "lucide-react";
 import type { Layer } from "../../lib/editorTypes";
 import type { EditorTheme, ThemeLayerTemplate } from "../../lib/editorThemes";
@@ -10,6 +11,7 @@ interface Props {
 }
 
 export default function ThemesPanel({ layers, onApplyTheme }: Props) {
+  const { t } = useTranslation();
   const [themes, setThemes] = useState<EditorTheme[]>(() => getAllThemes());
   const [defaultId, setDefaultId] = useState<string | null>(() => getDefaultThemeId());
   const [saveName, setSaveName] = useState("");
@@ -88,7 +90,7 @@ export default function ThemesPanel({ layers, onApplyTheme }: Props) {
     <div className="flex flex-col h-full">
       <div className="shrink-0 px-3 py-2.5 border-b border-white/[0.06] flex items-center justify-between">
         <h4 className="text-[10px] font-semibold text-zinc-500 uppercase tracking-widest">
-          Thèmes
+          {t("editor.themes")}
         </h4>
         <span className="text-[10px] text-zinc-600">{themes.length}</span>
       </div>
@@ -126,13 +128,13 @@ export default function ThemesPanel({ layers, onApplyTheme }: Props) {
                   {theme.name}
                   {isDefault && (
                     <span className="text-[9px] px-1.5 py-0.5 rounded bg-white/[0.1] text-zinc-200 font-medium leading-none shrink-0">
-                      défaut
+                      {t("editor.default")}
                     </span>
                   )}
                 </div>
                 <div className="text-[10px] text-zinc-600">
-                  {theme.layers.length} calque{theme.layers.length > 1 ? "s" : ""}
-                  {theme.builtIn && <span className="ml-1 text-zinc-700">- intégré</span>}
+                  {t("editor.layerCount", { count: theme.layers.length })}
+                  {theme.builtIn && <span className="ml-1 text-zinc-700">{t("editor.builtIn")}</span>}
                 </div>
               </div>
 
@@ -145,7 +147,7 @@ export default function ThemesPanel({ layers, onApplyTheme }: Props) {
                       ? "bg-white/[0.12] text-zinc-200"
                       : "bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200"
                   }`}
-                  title={isDefault ? "Retirer par défaut" : "Définir par défaut"}
+                  title={isDefault ? t("editor.removeDefault") : t("editor.setDefault")}
                 >
                   <Pin className="w-3.5 h-3.5" fill={isDefault ? "currentColor" : "none"} />
                 </button>
@@ -153,13 +155,13 @@ export default function ThemesPanel({ layers, onApplyTheme }: Props) {
                   onClick={() => onApplyTheme(theme.layers)}
                   className="pointer-events-auto text-[10px] px-2 py-1 rounded bg-white/[0.1] hover:bg-white/[0.15] text-zinc-200 hover:text-zinc-100 transition-colors font-medium"
                 >
-                  Appliquer
+                  {t("common.apply")}
                 </button>
                 {!theme.builtIn && !isDefault && (
                   <button
                     onClick={() => handleDelete(theme.id)}
                     className="pointer-events-auto text-[10px] px-1.5 py-1 rounded bg-red-500/15 hover:bg-red-500/25 text-red-400 hover:text-red-300 transition-colors"
-                    title="Supprimer"
+                    title={t("editor.deleteTheme")}
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
@@ -176,7 +178,7 @@ export default function ThemesPanel({ layers, onApplyTheme }: Props) {
           <div className="flex flex-col gap-2">
             <input
               className="w-full text-xs bg-white/[0.06] text-zinc-300 rounded-md px-2.5 py-1.5 border border-white/[0.06] outline-none focus:border-white/[0.2] placeholder-zinc-600"
-              placeholder="Nom du thème..."
+              placeholder={t("editor.themeNamePlaceholder")}
               value={saveName}
               onChange={(e) => setSaveName(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") handleSave(); if (e.key === "Escape") setShowSave(false); }}
@@ -188,13 +190,13 @@ export default function ThemesPanel({ layers, onApplyTheme }: Props) {
                 disabled={!saveName.trim() || layers.length === 0}
                 className="flex-1 text-[10px] px-2 py-1.5 rounded-md bg-white/[0.08] hover:bg-white/[0.12] text-zinc-200 hover:text-zinc-100 transition-colors font-medium disabled:opacity-30 disabled:cursor-not-allowed"
               >
-                Enregistrer
+                {t("editor.saveTheme")}
               </button>
               <button
                 onClick={() => setShowSave(false)}
                 className="text-[10px] px-2 py-1.5 rounded-md bg-white/[0.04] hover:bg-white/[0.08] text-zinc-400 hover:text-zinc-200 transition-colors"
               >
-                Annuler
+                {t("editor.cancelTheme")}
               </button>
             </div>
           </div>
@@ -205,7 +207,7 @@ export default function ThemesPanel({ layers, onApplyTheme }: Props) {
             className="w-full text-xs px-3 py-2 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] text-zinc-200 hover:text-zinc-100 transition-colors flex items-center justify-center gap-2 font-medium disabled:opacity-30 disabled:cursor-not-allowed"
           >
             <Save className="w-4 h-4" />
-            Sauvegarder le layout
+            {t("editor.saveLayout")}
           </button>
         )}
       </div>

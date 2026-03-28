@@ -8,6 +8,7 @@ import EditPageOld from "./pages/EditPage";
 import EditPage from "./pages/RemotionEditPage";
 import ExportsPage from "./pages/ExportsPage";
 import LoginPage from "./pages/LoginPage";
+import ProfilePage from "./pages/ProfilePage";
 import type { ReactNode } from "react";
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
@@ -38,6 +39,7 @@ function AppRoutes() {
       >
         <Route index element={<HomePage />} />
         <Route path="exports" element={<ExportsPage />} />
+        <Route path="profile" element={<ProfilePage />} />
         <Route path=":jobId" element={<JobPage />} />
       </Route>
       {/* Edit pages: fullscreen, outside the standard layout */}

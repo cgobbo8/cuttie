@@ -137,8 +137,14 @@ export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange
         {/* GIF loop toggle (asset layers with .gif source) */}
         {asset && onAssetChange && asset.src.toLowerCase().endsWith(".gif") && (
           <div className="flex items-center justify-between">
-            <span className="text-[10px] text-zinc-400 uppercase tracking-wider font-medium">
+            <span className="text-[10px] text-zinc-400 uppercase tracking-wider font-medium flex items-center gap-1">
               Boucler le GIF
+              <span
+                className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-white/[0.06] text-zinc-500 text-[8px] cursor-help"
+                title="Appliqué uniquement au rendu exporté. Dans la preview, le GIF boucle toujours."
+              >
+                ?
+              </span>
             </span>
             <button
               onClick={() => {

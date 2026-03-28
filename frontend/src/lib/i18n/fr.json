@@ -33,6 +33,7 @@
   "sidebar": {
     "newProject": "Nouveau projet",
     "projects": "Projets",
+    "games": "Jeux",
     "exports": "Exports",
     "profile": "Profil"
   },
@@ -149,6 +150,18 @@
     "storytelling": "Story",
     "awkward": "Awkward",
     "hype": "Hype"
+  },
+
+  "games": {
+    "title": "Jeux",
+    "gameCount_one": "{{count}} jeu",
+    "gameCount_other": "{{count}} jeux",
+    "search": "Rechercher par jeu ou streamer...",
+    "vods": "VODs",
+    "streamers": "streamers",
+    "avgViews": "vues moy.",
+    "noGames": "Aucun jeu pour l'instant",
+    "noGamesHint": "Les jeux apparaitront ici une fois des analyses terminees."
   },
 
   "exports": {

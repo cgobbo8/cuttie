@@ -10,6 +10,7 @@ import EditPage from "./pages/RemotionEditPage";
 import ExportsPage from "./pages/ExportsPage";
 import LoginPage from "./pages/LoginPage";
 import ProfilePage from "./pages/ProfilePage";
+import GamesPage from "./pages/GamesPage";
 import type { ReactNode } from "react";
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
@@ -39,6 +40,7 @@ function AppRoutes() {
         }
       >
         <Route index element={<HomePage />} />
+        <Route path="games" element={<GamesPage />} />
         <Route path="exports" element={<ExportsPage />} />
         <Route path="profile" element={<ProfilePage />} />
         <Route path=":jobId" element={<JobPage />} />

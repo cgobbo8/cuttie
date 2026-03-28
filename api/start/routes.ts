@@ -28,6 +28,9 @@ router
         router.delete('/auth/logout', [() => import('#controllers/access_token_controller'), 'destroy'])
         router.get('/auth/me', [() => import('#controllers/auth_me_controller'), 'show'])
 
+        // Games
+        router.get('/games', [() => import('#controllers/games_controller'), 'index'])
+
         // Jobs
         router.post('/analyze', [() => import('#controllers/jobs_controller'), 'store'])
         router.get('/jobs', [() => import('#controllers/jobs_controller'), 'index'])

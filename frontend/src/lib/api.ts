@@ -175,6 +175,25 @@ function mapJobSummary(raw: any): JobSummary {
   };
 }
 
+// ── Games API ───────────────────────────────────────────────────────────────
+
+export interface GameSummary {
+  name: string;
+  vod_count: number;
+  streamer_count: number;
+  avg_views: number;
+  total_views: number;
+  last_stream_date: string | null;
+  streamers: string[];
+}
+
+export async function listGames(): Promise<GameSummary[]> {
+  const res = await fetch(`${BASE}/games`);
+  if (!res.ok) throw new Error("Failed to fetch games");
+  const json = await res.json();
+  return json.data ?? [];
+}
+
 // ── Job API ─────────────────────────────────────────────────────────────────
 
 export async function submitVod(url: string): Promise<{ job_id: string }> {

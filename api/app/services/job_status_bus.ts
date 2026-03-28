@@ -10,6 +10,8 @@
 import EventEmitter from 'node:events'
 import env from '#start/env'
 import Job from '#models/job'
+import Streamer from '#models/streamer'
+import db from '@adonisjs/lucid/services/db'
 import { Redis } from 'ioredis'
 
 export interface JobStatusUpdate {
@@ -104,6 +106,43 @@ class JobStatusBus extends EventEmitter {
     if (update.view_count !== undefined) job.viewCount = update.view_count ?? null
     if (update.stream_date !== undefined) job.streamDate = update.stream_date ?? null
     if (update.step_timings !== undefined) job.stepTimings = update.step_timings ?? null
+
+    // Auto-create/link streamer when streamer name arrives and job has no streamer_id yet
+    if (update.streamer && !job.streamerId) {
+      try {
+        const login = update.streamer.toLowerCase().replace(/\s+/g, '')
+        let streamer = await Streamer.findBy('twitchLogin', login)
+        if (!streamer) {
+          const now = new Date().toISOString()
+          streamer = await Streamer.create({
+            twitchLogin: login,
+            displayName: update.streamer,
+            createdAt: now as any,
+            updatedAt: now as any,
+          })
+        }
+        job.streamerId = streamer.id
+
+        // Link streamer to user if not already linked
+        if (job.userId) {
+          const existing = await db
+            .from('user_streamers')
+            .where('user_id', job.userId)
+            .where('streamer_id', streamer.id)
+            .first()
+          if (!existing) {
+            await db.table('user_streamers').insert({
+              user_id: job.userId,
+              streamer_id: streamer.id,
+              created_at: new Date().toISOString(),
+            })
+          }
+        }
+      } catch (err) {
+        console.error('[JobStatusBus] Failed to link streamer:', err)
+      }
+    }
+
     await job.save()
   }
 }

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router";
 import { listJobs, deleteJob, retryJob, type JobSummary, type PaginationMeta } from "../lib/api";
+import { useStreamer } from "../lib/StreamerContext";
 import { useTranslation } from "react-i18next";
 import ConfirmModal from "../components/ConfirmModal";
 import { useToast } from "../components/Toast";
@@ -77,6 +78,7 @@ export default function HomePage() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const toast = useToast();
+  const { activeStreamer } = useStreamer();
   const [jobs, setJobs] = useState<JobSummary[]>([]);
   const [meta, setMeta] = useState<PaginationMeta>({ total: 0, per_page: 20, current_page: 1, last_page: 1 });
   const [loading, setLoading] = useState(true);
@@ -110,6 +112,7 @@ export default function HomePage() {
         per_page: 20,
         search: debouncedSearch || undefined,
         status: statusFilter || undefined,
+        streamer_id: activeStreamer?.id,
       });
       setJobs(result.data);
       setMeta(result.meta);
@@ -118,7 +121,16 @@ export default function HomePage() {
     } finally {
       setLoading(false);
     }
-  }, [page, debouncedSearch, statusFilter]);
+  }, [page, debouncedSearch, statusFilter, activeStreamer]);
+
+  // Reset page when streamer changes
+  const prevStreamerId = useRef(activeStreamer?.id);
+  useEffect(() => {
+    if (prevStreamerId.current !== activeStreamer?.id) {
+      prevStreamerId.current = activeStreamer?.id;
+      setPage(1);
+    }
+  }, [activeStreamer]);
 
   useEffect(() => {
     setLoading(true);

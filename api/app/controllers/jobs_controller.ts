@@ -39,8 +39,13 @@ export default class JobsController {
     const perPage = Math.min(100, Math.max(1, Number(request.input('per_page', 20))))
     const search = (request.input('search') as string || '').trim()
     const status = (request.input('status') as string || '').trim()
+    const streamerId = request.input('streamer_id') ? Number(request.input('streamer_id')) : null
 
     const query = Job.query().where('user_id', user.id)
+
+    if (streamerId) {
+      query.where('streamer_id', streamerId)
+    }
 
     if (search) {
       const q = `%${search}%`

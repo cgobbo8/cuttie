@@ -201,6 +201,7 @@ export interface ListJobsParams {
   per_page?: number;
   search?: string;
   status?: string;
+  streamer_id?: number;
 }
 
 export async function listJobs(params?: ListJobsParams): Promise<PaginatedJobs> {
@@ -209,6 +210,7 @@ export async function listJobs(params?: ListJobsParams): Promise<PaginatedJobs> 
   if (params?.per_page) qs.set("per_page", String(params.per_page));
   if (params?.search) qs.set("search", params.search);
   if (params?.status) qs.set("status", params.status);
+  if (params?.streamer_id) qs.set("streamer_id", String(params.streamer_id));
   const suffix = qs.toString() ? `?${qs}` : "";
   const res = await fetch(`${BASE}/jobs${suffix}`);
   if (!res.ok) throw new Error("Failed to fetch jobs");
@@ -435,8 +437,11 @@ export async function getRenderStatus(renderId: string): Promise<RenderStatus> {
   return res.json();
 }
 
-export async function listRenders(): Promise<RenderStatus[]> {
-  const res = await fetch(`${BASE}/renders`);
+export async function listRenders(streamerId?: number): Promise<RenderStatus[]> {
+  const qs = new URLSearchParams();
+  if (streamerId) qs.set("streamer_id", String(streamerId));
+  const suffix = qs.toString() ? `?${qs}` : "";
+  const res = await fetch(`${BASE}/renders${suffix}`);
   if (!res.ok) throw new Error("Failed to fetch renders");
   return res.json();
 }
@@ -472,6 +477,21 @@ export async function renderClip(
     };
     poll();
   });
+}
+
+// ── Streamers ──────────────────────────────────────────────
+
+export interface StreamerInfo {
+  id: number;
+  twitch_login: string;
+  display_name: string;
+  avatar_url: string | null;
+}
+
+export async function listStreamers(): Promise<StreamerInfo[]> {
+  const res = await fetch(`${BASE}/streamers`);
+  if (!res.ok) throw new Error("Failed to fetch streamers");
+  return res.json();
 }
 
 // ── Assets ──────────────────────────────────────────────

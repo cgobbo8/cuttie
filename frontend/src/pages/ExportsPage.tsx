@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo, useCallback } from "react";
 import { Link } from "react-router";
 import { Loader2, Download, AlertCircle, Film, Search, Gamepad2, Trash2 } from "lucide-react";
 import { listRenders, deleteRender, clipUrl, type RenderStatus } from "../lib/api";
+import { useStreamer } from "../lib/StreamerContext";
 import { useTranslation } from "react-i18next";
 import ConfirmModal from "../components/ConfirmModal";
 import { useToast } from "../components/Toast";
@@ -132,6 +133,7 @@ function RenderRow({ render, lng, onDelete }: { render: RenderStatus; lng: strin
 export default function ExportsPage() {
   const { t, i18n } = useTranslation();
   const toast = useToast();
+  const { activeStreamer } = useStreamer();
   const [renders, setRenders] = useState<RenderStatus[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -165,16 +167,17 @@ export default function ExportsPage() {
   useEffect(() => {
     let active = true;
     const load = () => {
-      listRenders()
+      listRenders(activeStreamer?.id)
         .then((data) => { if (active) setRenders(data); })
         .catch(() => {})
         .finally(() => { if (active) setLoading(false); });
     };
 
+    setLoading(true);
     load();
     const interval = setInterval(load, hasRendering || loading ? 2000 : 10000);
     return () => { active = false; clearInterval(interval); };
-  }, [hasRendering, loading]);
+  }, [hasRendering, loading, activeStreamer]);
 
   const filtered = useMemo(() => {
     let list = renders;

@@ -7,6 +7,9 @@ export default class Job extends JobSchema {
   @column()
   declare userId: number | null
 
+  @column()
+  declare streamerId: number | null
+
   @column({
     prepare: (value) => (value !== null && value !== undefined ? JSON.stringify(value) : null),
     consume: (value) => (typeof value === 'string' ? JSON.parse(value) : value),

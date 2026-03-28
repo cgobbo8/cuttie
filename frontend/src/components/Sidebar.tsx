@@ -2,6 +2,7 @@ import { NavLink, useNavigate } from "react-router";
 import { useState } from "react";
 import { Film, FolderOpen, LogOut, Plus } from "lucide-react";
 import NewProjectModal from "./NewProjectModal";
+import StreamerSelector from "./StreamerSelector";
 import { useAuth } from "../lib/AuthContext";
 import { useTranslation } from "react-i18next";
 
@@ -34,6 +35,9 @@ export default function Sidebar() {
             </span>
           </NavLink>
         </div>
+
+        {/* Streamer selector */}
+        <StreamerSelector />
 
         {/* New project button */}
         <div className="px-3 mb-1">

@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router";
 import { AuthProvider, useAuth } from "./lib/AuthContext";
+import { StreamerProvider } from "./lib/StreamerContext";
 import { TooltipProvider } from "./components/ui/Tooltip";
 import { ToastProvider } from "./components/Toast";
 import Layout from "./components/Layout";
@@ -67,13 +68,15 @@ function AppRoutes() {
 export default function App() {
   return (
     <AuthProvider>
-      <TooltipProvider>
-        <ToastProvider>
-          <BrowserRouter>
-            <AppRoutes />
-          </BrowserRouter>
-        </ToastProvider>
-      </TooltipProvider>
+      <StreamerProvider>
+        <TooltipProvider>
+          <ToastProvider>
+            <BrowserRouter>
+              <AppRoutes />
+            </BrowserRouter>
+          </ToastProvider>
+        </TooltipProvider>
+      </StreamerProvider>
     </AuthProvider>
   );
 }

@@ -147,7 +147,7 @@ export default function NativePreviewViewport({
     onDuration(e.currentTarget.duration);
   }, [onDuration]);
 
-  // Click-to-select in canvas coordinates — always hit-test by position
+  // Click-to-select in canvas coordinates — always hit-test by resolved position
   const handleOverlayClick = useCallback((e: React.MouseEvent) => {
     const rect = e.currentTarget.getBoundingClientRect();
     const cx = (e.clientX - rect.left) / scale;
@@ -155,14 +155,18 @@ export default function NativePreviewViewport({
     for (let i = layers.length - 1; i >= 0; i--) {
       const l = layers[i];
       if (!l.visible || l.locked) continue;
-      const t = l.transform;
-      if (cx >= t.x && cx <= t.x + t.width && cy >= t.y && cy <= t.y + t.height) {
+      const kf = resolveKeyframes(l.keyframes, animTime);
+      const lx = kf.x ?? l.transform.x;
+      const ly = kf.y ?? l.transform.y;
+      const lw = kf.width ?? l.transform.width;
+      const lh = kf.height ?? l.transform.height;
+      if (cx >= lx && cx <= lx + lw && cy >= ly && cy <= ly + lh) {
         onSelect(l.id);
         return;
       }
     }
     onSelect(null);
-  }, [layers, scale, onSelect]);
+  }, [layers, scale, onSelect, animTime]);
 
   const selectedLayer = layers.find((l) => l.id === selectedId);
 
@@ -452,16 +456,23 @@ export default function NativePreviewViewport({
           style={{ position: "absolute", inset: 0, cursor: "default" }}
           onClick={handleOverlayClick}
         >
-          {selectedLayer && (
+          {selectedLayer && (() => {
+            const selKf = resolveKeyframes(selectedLayer.keyframes, animTime);
+            const selX = selKf.x ?? selectedLayer.transform.x;
+            const selY = selKf.y ?? selectedLayer.transform.y;
+            const selW = selKf.width ?? selectedLayer.transform.width;
+            const selH = selKf.height ?? selectedLayer.transform.height;
+            const selR = selKf.rotation ?? (selectedLayer.transform.rotation ?? 0);
+            return (
             <div
               data-transform-root
               style={{
                 position: "absolute",
-                left: selectedLayer.transform.x * scale,
-                top: selectedLayer.transform.y * scale,
-                width: selectedLayer.transform.width * scale,
-                height: selectedLayer.transform.height * scale,
-                transform: selectedLayer.transform.rotation ? `rotate(${selectedLayer.transform.rotation}deg)` : undefined,
+                left: selX * scale,
+                top: selY * scale,
+                width: selW * scale,
+                height: selH * scale,
+                transform: selR ? `rotate(${selR}deg)` : undefined,
                 transformOrigin: "center center",
               }}
             >
@@ -473,7 +484,8 @@ export default function NativePreviewViewport({
                 onTransformStart={onTransformStart}
               />
             </div>
-          )}
+            );
+          })()}
         </div>
 
         {/* Canvas border */}

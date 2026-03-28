@@ -277,7 +277,7 @@ def _extract_single_clip(
                 url,
             ],
             check=True,
-            timeout=180,
+            timeout=300,
             capture_output=True,
             text=True,
         )
@@ -297,7 +297,7 @@ def _extract_single_clip(
                 filepath,
             ],
             check=True,
-            timeout=120,
+            timeout=240,
             capture_output=True,
             text=True,
         )
@@ -390,7 +390,7 @@ def _compress_clip(raw_path: str, output_path: str) -> bool:
                 output_path,
             ],
             check=True,
-            timeout=120,
+            timeout=240,
             capture_output=True,
             text=True,
         )
@@ -493,7 +493,7 @@ def extract_group(
                     "--force-keyframes-at-cuts", "-f", "best",
                     "-o", raw_file, "--no-warnings", url,
                 ],
-                check=True, timeout=180, capture_output=True, text=True,
+                check=True, timeout=300, capture_output=True, text=True,
             )
 
             if os.path.isfile(raw_file) and _compress_clip(raw_file, filepath):
@@ -563,7 +563,7 @@ def extract_group(
                             "-movflags", "+faststart",
                             filepath,
                         ],
-                        check=True, timeout=120, capture_output=True, text=True,
+                        check=True, timeout=240, capture_output=True, text=True,
                     )
 
                     if os.path.isfile(filepath):

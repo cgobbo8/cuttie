@@ -135,27 +135,56 @@ export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange
           </button>
         )}
 
-        {/* GIF loop toggle (asset layers with .gif source) */}
+        {/* GIF options (asset layers with .gif source) */}
         {asset && onAssetChange && asset.src.toLowerCase().endsWith(".gif") && (
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] text-zinc-400 uppercase tracking-wider font-medium flex items-center gap-1">
-              Boucler le GIF
-              <HintBadge tooltip="Applique uniquement au rendu exporte. Dans la preview, le GIF boucle toujours." />
-            </span>
-            <button
-              onClick={() => {
-                onCommit();
-                onAssetChange(layer.id, { gifLoop: asset.gifLoop === false ? true : false });
-              }}
-              className={`text-[10px] px-2.5 py-1 rounded-md font-medium transition-colors ${
-                asset.gifLoop !== false
-                  ? "bg-white/[0.1] text-zinc-200"
-                  : "bg-white/[0.04] text-zinc-500"
-              }`}
-            >
-              {asset.gifLoop !== false ? "Oui" : "Non"}
-            </button>
-          </div>
+          <>
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] text-zinc-400 uppercase tracking-wider font-medium flex items-center gap-1">
+                Boucler le GIF
+                <HintBadge tooltip="Applique uniquement au rendu exporte. Dans la preview, le GIF boucle toujours." />
+              </span>
+              <button
+                onClick={() => {
+                  onCommit();
+                  onAssetChange(layer.id, { gifLoop: asset.gifLoop === false ? true : false });
+                }}
+                className={`text-[10px] px-2.5 py-1 rounded-md font-medium transition-colors ${
+                  asset.gifLoop !== false
+                    ? "bg-white/[0.1] text-zinc-200"
+                    : "bg-white/[0.04] text-zinc-500"
+                }`}
+              >
+                {asset.gifLoop !== false ? "Oui" : "Non"}
+              </button>
+            </div>
+
+            <div className="flex items-end gap-1.5">
+              <div className="flex-1">
+                <Slider
+                  label="Vitesse GIF"
+                  value={asset.gifSpeed ?? 1}
+                  min={0.1}
+                  max={3}
+                  step={0.05}
+                  unit=""
+                  onChange={(v) => onAssetChange(layer.id, { gifSpeed: v })}
+                  onCommit={onCommit}
+                />
+              </div>
+              {(asset.gifSpeed ?? 1) !== 1 && (
+                <button
+                  onClick={() => {
+                    onCommit();
+                    onAssetChange(layer.id, { gifSpeed: 1 });
+                  }}
+                  className="text-[9px] px-1.5 py-1 rounded bg-white/[0.06] hover:bg-white/[0.1] text-zinc-500 hover:text-zinc-300 transition-colors shrink-0 mb-[1px]"
+                  title="Reinitialiser"
+                >
+                  1x
+                </button>
+              )}
+            </div>
+          </>
         )}
 
         {/* Rotation */}

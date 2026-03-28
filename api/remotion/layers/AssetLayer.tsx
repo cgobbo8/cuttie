@@ -27,7 +27,7 @@ export default function AssetLayer({ layer }: Props) {
         width={transform.width}
         height={transform.height}
         fit="fill"
-        playbackRate={asset.gifPlaybackRate ?? 1}
+        playbackRate={asset.gifSpeed ?? 1}
         loopBehavior={asset.gifLoop === false ? "pause-after-finish" : "loop"}
       />
     );

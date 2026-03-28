@@ -71,8 +71,8 @@ export interface ChatData {
 export interface AssetData {
   /** Data URL (base64) or object URL for the image */
   src: string;
-  /** Computed playback rate for GIF assets (browser-equivalent speed) */
-  gifPlaybackRate?: number;
+  /** GIF playback speed multiplier (default 1). Lower = slower. */
+  gifSpeed?: number;
   /** Whether GIF should loop (default true). false = play once then freeze on last frame. */
   gifLoop?: boolean;
 }

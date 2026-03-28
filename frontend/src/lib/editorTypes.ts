@@ -133,6 +133,22 @@ export type EasingPreset =
   | "easeIn.power4" | "easeOut.power4" | "easeInOut.power4"
   | "bounce" | "elastic";
 
+/* ── Keyframe system ─────────────────────────────────────── */
+
+/** A single keyframe: a value at a specific time with easing to the next keyframe */
+export interface Keyframe {
+  id: string;
+  time: number;        // seconds
+  value: number;
+  easing: EasingPreset; // easing curve to the NEXT keyframe
+}
+
+/** Properties that can be keyframed */
+export type KeyframableProperty = "x" | "y" | "width" | "height" | "rotation" | "opacity" | "scale";
+
+/** Keyframe tracks for a layer — each property has its own timeline */
+export type LayerKeyframes = Partial<Record<KeyframableProperty, Keyframe[]>>;
+
 export interface LayerAnimation {
   id: string;
   type: AnimationType;
@@ -156,4 +172,5 @@ export interface Layer {
   chat?: ChatData;
   text?: TextData;
   animations?: LayerAnimation[];
+  keyframes?: LayerKeyframes;
 }

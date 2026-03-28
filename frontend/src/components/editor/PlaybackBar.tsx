@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Play, Pause } from "lucide-react";
-import type { Layer, LayerAnimation } from "../../lib/editorTypes";
+import type { Layer, LayerAnimation, LayerKeyframes } from "../../lib/editorTypes";
 import { layerVisibilityAtTime, ANIMATION_DEFS } from "../../lib/animations";
 
 function fmtShort(s: number): string {
@@ -38,6 +38,8 @@ interface Props {
   onUpdateAnimation?: (layerId: string, animId: string, patch: Partial<LayerAnimation>) => void;
   /** Called before starting a drag to snapshot undo state */
   onCommitAnimation?: () => void;
+  /** Keyframes from the selected layer — shown as diamonds on the timeline */
+  selectedLayerKeyframes?: LayerKeyframes;
 }
 
 type TrimDragTarget = "start" | "end" | null;
@@ -287,6 +289,7 @@ export default function PlaybackBar({
   selectedLayer,
   onUpdateAnimation,
   onCommitAnimation,
+  selectedLayerKeyframes,
 }: Props) {
   const { t } = useTranslation();
   const trackRef = useRef<HTMLDivElement>(null);
@@ -489,6 +492,26 @@ export default function PlaybackBar({
               onUpdateAnimation={onUpdateAnimation}
               onCommit={onCommitAnimation}
             />
+          </div>
+        )}
+
+        {/* Keyframe diamonds */}
+        {selectedLayerKeyframes && (
+          <div className="relative h-3 mt-0.5">
+            {Object.entries(selectedLayerKeyframes).map(([prop, kfs]) =>
+              (kfs ?? []).map((kf) => (
+                <div
+                  key={kf.id}
+                  className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2"
+                  style={{ left: `${pct(kf.time)}%` }}
+                  title={`${prop}: ${Math.round(kf.value)}`}
+                >
+                  <svg viewBox="0 0 8 8" className="w-2 h-2 text-yellow-400">
+                    <rect x="4" y="0.5" width="4.5" height="4.5" rx="0.5" transform="rotate(45 4 4)" fill="currentColor" />
+                  </svg>
+                </div>
+              ))
+            )}
           </div>
         )}
 

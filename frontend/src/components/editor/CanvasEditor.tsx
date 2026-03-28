@@ -44,6 +44,7 @@ export default function CanvasEditor({
     addLayer,
     updateTransform, commitTransform, updateStyle, updateSubtitle, updateShape, updateChat, updateAsset, updateText, reorderLayers, duplicateLayer, removeLayer,
     renameLayer, toggleVisibility, toggleLock,
+    toggleKeyframe,
     undo, redo,
   } = editor;
 
@@ -625,6 +626,8 @@ export default function CanvasEditor({
                   onTransformChange={updateTransform}
                   onCommit={commitTransform}
                   onStartCrop={setCropEditingId}
+                  currentTime={currentTime}
+                  onToggleKeyframe={toggleKeyframe}
                 />
               ) : (
                 <div className="flex-1 flex items-center justify-center px-4">
@@ -678,6 +681,7 @@ export default function CanvasEditor({
         onSeek={seek}
         onTogglePlay={togglePlay}
         onTrimChange={() => {}}
+        selectedLayerKeyframes={selected?.keyframes}
       />
 
       {/* Hidden file input for asset upload */}

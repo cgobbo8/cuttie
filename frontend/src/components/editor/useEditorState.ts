@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { AssetData, ChatData, Layer, LayerAnimation, LayerType, ShapeData, SubtitleData, TextData, VideoLayerData } from "../../lib/editorTypes";
+import type { AssetData, ChatData, Layer, LayerAnimation, LayerType, ShapeData, SubtitleData, TextData, VideoLayerData, Keyframe, KeyframableProperty, EasingPreset } from "../../lib/editorTypes";
 type AssetPatch = Partial<Omit<AssetData, "src">>;
 import { DEFAULT_STYLE } from "../../lib/editorTypes";
 
@@ -282,6 +282,64 @@ export function useEditorState(clipKey: string) {
     );
   }, [pushHistory]);
 
+  /** Set or update a keyframe for a property on a layer at the current playhead time. */
+  const setKeyframe = useCallback((layerId: string, property: KeyframableProperty, value: number, easing: EasingPreset = "easeInOut") => {
+    pushHistory();
+    const kfId = uid();
+    setLayers((prev) =>
+      prev.map((l) => {
+        if (l.id !== layerId) return l;
+        const keyframes = { ...l.keyframes };
+        const track = [...(keyframes[property] ?? [])];
+        // Replace existing keyframe at this time, or add new one
+        const existingIdx = track.findIndex((kf) => Math.abs(kf.time - currentTime) < 0.05);
+        const newKf: Keyframe = { id: kfId, time: currentTime, value, easing };
+        if (existingIdx >= 0) {
+          track[existingIdx] = newKf;
+        } else {
+          track.push(newKf);
+          track.sort((a, b) => a.time - b.time);
+        }
+        keyframes[property] = track;
+        return { ...l, keyframes };
+      }),
+    );
+  }, [pushHistory, currentTime]);
+
+  /** Remove a keyframe by id from a property track. */
+  const removeKeyframe = useCallback((layerId: string, property: KeyframableProperty, keyframeId: string) => {
+    pushHistory();
+    setLayers((prev) =>
+      prev.map((l) => {
+        if (l.id !== layerId) return l;
+        const keyframes = { ...l.keyframes };
+        const track = (keyframes[property] ?? []).filter((kf) => kf.id !== keyframeId);
+        if (track.length === 0) {
+          delete keyframes[property];
+        } else {
+          keyframes[property] = track;
+        }
+        return { ...l, keyframes: Object.keys(keyframes).length > 0 ? keyframes : undefined };
+      }),
+    );
+  }, [pushHistory]);
+
+  /** Remove ALL keyframes at the current time for a specific property (toggle behavior). */
+  const toggleKeyframe = useCallback((layerId: string, property: KeyframableProperty, currentValue: number) => {
+    setLayers((cur) => {
+      const layer = cur.find((l) => l.id === layerId);
+      if (!layer) return cur;
+      const track = layer.keyframes?.[property] ?? [];
+      const existing = track.find((kf) => Math.abs(kf.time - currentTime) < 0.05);
+      if (existing) {
+        removeKeyframe(layerId, property, existing.id);
+      } else {
+        setKeyframe(layerId, property, currentValue);
+      }
+      return cur;
+    });
+  }, [currentTime, setKeyframe, removeKeyframe]);
+
   const moveLayer = useCallback((id: string, direction: "up" | "down") => {
     pushHistory();
     setLayers((prev) => {
@@ -379,6 +437,9 @@ export function useEditorState(clipKey: string) {
     addAnimation,
     updateAnimation,
     removeAnimation,
+    setKeyframe,
+    removeKeyframe,
+    toggleKeyframe,
     moveLayer,
     reorderLayers,
     duplicateLayer,

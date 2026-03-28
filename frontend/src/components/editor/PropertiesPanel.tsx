@@ -1,8 +1,9 @@
 import { useTranslation } from "react-i18next";
 import { Crop } from "lucide-react";
 import { HintBadge } from "../ui/Tooltip";
-import type { Layer, LayerStyle, ShapeData, SubtitleData, ChatData, TextData, AssetData } from "../../lib/editorTypes";
+import type { Layer, LayerStyle, ShapeData, SubtitleData, ChatData, TextData, AssetData, KeyframableProperty } from "../../lib/editorTypes";
 import { SUBTITLE_FONTS, TEXT_FONTS, BOX_SHADOW_PRESETS } from "../../lib/editorTypes";
+import { hasKeyframeAt } from "../../lib/animations";
 
 const CANVAS_W = 1080;
 const CANVAS_H = 1920;
@@ -18,6 +19,39 @@ interface Props {
   onTransformChange: (id: string, patch: Partial<Layer["transform"]>) => void;
   onCommit: () => void;
   onStartCrop?: (id: string) => void;
+  currentTime?: number;
+  onToggleKeyframe?: (layerId: string, property: KeyframableProperty, currentValue: number) => void;
+}
+
+function KeyframeButton({
+  hasKeyframe,
+  onClick,
+}: {
+  hasKeyframe: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`w-4 h-4 flex items-center justify-center shrink-0 transition-colors ${
+        hasKeyframe
+          ? "text-yellow-400 hover:text-yellow-300"
+          : "text-zinc-600 hover:text-zinc-400"
+      }`}
+      title={hasKeyframe ? "Remove keyframe" : "Add keyframe"}
+    >
+      <svg viewBox="0 0 10 10" className="w-2.5 h-2.5">
+        <rect
+          x="5" y="0.5" width="6" height="6"
+          rx="1"
+          transform="rotate(45 5 5)"
+          fill={hasKeyframe ? "currentColor" : "none"}
+          stroke="currentColor"
+          strokeWidth="1.2"
+        />
+      </svg>
+    </button>
+  );
 }
 
 function Slider({
@@ -29,6 +63,7 @@ function Slider({
   unit,
   onChange,
   onCommit,
+  suffix,
 }: {
   label: string;
   value: number;
@@ -38,13 +73,17 @@ function Slider({
   unit: string;
   onChange: (v: number) => void;
   onCommit: () => void;
+  suffix?: React.ReactNode;
 }) {
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex items-center justify-between">
-        <span className="text-[10px] text-zinc-400 uppercase tracking-wider font-medium">
-          {label}
-        </span>
+        <div className="flex items-center gap-1">
+          <span className="text-[10px] text-zinc-400 uppercase tracking-wider font-medium">
+            {label}
+          </span>
+          {suffix}
+        </div>
         <span className="text-[10px] text-zinc-500 font-mono tabular-nums">
           {unit === "%" ? `${Math.round(value * 100)}%` : unit === "s" ? `${value.toFixed(1)}s` : unit === "°" ? `${value}°` : `${value}${unit}`}
         </span>
@@ -66,7 +105,7 @@ function Slider({
   );
 }
 
-export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange, onShapeChange, onChatChange, onAssetChange, onTextChange, onTransformChange, onCommit, onStartCrop }: Props) {
+export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange, onShapeChange, onChatChange, onAssetChange, onTextChange, onTransformChange, onCommit, onStartCrop, currentTime = 0, onToggleKeyframe }: Props) {
   const { t } = useTranslation();
   const { style, transform, subtitle, shape, chat, text, asset } = layer;
 
@@ -100,14 +139,36 @@ export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange
 
         {/* Transform info */}
         <div className="grid grid-cols-2 gap-2">
-          {(["x", "y", "width", "height"] as const).map((k) => (
-            <div key={k} className="flex flex-col gap-0.5">
-              <span className="text-[10px] text-zinc-600 uppercase">{k === "width" ? "W" : k === "height" ? "H" : k.toUpperCase()}</span>
-              <span className="text-[10px] text-zinc-400 font-mono tabular-nums">
-                {Math.round(layer.transform[k])}
-              </span>
-            </div>
-          ))}
+          {(["x", "y", "width", "height"] as const).map((k) => {
+            const value = layer.transform[k];
+            const prop = k as KeyframableProperty;
+            const hasKf = hasKeyframeAt(layer.keyframes?.[prop], currentTime);
+            return (
+              <div key={k} className="flex items-center gap-1">
+                <div className="flex-1 flex flex-col gap-0.5">
+                  <span className="text-[10px] text-zinc-600 uppercase">
+                    {k === "width" ? "W" : k === "height" ? "H" : k.toUpperCase()}
+                  </span>
+                  <input
+                    type="number"
+                    value={Math.round(value)}
+                    onChange={(e) => {
+                      const v = parseInt(e.target.value);
+                      if (!isNaN(v)) onTransformChange(layer.id, { [k]: v });
+                    }}
+                    onFocus={onCommit}
+                    className="w-full text-[10px] text-zinc-400 font-mono tabular-nums bg-transparent border-b border-transparent hover:border-white/[0.1] focus:border-white/[0.2] outline-none py-0.5 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                  />
+                </div>
+                {onToggleKeyframe && (
+                  <KeyframeButton
+                    hasKeyframe={hasKf}
+                    onClick={() => onToggleKeyframe(layer.id, prop, value)}
+                  />
+                )}
+              </div>
+            );
+          })}
         </div>
 
         {/* Center buttons */}
@@ -175,6 +236,12 @@ export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange
               unit="°"
               onChange={(v) => onTransformChange(layer.id, { rotation: v })}
               onCommit={onCommit}
+              suffix={onToggleKeyframe && (
+                <KeyframeButton
+                  hasKeyframe={hasKeyframeAt(layer.keyframes?.["rotation"], currentTime)}
+                  onClick={() => onToggleKeyframe(layer.id, "rotation", transform.rotation ?? 0)}
+                />
+              )}
             />
           </div>
           {(transform.rotation ?? 0) !== 0 && (
@@ -203,6 +270,12 @@ export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange
           unit="%"
           onChange={(v) => onStyleChange(layer.id, { opacity: v })}
           onCommit={onCommit}
+          suffix={onToggleKeyframe && (
+            <KeyframeButton
+              hasKeyframe={hasKeyframeAt(layer.keyframes?.["opacity"], currentTime)}
+              onClick={() => onToggleKeyframe(layer.id, "opacity", style.opacity)}
+            />
+          )}
         />
 
         <Slider

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Layer } from "../../lib/editorTypes";
+import { resolveKeyframes } from "../../lib/animations";
 import VideoLayer from "./VideoLayer";
 import SubtitleLayer from "./SubtitleLayer";
 import ChatLayer from "./ChatLayer";
@@ -91,17 +92,31 @@ export default function CanvasViewport({
 
           const { style } = layer;
 
+          // Resolve keyframe overrides at current time
+          const kfOverrides = resolveKeyframes(layer.keyframes, currentTime);
+          const kfX = kfOverrides.x ?? layer.transform.x;
+          const kfY = kfOverrides.y ?? layer.transform.y;
+          const kfW = kfOverrides.width ?? layer.transform.width;
+          const kfH = kfOverrides.height ?? layer.transform.height;
+          const kfRotation = kfOverrides.rotation ?? (layer.transform.rotation ?? 0);
+          const kfOpacity = kfOverrides.opacity ?? style.opacity;
+          const kfScale = kfOverrides.scale ?? 1;
+
+          const transformParts: string[] = [];
+          if (kfRotation) transformParts.push(`rotate(${kfRotation}deg)`);
+          if (kfScale !== 1) transformParts.push(`scale(${kfScale})`);
+
           return (
             <div
               key={layer.id}
               data-transform-root
               style={{
                 position: "absolute",
-                left: layer.transform.x,
-                top: layer.transform.y,
-                width: layer.transform.width,
-                height: layer.transform.height,
-                transform: layer.transform.rotation ? `rotate(${layer.transform.rotation}deg)` : undefined,
+                left: kfX,
+                top: kfY,
+                width: kfW,
+                height: kfH,
+                transform: transformParts.length > 0 ? transformParts.join(" ") : undefined,
                 transformOrigin: "center center",
                 zIndex: 1,
               }}
@@ -117,7 +132,7 @@ export default function CanvasViewport({
                 style={{
                   width: "100%",
                   height: "100%",
-                  opacity: style.opacity,
+                  opacity: kfOpacity,
                   borderRadius: !layer.shape && style.borderRadius > 0 ? style.borderRadius : undefined,
                   overflow: !layer.shape && style.borderRadius > 0 ? "hidden" : undefined,
                   filter: style.blur > 0 ? `blur(${style.blur}px)` : undefined,

@@ -3,7 +3,7 @@
  * Never import framework-specific code here.
  */
 
-import type { Layer, AnimationType, AnimationCategory, EasingPreset } from "./editorTypes";
+import type { Layer, AnimationType, AnimationCategory, EasingPreset, Keyframe, KeyframableProperty, LayerKeyframes } from "./editorTypes";
 
 /* ── Easing functions ────────────────────────────────────── */
 
@@ -249,4 +249,66 @@ export function layerVisibilityAtTime(
 ): number {
   const result = evaluateAnimations(layer, time, clipDuration);
   return result.opacity;
+}
+
+/* ── Keyframe interpolation ─────────────────────────────── */
+
+/**
+ * Interpolate a value from a sorted keyframe array at a given time.
+ * Returns null if no keyframes exist for this property.
+ */
+export function interpolateKeyframes(keyframes: Keyframe[], time: number): number | null {
+  if (keyframes.length === 0) return null;
+  if (keyframes.length === 1) return keyframes[0].value;
+
+  // Before first keyframe — hold first value
+  if (time <= keyframes[0].time) return keyframes[0].value;
+  // After last keyframe — hold last value
+  if (time >= keyframes[keyframes.length - 1].time) return keyframes[keyframes.length - 1].value;
+
+  // Find surrounding keyframes
+  for (let i = 0; i < keyframes.length - 1; i++) {
+    const a = keyframes[i];
+    const b = keyframes[i + 1];
+    if (time >= a.time && time <= b.time) {
+      const rawProgress = (time - a.time) / (b.time - a.time);
+      const easedProgress = applyEasing(a.easing, rawProgress);
+      return a.value + (b.value - a.value) * easedProgress;
+    }
+  }
+
+  return keyframes[keyframes.length - 1].value;
+}
+
+/**
+ * Resolve all keyframed properties for a layer at a given time.
+ * Returns overrides that should be applied on top of the layer's static values.
+ */
+export function resolveKeyframes(
+  keyframes: LayerKeyframes | undefined,
+  time: number,
+): Partial<Record<KeyframableProperty, number>> {
+  if (!keyframes) return {};
+  const result: Partial<Record<KeyframableProperty, number>> = {};
+
+  for (const [prop, kfs] of Object.entries(keyframes) as [KeyframableProperty, Keyframe[]][]) {
+    if (!kfs || kfs.length === 0) continue;
+    const sorted = [...kfs].sort((a, b) => a.time - b.time);
+    const val = interpolateKeyframes(sorted, time);
+    if (val !== null) result[prop] = val;
+  }
+
+  return result;
+}
+
+/** Check if a property has a keyframe at (or very near) the given time */
+export function hasKeyframeAt(keyframes: Keyframe[] | undefined, time: number, tolerance: number = 0.05): boolean {
+  if (!keyframes || keyframes.length === 0) return false;
+  return keyframes.some((kf) => Math.abs(kf.time - time) <= tolerance);
+}
+
+/** Find keyframe at a given time (within tolerance) */
+export function findKeyframeAt(keyframes: Keyframe[] | undefined, time: number, tolerance: number = 0.05): Keyframe | undefined {
+  if (!keyframes || keyframes.length === 0) return undefined;
+  return keyframes.find((kf) => Math.abs(kf.time - time) <= tolerance);
 }

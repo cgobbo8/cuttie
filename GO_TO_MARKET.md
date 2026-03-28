@@ -133,10 +133,10 @@
 | ~~A2~~ | ~~Rate limiting sur endpoints auth~~ | ~~HIGH~~ | ~~2~~ |
 | ~~B9~~ | ~~Remplacer silent exceptions par logging~~ | ~~MEDIUM~~ | ~~4~~ |
 | ~~A9~~ | ~~Standardiser error responses (format unifié)~~ | ~~MEDIUM~~ | ~~5~~ |
-| A7 | Écrire tests fonctionnels API (auth, jobs CRUD) | LOW | 5 |
+| ~~A7~~ | ~~Écrire tests fonctionnels API (auth, jobs CRUD)~~ | ~~LOW~~ | ~~5~~ |
 | ~~P4~~ | ~~Dockerfile API + docker-compose prod~~ | ~~MEDIUM~~ | ~~6~~ |
 
-> **1 item restant** : tests fonctionnels API (non bloquant pour le go-to-market).
+> **TOUS LES ITEMS SONT COMPLETES.** GO_TO_MARKET termine le 2026-03-28.
 
 ---
 
@@ -167,3 +167,19 @@ Ajouts :
 
 **Status global** : 95% complete. Le seul item non-bloquant restant est A7 (tests fonctionnels API).
 Le projet est pret pour une demo investisseur.
+
+### 2026-03-28 — Session 3 (loop cron)
+
+**Dernier item A7 complete. Tout est fini.**
+
+23 tests API fonctionnels ecrits et tous passent :
+- Auth: login (credentials valides/invalides), session cookie, validation errors, protection des routes
+- Jobs: unauthenticated access, model CRUD, ownership filtering, status filtering, title search
+- Health: endpoint ok
+
+> **Note** : Le commit est en attente car le GPG agent est inactif (Corentin parti).
+> Les fichiers sont staged et prets. Lancer `git commit` au retour.
+
+**Total tests projet** : 9 frontend + 39 backend + 23 API = **71 tests**
+
+**GO_TO_MARKET : 100% COMPLETE.**

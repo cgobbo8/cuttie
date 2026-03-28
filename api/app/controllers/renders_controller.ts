@@ -4,7 +4,7 @@ import { unlinkSync } from 'node:fs'
 import path from 'node:path'
 import db from '@adonisjs/lucid/services/db'
 import { renderClip } from '#services/remotion_renderer'
-import { uploadFile, getPresignedDownloadUrl } from '#services/s3'
+import { uploadFile, getPresignedDownloadUrl, deleteObject } from '#services/s3'
 
 const CLIPS_BASE = path.resolve('../backend/clips')
 
@@ -94,6 +94,24 @@ export default class RendersController {
     const row = await getRender(params.renderId)
     if (!row || row.user_id !== user.id) return response.notFound({ error: 'render not found' })
     return response.json(serializeRender(row))
+  }
+
+  /** DELETE /api/renders/:renderId */
+  async destroy({ params, response, auth }: HttpContext) {
+    const user = auth.getUserOrFail()
+    const row = await getRender(params.renderId)
+    if (!row || row.user_id !== user.id) return response.notFound({ error: 'render not found' })
+
+    // Delete S3 object if render was completed
+    if (row.output_filename) {
+      const s3Key = `renders/${row.job_id}/${row.output_filename}`
+      try {
+        await deleteObject(s3Key)
+      } catch {}
+    }
+
+    await db.from('renders').where('id', params.renderId).delete()
+    return { success: true }
   }
 
   /** GET /api/renders/:renderId/download */

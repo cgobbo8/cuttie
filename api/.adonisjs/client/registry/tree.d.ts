@@ -18,6 +18,7 @@ export interface ApiDefinition {
     index: typeof routes['jobs.index']
     show: typeof routes['jobs.show']
     retry: typeof routes['jobs.retry']
+    destroy: typeof routes['jobs.destroy']
     stream: typeof routes['jobs.stream']
     renameClip: typeof routes['jobs.rename_clip']
   }
@@ -35,5 +36,6 @@ export interface ApiDefinition {
     index: typeof routes['renders.index']
     show: typeof routes['renders.show']
     download: typeof routes['renders.download']
+    destroy: typeof routes['renders.destroy']
   }
 }

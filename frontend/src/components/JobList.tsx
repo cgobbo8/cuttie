@@ -29,7 +29,7 @@ export default function JobList({ onSelect, onRetry }: Props) {
 
   useEffect(() => {
     listJobs()
-      .then(setJobs)
+      .then((result) => setJobs(result.data))
       .catch(() => setJobs([]))
       .finally(() => setLoading(false));
   }, []);

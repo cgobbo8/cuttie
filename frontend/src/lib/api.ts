@@ -114,9 +114,26 @@ export interface JobSummary {
   url: string;
   status: string;
   vod_title: string | null;
+  vod_game: string | null;
   vod_duration_seconds: number | null;
+  streamer: string | null;
+  view_count: number | null;
+  stream_date: string | null;
+  chat_message_count: number | null;
   created_at: string;
   error: string | null;
+}
+
+export interface PaginationMeta {
+  total: number;
+  per_page: number;
+  current_page: number;
+  last_page: number;
+}
+
+export interface PaginatedJobs {
+  data: JobSummary[];
+  meta: PaginationMeta;
 }
 
 // ── Adonis response mappers ──────────────────────────────────────────────────
@@ -147,7 +164,12 @@ function mapJobSummary(raw: any): JobSummary {
     url: raw.url,
     status: raw.status,
     vod_title: raw.vodTitle ?? null,
-    vod_duration_seconds: null,
+    vod_game: raw.vodGame ?? null,
+    vod_duration_seconds: raw.vodDurationSeconds ?? null,
+    streamer: raw.streamer ?? null,
+    view_count: raw.viewCount ?? null,
+    stream_date: raw.streamDate ?? null,
+    chat_message_count: raw.chatMessageCount ?? null,
     created_at: raw.createdAt,
     error: raw.error ?? null,
   };
@@ -174,11 +196,37 @@ export async function getJobStatus(jobId: string): Promise<JobResponse> {
   return mapJobResponse(await res.json());
 }
 
-export async function listJobs(): Promise<JobSummary[]> {
-  const res = await fetch(`${BASE}/jobs`);
+export interface ListJobsParams {
+  page?: number;
+  per_page?: number;
+  search?: string;
+  status?: string;
+}
+
+export async function listJobs(params?: ListJobsParams): Promise<PaginatedJobs> {
+  const qs = new URLSearchParams();
+  if (params?.page) qs.set("page", String(params.page));
+  if (params?.per_page) qs.set("per_page", String(params.per_page));
+  if (params?.search) qs.set("search", params.search);
+  if (params?.status) qs.set("status", params.status);
+  const suffix = qs.toString() ? `?${qs}` : "";
+  const res = await fetch(`${BASE}/jobs${suffix}`);
   if (!res.ok) throw new Error("Failed to fetch jobs");
-  const data = await res.json();
-  return (Array.isArray(data) ? data : data.data ?? []).map(mapJobSummary);
+  const json = await res.json();
+  return {
+    data: (json.data ?? []).map(mapJobSummary),
+    meta: json.meta,
+  };
+}
+
+export async function deleteJob(jobId: string): Promise<void> {
+  const res = await fetch(`${BASE}/jobs/${jobId}`, { method: "DELETE" });
+  if (!res.ok) throw new Error("Failed to delete job");
+}
+
+export async function deleteRender(renderId: string): Promise<void> {
+  const res = await fetch(`${BASE}/renders/${renderId}`, { method: "DELETE" });
+  if (!res.ok) throw new Error("Failed to delete render");
 }
 
 export async function retryJob(

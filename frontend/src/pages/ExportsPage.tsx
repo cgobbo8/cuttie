@@ -1,8 +1,10 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { Link } from "react-router";
-import { Loader2, Download, AlertCircle, Film, Search, Gamepad2 } from "lucide-react";
-import { listRenders, clipUrl, type RenderStatus } from "../lib/api";
+import { Loader2, Download, AlertCircle, Film, Search, Gamepad2, Trash2 } from "lucide-react";
+import { listRenders, deleteRender, clipUrl, type RenderStatus } from "../lib/api";
 import { useTranslation } from "react-i18next";
+import ConfirmModal from "../components/ConfirmModal";
+import { useToast } from "../components/Toast";
 
 function fmtDate(iso: string, lng: string): string {
   const locale = lng === "es" ? "es-ES" : lng === "en" ? "en-US" : "fr-FR";
@@ -18,14 +20,14 @@ function fmtDate(iso: string, lng: string): string {
 
 type StatusFilter = "all" | "done" | "rendering" | "error";
 
-function RenderRow({ render, lng }: { render: RenderStatus; lng: string }) {
+function RenderRow({ render, lng, onDelete }: { render: RenderStatus; lng: string; onDelete: (render: RenderStatus) => void }) {
   const { t } = useTranslation();
   const isRendering = render.status === "rendering";
   const isDone = render.status === "done";
   const isError = render.status === "error";
 
   return (
-    <div className="flex items-center gap-4 px-5 py-4 border-b border-white/[0.04] last:border-b-0 hover:bg-white/[0.02] transition-colors">
+    <div className="flex items-center gap-4 px-5 py-4 border-b border-white/[0.04] last:border-b-0 hover:bg-white/[0.02] transition-colors group">
       {/* Icon */}
       <div
         className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
@@ -113,6 +115,15 @@ function RenderRow({ render, lng }: { render: RenderStatus; lng: string }) {
             </button>
           </div>
         )}
+
+        {/* Delete button */}
+        <button
+          onClick={() => onDelete(render)}
+          className="p-1.5 text-zinc-600 hover:text-red-400 hover:bg-red-500/10 rounded-md transition-colors opacity-0 group-hover:opacity-100"
+          title={t("exports.deleteExport")}
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+        </button>
       </div>
     </div>
   );
@@ -120,10 +131,34 @@ function RenderRow({ render, lng }: { render: RenderStatus; lng: string }) {
 
 export default function ExportsPage() {
   const { t, i18n } = useTranslation();
+  const toast = useToast();
   const [renders, setRenders] = useState<RenderStatus[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+
+  // Delete modal
+  const [deleteTarget, setDeleteTarget] = useState<RenderStatus | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDeleteRequest = useCallback((render: RenderStatus) => {
+    setDeleteTarget(render);
+  }, []);
+
+  const confirmDelete = useCallback(async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await deleteRender(deleteTarget.render_id);
+      setRenders((prev) => prev.filter((r) => r.render_id !== deleteTarget.render_id));
+      setDeleteTarget(null);
+      toast.success(t("exports.deleteSuccess"));
+    } catch {
+      toast.error(t("exports.deleteError"));
+    } finally {
+      setDeleting(false);
+    }
+  }, [deleteTarget, toast, t]);
 
   const hasRendering = renders.some((r) => r.status === "rendering");
 
@@ -237,9 +272,19 @@ export default function ExportsPage() {
             )}
           </div>
         ) : (
-          filtered.map((r) => <RenderRow key={r.render_id} render={r} lng={i18n.language} />)
+          filtered.map((r) => <RenderRow key={r.render_id} render={r} lng={i18n.language} onDelete={handleDeleteRequest} />)
         )}
       </div>
+
+      {/* Delete confirmation modal */}
+      <ConfirmModal
+        open={!!deleteTarget}
+        title={t("exports.deleteExport")}
+        message={t("exports.deleteExportMessage")}
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteTarget(null)}
+        loading={deleting}
+      />
     </div>
   );
 }

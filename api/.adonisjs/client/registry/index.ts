@@ -60,6 +60,12 @@ const routes = {
     tokens: [{"old":"/api/jobs/:id/retry","type":0,"val":"api","end":""},{"old":"/api/jobs/:id/retry","type":0,"val":"jobs","end":""},{"old":"/api/jobs/:id/retry","type":1,"val":"id","end":""},{"old":"/api/jobs/:id/retry","type":0,"val":"retry","end":""}],
     types: placeholder as Registry['jobs.retry']['types'],
   },
+  'jobs.destroy': {
+    methods: ["DELETE"],
+    pattern: '/api/jobs/:id',
+    tokens: [{"old":"/api/jobs/:id","type":0,"val":"api","end":""},{"old":"/api/jobs/:id","type":0,"val":"jobs","end":""},{"old":"/api/jobs/:id","type":1,"val":"id","end":""}],
+    types: placeholder as Registry['jobs.destroy']['types'],
+  },
   'jobs.stream': {
     methods: ["GET","HEAD"],
     pattern: '/api/jobs/:id/sse',
@@ -125,6 +131,12 @@ const routes = {
     pattern: '/api/renders/:renderId/download',
     tokens: [{"old":"/api/renders/:renderId/download","type":0,"val":"api","end":""},{"old":"/api/renders/:renderId/download","type":0,"val":"renders","end":""},{"old":"/api/renders/:renderId/download","type":1,"val":"renderId","end":""},{"old":"/api/renders/:renderId/download","type":0,"val":"download","end":""}],
     types: placeholder as Registry['renders.download']['types'],
+  },
+  'renders.destroy': {
+    methods: ["DELETE"],
+    pattern: '/api/renders/:renderId',
+    tokens: [{"old":"/api/renders/:renderId","type":0,"val":"api","end":""},{"old":"/api/renders/:renderId","type":0,"val":"renders","end":""},{"old":"/api/renders/:renderId","type":1,"val":"renderId","end":""}],
+    types: placeholder as Registry['renders.destroy']['types'],
   },
 } as const satisfies Record<string, AdonisEndpoint>
 

@@ -115,6 +115,18 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/jobs_controller').default['retry']>>>
     }
   }
+  'jobs.destroy': {
+    methods: ["DELETE"]
+    pattern: '/api/jobs/:id'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { id: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/jobs_controller').default['destroy']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/jobs_controller').default['destroy']>>>
+    }
+  }
   'jobs.stream': {
     methods: ["GET","HEAD"]
     pattern: '/api/jobs/:id/sse'
@@ -245,6 +257,18 @@ export interface Registry {
       query: {}
       response: ExtractResponse<Awaited<ReturnType<import('#controllers/renders_controller').default['download']>>>
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/renders_controller').default['download']>>>
+    }
+  }
+  'renders.destroy': {
+    methods: ["DELETE"]
+    pattern: '/api/renders/:renderId'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { renderId: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/renders_controller').default['destroy']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/renders_controller').default['destroy']>>>
     }
   }
 }

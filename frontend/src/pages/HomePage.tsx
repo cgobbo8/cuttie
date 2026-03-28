@@ -1,17 +1,26 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router";
-import { listJobs, retryJob, type JobSummary } from "../lib/api";
+import { listJobs, deleteJob, retryJob, type JobSummary, type PaginationMeta } from "../lib/api";
 import { useTranslation } from "react-i18next";
+import ConfirmModal from "../components/ConfirmModal";
+import { useToast } from "../components/Toast";
 import {
   Search,
   ArrowUpDown,
   RotateCcw,
   Loader2,
   FolderOpen,
+  Trash2,
+  Gamepad2,
+  Users,
+  MessageSquare,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 
 type SortKey = "date" | "title" | "status";
 type SortDir = "asc" | "desc";
+type StatusFilter = "" | "done" | "in_progress" | "error";
 
 function formatDate(iso: string, lng: string): string {
   const locale = lng === "es" ? "es-ES" : lng === "en" ? "en-US" : "fr-FR";
@@ -29,6 +38,13 @@ function formatDuration(seconds: number | null): string {
   const h = Math.floor(seconds / 3600);
   const m = Math.floor((seconds % 3600) / 60);
   return h > 0 ? `${h}h${m.toString().padStart(2, "0")}` : `${m}min`;
+}
+
+function formatNumber(n: number | null): string {
+  if (n == null) return "-";
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
+  return String(n);
 }
 
 function StatusBadge({ status }: { status: string }) {
@@ -60,18 +76,62 @@ function StatusBadge({ status }: { status: string }) {
 export default function HomePage() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
+  const toast = useToast();
   const [jobs, setJobs] = useState<JobSummary[]>([]);
+  const [meta, setMeta] = useState<PaginationMeta>({ total: 0, per_page: 20, current_page: 1, last_page: 1 });
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("");
   const [sortKey, setSortKey] = useState<SortKey>("date");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [page, setPage] = useState(1);
+
+  // Delete modal
+  const [deleteTarget, setDeleteTarget] = useState<JobSummary | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  // Debounce search
+  const searchTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const [debouncedSearch, setDebouncedSearch] = useState("");
 
   useEffect(() => {
-    listJobs()
-      .then(setJobs)
-      .catch(() => setJobs([]))
-      .finally(() => setLoading(false));
-  }, []);
+    clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPage(1);
+    }, 300);
+    return () => clearTimeout(searchTimer.current);
+  }, [search]);
+
+  const fetchJobs = useCallback(async () => {
+    try {
+      const result = await listJobs({
+        page,
+        per_page: 20,
+        search: debouncedSearch || undefined,
+        status: statusFilter || undefined,
+      });
+      setJobs(result.data);
+      setMeta(result.meta);
+    } catch {
+      setJobs([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [page, debouncedSearch, statusFilter]);
+
+  useEffect(() => {
+    setLoading(true);
+    fetchJobs();
+  }, [fetchJobs]);
+
+  // Poll for in-progress jobs
+  const hasInProgress = jobs.some((j) => j.status !== "DONE" && j.status !== "ERROR");
+  useEffect(() => {
+    if (!hasInProgress) return;
+    const interval = setInterval(fetchJobs, 5000);
+    return () => clearInterval(interval);
+  }, [hasInProgress, fetchJobs]);
 
   const toggleSort = useCallback(
     (key: SortKey) => {
@@ -85,40 +145,20 @@ export default function HomePage() {
     [sortKey],
   );
 
-  const filtered = useMemo(() => {
-    let list = jobs;
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      list = list.filter(
-        (j) =>
-          (j.vod_title || "").toLowerCase().includes(q) ||
-          j.status.toLowerCase().includes(q),
-      );
+  // Client-side sort (server returns by date desc, we re-sort locally for title/status)
+  const sorted = [...jobs].sort((a, b) => {
+    const dir = sortDir === "asc" ? 1 : -1;
+    switch (sortKey) {
+      case "date":
+        return dir * (new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+      case "title":
+        return dir * (a.vod_title || "").localeCompare(b.vod_title || "");
+      case "status":
+        return dir * a.status.localeCompare(b.status);
+      default:
+        return 0;
     }
-
-    list = [...list].sort((a, b) => {
-      const dir = sortDir === "asc" ? 1 : -1;
-      switch (sortKey) {
-        case "date":
-          return (
-            dir *
-            (new Date(a.created_at).getTime() -
-              new Date(b.created_at).getTime())
-          );
-        case "title":
-          return (
-            dir *
-            (a.vod_title || "").localeCompare(b.vod_title || "")
-          );
-        case "status":
-          return dir * a.status.localeCompare(b.status);
-        default:
-          return 0;
-      }
-    });
-
-    return list;
-  }, [jobs, search, sortKey, sortDir]);
+  });
 
   const handleRetry = useCallback(
     async (e: React.MouseEvent, jobId: string) => {
@@ -126,30 +166,62 @@ export default function HomePage() {
       try {
         await retryJob(jobId);
         navigate(`/${jobId}`);
-      } catch {
-        /* ignore */
-      }
+      } catch {}
     },
     [navigate],
   );
 
-  const SortButton = ({
-    label,
-    sortKeyVal,
-  }: {
-    label: string;
-    sortKeyVal: SortKey;
-  }) => (
+  const handleDelete = useCallback(
+    (e: React.MouseEvent, job: JobSummary) => {
+      e.stopPropagation();
+      setDeleteTarget(job);
+    },
+    [],
+  );
+
+  const confirmDelete = useCallback(async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await deleteJob(deleteTarget.job_id);
+      setDeleteTarget(null);
+      toast.success(t("home.deleteSuccess"));
+      fetchJobs();
+    } catch {
+      toast.error(t("home.deleteError"));
+    } finally {
+      setDeleting(false);
+    }
+  }, [deleteTarget, fetchJobs, toast, t]);
+
+  const handleStatusFilter = useCallback((f: StatusFilter) => {
+    setStatusFilter(f);
+    setPage(1);
+  }, []);
+
+  const SortButton = ({ label, sortKeyVal }: { label: string; sortKeyVal: SortKey }) => (
     <button
       onClick={() => toggleSort(sortKeyVal)}
       className={`flex items-center gap-1 text-xs font-medium transition-colors ${
-        sortKey === sortKeyVal
-          ? "text-white"
-          : "text-zinc-500 hover:text-zinc-300"
+        sortKey === sortKeyVal ? "text-white" : "text-zinc-500 hover:text-zinc-300"
       }`}
     >
       {label}
       <ArrowUpDown className="w-3 h-3" />
+    </button>
+  );
+
+  const filterBtn = (key: StatusFilter, label: string) => (
+    <button
+      key={key}
+      onClick={() => handleStatusFilter(key)}
+      className={`text-xs px-3 py-1.5 rounded-lg transition-colors ${
+        statusFilter === key
+          ? "bg-white/[0.08] text-white"
+          : "text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04]"
+      }`}
+    >
+      {label}
     </button>
   );
 
@@ -162,21 +234,29 @@ export default function HomePage() {
             {t("home.title")}
           </h1>
           <p className="text-sm text-zinc-500 mt-0.5">
-            {t("home.analysisCount", { count: jobs.length })}
+            {t("home.analysisCount", { count: meta.total })}
           </p>
         </div>
       </div>
 
-      {/* Search bar */}
-      <div className="relative mb-4">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
-        <input
-          type="text"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder={t("home.search")}
-          className="w-full pl-10 pr-4 py-2.5 bg-white/[0.03] border border-white/[0.08] rounded-lg text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-white/[0.16] transition-colors"
-        />
+      {/* Search + filters */}
+      <div className="flex items-center gap-3 mb-4">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={t("home.search")}
+            className="w-full pl-10 pr-4 py-2.5 bg-white/[0.03] border border-white/[0.08] rounded-lg text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-white/[0.16] transition-colors"
+          />
+        </div>
+        <div className="flex items-center gap-1">
+          {filterBtn("", t("home.all"))}
+          {filterBtn("done", t("home.completed"))}
+          {filterBtn("in_progress", t("home.inProgress"))}
+          {filterBtn("error", t("home.errors"))}
+        </div>
       </div>
 
       {/* Table */}
@@ -184,71 +264,157 @@ export default function HomePage() {
         <div className="flex items-center justify-center py-20">
           <Loader2 className="w-5 h-5 animate-spin text-zinc-500" />
         </div>
-      ) : filtered.length === 0 ? (
+      ) : sorted.length === 0 ? (
         <div className="text-center py-20">
           <FolderOpen className="w-8 h-8 text-zinc-700 mx-auto mb-3" />
           <p className="text-sm text-zinc-500">
-            {search ? t("common.noResults") : t("home.noProjects")}
+            {debouncedSearch || statusFilter ? t("common.noResults") : t("home.noProjects")}
           </p>
-          <p className="text-xs text-zinc-600 mt-1">
-            {t("home.noProjectsHint")}
-          </p>
+          {!debouncedSearch && !statusFilter && (
+            <p className="text-xs text-zinc-600 mt-1">
+              {t("home.noProjectsHint")}
+            </p>
+          )}
         </div>
       ) : (
-        <div className="surface-static rounded-xl overflow-hidden">
-          {/* Table header */}
-          <div className="grid grid-cols-[1fr_120px_100px_140px] gap-4 px-5 py-3 border-b border-white/[0.06] bg-white/[0.02]">
-            <SortButton label={t("home.colTitle")} sortKeyVal="title" />
-            <SortButton label={t("home.colStatus")} sortKeyVal="status" />
-            <span className="text-xs font-medium text-zinc-500">{t("home.colDuration")}</span>
-            <SortButton label={t("home.colDate")} sortKeyVal="date" />
+        <>
+          <div className="surface-static rounded-xl overflow-hidden">
+            {/* Table header */}
+            <div className="grid grid-cols-[1fr_120px_80px_80px_80px_130px_40px] gap-4 px-5 py-3 border-b border-white/[0.06] bg-white/[0.02]">
+              <SortButton label={t("home.colTitle")} sortKeyVal="title" />
+              <SortButton label={t("home.colStatus")} sortKeyVal="status" />
+              <span className="text-xs font-medium text-zinc-500">{t("home.colDuration")}</span>
+              <span className="text-xs font-medium text-zinc-500 flex items-center gap-1">
+                <Users className="w-3 h-3" />
+                {t("home.colViewers")}
+              </span>
+              <span className="text-xs font-medium text-zinc-500 flex items-center gap-1">
+                <MessageSquare className="w-3 h-3" />
+                {t("home.colChat")}
+              </span>
+              <SortButton label={t("home.colDate")} sortKeyVal="date" />
+              <span />
+            </div>
+
+            {/* Rows */}
+            {sorted.map((job) => (
+              <div
+                key={job.job_id}
+                onClick={() => navigate(`/${job.job_id}`)}
+                className="grid grid-cols-[1fr_120px_80px_80px_80px_130px_40px] gap-4 px-5 py-3.5 border-b border-white/[0.04] last:border-b-0 hover:bg-white/[0.03] transition-colors cursor-pointer group"
+              >
+                {/* Title + game + streamer */}
+                <div className="min-w-0">
+                  <p className="text-sm text-zinc-300 truncate group-hover:text-white transition-colors">
+                    {job.vod_title || t("home.untitledVod")}
+                  </p>
+                  <div className="text-[11px] text-zinc-500 flex items-center gap-2 mt-0.5">
+                    {job.streamer && (
+                      <span className="truncate max-w-[140px]">{job.streamer}</span>
+                    )}
+                    {job.vod_game && (
+                      <span className="flex items-center gap-1 shrink-0">
+                        <Gamepad2 className="w-3 h-3" />
+                        <span className="truncate max-w-[160px]">{job.vod_game}</span>
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Status */}
+                <div className="flex items-center">
+                  <StatusBadge status={job.status} />
+                </div>
+
+                {/* Duration */}
+                <div className="flex items-center">
+                  <span className="text-xs text-zinc-500 font-mono">
+                    {formatDuration(job.vod_duration_seconds)}
+                  </span>
+                </div>
+
+                {/* Viewers */}
+                <div className="flex items-center">
+                  <span className="text-xs text-zinc-500 font-mono">
+                    {formatNumber(job.view_count)}
+                  </span>
+                </div>
+
+                {/* Chat messages */}
+                <div className="flex items-center">
+                  <span className="text-xs text-zinc-500 font-mono">
+                    {formatNumber(job.chat_message_count)}
+                  </span>
+                </div>
+
+                {/* Date */}
+                <div className="flex items-center">
+                  <span className="text-xs text-zinc-500">
+                    {formatDate(job.created_at, i18n.language)}
+                  </span>
+                </div>
+
+                {/* Actions */}
+                <div className="flex items-center justify-end">
+                  {job.status === "ERROR" && (
+                    <button
+                      onClick={(e) => handleRetry(e, job.job_id)}
+                      className="p-1.5 text-zinc-500 hover:text-white hover:bg-white/[0.06] rounded-md transition-colors opacity-0 group-hover:opacity-100"
+                      title={t("home.retry")}
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                  <button
+                    onClick={(e) => handleDelete(e, job)}
+                    className="p-1.5 text-zinc-600 hover:text-red-400 hover:bg-red-500/10 rounded-md transition-colors opacity-0 group-hover:opacity-100"
+                    title={t("home.deleteProject")}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
 
-          {/* Rows */}
-          {filtered.map((job) => (
-            <div
-              key={job.job_id}
-              onClick={() => navigate(`/${job.job_id}`)}
-              className="grid grid-cols-[1fr_120px_100px_140px] gap-4 px-5 py-3.5 border-b border-white/[0.04] last:border-b-0 hover:bg-white/[0.03] transition-colors cursor-pointer group"
-            >
-              {/* Title */}
-              <div className="min-w-0">
-                <p className="text-sm text-zinc-300 truncate group-hover:text-white transition-colors">
-                  {job.vod_title || t("home.untitledVod")}
-                </p>
-              </div>
-
-              {/* Status */}
-              <div className="flex items-center">
-                <StatusBadge status={job.status} />
-              </div>
-
-              {/* Duration */}
-              <div className="flex items-center">
-                <span className="text-xs text-zinc-500 font-mono">
-                  {formatDuration(job.vod_duration_seconds)}
-                </span>
-              </div>
-
-              {/* Date + actions */}
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-zinc-500">
-                  {formatDate(job.created_at, i18n.language)}
-                </span>
-                {job.status === "ERROR" && (
-                  <button
-                    onClick={(e) => handleRetry(e, job.job_id)}
-                    className="p-1.5 text-zinc-500 hover:text-white hover:bg-white/[0.06] rounded-md transition-colors"
-                    title={t("home.retry")}
-                  >
-                    <RotateCcw className="w-3.5 h-3.5" />
-                  </button>
-                )}
+          {/* Pagination */}
+          {meta.last_page > 1 && (
+            <div className="flex items-center justify-between mt-4 px-1">
+              <span className="text-xs text-zinc-500">
+                {t("home.page", { current: meta.current_page, total: meta.last_page })}
+              </span>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page <= 1}
+                  className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/[0.06] transition-colors disabled:opacity-30 disabled:pointer-events-none"
+                >
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                  {t("home.previous")}
+                </button>
+                <button
+                  onClick={() => setPage((p) => Math.min(meta.last_page, p + 1))}
+                  disabled={page >= meta.last_page}
+                  className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/[0.06] transition-colors disabled:opacity-30 disabled:pointer-events-none"
+                >
+                  {t("home.next")}
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
               </div>
             </div>
-          ))}
-        </div>
+          )}
+        </>
       )}
+
+      {/* Delete confirmation modal */}
+      <ConfirmModal
+        open={!!deleteTarget}
+        title={t("home.deleteProject")}
+        message={t("home.deleteProjectMessage")}
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteTarget(null)}
+        loading={deleting}
+      />
     </div>
   );
 }

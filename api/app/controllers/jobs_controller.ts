@@ -1,10 +1,12 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import { randomUUID } from 'node:crypto'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, rmSync } from 'node:fs'
 import path from 'node:path'
 import Job from '#models/job'
+import db from '@adonisjs/lucid/services/db'
 import redis from '@adonisjs/redis/services/main'
 import jobStatusBus, { type JobStatusUpdate } from '#services/job_status_bus'
+import { listObjects, deleteObject } from '#services/s3'
 
 const CLIPS_BASE = path.resolve('../backend/clips')
 
@@ -31,9 +33,74 @@ export default class JobsController {
   }
 
   // GET /api/jobs
-  async index({ auth }: HttpContext) {
+  async index({ auth, request }: HttpContext) {
     const user = auth.getUserOrFail()
-    return Job.query().where('user_id', user.id).orderBy('created_at', 'desc')
+    const page = Math.max(1, Number(request.input('page', 1)))
+    const perPage = Math.min(100, Math.max(1, Number(request.input('per_page', 20))))
+    const search = (request.input('search') as string || '').trim()
+    const status = (request.input('status') as string || '').trim()
+
+    const query = Job.query().where('user_id', user.id)
+
+    if (search) {
+      const q = `%${search}%`
+      query.where((builder) => {
+        builder
+          .whereILike('vod_title', q)
+          .orWhereILike('streamer', q)
+          .orWhereILike('vod_game', q)
+      })
+    }
+
+    if (status === 'done') {
+      query.where('status', 'DONE')
+    } else if (status === 'error') {
+      query.where('status', 'ERROR')
+    } else if (status === 'in_progress') {
+      query.whereNotIn('status', ['DONE', 'ERROR'])
+    }
+
+    query.orderBy('created_at', 'desc')
+    const paginated = await query.paginate(page, perPage)
+    const rows = paginated.all()
+
+    // Enrich with chat_message_count
+    const data = rows.map((job) => {
+      const serialized = job.serialize()
+      let chatMessageCount: number | null = null
+      try {
+        const chatPath = path.join(CLIPS_BASE, job.id, 'chat.json')
+        if (existsSync(chatPath)) {
+          const chat = JSON.parse(readFileSync(chatPath, 'utf-8'))
+          chatMessageCount = Array.isArray(chat) ? chat.length : null
+        }
+      } catch {}
+
+      return {
+        id: serialized.id,
+        url: serialized.url,
+        status: serialized.status,
+        vodTitle: serialized.vodTitle,
+        vodGame: serialized.vodGame,
+        vodDurationSeconds: serialized.vodDurationSeconds,
+        streamer: serialized.streamer,
+        viewCount: serialized.viewCount,
+        streamDate: serialized.streamDate,
+        chatMessageCount,
+        error: serialized.error,
+        createdAt: serialized.createdAt,
+      }
+    })
+
+    return {
+      data,
+      meta: {
+        total: paginated.total,
+        per_page: paginated.perPage,
+        current_page: paginated.currentPage,
+        last_page: paginated.lastPage,
+      },
+    }
   }
 
   // GET /api/jobs/:id
@@ -87,6 +154,44 @@ export default class JobsController {
 
     await redis.lpush('cuttie:jobs_queue', JSON.stringify({ job_id: job.id, url: job.url, retry: true }))
     return { job_id: job.id }
+  }
+
+  // DELETE /api/jobs/:id
+  async destroy({ params, response, auth }: HttpContext) {
+    const user = auth.getUserOrFail()
+    const job = await Job.find(params.id)
+    if (!job || job.userId !== user.id) return response.notFound({ error: 'job not found' })
+
+    // Delete related renders from DB
+    await db.from('renders').where('job_id', job.id).delete()
+
+    // Delete S3 objects (clips + renders)
+    const prefixes = [`clips/${job.id}/`, `renders/${job.id}/`]
+    for (const prefix of prefixes) {
+      try {
+        const keys = await listObjects(prefix)
+        await Promise.all(keys.map((key) => deleteObject(key)))
+      } catch {}
+    }
+
+    // Delete local files
+    const localDir = path.join(CLIPS_BASE, job.id)
+    try {
+      if (existsSync(localDir)) {
+        rmSync(localDir, { recursive: true, force: true })
+      }
+    } catch {}
+
+    // Delete local data directory
+    const dataDir = path.resolve('../backend/data', job.id)
+    try {
+      if (existsSync(dataDir)) {
+        rmSync(dataDir, { recursive: true, force: true })
+      }
+    } catch {}
+
+    await job.delete()
+    return { success: true }
   }
 
   // PATCH /api/jobs/:id/clips/:clipFilename/name

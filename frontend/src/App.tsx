@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router";
 import { AuthProvider, useAuth } from "./lib/AuthContext";
 import { TooltipProvider } from "./components/ui/Tooltip";
+import { ToastProvider } from "./components/Toast";
 import Layout from "./components/Layout";
 import HomePage from "./pages/HomePage";
 import JobPage from "./pages/JobPage";
@@ -67,9 +68,11 @@ export default function App() {
   return (
     <AuthProvider>
       <TooltipProvider>
-        <BrowserRouter>
-          <AppRoutes />
-        </BrowserRouter>
+        <ToastProvider>
+          <BrowserRouter>
+            <AppRoutes />
+          </BrowserRouter>
+        </ToastProvider>
       </TooltipProvider>
     </AuthProvider>
   );

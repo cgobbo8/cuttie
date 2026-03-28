@@ -33,6 +33,7 @@ router
         router.get('/jobs', [() => import('#controllers/jobs_controller'), 'index'])
         router.get('/jobs/:id', [() => import('#controllers/jobs_controller'), 'show'])
         router.post('/jobs/:id/retry', [() => import('#controllers/jobs_controller'), 'retry'])
+        router.delete('/jobs/:id', [() => import('#controllers/jobs_controller'), 'destroy'])
         router.get('/jobs/:id/sse', [() => import('#controllers/jobs_controller'), 'stream'])
         router.patch('/jobs/:id/clips/:clipFilename/name', [() => import('#controllers/jobs_controller'), 'renameClip'])
 
@@ -50,6 +51,7 @@ router
         router.get('/renders', [() => import('#controllers/renders_controller'), 'index'])
         router.get('/renders/:renderId', [() => import('#controllers/renders_controller'), 'show'])
         router.get('/renders/:renderId/download', [() => import('#controllers/renders_controller'), 'download'])
+        router.delete('/renders/:renderId', [() => import('#controllers/renders_controller'), 'destroy'])
       })
       .use(middleware.auth())
   })

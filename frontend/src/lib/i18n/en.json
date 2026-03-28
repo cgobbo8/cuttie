@@ -41,15 +41,28 @@
     "title": "Projects",
     "analysisCount_one": "{{count}} analysis",
     "analysisCount_other": "{{count}} analyses",
-    "search": "Search...",
+    "search": "Search by title, streamer, game...",
     "colTitle": "Title",
     "colStatus": "Status",
     "colDuration": "Duration",
+    "colViewers": "Viewers",
+    "colChat": "Chat",
     "colDate": "Date",
     "untitledVod": "Untitled VOD",
     "noProjects": "No projects",
     "noProjectsHint": "Use the \"New project\" button to get started.",
-    "retry": "Retry"
+    "retry": "Retry",
+    "all": "All",
+    "completed": "Completed",
+    "inProgress": "In progress",
+    "errors": "Errors",
+    "deleteProject": "Delete project",
+    "deleteProjectMessage": "This will permanently delete the project, all its clips and associated exports. This action cannot be undone.",
+    "deleteSuccess": "Project deleted",
+    "deleteError": "Failed to delete project",
+    "page": "Page {{current}} of {{total}}",
+    "previous": "Previous",
+    "next": "Next"
   },
 
   "status": {
@@ -150,7 +163,11 @@
     "noExports": "No exports yet.",
     "noExportsHint": "Start an export from the editor to see it here.",
     "download": "Download",
-    "error": "Error"
+    "error": "Error",
+    "deleteExport": "Delete export",
+    "deleteExportMessage": "This export will be permanently deleted. This action cannot be undone.",
+    "deleteSuccess": "Export deleted",
+    "deleteError": "Failed to delete export"
   },
 
   "editPage": {

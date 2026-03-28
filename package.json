@@ -5,9 +5,9 @@
     "dev:api": "cd api && npm run dev",
     "dev:front": "cd frontend && npm run dev",
     "dev:worker": "cd backend && uv run python worker.py",
-    "redis:up": "docker compose up -d",
-    "redis:down": "docker compose down",
-    "redis:logs": "docker compose logs -f"
+    "infra:up": "docker compose up -d",
+    "infra:down": "docker compose down",
+    "infra:logs": "docker compose logs -f"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"

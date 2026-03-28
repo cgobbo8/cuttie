@@ -73,7 +73,7 @@ export default function JobPage() {
           next[existing] = event.hot_point;
           return next;
         }
-        return [...prev, event.hot_point];
+        return [event.hot_point, ...prev];
       });
       const clipKey = event.hot_point.clip_filename || `rank-${event.rank}`;
       setAnimatedClips((prev) => new Set(prev).add(clipKey));

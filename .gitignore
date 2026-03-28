@@ -35,3 +35,15 @@ Thumbs.db
 .idea/
 *.swp
 .playwright-mcp/
+
+# Claude Code
+.claude/
+
+# Root
+node_modules/
+package-lock.json
+frontend/pnpm-lock.yaml
+
+# Debug / test artifacts
+*.test.png
+*.test.mp4

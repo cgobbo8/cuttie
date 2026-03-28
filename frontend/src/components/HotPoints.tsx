@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { Link } from "react-router";
 import { clipUrl, type HotPoint } from "../lib/api";
 import {
@@ -151,6 +151,25 @@ function VideoPreview({ src, hovering }: { src: string; hovering: boolean }) {
   );
 }
 
+function SkeletonCard() {
+  return (
+    <div className="surface-static rounded-xl p-5 animate-clip-enter">
+      <div className="flex items-start gap-4">
+        {/* Fake thumbnail */}
+        <div className="w-24 h-16 rounded-lg skeleton shrink-0" />
+        <div className="flex-1 space-y-2.5">
+          <div className="h-4 w-48 rounded skeleton" />
+          <div className="h-3 w-72 rounded skeleton" />
+          <div className="flex gap-2">
+            <div className="h-5 w-14 rounded-md skeleton" />
+            <div className="h-5 w-16 rounded-md skeleton" />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ClipCard({
   point,
   index,
@@ -164,10 +183,17 @@ function ClipCard({
   activeSignals: SignalInfo[];
   isNew?: boolean;
 }) {
+  const [showSkeleton, setShowSkeleton] = useState(isNew === true);
   const [expanded, setExpanded] = useState(false);
   const [activeMoment, setActiveMoment] = useState<number | null>(null);
   const [cardHover, setCardHover] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    if (!showSkeleton) return;
+    const t = setTimeout(() => setShowSkeleton(false), 2500);
+    return () => clearTimeout(t);
+  }, [showSkeleton]);
 
   const displayScore = point.final_score ?? point.score;
   const moments = point.llm?.key_moments ?? [];
@@ -194,9 +220,11 @@ function ClipCard({
     URL.revokeObjectURL(blobUrl);
   }, [jobId, point.clip_filename, point.clip_name]);
 
+  if (showSkeleton) return <SkeletonCard />;
+
   return (
     <div
-      className={`surface-static rounded-xl overflow-hidden transition-all duration-200 relative ${isNew ? "animate-clip-enter" : ""} ${cardHover ? "opacity-100" : "opacity-60"}`}
+      className={`surface-static rounded-xl overflow-hidden transition-all duration-200 relative animate-fade-in ${cardHover ? "opacity-100" : "opacity-60"}`}
       onMouseEnter={() => setCardHover(true)}
       onMouseLeave={() => setCardHover(false)}
     >

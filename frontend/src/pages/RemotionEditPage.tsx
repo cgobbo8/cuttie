@@ -17,11 +17,11 @@ export default function RemotionEditPage() {
     if (!jobId) return;
     getJobStatus(jobId)
       .then((job) => {
-        if (job.status !== "DONE" || !job.hot_points) {
+        const clips = (job.hot_points ?? []).filter((hp) => hp.clip_filename);
+        if (!clips.length) {
           navigate(`/${jobId}`);
           return;
         }
-        const clips = job.hot_points.filter((hp) => hp.clip_filename);
         const target = clipFile
           ? clips.find((hp) => hp.clip_filename === clipFile)
           : clips[0];

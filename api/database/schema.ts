@@ -106,7 +106,7 @@ export class RenderSchema extends BaseModel {
 
 export class StreamerSchema extends BaseModel {
   static table = 'streamers'
-  static $columns = ['avatarUrl', 'createdAt', 'displayName', 'id', 'twitchLogin', 'updatedAt'] as const
+  static $columns = ['avatarUrl', 'createdAt', 'displayName', 'id', 'twitchLogin', 'updatedAt', 'userId'] as const
   $columns = StreamerSchema.$columns
   @column()
   declare avatarUrl: string | null
@@ -120,6 +120,8 @@ export class StreamerSchema extends BaseModel {
   declare twitchLogin: string
   @column.dateTime({ autoCreate: true, autoUpdate: true })
   declare updatedAt: DateTime
+  @column()
+  declare userId: number
 }
 
 export class SessionSchema extends BaseModel {

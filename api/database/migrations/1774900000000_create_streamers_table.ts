@@ -2,26 +2,18 @@ import { BaseSchema } from '@adonisjs/lucid/schema'
 
 export default class extends BaseSchema {
   async up() {
-    // 1. Create streamers table
+    // 1. Create streamers table — each streamer belongs to ONE user
     this.schema.createTable('streamers', (table) => {
       table.increments('id')
-      table.string('twitch_login').notNullable() // e.g. "kamet0"
-      table.string('display_name').notNullable() // e.g. "Kamet0"
+      table.integer('user_id').unsigned().notNullable().references('id').inTable('users').onDelete('CASCADE')
+      table.string('twitch_login').notNullable() // e.g. "squeezie" — shared Twitch identity (data only)
+      table.string('display_name').notNullable() // e.g. "Squeezie"
       table.string('avatar_url').nullable()
       table.timestamp('created_at').notNullable()
       table.timestamp('updated_at').notNullable()
     })
 
-    // 2. Create user_streamers pivot table (many-to-many)
-    this.schema.createTable('user_streamers', (table) => {
-      table.increments('id')
-      table.integer('user_id').unsigned().notNullable().references('id').inTable('users').onDelete('CASCADE')
-      table.integer('streamer_id').unsigned().notNullable().references('id').inTable('streamers').onDelete('CASCADE')
-      table.unique(['user_id', 'streamer_id'])
-      table.timestamp('created_at').notNullable()
-    })
-
-    // 3. Add streamer_id to jobs and renders
+    // 2. Add streamer_id to jobs and renders
     this.schema.alterTable('jobs', (table) => {
       table.integer('streamer_id').nullable().unsigned().references('id').inTable('streamers').onDelete('SET NULL')
     })
@@ -30,55 +22,44 @@ export default class extends BaseSchema {
       table.integer('streamer_id').nullable().unsigned().references('id').inTable('streamers').onDelete('SET NULL')
     })
 
-    // 4. Backfill: create streamers from existing jobs and link them
+    // 3. Backfill: create one streamer per (user_id, streamer_name) pair
     this.defer(async (db) => {
-      // Get distinct streamer names from jobs
-      const streamerNames = await db
+      const pairs = await db
         .from('jobs')
         .whereNotNull('streamer')
         .where('streamer', '!=', '')
-        .distinct('streamer')
-        .select('streamer')
+        .whereNotNull('user_id')
+        .distinct('user_id', 'streamer')
+        .select('user_id', 'streamer')
 
       const now = new Date().toISOString()
 
-      for (const row of streamerNames) {
+      for (const row of pairs) {
         const name = row.streamer as string
+        const userId = row.user_id as number
         const login = name.toLowerCase().replace(/\s+/g, '')
 
-        // Create the streamer
+        // Create a streamer for this user
         const [streamerId] = await db.table('streamers').insert({
+          user_id: userId,
           twitch_login: login,
           display_name: name,
           created_at: now,
           updated_at: now,
         })
 
-        // Link this streamer to all users who have jobs with this streamer name
-        const userIds = await db
+        // Update jobs for this (user_id, streamer) pair
+        await db
           .from('jobs')
+          .where('user_id', userId)
           .where('streamer', name)
-          .whereNotNull('user_id')
-          .distinct('user_id')
-          .select('user_id')
-
-        for (const u of userIds) {
-          await db.table('user_streamers').insert({
-            user_id: u.user_id,
-            streamer_id: streamerId,
-            created_at: now,
-          }).catch(() => {}) // ignore duplicate
-        }
-
-        // Update jobs with the streamer_id
-        await db.from('jobs').where('streamer', name).update({ streamer_id: streamerId })
+          .update({ streamer_id: streamerId })
 
         // Update renders linked to those jobs
-        await db
-          .rawQuery(
-            `UPDATE renders SET streamer_id = ? WHERE job_id IN (SELECT id FROM jobs WHERE streamer = ?)`,
-            [streamerId, name]
-          )
+        await db.rawQuery(
+          `UPDATE renders SET streamer_id = ? WHERE job_id IN (SELECT id FROM jobs WHERE user_id = ? AND streamer = ?)`,
+          [streamerId, userId, name]
+        )
       }
     })
   }
@@ -92,7 +73,6 @@ export default class extends BaseSchema {
       table.dropColumn('streamer_id')
     })
 
-    this.schema.dropTable('user_streamers')
     this.schema.dropTable('streamers')
   }
 }

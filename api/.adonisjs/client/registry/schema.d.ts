@@ -67,6 +67,18 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/auth_me_controller').default['show']>>>
     }
   }
+  'games.index': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/games'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/games_controller').default['index']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/games_controller').default['index']>>>
+    }
+  }
   'jobs.store': {
     methods: ["POST"]
     pattern: '/api/analyze'

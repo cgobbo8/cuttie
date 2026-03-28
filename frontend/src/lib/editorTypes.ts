@@ -135,19 +135,22 @@ export type EasingPreset =
 
 /* ── Keyframe system ─────────────────────────────────────── */
 
-/** A single keyframe: a value at a specific time with easing to the next keyframe */
-export interface Keyframe {
-  id: string;
-  time: number;        // seconds
-  value: number;
-  easing: EasingPreset; // easing curve to the NEXT keyframe
-}
-
-/** Properties that can be keyframed */
+/** Properties captured in a keyframe snapshot */
 export type KeyframableProperty = "x" | "y" | "width" | "height" | "rotation" | "opacity" | "scale";
 
-/** Keyframe tracks for a layer — each property has its own timeline */
-export type LayerKeyframes = Partial<Record<KeyframableProperty, Keyframe[]>>;
+/** A snapshot of all layer properties at a specific time */
+export interface KeyframeSnapshot {
+  id: string;
+  time: number;         // seconds
+  easing: EasingPreset; // easing curve to the NEXT keyframe
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation: number;
+  opacity: number;
+  scale: number;
+}
 
 export interface LayerAnimation {
   id: string;
@@ -172,5 +175,5 @@ export interface Layer {
   chat?: ChatData;
   text?: TextData;
   animations?: LayerAnimation[];
-  keyframes?: LayerKeyframes;
+  keyframes?: KeyframeSnapshot[];
 }

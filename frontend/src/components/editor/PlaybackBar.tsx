@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Play, Pause } from "lucide-react";
-import type { Layer, LayerAnimation, LayerKeyframes } from "../../lib/editorTypes";
+import type { Layer, LayerAnimation, KeyframeSnapshot } from "../../lib/editorTypes";
 import { layerVisibilityAtTime, ANIMATION_DEFS } from "../../lib/animations";
 
 function fmtShort(s: number): string {
@@ -39,7 +39,7 @@ interface Props {
   /** Called before starting a drag to snapshot undo state */
   onCommitAnimation?: () => void;
   /** Keyframes from the selected layer — shown as diamonds on the timeline */
-  selectedLayerKeyframes?: LayerKeyframes;
+  selectedLayerKeyframes?: KeyframeSnapshot[];
 }
 
 type TrimDragTarget = "start" | "end" | null;
@@ -496,22 +496,20 @@ export default function PlaybackBar({
         )}
 
         {/* Keyframe diamonds */}
-        {selectedLayerKeyframes && (
-          <div className="relative h-3 mt-0.5">
-            {Object.entries(selectedLayerKeyframes).map(([prop, kfs]) =>
-              (kfs ?? []).map((kf) => (
-                <div
-                  key={kf.id}
-                  className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2"
-                  style={{ left: `${pct(kf.time)}%` }}
-                  title={`${prop}: ${Math.round(kf.value)}`}
-                >
-                  <svg viewBox="0 0 8 8" className="w-2 h-2 text-yellow-400">
-                    <rect x="4" y="0.5" width="4.5" height="4.5" rx="0.5" transform="rotate(45 4 4)" fill="currentColor" />
-                  </svg>
-                </div>
-              ))
-            )}
+        {selectedLayerKeyframes && selectedLayerKeyframes.length > 0 && (
+          <div className="relative h-4 mt-0.5">
+            {selectedLayerKeyframes.map((kf) => (
+              <div
+                key={kf.id}
+                className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2"
+                style={{ left: `${pct(kf.time)}%` }}
+                title={`${kf.time.toFixed(1)}s`}
+              >
+                <svg viewBox="0 0 12 12" className="w-3 h-3 text-yellow-400">
+                  <rect x="6" y="1" width="5" height="5" rx="0.8" transform="rotate(45 6 6)" fill="currentColor" />
+                </svg>
+              </div>
+            ))}
           </div>
         )}
 

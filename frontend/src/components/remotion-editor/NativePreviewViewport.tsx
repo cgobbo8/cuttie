@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { Layer, SubtitleWord, ChatMessage } from "../../lib/editorTypes";
 import { BOX_SHADOW_PRESETS } from "../../lib/editorTypes";
-import { evaluateAnimations } from "../../lib/animations";
+import { evaluateAnimations, resolveKeyframes } from "../../lib/animations";
 import TransformHandles from "../editor/TransformHandles";
 
 const CANVAS_W = 1080;
@@ -199,17 +199,30 @@ export default function NativePreviewViewport({
             if (!layer.visible) return null;
             const { style } = layer;
 
+            // Resolve keyframe overrides at current time
+            const kf = resolveKeyframes(layer.keyframes, animTime);
+            const kfX = kf.x ?? layer.transform.x;
+            const kfY = kf.y ?? layer.transform.y;
+            const kfW = kf.width ?? layer.transform.width;
+            const kfH = kf.height ?? layer.transform.height;
+            const kfRotation = kf.rotation ?? (layer.transform.rotation ?? 0);
+            const kfOpacity = kf.opacity ?? style.opacity;
+            const kfScale = kf.scale ?? 1;
+
             const animResult = evaluateAnimations(layer, animTime, duration);
-            const rotateStr = layer.transform.rotation ? `rotate(${layer.transform.rotation}deg)` : "";
-            const animTransform = animResult.transform || "";
-            const combinedTransform = [rotateStr, animTransform].filter(Boolean).join(" ") || undefined;
+            const transformParts: string[] = [];
+            if (kfRotation) transformParts.push(`rotate(${kfRotation}deg)`);
+            if (kfScale !== 1) transformParts.push(`scale(${kfScale})`);
+            if (animResult.transform) transformParts.push(animResult.transform);
+            const combinedTransform = transformParts.join(" ") || undefined;
+
             const baseStyle: React.CSSProperties = {
               position: "absolute",
-              left: layer.transform.x,
-              top: layer.transform.y,
-              width: layer.transform.width,
-              height: layer.transform.height,
-              opacity: animResult.opacity,
+              left: kfX,
+              top: kfY,
+              width: kfW,
+              height: kfH,
+              opacity: animResult.opacity * kfOpacity,
               transform: combinedTransform,
               transformOrigin: "center center",
               borderRadius: !layer.shape && style.borderRadius > 0 ? style.borderRadius : undefined,

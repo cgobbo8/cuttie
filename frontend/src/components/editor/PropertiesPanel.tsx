@@ -1,7 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { Crop } from "lucide-react";
 import { HintBadge } from "../ui/Tooltip";
-import type { Layer, LayerStyle, ShapeData, SubtitleData, ChatData, TextData, AssetData, KeyframableProperty } from "../../lib/editorTypes";
+import type { Layer, LayerStyle, ShapeData, SubtitleData, ChatData, TextData, AssetData } from "../../lib/editorTypes";
 import { SUBTITLE_FONTS, TEXT_FONTS, BOX_SHADOW_PRESETS } from "../../lib/editorTypes";
 import { hasKeyframeAt } from "../../lib/animations";
 
@@ -20,7 +20,7 @@ interface Props {
   onCommit: () => void;
   onStartCrop?: (id: string) => void;
   currentTime?: number;
-  onToggleKeyframe?: (layerId: string, property: KeyframableProperty, currentValue: number) => void;
+  onToggleKeyframe?: (layerId: string) => void;
 }
 
 function KeyframeButton({
@@ -40,11 +40,11 @@ function KeyframeButton({
       }`}
       title={hasKeyframe ? "Remove keyframe" : "Add keyframe"}
     >
-      <svg viewBox="0 0 10 10" className="w-2.5 h-2.5">
+      <svg viewBox="0 0 12 12" className="w-3 h-3">
         <rect
-          x="5" y="0.5" width="6" height="6"
-          rx="1"
-          transform="rotate(45 5 5)"
+          x="6" y="1" width="5" height="5"
+          rx="0.8"
+          transform="rotate(45 6 6)"
           fill={hasKeyframe ? "currentColor" : "none"}
           stroke="currentColor"
           strokeWidth="1.2"
@@ -124,6 +124,12 @@ export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange
         <h4 className="text-[10px] font-semibold text-zinc-500 uppercase tracking-widest">
           {t("editor.properties")}
         </h4>
+        {onToggleKeyframe && (
+          <KeyframeButton
+            hasKeyframe={hasKeyframeAt(layer.keyframes, currentTime)}
+            onClick={() => onToggleKeyframe(layer.id)}
+          />
+        )}
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto px-3 py-3 flex flex-col gap-4">
@@ -139,36 +145,23 @@ export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange
 
         {/* Transform info */}
         <div className="grid grid-cols-2 gap-2">
-          {(["x", "y", "width", "height"] as const).map((k) => {
-            const value = layer.transform[k];
-            const prop = k as KeyframableProperty;
-            const hasKf = hasKeyframeAt(layer.keyframes?.[prop], currentTime);
-            return (
-              <div key={k} className="flex items-center gap-1">
-                <div className="flex-1 flex flex-col gap-0.5">
-                  <span className="text-[10px] text-zinc-600 uppercase">
-                    {k === "width" ? "W" : k === "height" ? "H" : k.toUpperCase()}
-                  </span>
-                  <input
-                    type="number"
-                    value={Math.round(value)}
-                    onChange={(e) => {
-                      const v = parseInt(e.target.value);
-                      if (!isNaN(v)) onTransformChange(layer.id, { [k]: v });
-                    }}
-                    onFocus={onCommit}
-                    className="w-full text-[10px] text-zinc-400 font-mono tabular-nums bg-transparent border-b border-transparent hover:border-white/[0.1] focus:border-white/[0.2] outline-none py-0.5 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                  />
-                </div>
-                {onToggleKeyframe && (
-                  <KeyframeButton
-                    hasKeyframe={hasKf}
-                    onClick={() => onToggleKeyframe(layer.id, prop, value)}
-                  />
-                )}
-              </div>
-            );
-          })}
+          {(["x", "y", "width", "height"] as const).map((k) => (
+            <div key={k} className="flex flex-col gap-0.5">
+              <span className="text-[10px] text-zinc-600 uppercase">
+                {k === "width" ? "W" : k === "height" ? "H" : k.toUpperCase()}
+              </span>
+              <input
+                type="number"
+                value={Math.round(layer.transform[k])}
+                onChange={(e) => {
+                  const v = parseInt(e.target.value);
+                  if (!isNaN(v)) onTransformChange(layer.id, { [k]: v });
+                }}
+                onFocus={onCommit}
+                className="w-full text-[10px] text-zinc-400 font-mono tabular-nums bg-transparent border-b border-transparent hover:border-white/[0.1] focus:border-white/[0.2] outline-none py-0.5 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+              />
+            </div>
+          ))}
         </div>
 
         {/* Center buttons */}
@@ -236,12 +229,6 @@ export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange
               unit="°"
               onChange={(v) => onTransformChange(layer.id, { rotation: v })}
               onCommit={onCommit}
-              suffix={onToggleKeyframe && (
-                <KeyframeButton
-                  hasKeyframe={hasKeyframeAt(layer.keyframes?.["rotation"], currentTime)}
-                  onClick={() => onToggleKeyframe(layer.id, "rotation", transform.rotation ?? 0)}
-                />
-              )}
             />
           </div>
           {(transform.rotation ?? 0) !== 0 && (
@@ -270,12 +257,6 @@ export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange
           unit="%"
           onChange={(v) => onStyleChange(layer.id, { opacity: v })}
           onCommit={onCommit}
-          suffix={onToggleKeyframe && (
-            <KeyframeButton
-              hasKeyframe={hasKeyframeAt(layer.keyframes?.["opacity"], currentTime)}
-              onClick={() => onToggleKeyframe(layer.id, "opacity", style.opacity)}
-            />
-          )}
         />
 
         <Slider

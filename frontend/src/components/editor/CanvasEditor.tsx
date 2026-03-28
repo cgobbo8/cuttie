@@ -474,7 +474,7 @@ export default function CanvasEditor({
                   ? "bg-white/[0.08] text-zinc-200"
                   : "text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.05]"
               }`}
-              title="Calques"
+              title={t("editor.layers")}
             >
               <Layers className="w-4 h-4" />
             </button>
@@ -485,7 +485,7 @@ export default function CanvasEditor({
                   ? "bg-white/[0.08] text-zinc-200"
                   : "text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.05]"
               }`}
-              title="Temps forts"
+              title={t("editor.hotpoints")}
             >
               <Flame className="w-4 h-4" />
             </button>
@@ -496,7 +496,7 @@ export default function CanvasEditor({
                   ? "bg-white/[0.08] text-zinc-200"
                   : "text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.05]"
               }`}
-              title="Transcription"
+              title={t("editor.transcription")}
             >
               <FileText className="w-4 h-4" />
             </button>
@@ -525,47 +525,47 @@ export default function CanvasEditor({
                     className="w-full text-xs px-3 py-2 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] text-zinc-200 hover:text-zinc-100 transition-colors flex items-center justify-center gap-2 font-medium"
                   >
                     <Plus className="w-4 h-4" />
-                    Ajouter layer
+                    {t("editor.addLayer")}
                   </button>
 
                   {addMenuOpen && (
                     <div className="absolute bottom-full left-2 right-2 mb-1 bg-zinc-900 border border-white/[0.08] rounded-lg shadow-xl overflow-hidden z-50">
                       <button onClick={handleAddGameplay} className="w-full text-left text-xs px-3 py-2.5 hover:bg-white/[0.05] text-zinc-300 hover:text-white transition-colors flex items-center gap-2">
                         <Video className="w-4 h-4 text-white shrink-0" />
-                        Gameplay
+                        {t("editor.gameplay")}
                       </button>
                       <button onClick={handleAddFacecam} disabled={editEnvLoading} className="w-full text-left text-xs px-3 py-2.5 hover:bg-white/[0.05] text-zinc-300 hover:text-white transition-colors flex items-center gap-2 disabled:opacity-40">
                         <User className="w-4 h-4 text-white shrink-0" />
-                        Facecam
+                        {t("editor.facecam")}
                       </button>
                       <button onClick={handleAddSubtitles} disabled={editEnvLoading} className="w-full text-left text-xs px-3 py-2.5 hover:bg-white/[0.05] text-zinc-300 hover:text-white transition-colors flex items-center gap-2 disabled:opacity-40">
                         <MessageSquare className="w-4 h-4 text-white shrink-0" />
-                        Sous-titres
+                        {t("editor.subtitles")}
                       </button>
                       <button onClick={handleAddChat} disabled={editEnvLoading} className="w-full text-left text-xs px-3 py-2.5 hover:bg-white/[0.05] text-zinc-300 hover:text-white transition-colors flex items-center gap-2 disabled:opacity-40">
                         <MessagesSquare className="w-4 h-4 text-white shrink-0" />
-                        Chat Twitch
+                        {t("editor.twitchChat")}
                       </button>
                       <button onClick={handleAddAsset} className="w-full text-left text-xs px-3 py-2.5 hover:bg-white/[0.05] text-zinc-300 hover:text-white transition-colors flex items-center gap-2">
                         <ImagePlus className="w-4 h-4 text-white shrink-0" />
-                        Importer image
+                        {t("editor.importImage")}
                       </button>
                       <button onClick={handleOpenLibrary} className="w-full text-left text-xs px-3 py-2.5 hover:bg-white/[0.05] text-zinc-300 hover:text-white transition-colors flex items-center gap-2">
                         <FolderOpen className="w-4 h-4 text-white shrink-0" />
-                        Bibliothèque
+                        {t("editor.library")}
                       </button>
                       <button onClick={handleAddText} className="w-full text-left text-xs px-3 py-2.5 hover:bg-white/[0.05] text-zinc-300 hover:text-white transition-colors flex items-center gap-2">
                         <Type className="w-4 h-4 text-white shrink-0" />
-                        Texte
+                        {t("editor.text")}
                       </button>
                       <div className="h-px bg-white/[0.06] mx-2" />
                       <button onClick={() => handleAddShape("rectangle")} className="w-full text-left text-xs px-3 py-2.5 hover:bg-white/[0.05] text-zinc-300 hover:text-white transition-colors flex items-center gap-2">
                         <Square className="w-4 h-4 text-white shrink-0" />
-                        Rectangle
+                        {t("editor.rectangle")}
                       </button>
                       <button onClick={() => handleAddShape("circle")} className="w-full text-left text-xs px-3 py-2.5 hover:bg-white/[0.05] text-zinc-300 hover:text-white transition-colors flex items-center gap-2">
                         <Circle className="w-4 h-4 text-white shrink-0" />
-                        Cercle
+                        {t("editor.circle")}
                       </button>
                     </div>
                   )}

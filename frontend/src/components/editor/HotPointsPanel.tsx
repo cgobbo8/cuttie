@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import type { HotPoint } from "../../lib/api";
 
 interface Props {
@@ -13,12 +14,13 @@ function formatTime(seconds: number): string {
 }
 
 export default function HotPointsPanel({ hotPoint, currentTime, onSeek }: Props) {
+  const { t } = useTranslation();
   const keyMoments = hotPoint.llm?.key_moments ?? [];
 
   if (!hotPoint.llm) {
     return (
       <div className="flex-1 flex items-center justify-center px-4">
-        <p className="text-[11px] text-zinc-600 text-center">Aucune analyse LLM disponible</p>
+        <p className="text-[11px] text-zinc-600 text-center">{t("editor.noLlmAnalysis")}</p>
       </div>
     );
   }
@@ -33,19 +35,19 @@ export default function HotPointsPanel({ hotPoint, currentTime, onSeek }: Props)
             {hotPoint.llm.category && (
               <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/[0.06] text-zinc-400">{hotPoint.llm.category}</span>
             )}
-            <span className="text-[10px] text-zinc-500">Score: {hotPoint.llm.virality_score}/10</span>
+            <span className="text-[10px] text-zinc-500">{t("editor.score")}: {hotPoint.llm.virality_score}/10</span>
           </div>
         </div>
       )}
 
       {/* Key moments */}
       <div className="px-3 py-2 border-b border-white/[0.06]">
-        <p className="text-[10px] font-medium text-zinc-500 uppercase tracking-wider">Temps forts</p>
+        <p className="text-[10px] font-medium text-zinc-500 uppercase tracking-wider">{t("editor.hotpoints")}</p>
       </div>
       <div className="flex-1 overflow-y-auto">
         {keyMoments.length === 0 ? (
           <div className="px-3 py-4">
-            <p className="text-[11px] text-zinc-600 text-center">Aucun temps fort détecté</p>
+            <p className="text-[11px] text-zinc-600 text-center">{t("editor.noKeyMomentsDetected")}</p>
           </div>
         ) : (
           <div className="py-1">

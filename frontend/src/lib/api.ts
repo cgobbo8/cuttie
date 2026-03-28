@@ -118,6 +118,7 @@ export interface JobSummary {
   vod_game: string | null;
   vod_duration_seconds: number | null;
   streamer: string | null;
+  streamer_thumbnail: string | null;
   view_count: number | null;
   stream_date: string | null;
   chat_message_count: number | null;
@@ -167,6 +168,7 @@ interface ServerJobSummary {
   vodGame?: string | null;
   vodDurationSeconds?: number | null;
   streamer?: string | null;
+  streamerThumbnail?: string | null;
   viewCount?: number | null;
   streamDate?: string | null;
   chatMessageCount?: number | null;
@@ -203,6 +205,7 @@ function mapJobSummary(raw: ServerJobSummary): JobSummary {
     vod_game: raw.vodGame ?? null,
     vod_duration_seconds: raw.vodDurationSeconds ?? null,
     streamer: raw.streamer ?? null,
+    streamer_thumbnail: raw.streamerThumbnail ?? null,
     view_count: raw.viewCount ?? null,
     stream_date: raw.streamDate ?? null,
     chat_message_count: raw.chatMessageCount ?? null,
@@ -225,9 +228,50 @@ export interface GameSummary {
   streamers: string[];
 }
 
-export async function listGames(): Promise<GameSummary[]> {
+export interface StreamerSummary {
+  name: string;
+  thumbnail: string | null;
+  vod_count: number;
+}
+
+export interface GamesResponse {
+  games: GameSummary[];
+  streamers: StreamerSummary[];
+}
+
+export async function listGamesAndStreamers(): Promise<GamesResponse> {
   const res = await fetch(`${BASE}/games`);
   if (!res.ok) throw new Error("Failed to fetch games");
+  const json = await res.json();
+  return {
+    games: json.data ?? [],
+    streamers: json.streamers ?? [],
+  };
+}
+
+export async function listGames(): Promise<GameSummary[]> {
+  const { games } = await listGamesAndStreamers();
+  return games;
+}
+
+// ── Creators API ────────────────────────────────────────────────────────────
+
+export interface CreatorSummary {
+  id: number;
+  twitch_id: string | null;
+  login: string;
+  display_name: string;
+  thumbnail: string | null;
+  vod_count: number;
+  avg_views: number;
+  total_views: number;
+  last_stream_date: string | null;
+  games: string[];
+}
+
+export async function listCreators(): Promise<CreatorSummary[]> {
+  const res = await fetch(`${BASE}/creators`);
+  if (!res.ok) throw new Error("Failed to fetch creators");
   const json = await res.json();
   return json.data ?? [];
 }
@@ -258,6 +302,8 @@ export interface ListJobsParams {
   per_page?: number;
   search?: string;
   status?: string;
+  game?: string;
+  streamer?: string;
 }
 
 export async function listJobs(params?: ListJobsParams): Promise<PaginatedJobs> {
@@ -266,6 +312,8 @@ export async function listJobs(params?: ListJobsParams): Promise<PaginatedJobs> 
   if (params?.per_page) qs.set("per_page", String(params.per_page));
   if (params?.search) qs.set("search", params.search);
   if (params?.status) qs.set("status", params.status);
+  if (params?.game) qs.set("game", params.game);
+  if (params?.streamer) qs.set("streamer", params.streamer);
   const suffix = qs.toString() ? `?${qs}` : "";
   const res = await fetch(`${BASE}/jobs${suffix}`);
   if (!res.ok) throw new Error("Failed to fetch jobs");

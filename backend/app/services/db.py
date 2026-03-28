@@ -128,6 +128,7 @@ def init_db() -> None:
         ("hot_points", "clip_name", "TEXT"),
         ("jobs", "vod_game_id", "TEXT"),
         ("jobs", "vod_game_thumbnail", "TEXT"),
+        ("jobs", "streamer_thumbnail", "TEXT"),
     ]
 
     # Allowlists derived from the migration tuples above — update both lists
@@ -136,7 +137,7 @@ def init_db() -> None:
     VALID_COLUMNS = {
         "llm_json", "final_score", "chat_mood", "vertical_filename",
         "vod_game", "streamer", "view_count", "stream_date", "step_timings",
-        "clip_name",
+        "clip_name", "vod_game_id", "vod_game_thumbnail", "streamer_thumbnail",
     }
     VALID_COL_TYPES = {"TEXT", "REAL", "INTEGER", "BLOB", "NUMERIC"}
 

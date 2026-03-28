@@ -34,6 +34,7 @@
     "newProject": "Nuevo proyecto",
     "projects": "Proyectos",
     "games": "Juegos",
+    "creators": "Creadores",
     "exports": "Exportaciones",
     "profile": "Perfil"
   },
@@ -63,7 +64,10 @@
     "deleteError": "Error al eliminar el proyecto",
     "page": "Página {{current}} de {{total}}",
     "previous": "Anterior",
-    "next": "Siguiente"
+    "next": "Siguiente",
+    "allGames": "Todos los juegos",
+    "allStreamers": "Todos los streamers",
+    "clearFilters": "Borrar"
   },
 
   "status": {
@@ -165,6 +169,17 @@
     "avgViews": "vistas prom.",
     "noGames": "Ningún juego aún",
     "noGamesHint": "Los juegos aparecerán aquí una vez que se completen los análisis."
+  },
+
+  "creators": {
+    "title": "Creadores",
+    "creatorCount_one": "{{count}} creador",
+    "creatorCount_other": "{{count}} creadores",
+    "search": "Buscar por creador o juego...",
+    "vods": "VODs",
+    "avgViews": "vistas prom.",
+    "noCreators": "Ningún creador aún",
+    "noCreatorsHint": "Los creadores aparecerán aquí una vez que se completen los análisis."
   },
 
   "exports": {

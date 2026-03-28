@@ -38,6 +38,8 @@ export default class JobsController {
     const perPage = Math.min(100, Math.max(1, Number(request.input('per_page', 20))))
     const search = (request.input('search') as string || '').trim()
     const status = (request.input('status') as string || '').trim()
+    const game = (request.input('game') as string || '').trim()
+    const streamer = (request.input('streamer') as string || '').trim()
 
     const query = Job.query().where('user_id', user.id)
 
@@ -49,6 +51,14 @@ export default class JobsController {
           .orWhereILike('streamer', q)
           .orWhereILike('vod_game', q)
       })
+    }
+
+    if (game) {
+      query.where('vod_game', game)
+    }
+
+    if (streamer) {
+      query.where('streamer', streamer)
     }
 
     if (status === 'done') {
@@ -83,6 +93,7 @@ export default class JobsController {
         vodGame: serialized.vodGame,
         vodDurationSeconds: serialized.vodDurationSeconds,
         streamer: serialized.streamer,
+        streamerThumbnail: serialized.streamerThumbnail,
         viewCount: serialized.viewCount,
         streamDate: serialized.streamDate,
         chatMessageCount,

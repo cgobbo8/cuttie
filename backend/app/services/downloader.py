@@ -52,6 +52,10 @@ def download_audio(url: str, output_dir: str) -> tuple[str, dict]:
     vod_id = info.get("id", "")
     game_id, game_thumbnail = _fetch_game_info(vod_id)
 
+    # Fetch streamer profile picture
+    streamer_login = info.get("uploader", "")
+    streamer_thumbnail = _fetch_streamer_thumbnail(streamer_login)
+
     metadata = {
         "title": info.get("title", "Unknown"),
         "duration": info.get("duration", 0),
@@ -59,7 +63,8 @@ def download_audio(url: str, output_dir: str) -> tuple[str, dict]:
         "game": game,
         "game_id": game_id,
         "game_thumbnail": game_thumbnail,
-        "streamer": info.get("uploader", ""),
+        "streamer": streamer_login,
+        "streamer_thumbnail": streamer_thumbnail,
         "view_count": info.get("view_count", 0),
         "stream_date": stream_date,
     }
@@ -97,6 +102,34 @@ def _fetch_game_info(vod_id: str) -> tuple[str, str]:
     except Exception as e:
         logger.warning(f"Failed to fetch game info from Twitch GQL: {e}")
         return "", ""
+
+
+def _fetch_streamer_thumbnail(login: str) -> str:
+    """Fetch streamer profile picture URL from Twitch GQL."""
+    import requests
+
+    if not login:
+        return ""
+
+    gql_url = "https://gql.twitch.tv/gql"
+    headers = {"Client-ID": "kimne78kx3ncx6brgo4mv6wki5h1ko"}
+
+    query = """query {
+        user(login: "%s") {
+            profileImageURL(width: 150)
+        }
+    }""" % login.lower()
+
+    try:
+        resp = requests.post(gql_url, json={"query": query}, headers=headers, timeout=10)
+        data = resp.json()
+        user_data = data.get("data", {}).get("user") or {}
+        profile_url = user_data.get("profileImageURL", "")
+        logger.info(f"Twitch GQL streamer info: login={login}, avatar={'yes' if profile_url else 'no'}")
+        return profile_url
+    except Exception as e:
+        logger.warning(f"Failed to fetch streamer thumbnail from Twitch GQL: {e}")
+        return ""
 
 
 def download_chat(url: str) -> list[dict]:

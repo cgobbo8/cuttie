@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useNavigate } from "react-router";
-import { listJobs, deleteJob, retryJob, type JobSummary, type PaginationMeta } from "../lib/api";
+import { useNavigate, useSearchParams } from "react-router";
+import { listJobs, listGamesAndStreamers, deleteJob, retryJob, type JobSummary, type PaginationMeta, type GameSummary, type StreamerSummary } from "../lib/api";
 import { useTranslation } from "react-i18next";
 import ConfirmModal from "../components/ConfirmModal";
 import { useToast } from "../components/Toast";
@@ -16,6 +16,7 @@ import {
   MessageSquare,
   ChevronLeft,
   ChevronRight,
+  X,
 } from "lucide-react";
 
 type SortKey = "date" | "title" | "status";
@@ -76,15 +77,39 @@ function StatusBadge({ status }: { status: string }) {
 export default function HomePage() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const toast = useToast();
   const [jobs, setJobs] = useState<JobSummary[]>([]);
   const [meta, setMeta] = useState<PaginationMeta>({ total: 0, per_page: 20, current_page: 1, last_page: 1 });
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("");
+  const [gameFilter, setGameFilter] = useState(searchParams.get("game") || "");
+  const [streamerFilter, setStreamerFilter] = useState(searchParams.get("streamer") || "");
   const [sortKey, setSortKey] = useState<SortKey>("date");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [page, setPage] = useState(1);
+
+  // Filter options from games API
+  const [gameOptions, setGameOptions] = useState<GameSummary[]>([]);
+  const [streamerOptions, setStreamerOptions] = useState<StreamerSummary[]>([]);
+
+  useEffect(() => {
+    listGamesAndStreamers()
+      .then(({ games, streamers }) => {
+        setGameOptions(games);
+        setStreamerOptions(streamers);
+      })
+      .catch(() => {});
+  }, []);
+
+  // Sync filters to URL
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (gameFilter) params.set("game", gameFilter);
+    if (streamerFilter) params.set("streamer", streamerFilter);
+    setSearchParams(params, { replace: true });
+  }, [gameFilter, streamerFilter, setSearchParams]);
 
   // Delete modal
   const [deleteTarget, setDeleteTarget] = useState<JobSummary | null>(null);
@@ -110,6 +135,8 @@ export default function HomePage() {
         per_page: 20,
         search: debouncedSearch || undefined,
         status: statusFilter || undefined,
+        game: gameFilter || undefined,
+        streamer: streamerFilter || undefined,
       });
       setJobs(result.data);
       setMeta(result.meta);
@@ -118,7 +145,7 @@ export default function HomePage() {
     } finally {
       setLoading(false);
     }
-  }, [page, debouncedSearch, statusFilter]);
+  }, [page, debouncedSearch, statusFilter, gameFilter, streamerFilter]);
 
   useEffect(() => {
     setLoading(true);
@@ -259,6 +286,45 @@ export default function HomePage() {
         </div>
       </div>
 
+      {/* Game & streamer filters */}
+      <div className="flex items-center gap-2 mb-4">
+        <div className="relative">
+          <select
+            value={gameFilter}
+            onChange={(e) => { setGameFilter(e.target.value); setPage(1); }}
+            className="appearance-none text-xs pl-3 pr-8 py-1.5 rounded-lg bg-white/[0.03] border border-white/[0.08] text-zinc-300 focus:outline-none focus:border-white/[0.16] transition-colors cursor-pointer"
+          >
+            <option value="">{t("home.allGames")}</option>
+            {gameOptions.map((g) => (
+              <option key={g.game_id || g.name} value={g.name}>{g.name}</option>
+            ))}
+          </select>
+          <Gamepad2 className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-zinc-500 pointer-events-none" />
+        </div>
+        <div className="relative">
+          <select
+            value={streamerFilter}
+            onChange={(e) => { setStreamerFilter(e.target.value); setPage(1); }}
+            className="appearance-none text-xs pl-3 pr-8 py-1.5 rounded-lg bg-white/[0.03] border border-white/[0.08] text-zinc-300 focus:outline-none focus:border-white/[0.16] transition-colors cursor-pointer"
+          >
+            <option value="">{t("home.allStreamers")}</option>
+            {streamerOptions.map((s) => (
+              <option key={s.name} value={s.name}>{s.name}</option>
+            ))}
+          </select>
+          <Users className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-zinc-500 pointer-events-none" />
+        </div>
+        {(gameFilter || streamerFilter) && (
+          <button
+            onClick={() => { setGameFilter(""); setStreamerFilter(""); setPage(1); }}
+            className="flex items-center gap-1 text-xs text-zinc-500 hover:text-white px-2 py-1.5 rounded-lg hover:bg-white/[0.04] transition-colors"
+          >
+            <X className="w-3 h-3" />
+            {t("home.clearFilters")}
+          </button>
+        )}
+      </div>
+
       {/* Table */}
       {loading ? (
         <div className="flex items-center justify-center py-20">
@@ -268,9 +334,9 @@ export default function HomePage() {
         <div className="text-center py-20">
           <FolderOpen className="w-8 h-8 text-zinc-700 mx-auto mb-3" />
           <p className="text-sm text-zinc-500">
-            {debouncedSearch || statusFilter ? t("common.noResults") : t("home.noProjects")}
+            {debouncedSearch || statusFilter || gameFilter || streamerFilter ? t("common.noResults") : t("home.noProjects")}
           </p>
-          {!debouncedSearch && !statusFilter && (
+          {!debouncedSearch && !statusFilter && !gameFilter && !streamerFilter && (
             <p className="text-xs text-zinc-600 mt-1">
               {t("home.noProjectsHint")}
             </p>
@@ -304,7 +370,20 @@ export default function HomePage() {
                 className="grid grid-cols-[1fr_120px_80px_80px_80px_130px_40px] gap-4 px-5 py-3.5 border-b border-white/[0.04] last:border-b-0 hover:bg-white/[0.03] transition-colors cursor-pointer group"
               >
                 {/* Title + game + streamer */}
-                <div className="min-w-0">
+                <div className="min-w-0 flex items-center gap-3">
+                  {job.streamer_thumbnail ? (
+                    <img
+                      src={job.streamer_thumbnail}
+                      alt={job.streamer || ""}
+                      className="w-8 h-8 rounded-full shrink-0 object-cover"
+                      loading="lazy"
+                    />
+                  ) : (
+                    <div className="w-8 h-8 rounded-full shrink-0 bg-white/[0.06] flex items-center justify-center">
+                      <Users className="w-3.5 h-3.5 text-zinc-600" />
+                    </div>
+                  )}
+                  <div className="min-w-0">
                   <p className="text-sm text-zinc-300 truncate group-hover:text-white transition-colors">
                     {job.vod_title || t("home.untitledVod")}
                   </p>
@@ -318,6 +397,7 @@ export default function HomePage() {
                         <span className="truncate max-w-[160px]">{job.vod_game}</span>
                       </span>
                     )}
+                  </div>
                   </div>
                 </div>
 

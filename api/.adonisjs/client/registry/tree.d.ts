@@ -13,6 +13,12 @@ export interface ApiDefinition {
   authMe: {
     show: typeof routes['auth_me.show']
   }
+  games: {
+    index: typeof routes['games.index']
+  }
+  creators: {
+    index: typeof routes['creators.index']
+  }
   jobs: {
     store: typeof routes['jobs.store']
     index: typeof routes['jobs.index']

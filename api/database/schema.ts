@@ -32,13 +32,36 @@ export class AuthAccessTokenSchema extends BaseModel {
   declare updatedAt: DateTime | null
 }
 
+export class CreatorSchema extends BaseModel {
+  static $columns = ['createdAt', 'displayName', 'id', 'login', 'thumbnail', 'twitchId', 'updatedAt', 'userId'] as const
+  $columns = CreatorSchema.$columns
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime | null
+  @column()
+  declare displayName: string
+  @column({ isPrimary: true })
+  declare id: number
+  @column()
+  declare login: string
+  @column()
+  declare thumbnail: string | null
+  @column()
+  declare twitchId: string | null
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime | null
+  @column()
+  declare userId: number
+}
+
 export class JobSchema extends BaseModel {
-  static $columns = ['clips', 'createdAt', 'error', 'hotPoints', 'id', 'progress', 'status', 'stepTimings', 'streamDate', 'streamer', 'updatedAt', 'url', 'userId', 'viewCount', 'vodDurationSeconds', 'vodGame', 'vodGameId', 'vodGameThumbnail', 'vodTitle'] as const
+  static $columns = ['clips', 'createdAt', 'creatorId', 'error', 'hotPoints', 'id', 'progress', 'status', 'stepTimings', 'streamDate', 'streamer', 'streamerThumbnail', 'updatedAt', 'url', 'userId', 'viewCount', 'vodDurationSeconds', 'vodGame', 'vodGameId', 'vodGameThumbnail', 'vodTitle'] as const
   $columns = JobSchema.$columns
   @column()
   declare clips: any | null
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime | null
+  @column()
+  declare creatorId: number | null
   @column()
   declare error: string | null
   @column()
@@ -55,6 +78,8 @@ export class JobSchema extends BaseModel {
   declare streamDate: string | null
   @column()
   declare streamer: string | null
+  @column()
+  declare streamerThumbnail: string | null
   @column.dateTime({ autoCreate: true, autoUpdate: true })
   declare updatedAt: DateTime | null
   @column()

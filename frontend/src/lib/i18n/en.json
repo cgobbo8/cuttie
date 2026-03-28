@@ -34,6 +34,7 @@
     "newProject": "New project",
     "projects": "Projects",
     "games": "Games",
+    "creators": "Creators",
     "exports": "Exports",
     "profile": "Profile"
   },
@@ -63,7 +64,10 @@
     "deleteError": "Failed to delete project",
     "page": "Page {{current}} of {{total}}",
     "previous": "Previous",
-    "next": "Next"
+    "next": "Next",
+    "allGames": "All games",
+    "allStreamers": "All streamers",
+    "clearFilters": "Clear"
   },
 
   "status": {
@@ -165,6 +169,17 @@
     "avgViews": "avg views",
     "noGames": "No games yet",
     "noGamesHint": "Games will appear here once analyses are completed."
+  },
+
+  "creators": {
+    "title": "Creators",
+    "creatorCount_one": "{{count}} creator",
+    "creatorCount_other": "{{count}} creators",
+    "search": "Search by creator or game...",
+    "vods": "VODs",
+    "avgViews": "avg views",
+    "noCreators": "No creators yet",
+    "noCreatorsHint": "Creators will appear here once analyses are completed."
   },
 
   "exports": {

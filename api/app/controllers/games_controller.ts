@@ -23,7 +23,7 @@ export default class GamesController {
         db.raw('ROUND(AVG(view_count)) as avg_views'),
         db.raw('SUM(view_count) as total_views'),
         db.raw('MAX(stream_date) as last_stream_date'),
-        db.raw("GROUP_CONCAT(DISTINCT streamer, ',') as streamers")
+        db.raw("GROUP_CONCAT(DISTINCT streamer) as streamers")
       )
       .groupByRaw("COALESCE(NULLIF(vod_game_id, ''), vod_game)")
       .orderBy('vod_count', 'desc')
@@ -42,6 +42,27 @@ export default class GamesController {
         : [],
     }))
 
-    return { data: games }
+    // Distinct streamers with latest thumbnail
+    const streamerRows = await db
+      .from('jobs')
+      .where('user_id', user.id)
+      .where('status', 'DONE')
+      .whereNotNull('streamer')
+      .where('streamer', '!=', '')
+      .select(
+        'streamer',
+        db.raw('MAX(streamer_thumbnail) as streamer_thumbnail'),
+        db.raw('COUNT(*) as vod_count')
+      )
+      .groupBy('streamer')
+      .orderBy('vod_count', 'desc')
+
+    const streamers = streamerRows.map((row) => ({
+      name: row.streamer,
+      thumbnail: row.streamer_thumbnail || null,
+      vod_count: Number(row.vod_count),
+    }))
+
+    return { data: games, streamers }
   }
 }

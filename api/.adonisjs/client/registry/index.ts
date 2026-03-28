@@ -36,6 +36,18 @@ const routes = {
     tokens: [{"old":"/api/auth/me","type":0,"val":"api","end":""},{"old":"/api/auth/me","type":0,"val":"auth","end":""},{"old":"/api/auth/me","type":0,"val":"me","end":""}],
     types: placeholder as Registry['auth_me.show']['types'],
   },
+  'games.index': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/games',
+    tokens: [{"old":"/api/games","type":0,"val":"api","end":""},{"old":"/api/games","type":0,"val":"games","end":""}],
+    types: placeholder as Registry['games.index']['types'],
+  },
+  'creators.index': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/creators',
+    tokens: [{"old":"/api/creators","type":0,"val":"api","end":""},{"old":"/api/creators","type":0,"val":"creators","end":""}],
+    types: placeholder as Registry['creators.index']['types'],
+  },
   'jobs.store': {
     methods: ["POST"],
     pattern: '/api/analyze',

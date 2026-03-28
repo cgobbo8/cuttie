@@ -35,6 +35,9 @@ router
         // Games
         router.get('/games', [() => import('#controllers/games_controller'), 'index'])
 
+        // Creators
+        router.get('/creators', [() => import('#controllers/creators_controller'), 'index'])
+
         // Jobs
         router.post('/analyze', [() => import('#controllers/jobs_controller'), 'store'])
         router.get('/jobs', [() => import('#controllers/jobs_controller'), 'index'])

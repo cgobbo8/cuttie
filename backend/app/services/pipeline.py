@@ -203,6 +203,7 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
             vod_game_id = metadata.get("game_id", "")
             vod_game_thumbnail = metadata.get("game_thumbnail", "")
             streamer = metadata.get("streamer", "")
+            streamer_thumbnail = metadata.get("streamer_thumbnail", "")
             view_count = metadata.get("view_count", 0)
             stream_date = metadata.get("stream_date", "")
             update_job(
@@ -213,6 +214,7 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
                 vod_game_thumbnail=vod_game_thumbnail,
                 vod_duration_seconds=duration,
                 streamer=streamer,
+                streamer_thumbnail=streamer_thumbnail,
                 view_count=view_count,
                 stream_date=stream_date,
             )

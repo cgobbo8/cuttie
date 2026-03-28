@@ -79,6 +79,18 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/games_controller').default['index']>>>
     }
   }
+  'creators.index': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/creators'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/creators_controller').default['index']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/creators_controller').default['index']>>>
+    }
+  }
   'jobs.store': {
     methods: ["POST"]
     pattern: '/api/analyze'

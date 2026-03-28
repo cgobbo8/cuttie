@@ -503,7 +503,7 @@ export default function CanvasEditor({
           </div>
 
           {/* Content panel */}
-          <div className="w-56 flex flex-col">
+          <div className="w-72 flex flex-col">
             {leftTab === "layers" && (
               <>
                 <LayerPanel

@@ -21,7 +21,15 @@ export default function AssetLayer({ layer }: Props) {
   const isGif = asset.src.toLowerCase().endsWith(".gif");
 
   if (isGif) {
-    return <Gif src={asset.src} width={transform.width} height={transform.height} fit="fill" />;
+    return (
+      <Gif
+        src={asset.src}
+        width={transform.width}
+        height={transform.height}
+        fit="fill"
+        playbackRate={asset.gifPlaybackRate ?? 1}
+      />
+    );
   }
 
   return <Img src={asset.src} style={style} />;

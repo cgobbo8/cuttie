@@ -5,7 +5,8 @@
 
 import { bundle } from '@remotion/bundler'
 import { renderMedia, selectComposition } from '@remotion/renderer'
-import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync, statSync, writeFileSync, unlinkSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import path from 'node:path'
 import type { Layer } from '../../remotion/editorTypes.js'
 import { getPresignedUrl } from '#services/s3'
@@ -66,6 +67,48 @@ function readProbe(jobId: string, clipFilename: string): {
   throw new Error(`Probe file not found: ${probePath}. Run the pipeline again to generate it.`)
 }
 
+/**
+ * Extract frame delays from a GIF binary and compute a playbackRate that
+ * matches browser behavior. Browsers clamp GIF frame delays < 20ms to ~100ms.
+ * Returns a playbackRate to pass to @remotion/gif's <Gif> component.
+ */
+function computeGifPlaybackRate(buffer: Buffer): number {
+  const delays: number[] = []
+
+  // Parse GIF binary — look for Graphic Control Extension blocks (0x21 0xF9)
+  for (let i = 0; i < buffer.length - 6; i++) {
+    if (buffer[i] === 0x21 && buffer[i + 1] === 0xf9 && buffer[i + 2] === 0x04) {
+      // Delay time is at offset +3 (2 bytes, little-endian, in centiseconds)
+      const delayCentiseconds = buffer[i + 4] | (buffer[i + 5] << 8)
+      delays.push(delayCentiseconds * 10) // convert to ms
+    }
+  }
+
+  if (delays.length === 0) return 1
+
+  // Compute actual total duration (as declared in the GIF)
+  const declaredTotal = delays.reduce((sum, d) => sum + d, 0)
+
+  // Compute browser-equivalent duration (with clamping: delays < 20ms → 100ms)
+  const browserTotal = delays.reduce((sum, d) => sum + (d < 20 ? 100 : d), 0)
+
+  if (declaredTotal <= 0 || browserTotal <= 0) return 1
+
+  return declaredTotal / browserTotal
+}
+
+async function analyzeGifAsset(s3Key: string): Promise<number> {
+  try {
+    const presignedUrl = await getPresignedUrl(s3Key, 60)
+    const resp = await fetch(presignedUrl)
+    if (!resp.ok) return 1
+    const arrayBuffer = await resp.arrayBuffer()
+    return computeGifPlaybackRate(Buffer.from(arrayBuffer))
+  } catch {
+    return 1
+  }
+}
+
 export interface RenderOptions {
   renderId: string
   layers: Layer[]
@@ -113,10 +156,13 @@ export async function renderClip(opts: RenderOptions): Promise<{ sizeMb: number 
       if (layer.type === 'asset' && layer.asset?.src) {
         const assetMatch = layer.asset.src.match(/\/api\/assets\/(.+)$/)
         if (assetMatch) {
-          const assetPresignedUrl = await getPresignedUrl(`assets/${assetMatch[1]}`, 3600)
+          const s3Key = `assets/${assetMatch[1]}`
+          const assetPresignedUrl = await getPresignedUrl(s3Key, 3600)
+          const isGif = assetMatch[1].toLowerCase().endsWith('.gif')
+          const gifPlaybackRate = isGif ? await analyzeGifAsset(s3Key) : undefined
           return {
             ...layer,
-            asset: { ...layer.asset, src: assetPresignedUrl },
+            asset: { ...layer.asset, src: assetPresignedUrl, gifPlaybackRate },
           }
         }
       }

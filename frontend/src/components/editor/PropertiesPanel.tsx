@@ -1,4 +1,5 @@
 import { Crop } from "lucide-react";
+import { HintBadge } from "../ui/Tooltip";
 import type { Layer, LayerStyle, ShapeData, SubtitleData, ChatData, TextData, AssetData } from "../../lib/editorTypes";
 import { SUBTITLE_FONTS, TEXT_FONTS, BOX_SHADOW_PRESETS } from "../../lib/editorTypes";
 
@@ -139,12 +140,7 @@ export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange
           <div className="flex items-center justify-between">
             <span className="text-[10px] text-zinc-400 uppercase tracking-wider font-medium flex items-center gap-1">
               Boucler le GIF
-              <span
-                className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-white/[0.06] text-zinc-500 text-[8px] cursor-help"
-                title="Appliqué uniquement au rendu exporté. Dans la preview, le GIF boucle toujours."
-              >
-                ?
-              </span>
+              <HintBadge tooltip="Applique uniquement au rendu exporte. Dans la preview, le GIF boucle toujours." />
             </span>
             <button
               onClick={() => {

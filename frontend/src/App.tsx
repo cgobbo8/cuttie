@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router";
 import { AuthProvider, useAuth } from "./lib/AuthContext";
+import { TooltipProvider } from "./components/ui/Tooltip";
 import Layout from "./components/Layout";
 import HomePage from "./pages/HomePage";
 import JobPage from "./pages/JobPage";
@@ -63,9 +64,11 @@ function AppRoutes() {
 export default function App() {
   return (
     <AuthProvider>
-      <BrowserRouter>
-        <AppRoutes />
-      </BrowserRouter>
+      <TooltipProvider>
+        <BrowserRouter>
+          <AppRoutes />
+        </BrowserRouter>
+      </TooltipProvider>
     </AuthProvider>
   );
 }

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ArrowLeft, Undo2, Redo2, Loader2, Download, Plus, Video, User, MessageSquare, MessagesSquare, ImagePlus, FolderOpen, Square, Circle, SlidersHorizontal, LayoutTemplate, Sparkles, X, Check, Pencil, Type } from "lucide-react";
-import { clipUrl, getEditEnvironment, startRender, renameClip, uploadAsset, listAssets, assetUrl, type EditEnvironment, type HotPoint, type AssetInfo } from "../../lib/api";
+import { ArrowLeft, Undo2, Redo2, Loader2, Download, Plus, Video, User, MessageSquare, MessagesSquare, ImagePlus, FolderOpen, Square, Circle, SlidersHorizontal, LayoutTemplate, Sparkles, X, Check, Pencil, Type, Flame, FileText, Layers } from "lucide-react";
+import { clipUrl, getEditEnvironment, startRender, renameClip, uploadAsset, listAssets, assetUrl, type EditEnvironment, type HotPoint, type AssetInfo, type TranscriptWord } from "../../lib/api";
 import type { Layer, SubtitleData } from "../../lib/editorTypes";
 import type { ThemeLayerTemplate } from "../../lib/editorThemes";
 import { getDefaultTheme } from "../../lib/editorThemes";
@@ -12,6 +12,8 @@ import PropertiesPanel from "../editor/PropertiesPanel";
 import AnimationsPanel from "../editor/AnimationsPanel";
 import ThemesPanel from "../editor/ThemesPanel";
 import PlaybackBar from "../editor/PlaybackBar";
+import HotPointsPanel from "../editor/HotPointsPanel";
+import TranscriptionPanel from "../editor/TranscriptionPanel";
 import CropEditor from "../editor/CropEditor";
 
 interface Props {
@@ -21,6 +23,7 @@ interface Props {
 }
 
 type RightTab = "properties" | "animations" | "themes";
+type LeftTab = "layers" | "hotpoints" | "transcription";
 
 let _nextApplyId = 0;
 function applyUid() {
@@ -49,6 +52,8 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
   const [assetLibraryOpen, setAssetLibraryOpen] = useState(false);
   const [assetLibrary, setAssetLibrary] = useState<AssetInfo[]>([]);
   const [rightTab, setRightTab] = useState<RightTab>("properties");
+  const [leftTab, setLeftTab] = useState<LeftTab>("layers");
+  const [transcriptWords, setTranscriptWords] = useState<TranscriptWord[]>([]);
 
   // ── Clip name state ──
   const [clipName, setClipName] = useState(hotPoint.clip_name || `Clip ${hotPoint.timestamp_display}`);
@@ -217,11 +222,19 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
     try {
       const env = await getEditEnvironment(jobId, hotPoint.clip_filename!);
       editEnvRef.current = env;
+      if (env.words?.length) setTranscriptWords(env.words);
       return env;
     } finally {
       setEditEnvLoading(false);
     }
   }, [jobId, hotPoint.clip_filename]);
+
+  // Auto-fetch edit environment when switching to transcription tab
+  useEffect(() => {
+    if (leftTab === "transcription" && transcriptWords.length === 0 && !editEnvRef.current) {
+      fetchEditEnv();
+    }
+  }, [leftTab, transcriptWords.length, fetchEditEnv]);
 
   /* ── Add layer handlers ─────────────────────────────────── */
 
@@ -604,61 +617,127 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
 
       {/* ─── Main area ─── */}
       <div className="flex-1 flex min-h-0">
-        {/* Left: Layer panel */}
-        <div className="w-64 shrink-0 border-r border-white/[0.06] flex flex-col">
-          <LayerPanel
-            layers={layers}
-            selectedId={selectedId}
-            onSelect={setSelectedId}
-            onToggleVisibility={toggleVisibility}
-            onToggleLock={toggleLock}
-            onReorder={reorderLayers}
-            onDuplicate={duplicateLayer}
-            onRemove={removeLayer}
-            onRename={renameLayer}
-          />
-
-          {/* Add layer */}
-          <div className="shrink-0 border-t border-white/[0.06] p-2 relative" ref={addMenuRef}>
+        {/* ─── Left: Icon toolbar + panel ─── */}
+        <div className="shrink-0 flex border-r border-white/[0.06]">
+          {/* Icon strip */}
+          <div className="w-11 flex flex-col items-center py-2 gap-1 border-r border-white/[0.06]">
             <button
-              onClick={() => setAddMenuOpen((v) => !v)}
-              className="w-full text-xs px-3 py-2 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] text-zinc-200 hover:text-zinc-100 transition-colors flex items-center justify-center gap-2 font-medium"
+              onClick={() => setLeftTab("layers")}
+              className={`w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${
+                leftTab === "layers"
+                  ? "bg-white/[0.08] text-zinc-200"
+                  : "text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.05]"
+              }`}
+              title={t("editor.layers")}
             >
-              <Plus className="w-4 h-4" />
-              {t("editor.addLayer")}
+              <Layers className="w-4 h-4" />
             </button>
+            <button
+              onClick={() => setLeftTab("hotpoints")}
+              className={`w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${
+                leftTab === "hotpoints"
+                  ? "bg-white/[0.08] text-zinc-200"
+                  : "text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.05]"
+              }`}
+              title={t("editor.hotpoints")}
+            >
+              <Flame className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setLeftTab("transcription")}
+              className={`w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${
+                leftTab === "transcription"
+                  ? "bg-white/[0.08] text-zinc-200"
+                  : "text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.05]"
+              }`}
+              title={t("editor.transcription")}
+            >
+              <FileText className="w-4 h-4" />
+            </button>
+          </div>
 
-            {addMenuOpen && (
-              <div className="absolute bottom-full left-2 right-2 mb-1 bg-zinc-900 border border-white/[0.08] rounded-lg shadow-xl overflow-hidden z-50">
-                <button onClick={handleAddGameplay} className="w-full text-left text-xs px-3 py-2.5 hover:bg-white/[0.05] text-zinc-300 hover:text-white transition-colors flex items-center gap-2">
-                  <Video className="w-4 h-4 text-white shrink-0" />{t("editor.gameplay")}
-                </button>
-                <button onClick={handleAddFacecam} disabled={editEnvLoading} className="w-full text-left text-xs px-3 py-2.5 hover:bg-white/[0.05] text-zinc-300 hover:text-white transition-colors flex items-center gap-2 disabled:opacity-40">
-                  <User className="w-4 h-4 text-white shrink-0" />{t("editor.facecam")}
-                </button>
-                <button onClick={handleAddSubtitles} disabled={editEnvLoading} className="w-full text-left text-xs px-3 py-2.5 hover:bg-white/[0.05] text-zinc-300 hover:text-white transition-colors flex items-center gap-2 disabled:opacity-40">
-                  <MessageSquare className="w-4 h-4 text-white shrink-0" />{t("editor.subtitles")}
-                </button>
-                <button onClick={handleAddChat} disabled={editEnvLoading} className="w-full text-left text-xs px-3 py-2.5 hover:bg-white/[0.05] text-zinc-300 hover:text-white transition-colors flex items-center gap-2 disabled:opacity-40">
-                  <MessagesSquare className="w-4 h-4 text-white shrink-0" />{t("editor.twitchChat")}
-                </button>
-                <button onClick={handleAddAsset} className="w-full text-left text-xs px-3 py-2.5 hover:bg-white/[0.05] text-zinc-300 hover:text-white transition-colors flex items-center gap-2">
-                  <ImagePlus className="w-4 h-4 text-white shrink-0" />{t("editor.importImage")}
-                </button>
-                <button onClick={handleOpenLibrary} className="w-full text-left text-xs px-3 py-2.5 hover:bg-white/[0.05] text-zinc-300 hover:text-white transition-colors flex items-center gap-2">
-                  <FolderOpen className="w-4 h-4 text-white shrink-0" />{t("editor.library")}
-                </button>
-                <button onClick={handleAddText} className="w-full text-left text-xs px-3 py-2.5 hover:bg-white/[0.05] text-zinc-300 hover:text-white transition-colors flex items-center gap-2">
-                  <Type className="w-4 h-4 text-white shrink-0" />{t("editor.text")}
-                </button>
-                <div className="h-px bg-white/[0.06] mx-2" />
-                <button onClick={() => handleAddShape("rectangle")} className="w-full text-left text-xs px-3 py-2.5 hover:bg-white/[0.05] text-zinc-300 hover:text-white transition-colors flex items-center gap-2">
-                  <Square className="w-4 h-4 text-white shrink-0" />{t("editor.rectangle")}
-                </button>
-                <button onClick={() => handleAddShape("circle")} className="w-full text-left text-xs px-3 py-2.5 hover:bg-white/[0.05] text-zinc-300 hover:text-white transition-colors flex items-center gap-2">
-                  <Circle className="w-4 h-4 text-white shrink-0" />{t("editor.circle")}
-                </button>
-              </div>
+          {/* Content panel */}
+          <div className="w-72 flex flex-col">
+            {leftTab === "layers" && (
+              <>
+                <LayerPanel
+                  layers={layers}
+                  selectedId={selectedId}
+                  onSelect={setSelectedId}
+                  onToggleVisibility={toggleVisibility}
+                  onToggleLock={toggleLock}
+                  onReorder={reorderLayers}
+                  onDuplicate={duplicateLayer}
+                  onRemove={removeLayer}
+                  onRename={renameLayer}
+                />
+
+                {/* Add layer */}
+                <div className="shrink-0 border-t border-white/[0.06] p-2 relative" ref={addMenuRef}>
+                  <button
+                    onClick={() => setAddMenuOpen((v) => !v)}
+                    className="w-full text-xs px-3 py-2 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] text-zinc-200 hover:text-zinc-100 transition-colors flex items-center justify-center gap-2 font-medium"
+                  >
+                    <Plus className="w-4 h-4" />
+                    {t("editor.addLayer")}
+                  </button>
+
+                  {addMenuOpen && (
+                    <div className="absolute bottom-full left-2 right-2 mb-1 bg-zinc-900 border border-white/[0.08] rounded-lg shadow-xl overflow-hidden z-50">
+                      <button onClick={handleAddGameplay} className="w-full text-left text-xs px-3 py-2.5 hover:bg-white/[0.05] text-zinc-300 hover:text-white transition-colors flex items-center gap-2">
+                        <Video className="w-4 h-4 text-white shrink-0" />{t("editor.gameplay")}
+                      </button>
+                      <button onClick={handleAddFacecam} disabled={editEnvLoading} className="w-full text-left text-xs px-3 py-2.5 hover:bg-white/[0.05] text-zinc-300 hover:text-white transition-colors flex items-center gap-2 disabled:opacity-40">
+                        <User className="w-4 h-4 text-white shrink-0" />{t("editor.facecam")}
+                      </button>
+                      <button onClick={handleAddSubtitles} disabled={editEnvLoading} className="w-full text-left text-xs px-3 py-2.5 hover:bg-white/[0.05] text-zinc-300 hover:text-white transition-colors flex items-center gap-2 disabled:opacity-40">
+                        <MessageSquare className="w-4 h-4 text-white shrink-0" />{t("editor.subtitles")}
+                      </button>
+                      <button onClick={handleAddChat} disabled={editEnvLoading} className="w-full text-left text-xs px-3 py-2.5 hover:bg-white/[0.05] text-zinc-300 hover:text-white transition-colors flex items-center gap-2 disabled:opacity-40">
+                        <MessagesSquare className="w-4 h-4 text-white shrink-0" />{t("editor.twitchChat")}
+                      </button>
+                      <button onClick={handleAddAsset} className="w-full text-left text-xs px-3 py-2.5 hover:bg-white/[0.05] text-zinc-300 hover:text-white transition-colors flex items-center gap-2">
+                        <ImagePlus className="w-4 h-4 text-white shrink-0" />{t("editor.importImage")}
+                      </button>
+                      <button onClick={handleOpenLibrary} className="w-full text-left text-xs px-3 py-2.5 hover:bg-white/[0.05] text-zinc-300 hover:text-white transition-colors flex items-center gap-2">
+                        <FolderOpen className="w-4 h-4 text-white shrink-0" />{t("editor.library")}
+                      </button>
+                      <button onClick={handleAddText} className="w-full text-left text-xs px-3 py-2.5 hover:bg-white/[0.05] text-zinc-300 hover:text-white transition-colors flex items-center gap-2">
+                        <Type className="w-4 h-4 text-white shrink-0" />{t("editor.text")}
+                      </button>
+                      <div className="h-px bg-white/[0.06] mx-2" />
+                      <button onClick={() => handleAddShape("rectangle")} className="w-full text-left text-xs px-3 py-2.5 hover:bg-white/[0.05] text-zinc-300 hover:text-white transition-colors flex items-center gap-2">
+                        <Square className="w-4 h-4 text-white shrink-0" />{t("editor.rectangle")}
+                      </button>
+                      <button onClick={() => handleAddShape("circle")} className="w-full text-left text-xs px-3 py-2.5 hover:bg-white/[0.05] text-zinc-300 hover:text-white transition-colors flex items-center gap-2">
+                        <Circle className="w-4 h-4 text-white shrink-0" />{t("editor.circle")}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+
+            {leftTab === "hotpoints" && (
+              <HotPointsPanel
+                hotPoint={hotPoint}
+                currentTime={playerTime}
+                onSeek={seek}
+              />
+            )}
+
+            {leftTab === "transcription" && (
+              editEnvLoading ? (
+                <div className="flex-1 flex items-center justify-center">
+                  <Loader2 className="w-4 h-4 animate-spin text-zinc-500" />
+                </div>
+              ) : (
+                <TranscriptionPanel
+                  words={transcriptWords}
+                  currentTime={playerTime}
+                  onSeek={seek}
+                />
+              )
             )}
           </div>
         </div>

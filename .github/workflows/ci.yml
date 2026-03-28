@@ -1,0 +1,129 @@
+name: CI
+
+# Run on every push and pull request targeting main or dev branches.
+# Each job is independent and runs in parallel to keep feedback fast.
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+
+# ─── FRONTEND ──────────────────────────────────────────────────────────────────
+# Validates the React 19 + TypeScript + Vite app located in frontend/.
+# Steps: install → typecheck → unit tests (vitest) → production build
+jobs:
+  frontend:
+    name: Frontend (React / TypeScript)
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          # Cache npm dependencies keyed on the lockfile so installs are fast
+          # on subsequent runs.
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      # tsc --noEmit — fails fast on any type error without emitting output.
+      - name: TypeScript check
+        run: npm run check
+
+      # Vitest in run mode (non-interactive, exits after test suite completes).
+      - name: Run unit tests
+        run: npx vitest run
+
+      # Ensure the production bundle compiles cleanly (catches Vite/Rolldown
+      # config issues that tsc alone would not surface).
+      - name: Production build check
+        run: npm run build
+
+# ─── API ───────────────────────────────────────────────────────────────────────
+# Validates the AdonisJS 7 + TypeScript API located in api/.
+# The API depends on Redis and MinIO at runtime, but type-checking does not
+# require live services, so we keep this job lightweight.
+  api:
+    name: API (AdonisJS / TypeScript)
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: api
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: api/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      # tsc --noEmit against the AdonisJS tsconfig — validates all app, config,
+      # start, and database files (remotion/ is excluded in tsconfig.json).
+      - name: TypeScript check
+        run: npm run typecheck
+
+# ─── BACKEND ───────────────────────────────────────────────────────────────────
+# Validates the Python 3.12 FastAPI worker located in backend/.
+# Uses uv for deterministic, fast dependency installation.
+# Kept minimal for now: syntax-check the entry-point with py_compile.
+# Once pytest tests are added, replace/extend the last step accordingly.
+  backend:
+    name: Backend (Python / FastAPI)
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # Install uv — the package manager used by this project.
+      # The official installer writes the binary to ~/.local/bin which is
+      # already on $PATH inside GitHub Actions runners.
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+          # Cache the uv package cache between runs using the lockfile as key.
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      # uv sync reads uv.lock and installs an exact, reproducible environment.
+      # --frozen ensures the lockfile is never auto-updated during CI.
+      - name: Install Python dependencies
+        run: uv sync --frozen
+
+      # Compile the FastAPI entry-point to bytecode without executing it.
+      # This catches syntax errors, bad imports (at parse level), and obvious
+      # module-level issues in main.py and everything it imports transitively
+      # at compile time.
+      - name: Syntax check (py_compile)
+        run: uv run python -m py_compile app/main.py
+
+      - name: Run tests
+        run: uv run pytest -v

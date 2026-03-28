@@ -14,12 +14,11 @@ import shutil
 import subprocess
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from openai import OpenAI
-
 from app.models.schemas import HotPoint
 from app.services.clipper import POST_PEAK_WINDOW, PRE_PEAK_WINDOW
 from app.services.db import save_hot_points, update_job
 from app.services.llm_analyzer import _extract_chat_for_clip
+from app.services.openai_client import get_openai_client, GPT_MODEL, WHISPER_MODEL
 
 logger = logging.getLogger(__name__)
 
@@ -30,10 +29,6 @@ TRIAGE_BATCH_SIZE = 10
 # Triage blending weights
 HEURISTIC_TRIAGE_W = 0.4
 LLM_TRIAGE_W = 0.6
-
-
-def _get_client() -> OpenAI:
-    return OpenAI()
 
 
 def _extract_audio_segment(
@@ -65,11 +60,11 @@ def _transcribe_segment(segment_path: str) -> tuple[str, float]:
 
     Returns (transcript_text, speech_rate).
     """
-    client = _get_client()
+    client = get_openai_client()
     try:
         with open(segment_path, "rb") as f:
             result = client.audio.transcriptions.create(
-                model="whisper-1",
+                model=WHISPER_MODEL,
                 file=f,
                 response_format="verbose_json",
                 timestamp_granularities=["segment"],
@@ -98,7 +93,7 @@ def _triage_batch(
 
     Returns list of {"idx": N, "interest": 0.X}.
     """
-    client = _get_client()
+    client = get_openai_client()
 
     vod_title = vod_meta.get("title", "")
     vod_game = vod_meta.get("game", "")
@@ -135,7 +130,7 @@ Sois exigeant. JSON uniquement, pas de markdown."""
 
     try:
         response = client.chat.completions.create(
-            model="gpt-5.4",
+            model=GPT_MODEL,
             messages=[{"role": "user", "content": prompt}],
             temperature=0.3,
             max_completion_tokens=500,

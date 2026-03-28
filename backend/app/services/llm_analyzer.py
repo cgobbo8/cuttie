@@ -12,11 +12,10 @@ import logging
 import os
 import subprocess
 
-from openai import OpenAI
-
 from app.models.schemas import HotPoint, KeyMoment, LlmAnalysis
 from app.services.db import publish_clip_ready, save_hot_points, update_job
 from app.services.frame_extractor import extract_frames
+from app.services.openai_client import get_openai_client, GPT_MODEL, WHISPER_MODEL
 from app.services.vision_analyzer import analyze_clip_frames
 
 logger = logging.getLogger(__name__)
@@ -24,10 +23,6 @@ logger = logging.getLogger(__name__)
 CLIPS_DIR = "clips"
 HEURISTIC_WEIGHT = 0.3
 LLM_WEIGHT = 0.7
-
-
-def _get_client() -> OpenAI:
-    return OpenAI()
 
 
 def _extract_audio_segment(clip_path: str, output_path: str) -> bool:
@@ -55,7 +50,7 @@ def transcribe_clip(clip_path: str) -> tuple[str, float, list[float]]:
 
     Returns (transcript_text, speech_rate, segment_start_timestamps).
     """
-    client = _get_client()
+    client = get_openai_client()
 
     audio_path = clip_path.replace(".mp4", "_audio.mp3")
     if not _extract_audio_segment(clip_path, audio_path):
@@ -64,7 +59,7 @@ def transcribe_clip(clip_path: str) -> tuple[str, float, list[float]]:
     try:
         with open(audio_path, "rb") as f:
             result = client.audio.transcriptions.create(
-                model="whisper-1",
+                model=WHISPER_MODEL,
                 file=f,
                 response_format="verbose_json",
                 timestamp_granularities=["segment"],
@@ -128,7 +123,7 @@ def synthesize_analysis(
     chat_mood: str = "",
 ) -> tuple[LlmAnalysis, str]:
     """Final synthesis: combine transcript + vision moments into full analysis."""
-    client = _get_client()
+    client = get_openai_client()
 
     vod_title = vod_meta.get("title", "")
     vod_game = vod_meta.get("game", "")
@@ -199,7 +194,7 @@ JSON uniquement, pas de markdown."""
 
     try:
         response = client.chat.completions.create(
-            model="gpt-5.4",
+            model=GPT_MODEL,
             messages=[{"role": "user", "content": prompt}],
             temperature=0.4,
             max_completion_tokens=600,

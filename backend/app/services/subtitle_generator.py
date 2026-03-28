@@ -10,7 +10,7 @@ import subprocess
 
 import cv2
 import numpy as np
-from openai import OpenAI
+from app.services.openai_client import get_openai_client, GPT_MINI_MODEL, WHISPER_MODEL
 
 logger = logging.getLogger(__name__)
 
@@ -21,10 +21,6 @@ FONTS_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "assets", "fonts
 # Style constants
 OUTLINE_COLOR = "&H00000000"  # black outline
 BACK_COLOR = "&H80000000"     # semi-transparent black shadow
-
-
-def _get_client() -> OpenAI:
-    return OpenAI()
 
 
 def _fix_timestamps_with_vad(words: list[dict], audio_path: str) -> list[dict]:
@@ -77,7 +73,7 @@ def transcribe_with_words(clip_path: str) -> tuple[str, float, list[dict]]:
     Returns (full_text, speech_rate, words) where words is a list of
     {"word": str, "start": float, "end": float}.
     """
-    client = _get_client()
+    client = get_openai_client()
 
     # Extract audio as mp3
     audio_path = clip_path.replace(".mp4", "_sub_audio.mp3")
@@ -98,7 +94,7 @@ def transcribe_with_words(clip_path: str) -> tuple[str, float, list[dict]]:
     try:
         with open(audio_path, "rb") as f:
             result = client.audio.transcriptions.create(
-                model="whisper-1",
+                model=WHISPER_MODEL,
                 file=f,
                 response_format="verbose_json",
                 timestamp_granularities=["word"],
@@ -203,10 +199,10 @@ def _rewrite_words_with_llm(words: list[dict]) -> list[dict]:
     if not raw_text.strip():
         return words
 
-    client = _get_client()
+    client = get_openai_client()
     try:
         response = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model=GPT_MINI_MODEL,
             temperature=0,
             messages=[
                 {

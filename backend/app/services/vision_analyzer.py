@@ -10,7 +10,7 @@ import logging
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from openai import OpenAI
+from app.services.openai_client import get_openai_client, GPT_MODEL
 
 logger = logging.getLogger(__name__)
 
@@ -18,10 +18,6 @@ logger = logging.getLogger(__name__)
 MAX_FRAMES_PER_CALL = 12
 # Max frames to analyze per clip (cost control)
 MAX_FRAMES_PER_CLIP = 15
-
-
-def _get_client() -> OpenAI:
-    return OpenAI()
 
 
 def _encode_frame(path: str) -> str | None:
@@ -82,7 +78,7 @@ def _analyze_batch(
     vod_game: str = "",
 ) -> list[dict]:
     """Send a batch of frames to GPT-4o vision for analysis."""
-    client = _get_client()
+    client = get_openai_client()
 
     # Build the image content parts
     content_parts = []
@@ -145,7 +141,7 @@ JSON array uniquement."""
 
     try:
         response = client.chat.completions.create(
-            model="gpt-5.4",
+            model=GPT_MODEL,
             messages=[{"role": "user", "content": content_parts}],
             temperature=0.3,
             max_completion_tokens=800,

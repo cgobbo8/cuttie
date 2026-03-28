@@ -36,9 +36,11 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
   const editor = useEditorState(clipKey);
   const {
     layers, setLayers, selectedId, setSelectedId, selected,
+    setCurrentTime,
     addLayer,
     updateTransform, commitTransform, updateStyle, updateSubtitle, updateShape, updateChat, updateAsset, updateText,
     addAnimation, updateAnimation, removeAnimation,
+    toggleKeyframe,
     reorderLayers, duplicateLayer, removeLayer, renameLayer, toggleVisibility, toggleLock,
     undo, redo,
   } = editor;
@@ -176,6 +178,9 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
   const [playerTime, setPlayerTime] = useState(0);
   const [playing, setPlaying] = useState(false);
 
+  // Sync playerTime to the editor hook so keyframes use the correct time
+  useEffect(() => { setCurrentTime(playerTime); }, [playerTime, setCurrentTime]);
+
   const handleTimeUpdate = useCallback((t: number) => {
     setPlayerTime(t);
     // Pause at trim end
@@ -252,7 +257,8 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
     setAddMenuOpen(false);
     const env = await fetchEditEnv();
     if (!env) return;
-    const cam = env.facecam ?? {
+    const existingCrop = layers.find((l) => l.type === "facecam" && l.video?.crop)?.video?.crop;
+    const cam = existingCrop ?? env.facecam ?? {
       x: Math.round(env.clip_width * 0.65),
       y: Math.round(env.clip_height * 0.65),
       w: Math.round(Math.min(env.clip_width, env.clip_height) / 3),
@@ -270,7 +276,7 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
       style: { borderRadius: env.layout.cam_border_radius },
       video: { src: rawClipUrl, crop: cam },
     });
-  }, [addLayer, rawClipUrl, fetchEditEnv]);
+  }, [addLayer, rawClipUrl, fetchEditEnv, layers]);
 
   const handleAddSubtitles = useCallback(async () => {
     setAddMenuOpen(false);
@@ -425,7 +431,8 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
       if (tpl.type === "gameplay") {
         base.video = { src: rawClipUrl };
       } else if (tpl.type === "facecam") {
-        const crop = tpl.videoCrop ?? env?.facecam ?? {
+        const existingCrop = layers.find((l) => l.type === "facecam" && l.video?.crop)?.video?.crop;
+        const crop = existingCrop ?? tpl.videoCrop ?? env?.facecam ?? {
           x: Math.round((env?.clip_width ?? 1920) * 0.65),
           y: Math.round((env?.clip_height ?? 1080) * 0.65),
           w: Math.round(Math.min(env?.clip_width ?? 1920, env?.clip_height ?? 1080) / 3),
@@ -460,7 +467,7 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
 
     setLayers(newLayers);
     setSelectedId(null);
-  }, [commitTransform, fetchEditEnv, rawClipUrl, setLayers, setSelectedId]);
+  }, [commitTransform, fetchEditEnv, rawClipUrl, layers, setLayers, setSelectedId]);
 
   /* ── Auto-apply default theme ──────────────────────────── */
 
@@ -773,6 +780,8 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
                   onTransformChange={updateTransform}
                   onCommit={commitTransform}
                   onStartCrop={setCropEditingId}
+                  currentTime={playerTime}
+                  onToggleKeyframe={toggleKeyframe}
                 />
               ) : (
                 <div className="flex-1 flex items-center justify-center px-4">
@@ -840,6 +849,7 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
         chatTimestamps={chatTimestamps.length > 0 ? chatTimestamps : undefined}
         subtitleWords={subtitleWords.length > 0 ? subtitleWords : undefined}
         selectedLayer={selected}
+        selectedLayerKeyframes={selected?.keyframes}
         onUpdateAnimation={updateAnimation}
         onCommitAnimation={commitTransform}
       />

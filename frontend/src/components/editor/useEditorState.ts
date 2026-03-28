@@ -419,6 +419,7 @@ export function useEditorState(clipKey: string) {
     setSelectedId,
     selected,
     currentTime,
+    setCurrentTime,
     duration,
     playing,
     registerVideo,

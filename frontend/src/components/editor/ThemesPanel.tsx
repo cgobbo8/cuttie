@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Pin, Trash2, Save } from "lucide-react";
+import { Pin, Trash2, Save, Loader2 } from "lucide-react";
 import type { Layer } from "../../lib/editorTypes";
 import type { EditorTheme, ThemeLayerTemplate } from "../../lib/editorThemes";
-import { getAllThemes, loadUserThemes, saveUserThemes, getDefaultThemeId, setDefaultThemeId } from "../../lib/editorThemes";
+import { fetchAllThemes, saveTheme, removeTheme, toggleDefault } from "../../lib/editorThemes";
+import { useToast } from "../Toast";
 
 interface Props {
   layers: Layer[];
@@ -12,22 +13,30 @@ interface Props {
 
 export default function ThemesPanel({ layers, onApplyTheme }: Props) {
   const { t } = useTranslation();
-  const [themes, setThemes] = useState<EditorTheme[]>(() => getAllThemes());
-  const [defaultId, setDefaultId] = useState<string | null>(() => getDefaultThemeId());
+  const toast = useToast();
+  const [themes, setThemes] = useState<EditorTheme[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [saveName, setSaveName] = useState("");
   const [showSave, setShowSave] = useState(false);
 
+  const refresh = useCallback(async () => {
+    try {
+      const all = await fetchAllThemes();
+      setThemes(all);
+    } catch {
+      // keep current list on error
+    }
+  }, []);
+
   useEffect(() => {
-    setThemes(getAllThemes());
-    setDefaultId(getDefaultThemeId());
+    fetchAllThemes()
+      .then(setThemes)
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, []);
 
-  const refresh = useCallback(() => {
-    setThemes(getAllThemes());
-    setDefaultId(getDefaultThemeId());
-  }, []);
-
-  const handleSave = useCallback(() => {
+  const handleSave = useCallback(async () => {
     const name = saveName.trim();
     if (!name || layers.length === 0) return;
 
@@ -49,42 +58,57 @@ export default function ThemesPanel({ layers, onApplyTheme }: Props) {
       }
       if (l.shape) tpl.shape = { ...l.shape };
       if (l.asset) tpl.asset = { ...l.asset };
+      if (l.text) {
+        const { content: _c, ...rest } = l.text;
+        tpl.text = rest;
+      }
       if (l.animations && l.animations.length > 0) tpl.animations = l.animations.map((a) => ({ ...a }));
+      if (l.keyframes && l.keyframes.length > 0) tpl.keyframes = l.keyframes.map((k) => ({ ...k }));
       return tpl;
     });
 
-    const theme: EditorTheme = {
-      id: `user_${Date.now().toString(36)}`,
-      name,
-      layers: templates,
-    };
-
-    const userThemes = [...loadUserThemes(), theme];
-    saveUserThemes(userThemes);
-    setSaveName("");
-    setShowSave(false);
-    refresh();
-  }, [saveName, layers, refresh]);
-
-  const handleDelete = useCallback((id: string) => {
-    const userThemes = loadUserThemes().filter((t) => t.id !== id);
-    saveUserThemes(userThemes);
-    // Clear default if we're deleting it
-    if (getDefaultThemeId() === id) {
-      setDefaultThemeId(null);
+    setSaving(true);
+    try {
+      await saveTheme(name, templates);
+      setSaveName("");
+      setShowSave(false);
+      toast.success(t("editor.themeSaved"));
+      await refresh();
+    } catch {
+      toast.error(t("editor.themeSaveError"));
+    } finally {
+      setSaving(false);
     }
-    refresh();
-  }, [refresh]);
+  }, [saveName, layers, refresh, toast, t]);
 
-  const handleToggleDefault = useCallback((id: string) => {
-    if (defaultId === id) {
-      setDefaultThemeId(null);
-    } else {
-      setDefaultThemeId(id);
+  const handleDelete = useCallback(async (id: number | string) => {
+    if (typeof id === "string") return; // can't delete built-in
+    try {
+      await removeTheme(id);
+      toast.success(t("editor.themeDeleted"));
+      await refresh();
+    } catch {
+      toast.error(t("editor.themeDeleteError"));
     }
-    setDefaultId(getDefaultThemeId() === id ? null : id);
-    refresh();
-  }, [defaultId, refresh]);
+  }, [refresh, toast, t]);
+
+  const handleToggleDefault = useCallback(async (id: number | string) => {
+    if (typeof id === "string") return; // can't set built-in as default
+    try {
+      await toggleDefault(id);
+      await refresh();
+    } catch {
+      toast.error(t("editor.themeDefaultError"));
+    }
+  }, [refresh, toast, t]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-32">
+        <Loader2 className="w-4 h-4 animate-spin text-zinc-500" />
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col h-full">
@@ -97,7 +121,7 @@ export default function ThemesPanel({ layers, onApplyTheme }: Props) {
 
       <div className="flex-1 min-h-0 overflow-y-auto">
         {themes.map((theme) => {
-          const isDefault = theme.id === defaultId;
+          const isDefault = !!theme.isDefault;
           return (
             <div
               key={theme.id}
@@ -140,24 +164,26 @@ export default function ThemesPanel({ layers, onApplyTheme }: Props) {
 
               {/* Hover actions — absolute overlay */}
               <div className="absolute inset-0 flex items-center justify-end gap-1 px-2 opacity-0 group-hover:opacity-100 transition-opacity bg-gradient-to-l from-zinc-900 from-60% to-transparent pointer-events-none">
-                <button
-                  onClick={() => handleToggleDefault(theme.id)}
-                  className={`pointer-events-auto text-[10px] px-1.5 py-1 rounded transition-colors ${
-                    isDefault
-                      ? "bg-white/[0.12] text-zinc-200"
-                      : "bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200"
-                  }`}
-                  title={isDefault ? t("editor.removeDefault") : t("editor.setDefault")}
-                >
-                  <Pin className="w-3.5 h-3.5" fill={isDefault ? "currentColor" : "none"} />
-                </button>
+                {!theme.builtIn && (
+                  <button
+                    onClick={() => handleToggleDefault(theme.id)}
+                    className={`pointer-events-auto text-[10px] px-1.5 py-1 rounded transition-colors ${
+                      isDefault
+                        ? "bg-white/[0.12] text-zinc-200"
+                        : "bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200"
+                    }`}
+                    title={isDefault ? t("editor.removeDefault") : t("editor.setDefault")}
+                  >
+                    <Pin className="w-3.5 h-3.5" fill={isDefault ? "currentColor" : "none"} />
+                  </button>
+                )}
                 <button
                   onClick={() => onApplyTheme(theme.layers)}
                   className="pointer-events-auto text-[10px] px-2 py-1 rounded bg-white/[0.1] hover:bg-white/[0.15] text-zinc-200 hover:text-zinc-100 transition-colors font-medium"
                 >
                   {t("common.apply")}
                 </button>
-                {!theme.builtIn && !isDefault && (
+                {!theme.builtIn && (
                   <button
                     onClick={() => handleDelete(theme.id)}
                     className="pointer-events-auto text-[10px] px-1.5 py-1 rounded bg-red-500/15 hover:bg-red-500/25 text-red-400 hover:text-red-300 transition-colors"
@@ -187,9 +213,10 @@ export default function ThemesPanel({ layers, onApplyTheme }: Props) {
             <div className="flex gap-1">
               <button
                 onClick={handleSave}
-                disabled={!saveName.trim() || layers.length === 0}
-                className="flex-1 text-[10px] px-2 py-1.5 rounded-md bg-white/[0.08] hover:bg-white/[0.12] text-zinc-200 hover:text-zinc-100 transition-colors font-medium disabled:opacity-30 disabled:cursor-not-allowed"
+                disabled={!saveName.trim() || layers.length === 0 || saving}
+                className="flex-1 text-[10px] px-2 py-1.5 rounded-md bg-white/[0.08] hover:bg-white/[0.12] text-zinc-200 hover:text-zinc-100 transition-colors font-medium disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
               >
+                {saving && <Loader2 className="w-3 h-3 animate-spin" />}
                 {t("editor.saveTheme")}
               </button>
               <button

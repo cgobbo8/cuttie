@@ -666,3 +666,50 @@ export async function listAssets(): Promise<AssetInfo[]> {
 export function assetUrl(filename: string): string {
   return `${BASE}/assets/${filename}`;
 }
+
+// ── Themes ─────────────────────────────────────────────
+
+export interface ThemeResponse {
+  id: number;
+  name: string;
+  layers: unknown[];
+  is_default: boolean;
+  created_at: string;
+}
+
+export async function listThemes(): Promise<ThemeResponse[]> {
+  const res = await fetch(`${BASE}/themes`);
+  if (!res.ok) throw new Error("Failed to fetch themes");
+  return res.json();
+}
+
+export async function createTheme(name: string, layers: unknown[], isDefault?: boolean): Promise<ThemeResponse> {
+  const res = await fetch(`${BASE}/themes`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, layers, is_default: isDefault }),
+  });
+  if (!res.ok) throw new Error("Failed to create theme");
+  return res.json();
+}
+
+export async function updateTheme(id: number, data: { name?: string; layers?: unknown[]; is_default?: boolean }): Promise<ThemeResponse> {
+  const res = await fetch(`${BASE}/themes/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error("Failed to update theme");
+  return res.json();
+}
+
+export async function deleteTheme(id: number): Promise<void> {
+  const res = await fetch(`${BASE}/themes/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error("Failed to delete theme");
+}
+
+export async function toggleThemeDefault(id: number): Promise<{ is_default: boolean }> {
+  const res = await fetch(`${BASE}/themes/${id}/default`, { method: "POST" });
+  if (!res.ok) throw new Error("Failed to toggle default");
+  return res.json();
+}

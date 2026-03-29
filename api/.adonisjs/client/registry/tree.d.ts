@@ -43,6 +43,13 @@ export interface ApiDefinition {
   aiEditor: {
     chat: typeof routes['ai_editor.chat']
   }
+  themes: {
+    index: typeof routes['themes.index']
+    store: typeof routes['themes.store']
+    update: typeof routes['themes.update']
+    destroy: typeof routes['themes.destroy']
+    setDefault: typeof routes['themes.set_default']
+  }
   renders: {
     store: typeof routes['renders.store']
     index: typeof routes['renders.index']

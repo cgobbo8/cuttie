@@ -63,6 +63,13 @@ router
         // AI Editor
         router.post('/ai/editor/chat', [() => import('#controllers/ai_editor_controller'), 'chat']).use(rateLimit(20, 60 * 1000)).use(middleware.access({ permission: Permissions.EDITOR_AI_WRITE }))
 
+        // Themes
+        router.get('/themes', [() => import('#controllers/themes_controller'), 'index'])
+        router.post('/themes', [() => import('#controllers/themes_controller'), 'store'])
+        router.patch('/themes/:id', [() => import('#controllers/themes_controller'), 'update'])
+        router.delete('/themes/:id', [() => import('#controllers/themes_controller'), 'destroy'])
+        router.post('/themes/:id/default', [() => import('#controllers/themes_controller'), 'setDefault'])
+
         // Renders
         router.post('/clips/:jobId/:filename/render', [() => import('#controllers/renders_controller'), 'store'])
         router.get('/renders', [() => import('#controllers/renders_controller'), 'index'])

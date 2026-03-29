@@ -315,6 +315,11 @@
     "saveTheme": "Save",
     "cancelTheme": "Cancel",
     "saveLayout": "Save layout",
+    "themeSaved": "Theme saved",
+    "themeSaveError": "Failed to save theme",
+    "themeDeleted": "Theme deleted",
+    "themeDeleteError": "Failed to delete theme",
+    "themeDefaultError": "Failed to change default theme",
 
     "animations": "Animations",
     "noAnimations": "No animations",

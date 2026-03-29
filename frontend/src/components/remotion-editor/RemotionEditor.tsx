@@ -4,7 +4,7 @@ import { ArrowLeft, Undo2, Redo2, Loader2, Download, Plus, Video, User, MessageS
 import { clipUrl, getEditEnvironment, startRender, renameClip, uploadAsset, listAssets, assetUrl, type EditEnvironment, type HotPoint, type AssetInfo, type TranscriptWord } from "../../lib/api";
 import type { Layer, SubtitleData } from "../../lib/editorTypes";
 import type { ThemeLayerTemplate } from "../../lib/editorThemes";
-import { getDefaultTheme } from "../../lib/editorThemes";
+import { fetchDefaultTheme } from "../../lib/editorThemes";
 import { useEditorState } from "../editor/useEditorState";
 import NativePreviewViewport from "./NativePreviewViewport";
 import LayerPanel from "../editor/LayerPanel";
@@ -470,6 +470,9 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
       if (tpl.animations && tpl.animations.length > 0) {
         base.animations = tpl.animations.map((a) => ({ ...a }));
       }
+      if (tpl.keyframes && tpl.keyframes.length > 0) {
+        base.keyframes = tpl.keyframes.map((k) => ({ ...k }));
+      }
 
       return base;
     });
@@ -484,10 +487,10 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
   useEffect(() => {
     if (defaultAppliedRef.current) return;
     if (layers.length > 0) return;
-    const defaultTheme = getDefaultTheme();
-    if (!defaultTheme) return;
     defaultAppliedRef.current = true;
-    handleApplyTheme(defaultTheme.layers);
+    fetchDefaultTheme().then((theme) => {
+      if (theme) handleApplyTheme(theme.layers);
+    }).catch(() => {});
   }, [layers.length, handleApplyTheme]);
 
   /* ── Export ──────────────────────────────────────────────── */

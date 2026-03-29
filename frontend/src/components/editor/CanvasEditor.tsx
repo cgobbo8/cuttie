@@ -4,7 +4,7 @@ import { ArrowLeft, Undo2, Redo2, Loader2, Download, Plus, Video, User, MessageS
 import { clipUrl, getEditEnvironment, startRender, uploadAsset, listAssets, assetUrl, type EditEnvironment, type HotPoint, type AssetInfo, type TranscriptWord } from "../../lib/api";
 import type { Layer, SubtitleData } from "../../lib/editorTypes";
 import type { ThemeLayerTemplate } from "../../lib/editorThemes";
-import { getDefaultTheme } from "../../lib/editorThemes";
+import { fetchDefaultTheme } from "../../lib/editorThemes";
 import { useEditorState } from "./useEditorState";
 import CanvasViewport from "./CanvasViewport";
 import LayerPanel from "./LayerPanel";
@@ -89,15 +89,18 @@ export default function CanvasEditor({
 
   /* ── Add layer handlers ─────────────────────────────────── */
 
-  const handleAddGameplay = useCallback(() => {
+  const handleAddGameplay = useCallback(async () => {
     setAddMenuOpen(false);
+    const env = await fetchEditEnv();
+    const clipAspect = (env?.clip_width ?? 1920) / (env?.clip_height ?? 1080);
+    const h = Math.round(1080 / clipAspect);
     addLayer({
       type: "gameplay",
       name: "Gameplay",
       clipUrl: rawClipUrl,
-      transform: { x: 0, y: Math.round((1920 - Math.round(1080 * 9 / 16)) / 2), width: 1080, height: Math.round(1080 * 9 / 16) },
+      transform: { x: 0, y: Math.round((1920 - h) / 2), width: 1080, height: h },
     });
-  }, [addLayer, rawClipUrl]);
+  }, [addLayer, rawClipUrl, fetchEditEnv]);
 
   const handleAddFacecam = useCallback(async () => {
     setAddMenuOpen(false);
@@ -256,7 +259,7 @@ export default function CanvasEditor({
 
     // Fetch edit-env lazily for facecam/subtitles/chat
     let env: EditEnvironment | null = null;
-    const needsEnv = templates.some((t) => t.type === "facecam" || t.type === "subtitles" || t.type === "chat");
+    const needsEnv = templates.some((t) => t.type === "gameplay" || t.type === "facecam" || t.type === "subtitles" || t.type === "chat");
     if (needsEnv) {
       env = await fetchEditEnv();
     }
@@ -280,8 +283,11 @@ export default function CanvasEditor({
 
       if (tpl.type === "gameplay") {
         base.video = { src: rawClipUrl };
+        const clipAspect = (env?.clip_width ?? 1920) / (env?.clip_height ?? 1080);
+        base.transform.height = Math.round(base.transform.width / clipAspect);
+        base.transform.y = Math.round((1920 - base.transform.height) / 2);
       } else if (tpl.type === "facecam") {
-        const crop = tpl.videoCrop ?? env?.facecam ?? {
+        const crop = env?.facecam ?? tpl.videoCrop ?? {
           x: Math.round((env?.clip_width ?? 1920) * 0.65),
           y: Math.round((env?.clip_height ?? 1080) * 0.65),
           w: Math.round(Math.min(env?.clip_width ?? 1920, env?.clip_height ?? 1080) / 3),
@@ -312,6 +318,13 @@ export default function CanvasEditor({
         base.asset = { ...tpl.asset };
       }
 
+      if (tpl.animations && tpl.animations.length > 0) {
+        base.animations = tpl.animations.map((a) => ({ ...a }));
+      }
+      if (tpl.keyframes && tpl.keyframes.length > 0) {
+        base.keyframes = tpl.keyframes.map((k) => ({ ...k }));
+      }
+
       return base;
     });
 
@@ -325,10 +338,10 @@ export default function CanvasEditor({
   useEffect(() => {
     if (defaultAppliedRef.current) return;
     if (layers.length > 0) return; // Already has saved layers
-    const defaultTheme = getDefaultTheme();
-    if (!defaultTheme) return;
     defaultAppliedRef.current = true;
-    handleApplyTheme(defaultTheme.layers);
+    fetchDefaultTheme().then((theme) => {
+      if (theme) handleApplyTheme(theme.layers);
+    }).catch(() => {});
   }, [layers.length, handleApplyTheme]);
 
   /* ── Export ──────────────────────────────────────────────── */

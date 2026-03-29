@@ -1,5 +1,6 @@
-import type { LayerType, LayerTransform, LayerStyle, LayerAnimation, SubtitleData, ShapeData, AssetData, ChatData, TextData } from "./editorTypes";
+import type { LayerType, LayerTransform, LayerStyle, LayerAnimation, KeyframeSnapshot, SubtitleData, ShapeData, AssetData, ChatData, TextData } from "./editorTypes";
 import { DEFAULT_STYLE } from "./editorTypes";
+import { listThemes, createTheme, updateTheme, deleteTheme, toggleThemeDefault, type ThemeResponse } from "./api";
 
 /* ── Theme layer template ─────────────────────────────────── */
 
@@ -19,13 +20,15 @@ export interface ThemeLayerTemplate {
   asset?: AssetData;
   text?: Omit<TextData, "content">;
   animations?: LayerAnimation[];
+  keyframes?: KeyframeSnapshot[];
 }
 
 export interface EditorTheme {
-  id: string;
+  id: number | string; // number for DB themes, string for built-in
   name: string;
   layers: ThemeLayerTemplate[];
   builtIn?: boolean;
+  isDefault?: boolean;
 }
 
 /* ── Built-in themes ──────────────────────────────────────── */
@@ -80,45 +83,57 @@ export const BUILTIN_THEMES: EditorTheme[] = [
   },
 ];
 
-/* ── Persistence (localStorage) ───────────────────────────── */
+/* ── API-backed persistence ──────────────────────────────── */
 
-const STORAGE_KEY = "cuttie_themes";
-const DEFAULT_THEME_KEY = "cuttie_default_theme";
-
-export function getDefaultThemeId(): string | null {
-  return localStorage.getItem(DEFAULT_THEME_KEY);
+function fromApiTheme(t: ThemeResponse): EditorTheme {
+  return {
+    id: t.id,
+    name: t.name,
+    layers: t.layers as ThemeLayerTemplate[],
+    builtIn: false,
+    isDefault: t.is_default,
+  };
 }
 
-export function setDefaultThemeId(id: string | null) {
-  if (id) {
-    localStorage.setItem(DEFAULT_THEME_KEY, id);
-  } else {
-    localStorage.removeItem(DEFAULT_THEME_KEY);
-  }
+/** Fetch all themes: built-in + user themes from API */
+export async function fetchAllThemes(): Promise<EditorTheme[]> {
+  const apiThemes = await listThemes();
+  const userThemes = apiThemes.map(fromApiTheme);
+  return [...BUILTIN_THEMES, ...userThemes];
 }
 
-export function getDefaultTheme(): EditorTheme | null {
-  const id = getDefaultThemeId();
-  if (!id) return null;
-  return getAllThemes().find((t) => t.id === id) ?? null;
+/** Fetch only user themes from API */
+export async function fetchUserThemes(): Promise<EditorTheme[]> {
+  const apiThemes = await listThemes();
+  return apiThemes.map(fromApiTheme);
 }
 
-export function loadUserThemes(): EditorTheme[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    return JSON.parse(raw) as EditorTheme[];
-  } catch {
-    return [];
-  }
+/** Get the default theme (user-set default, or null) */
+export async function fetchDefaultTheme(): Promise<EditorTheme | null> {
+  const apiThemes = await listThemes();
+  const defaultTheme = apiThemes.find((t) => t.is_default);
+  if (defaultTheme) return fromApiTheme(defaultTheme);
+  return null;
 }
 
-export function saveUserThemes(themes: EditorTheme[]) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(themes));
-  } catch { /* quota exceeded */ }
+/** Save current layers as a new user theme */
+export async function saveTheme(name: string, layers: ThemeLayerTemplate[], isDefault?: boolean): Promise<EditorTheme> {
+  const created = await createTheme(name, layers, isDefault);
+  return fromApiTheme(created);
 }
 
-export function getAllThemes(): EditorTheme[] {
-  return [...BUILTIN_THEMES, ...loadUserThemes()];
+/** Update an existing user theme */
+export async function patchTheme(id: number, data: { name?: string; layers?: ThemeLayerTemplate[]; is_default?: boolean }): Promise<EditorTheme> {
+  const updated = await updateTheme(id, data);
+  return fromApiTheme(updated);
+}
+
+/** Delete a user theme */
+export async function removeTheme(id: number): Promise<void> {
+  await deleteTheme(id);
+}
+
+/** Toggle default status on a user theme */
+export async function toggleDefault(id: number): Promise<{ is_default: boolean }> {
+  return toggleThemeDefault(id);
 }

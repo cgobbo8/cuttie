@@ -259,6 +259,66 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/ai_editor_controller').default['chat']>>>
     }
   }
+  'themes.index': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/themes'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/themes_controller').default['index']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/themes_controller').default['index']>>>
+    }
+  }
+  'themes.store': {
+    methods: ["POST"]
+    pattern: '/api/themes'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/themes_controller').default['store']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/themes_controller').default['store']>>>
+    }
+  }
+  'themes.update': {
+    methods: ["PATCH"]
+    pattern: '/api/themes/:id'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { id: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/themes_controller').default['update']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/themes_controller').default['update']>>>
+    }
+  }
+  'themes.destroy': {
+    methods: ["DELETE"]
+    pattern: '/api/themes/:id'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { id: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/themes_controller').default['destroy']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/themes_controller').default['destroy']>>>
+    }
+  }
+  'themes.set_default': {
+    methods: ["POST"]
+    pattern: '/api/themes/:id/default'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { id: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/themes_controller').default['setDefault']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/themes_controller').default['setDefault']>>>
+    }
+  }
   'renders.store': {
     methods: ["POST"]
     pattern: '/api/clips/:jobId/:filename/render'

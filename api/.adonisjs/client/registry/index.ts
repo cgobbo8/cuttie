@@ -132,6 +132,36 @@ const routes = {
     tokens: [{"old":"/api/ai/editor/chat","type":0,"val":"api","end":""},{"old":"/api/ai/editor/chat","type":0,"val":"ai","end":""},{"old":"/api/ai/editor/chat","type":0,"val":"editor","end":""},{"old":"/api/ai/editor/chat","type":0,"val":"chat","end":""}],
     types: placeholder as Registry['ai_editor.chat']['types'],
   },
+  'themes.index': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/themes',
+    tokens: [{"old":"/api/themes","type":0,"val":"api","end":""},{"old":"/api/themes","type":0,"val":"themes","end":""}],
+    types: placeholder as Registry['themes.index']['types'],
+  },
+  'themes.store': {
+    methods: ["POST"],
+    pattern: '/api/themes',
+    tokens: [{"old":"/api/themes","type":0,"val":"api","end":""},{"old":"/api/themes","type":0,"val":"themes","end":""}],
+    types: placeholder as Registry['themes.store']['types'],
+  },
+  'themes.update': {
+    methods: ["PATCH"],
+    pattern: '/api/themes/:id',
+    tokens: [{"old":"/api/themes/:id","type":0,"val":"api","end":""},{"old":"/api/themes/:id","type":0,"val":"themes","end":""},{"old":"/api/themes/:id","type":1,"val":"id","end":""}],
+    types: placeholder as Registry['themes.update']['types'],
+  },
+  'themes.destroy': {
+    methods: ["DELETE"],
+    pattern: '/api/themes/:id',
+    tokens: [{"old":"/api/themes/:id","type":0,"val":"api","end":""},{"old":"/api/themes/:id","type":0,"val":"themes","end":""},{"old":"/api/themes/:id","type":1,"val":"id","end":""}],
+    types: placeholder as Registry['themes.destroy']['types'],
+  },
+  'themes.set_default': {
+    methods: ["POST"],
+    pattern: '/api/themes/:id/default',
+    tokens: [{"old":"/api/themes/:id/default","type":0,"val":"api","end":""},{"old":"/api/themes/:id/default","type":0,"val":"themes","end":""},{"old":"/api/themes/:id/default","type":1,"val":"id","end":""},{"old":"/api/themes/:id/default","type":0,"val":"default","end":""}],
+    types: placeholder as Registry['themes.set_default']['types'],
+  },
   'renders.store': {
     methods: ["POST"],
     pattern: '/api/clips/:jobId/:filename/render',

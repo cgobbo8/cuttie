@@ -5,6 +5,7 @@
 
 export const controllers = {
   AccessToken: () => import('#controllers/access_token_controller'),
+  AiEditor: () => import('#controllers/ai_editor_controller'),
   Assets: () => import('#controllers/assets_controller'),
   AuthMe: () => import('#controllers/auth_me_controller'),
   Clips: () => import('#controllers/clips_controller'),
@@ -16,5 +17,5 @@ export const controllers = {
   NewAccount: () => import('#controllers/new_account_controller'),
   Profile: () => import('#controllers/profile_controller'),
   Renders: () => import('#controllers/renders_controller'),
-  AiEditor: () => import('#controllers/ai_editor_controller'),
+  Themes: () => import('#controllers/themes_controller'),
 }

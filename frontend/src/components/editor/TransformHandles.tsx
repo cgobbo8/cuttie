@@ -52,8 +52,12 @@ export default function TransformHandles({
     (e: React.PointerEvent, type: HandleType) => {
       if (locked) return;
       e.stopPropagation();
-      e.preventDefault();
+      // preventDefault on resize/rotate to avoid text selection, but NOT on move
+      // so the click event still fires and bubbles for layer re-selection
+      if (type !== "move") e.preventDefault();
       (e.target as HTMLElement).setPointerCapture(e.pointerId);
+      // Mark that a transform interaction started — "pending" means pointer is down but hasn't moved yet
+      document.documentElement.dataset.transformDragging = "pending";
       onTransformStart?.();
 
       if (type === "rotate") {
@@ -88,6 +92,8 @@ export default function TransformHandles({
     const { type, startX, startY, startTransform } = dragging;
 
     const onMove = (e: PointerEvent) => {
+      // Mark that pointer actually moved (not just a click)
+      document.documentElement.dataset.transformDragging = "moved";
       if (type === "rotate") {
         const { centerScreen, startAngle } = dragging;
         if (!centerScreen || startAngle === undefined) return;
@@ -194,6 +200,8 @@ export default function TransformHandles({
     const onUp = () => {
       setDragging(null);
       setGuides({ x: null, y: null });
+      // Clear after a microtask so the click event (which fires after pointerup) can still read it
+      requestAnimationFrame(() => { delete document.documentElement.dataset.transformDragging; });
     };
 
     window.addEventListener("pointermove", onMove);

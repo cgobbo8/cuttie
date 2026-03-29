@@ -31,6 +31,15 @@ export interface ApiDefinition {
     stream: typeof routes['jobs.stream']
     renameClip: typeof routes['jobs.rename_clip']
   }
+  renders: {
+    batchStore: typeof routes['renders.batch_store']
+    store: typeof routes['renders.store']
+    index: typeof routes['renders.index']
+    batchDownload: typeof routes['renders.batch_download']
+    show: typeof routes['renders.show']
+    download: typeof routes['renders.download']
+    destroy: typeof routes['renders.destroy']
+  }
   clips: {
     editEnv: typeof routes['clips.edit_env']
     show: typeof routes['clips.show']
@@ -49,12 +58,5 @@ export interface ApiDefinition {
     update: typeof routes['themes.update']
     destroy: typeof routes['themes.destroy']
     setDefault: typeof routes['themes.set_default']
-  }
-  renders: {
-    store: typeof routes['renders.store']
-    index: typeof routes['renders.index']
-    show: typeof routes['renders.show']
-    download: typeof routes['renders.download']
-    destroy: typeof routes['renders.destroy']
   }
 }

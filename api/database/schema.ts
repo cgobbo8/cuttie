@@ -101,8 +101,10 @@ export class JobSchema extends BaseModel {
 }
 
 export class RenderSchema extends BaseModel {
-  static $columns = ['clipFilename', 'clipName', 'createdAt', 'error', 'id', 'jobId', 'outputFilename', 'progress', 'sizeMb', 'status', 'updatedAt', 'userId'] as const
+  static $columns = ['batchGroupId', 'clipFilename', 'clipName', 'createdAt', 'error', 'id', 'jobId', 'outputFilename', 'progress', 'sizeMb', 'status', 'updatedAt', 'userId'] as const
   $columns = RenderSchema.$columns
+  @column()
+  declare batchGroupId: string | null
   @column()
   declare clipFilename: string
   @column()

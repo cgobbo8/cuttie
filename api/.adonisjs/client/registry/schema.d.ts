@@ -187,6 +187,18 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/jobs_controller').default['renameClip']>>>
     }
   }
+  'renders.batch_store': {
+    methods: ["POST"]
+    pattern: '/api/jobs/:jobId/batch-render'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { jobId: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/renders_controller').default['batchStore']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/renders_controller').default['batchStore']>>>
+    }
+  }
   'clips.edit_env': {
     methods: ["GET","HEAD"]
     pattern: '/api/clips/:jobId/:filename/edit-env'
@@ -341,6 +353,18 @@ export interface Registry {
       query: {}
       response: ExtractResponse<Awaited<ReturnType<import('#controllers/renders_controller').default['index']>>>
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/renders_controller').default['index']>>>
+    }
+  }
+  'renders.batch_download': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/renders/batch/:batchGroupId/download'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { batchGroupId: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/renders_controller').default['batchDownload']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/renders_controller').default['batchDownload']>>>
     }
   }
   'renders.show': {

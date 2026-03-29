@@ -45,7 +45,7 @@ export default function CanvasEditor({
     updateTransform, commitTransform, updateStyle, updateSubtitle, updateShape, updateChat, updateAsset, updateText, reorderLayers, duplicateLayer, removeLayer,
     renameLayer, toggleVisibility, toggleLock,
     toggleKeyframe,
-    undo, redo,
+    undo, redo, hadSavedLayers,
   } = editor;
 
   const rawClipUrl = clipUrl(jobId, hotPoint.clip_filename!);
@@ -283,9 +283,6 @@ export default function CanvasEditor({
 
       if (tpl.type === "gameplay") {
         base.video = { src: rawClipUrl };
-        const clipAspect = (env?.clip_width ?? 1920) / (env?.clip_height ?? 1080);
-        base.transform.height = Math.round(base.transform.width / clipAspect);
-        base.transform.y = Math.round((1920 - base.transform.height) / 2);
       } else if (tpl.type === "facecam") {
         const crop = env?.facecam ?? tpl.videoCrop ?? {
           x: Math.round((env?.clip_width ?? 1920) * 0.65),
@@ -294,8 +291,6 @@ export default function CanvasEditor({
           h: Math.round(Math.min(env?.clip_width ?? 1920, env?.clip_height ?? 1080) / 3),
         };
         base.video = { src: rawClipUrl, crop };
-        // Adjust height to match crop aspect ratio (avoid distortion)
-        base.transform.height = Math.round(base.transform.width * (crop.h / crop.w));
       } else if (tpl.type === "subtitles" && tpl.subtitle) {
         const sub: SubtitleData = {
           ...tpl.subtitle,
@@ -337,12 +332,16 @@ export default function CanvasEditor({
   const defaultAppliedRef = useRef(false);
   useEffect(() => {
     if (defaultAppliedRef.current) return;
-    if (layers.length > 0) return; // Already has saved layers
+    if (hadSavedLayers) return; // clip already has a saved layout — don't override
     defaultAppliedRef.current = true;
-    fetchDefaultTheme().then((theme) => {
-      if (theme) handleApplyTheme(theme.layers);
-    }).catch(() => {});
-  }, [layers.length, handleApplyTheme]);
+    setEditEnvLoading(true);
+    fetchDefaultTheme()
+      .then((theme) => {
+        if (theme) return handleApplyTheme(theme.layers);
+      })
+      .catch(() => {})
+      .finally(() => setEditEnvLoading(false));
+  }, [hadSavedLayers, handleApplyTheme]);
 
   /* ── Export ──────────────────────────────────────────────── */
 

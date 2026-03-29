@@ -160,9 +160,12 @@ export default function NativePreviewViewport({
   const handleOverlayClick = useCallback((e: React.MouseEvent) => {
     const start = pointerStartRef.current;
     pointerStartRef.current = null;
-    if (!start) return; // pointerdown was intercepted by TransformHandles
-    // If pointer moved more than 5px, it was a drag, not a click
-    if (Math.hypot(e.clientX - start.x, e.clientY - start.y) > 5) return;
+
+    // If overlay tracked a pointerdown and it moved > 5px, it was a drag on empty space
+    if (start && Math.hypot(e.clientX - start.x, e.clientY - start.y) > 5) return;
+
+    // If TransformHandles was dragging (pointer actually moved), don't change selection
+    if (document.documentElement.dataset.transformDragging === "moved") return;
 
     const rect = e.currentTarget.getBoundingClientRect();
     const cx = (e.clientX - rect.left) / scale;

@@ -157,7 +157,8 @@
     "edit": "Editar",
     "rawClip": "Clip original",
     "download": "Descargar",
-    "msg": "msg"
+    "msg": "msg",
+    "clipOf": "Clip {{index}} de {{total}}"
   },
 
   "signals": {
@@ -221,7 +222,9 @@
     "deleteExport": "Eliminar exportación",
     "deleteExportMessage": "Esta exportación será eliminada permanentemente. Esta acción es irreversible.",
     "deleteSuccess": "Exportación eliminada",
-    "deleteError": "Error al eliminar la exportación"
+    "deleteError": "Error al eliminar la exportación",
+    "batchTitle_one": "Lote — {{count}} clip",
+    "batchTitle_other": "Lote — {{count}} clips"
   },
 
   "editPage": {
@@ -317,6 +320,8 @@
     "saveLayout": "Guardar layout",
     "themeSaved": "Tema guardado",
     "themeSaveError": "Error al guardar el tema",
+    "themeUpdated": "Tema actualizado",
+    "updateTheme": "Actualizar con el layout actual",
     "themeDeleted": "Tema eliminado",
     "themeDeleteError": "Error al eliminar el tema",
     "themeDefaultError": "Error al cambiar el tema predeterminado",
@@ -432,5 +437,22 @@
     "french": "Francés",
     "english": "Inglés",
     "spanish": "Español"
+  },
+  "batchExport": {
+    "exportClips": "Exportar clips",
+    "selectAll": "Seleccionar todo",
+    "deselectAll": "Deseleccionar todo",
+    "clipsSelected_one": "{{count}} clip seleccionado",
+    "clipsSelected_other": "{{count}} clips seleccionados",
+    "next": "Siguiente",
+    "cancel": "Cancelar",
+    "modalTitle": "Exportación por lote",
+    "chooseTheme": "Elegir un tema",
+
+    "startExport": "Iniciar exportación",
+    "summary": "Exportar {{count}} clips con el tema « {{theme}} »",
+    "started_one": "{{count}} exportación iniciada",
+    "started_other": "{{count}} exportaciones iniciadas",
+    "error": "Error al iniciar la exportación"
   }
 }

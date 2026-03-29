@@ -561,12 +561,13 @@ export interface RenderStatus {
   job_id: string;
   clip_filename: string;
   clip_name?: string;
-  status: "rendering" | "done" | "error";
+  status: "pending" | "rendering" | "done" | "error";
   progress: number;
   output_filename?: string;
   size_mb?: number;
   url?: string;
   error?: string;
+  batch_group_id?: string;
   vod_title?: string;
   vod_game?: string;
   created_at: string;
@@ -711,5 +712,32 @@ export async function deleteTheme(id: number): Promise<void> {
 export async function toggleThemeDefault(id: number): Promise<{ is_default: boolean }> {
   const res = await fetch(`${BASE}/themes/${id}/default`, { method: "POST" });
   if (!res.ok) throw new Error("Failed to toggle default");
+  return res.json();
+}
+
+// ── Batch Render ───────────────────────────────────────
+
+export interface BatchRenderResponse {
+  batch_group_id: string;
+  render_ids: string[];
+}
+
+export async function startBatchRender(
+  jobId: string,
+  clipFilenames: string[],
+  themeLayers: unknown[],
+): Promise<BatchRenderResponse> {
+  const res = await fetch(`${BASE}/jobs/${jobId}/batch-render`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      clip_filenames: clipFilenames,
+      theme_layers: themeLayers,
+    }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: "Batch render failed" }));
+    throw new Error(err.error || "Batch render failed");
+  }
   return res.json();
 }

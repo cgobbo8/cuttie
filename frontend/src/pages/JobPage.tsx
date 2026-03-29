@@ -12,10 +12,11 @@ import {
 } from "../lib/api";
 import JobStatus from "../components/JobStatus";
 import HotPoints from "../components/HotPoints";
-import { ArrowLeft, RotateCcw, Loader2, X } from "lucide-react";
+import { ArrowLeft, RotateCcw, Loader2, X, PackageCheck } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useToast } from "../components/Toast";
 import { useCreatorWorkspace } from "../lib/CreatorWorkspaceContext";
+import BatchExportModal from "../components/BatchExportModal";
 
 export default function JobPage() {
   const { t } = useTranslation();
@@ -43,6 +44,11 @@ export default function JobPage() {
   const [clipsTotal, setClipsTotal] = useState<number | null>(null);
   const [animatedClips, setAnimatedClips] = useState<Set<string>>(new Set());
   const [isFinalSort, setIsFinalSort] = useState(false);
+
+  // Batch export selection
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedClips, setSelectedClips] = useState<Set<string>>(new Set());
+  const [showBatchModal, setShowBatchModal] = useState(false);
 
   const sseCleanupRef = useRef<(() => void) | null>(null);
 
@@ -162,6 +168,41 @@ export default function JobPage() {
     }
   }, [jobId, handleSSEEvent, t]);
 
+  const clipsWithFilesForSelection = clips.filter((c) => c.clip_filename);
+
+  const handleStartSelection = useCallback(() => {
+    setSelectionMode(true);
+    setSelectedClips(new Set(clipsWithFilesForSelection.map((c) => c.clip_filename!)));
+  }, [clipsWithFilesForSelection]);
+
+  const handleToggleClip = useCallback((filename: string) => {
+    setSelectedClips((prev) => {
+      const next = new Set(prev);
+      if (next.has(filename)) next.delete(filename);
+      else next.add(filename);
+      return next;
+    });
+  }, []);
+
+  const handleSelectAll = useCallback(() => {
+    setSelectedClips(new Set(clipsWithFilesForSelection.map((c) => c.clip_filename!)));
+  }, [clipsWithFilesForSelection]);
+
+  const handleDeselectAll = useCallback(() => {
+    setSelectedClips(new Set());
+  }, []);
+
+  const handleCancelSelection = useCallback(() => {
+    setSelectionMode(false);
+    setSelectedClips(new Set());
+  }, []);
+
+  const handleBatchExportDone = useCallback(() => {
+    setShowBatchModal(false);
+    setSelectionMode(false);
+    setSelectedClips(new Set());
+  }, []);
+
   if (loading) {
     return (
       <div className="flex justify-center py-20">
@@ -175,14 +216,25 @@ export default function JobPage() {
 
   return (
     <div className="animate-fade-in">
-      {/* Back link */}
-      <Link
-        to="/"
-        className="inline-flex items-center gap-1.5 text-sm text-zinc-500 hover:text-zinc-300 transition-colors mb-6"
-      >
-        <ArrowLeft className="w-4 h-4" />
-        {t("job.backToProjects")}
-      </Link>
+      {/* Back link + batch export button */}
+      <div className="flex items-center justify-between mb-6">
+        <Link
+          to="/"
+          className="inline-flex items-center gap-1.5 text-sm text-zinc-500 hover:text-zinc-300 transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          {t("job.backToProjects")}
+        </Link>
+        {status === "DONE" && clipsWithFilesForSelection.length > 0 && !selectionMode && (
+          <button
+            onClick={handleStartSelection}
+            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-zinc-300 bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.08] rounded-lg transition-colors"
+          >
+            <PackageCheck className="w-4 h-4" />
+            {t("batchExport.exportClips")}
+          </button>
+        )}
+      </div>
 
       {/* Progress bar while processing */}
       {isProcessing && (
@@ -242,6 +294,53 @@ export default function JobPage() {
           isStreaming={isProcessing}
           animatedClips={animatedClips}
           isFinalSort={isFinalSort}
+          selectionMode={selectionMode}
+          selectedClips={selectedClips}
+          onToggleClip={handleToggleClip}
+        />
+      )}
+
+      {/* Selection mode sticky bar */}
+      {selectionMode && (
+        <div className="fixed bottom-0 left-0 right-0 z-50 bg-zinc-900/95 backdrop-blur-sm border-t border-white/[0.08] px-6 py-3">
+          <div className="max-w-4xl mx-auto flex items-center justify-between">
+            <span className="text-sm text-zinc-300">
+              {t("batchExport.clipsSelected", { count: selectedClips.size })}
+            </span>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={selectedClips.size === clipsWithFilesForSelection.length ? handleDeselectAll : handleSelectAll}
+                className="text-sm text-zinc-400 hover:text-zinc-200 transition-colors"
+              >
+                {selectedClips.size === clipsWithFilesForSelection.length
+                  ? t("batchExport.deselectAll")
+                  : t("batchExport.selectAll")}
+              </button>
+              <button
+                onClick={handleCancelSelection}
+                className="px-4 py-2 text-sm text-zinc-400 hover:text-zinc-200 transition-colors"
+              >
+                {t("batchExport.cancel")}
+              </button>
+              <button
+                onClick={() => setShowBatchModal(true)}
+                disabled={selectedClips.size === 0}
+                className="px-5 py-2 text-sm font-medium text-black bg-white hover:bg-zinc-200 rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                {t("batchExport.next")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Batch export modal */}
+      {showBatchModal && (
+        <BatchExportModal
+          jobId={jobId!}
+          clipFilenames={Array.from(selectedClips)}
+          onClose={() => setShowBatchModal(false)}
+          onDone={handleBatchExportDone}
         />
       )}
     </div>

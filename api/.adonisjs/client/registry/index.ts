@@ -96,6 +96,12 @@ const routes = {
     tokens: [{"old":"/api/jobs/:id/clips/:clipFilename/name","type":0,"val":"api","end":""},{"old":"/api/jobs/:id/clips/:clipFilename/name","type":0,"val":"jobs","end":""},{"old":"/api/jobs/:id/clips/:clipFilename/name","type":1,"val":"id","end":""},{"old":"/api/jobs/:id/clips/:clipFilename/name","type":0,"val":"clips","end":""},{"old":"/api/jobs/:id/clips/:clipFilename/name","type":1,"val":"clipFilename","end":""},{"old":"/api/jobs/:id/clips/:clipFilename/name","type":0,"val":"name","end":""}],
     types: placeholder as Registry['jobs.rename_clip']['types'],
   },
+  'renders.batch_store': {
+    methods: ["POST"],
+    pattern: '/api/jobs/:jobId/batch-render',
+    tokens: [{"old":"/api/jobs/:jobId/batch-render","type":0,"val":"api","end":""},{"old":"/api/jobs/:jobId/batch-render","type":0,"val":"jobs","end":""},{"old":"/api/jobs/:jobId/batch-render","type":1,"val":"jobId","end":""},{"old":"/api/jobs/:jobId/batch-render","type":0,"val":"batch-render","end":""}],
+    types: placeholder as Registry['renders.batch_store']['types'],
+  },
   'clips.edit_env': {
     methods: ["GET","HEAD"],
     pattern: '/api/clips/:jobId/:filename/edit-env',
@@ -173,6 +179,12 @@ const routes = {
     pattern: '/api/renders',
     tokens: [{"old":"/api/renders","type":0,"val":"api","end":""},{"old":"/api/renders","type":0,"val":"renders","end":""}],
     types: placeholder as Registry['renders.index']['types'],
+  },
+  'renders.batch_download': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/renders/batch/:batchGroupId/download',
+    tokens: [{"old":"/api/renders/batch/:batchGroupId/download","type":0,"val":"api","end":""},{"old":"/api/renders/batch/:batchGroupId/download","type":0,"val":"renders","end":""},{"old":"/api/renders/batch/:batchGroupId/download","type":0,"val":"batch","end":""},{"old":"/api/renders/batch/:batchGroupId/download","type":1,"val":"batchGroupId","end":""},{"old":"/api/renders/batch/:batchGroupId/download","type":0,"val":"download","end":""}],
+    types: placeholder as Registry['renders.batch_download']['types'],
   },
   'renders.show': {
     methods: ["GET","HEAD"],

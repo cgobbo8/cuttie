@@ -2,9 +2,13 @@ import type { HttpContext } from '@adonisjs/core/http'
 import { randomUUID } from 'node:crypto'
 import { unlinkSync } from 'node:fs'
 import path from 'node:path'
+import archiver from 'archiver'
 import db from '@adonisjs/lucid/services/db'
 import { renderClip } from '#services/remotion_renderer'
-import { uploadFile, getPresignedDownloadUrl, deleteObject } from '#services/s3'
+import { uploadFile, getPresignedDownloadUrl, getPresignedUrl, deleteObject } from '#services/s3'
+import { enqueueRender } from '#services/render_queue'
+import { loadJobSharedData, resolveEditEnv } from '#services/edit_env_resolver'
+import { resolveThemeForClip, type ThemeLayerTemplate } from '#services/theme_resolver'
 import type { Layer } from '../../remotion/editorTypes.js'
 
 const CLIPS_BASE = path.resolve('../backend/clips')
@@ -26,6 +30,7 @@ interface RenderRow {
   size_mb: number | null
   error: string | null
   user_id: number
+  batch_group_id: string | null
   vod_title?: string | null
   vod_game?: string | null
   created_at: string
@@ -45,6 +50,7 @@ function serializeRender(row: RenderRow) {
       ? `/api/renders/${row.id}/download`
       : undefined,
     error: row.error ?? undefined,
+    batch_group_id: row.batch_group_id ?? undefined,
     vod_title: row.vod_title ?? undefined,
     vod_game: row.vod_game ?? undefined,
     created_at: row.created_at,
@@ -87,11 +93,93 @@ export default class RendersController {
       updated_at: now,
     })
 
-    // Fire-and-forget — render runs asynchronously
-    // layers structure is validated by Remotion at render time
-    runRender({ renderId, jobId, clipFilename: filename, layers: layers as Layer[], outputPath, outputFilename, trim })
+    // Enqueue render (sequential queue ensures one at a time)
+    enqueueRender(() => runRender({ renderId, jobId, clipFilename: filename, layers: layers as Layer[], outputPath, outputFilename, trim }))
 
     return response.created({ render_id: renderId })
+  }
+
+  /** POST /api/jobs/:jobId/batch-render */
+  async batchStore({ params, request, response, auth }: HttpContext) {
+    const user = auth.getUserOrFail()
+    const jobId = params.jobId
+
+    // Verify job ownership
+    const job = await db.from('jobs').where('id', jobId).where('user_id', user.id).first()
+    if (!job) return response.notFound({ error: 'job not found' })
+
+    const body = request.body() as {
+      clip_filenames: string[]
+      theme_layers: ThemeLayerTemplate[]
+    }
+
+    const { clip_filenames, theme_layers } = body
+
+    if (!clip_filenames?.length || !theme_layers?.length) {
+      return response.badRequest({ error: 'clip_filenames and theme_layers required' })
+    }
+
+    // Load shared job data once (facecam, dominant_color, chat)
+    const shared = await loadJobSharedData(jobId, clip_filenames[0])
+
+    const batchGroupId = randomUUID()
+    const renderIds: string[] = []
+
+    // Get clip names from hot_points for display
+    const hotPoints: any[] = typeof job.hot_points === 'string' ? JSON.parse(job.hot_points) : (job.hot_points ?? [])
+
+    for (const clipFilename of clip_filenames) {
+      const renderId = randomUUID()
+      renderIds.push(renderId)
+
+      // Find clip name from hot_points
+      const hp = hotPoints.find((h: any) => h.clip_filename === clipFilename)
+      const clipName = hp?.clip_name ?? null
+
+      const now = new Date().toISOString()
+      await db.table('renders').insert({
+        id: renderId,
+        job_id: jobId,
+        clip_filename: clipFilename,
+        clip_name: clipName,
+        status: 'pending',
+        progress: 0,
+        user_id: user.id,
+        batch_group_id: batchGroupId,
+        created_at: now,
+        updated_at: now,
+      })
+
+      // Enqueue render — resolves edit env + theme per clip then renders
+      enqueueRender(async () => {
+        const outputFilename = `render_${renderId}.mp4`
+        const outputPath = path.join(CLIPS_BASE, jobId, outputFilename)
+
+        try {
+          // Mark as rendering
+          await db.from('renders').where('id', renderId).update({ status: 'rendering', updated_at: new Date().toISOString() })
+
+          // Resolve clip-specific edit environment
+          const env = await resolveEditEnv(jobId, clipFilename, shared)
+
+          // Resolve theme → layers for this clip
+          const layers = resolveThemeForClip(theme_layers, env, {
+            clipSrc: clipFilename, // placeholder, replaced by presigned URL in remotion_renderer
+          })
+
+          await runRender({ renderId, jobId, clipFilename, layers, outputPath, outputFilename })
+        } catch (err: any) {
+          console.error(`[BatchRender] Failed for ${clipFilename}:`, err.message)
+          await db.from('renders').where('id', renderId).update({
+            status: 'error',
+            error: err.message,
+            updated_at: new Date().toISOString(),
+          })
+        }
+      })
+    }
+
+    return response.created({ batch_group_id: batchGroupId, render_ids: renderIds })
   }
 
   /** GET /api/renders */
@@ -152,6 +240,47 @@ export default class RendersController {
     const presignedUrl = await getPresignedDownloadUrl(s3Key, downloadName)
     return response.redirect(presignedUrl)
   }
+
+  /** GET /api/renders/batch/:batchGroupId/download — ZIP of all completed renders in a batch */
+  async batchDownload({ params, response, auth }: HttpContext) {
+    const user = auth.getUserOrFail()
+    const rows = await db
+      .from('renders')
+      .where('batch_group_id', params.batchGroupId)
+      .where('user_id', user.id)
+      .where('status', 'done')
+      .whereNotNull('output_filename')
+
+    if (rows.length === 0) {
+      return response.notFound({ error: 'no completed renders in this batch' })
+    }
+
+    // Fetch presigned URLs for all completed renders
+    const files = await Promise.all(
+      rows.map(async (row: any) => {
+        const s3Key = `renders/${row.job_id}/${row.output_filename}`
+        const url = await getPresignedUrl(s3Key, 3600)
+        const name = row.clip_name ? `${row.clip_name}.mp4` : row.output_filename
+        return { url, name }
+      })
+    )
+
+    // Stream ZIP response
+    response.header('Content-Type', 'application/zip')
+    response.header('Content-Disposition', `attachment; filename="batch_export.zip"`)
+
+    const archive = archiver('zip', { zlib: { level: 1 } }) // level 1 = fast (video is already compressed)
+    archive.pipe(response.response)
+
+    for (const file of files) {
+      const res = await fetch(file.url)
+      if (!res.ok) continue
+      const buffer = Buffer.from(await res.arrayBuffer())
+      archive.append(buffer, { name: file.name })
+    }
+
+    await archive.finalize()
+  }
 }
 
 // ── background render ────────────────────────────────────────────────────────
@@ -175,6 +304,9 @@ async function runRender(opts: {
   }
 
   try {
+    // Mark as rendering (for batch renders that start as 'pending')
+    await updateRender({ status: 'rendering' })
+
     const { sizeMb } = await renderClip({
       renderId,
       layers,

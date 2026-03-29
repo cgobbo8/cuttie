@@ -50,6 +50,7 @@ router
         router.delete('/jobs/:id', [() => import('#controllers/jobs_controller'), 'destroy'])
         router.get('/jobs/:id/sse', [() => import('#controllers/jobs_controller'), 'stream'])
         router.patch('/jobs/:id/clips/:clipFilename/name', [() => import('#controllers/jobs_controller'), 'renameClip'])
+        router.post('/jobs/:jobId/batch-render', [() => import('#controllers/renders_controller'), 'batchStore'])
 
         // Clips
         router.get('/clips/:jobId/:filename/edit-env', [() => import('#controllers/clips_controller'), 'editEnv'])
@@ -73,6 +74,7 @@ router
         // Renders
         router.post('/clips/:jobId/:filename/render', [() => import('#controllers/renders_controller'), 'store'])
         router.get('/renders', [() => import('#controllers/renders_controller'), 'index'])
+        router.get('/renders/batch/:batchGroupId/download', [() => import('#controllers/renders_controller'), 'batchDownload'])
         router.get('/renders/:renderId', [() => import('#controllers/renders_controller'), 'show'])
         router.get('/renders/:renderId/download', [() => import('#controllers/renders_controller'), 'download'])
         router.delete('/renders/:renderId', [() => import('#controllers/renders_controller'), 'destroy'])

@@ -50,6 +50,7 @@ function saveLayers(clipKey: string, layers: Layer[]) {
 /* ── Editor state hook ───────────────────────────────────── */
 
 export function useEditorState(clipKey: string) {
+  const hadSavedLayers = useRef(loadLayers(clipKey) !== null);
   const [layers, setLayers] = useState<Layer[]>(() => loadLayers(clipKey) ?? []);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
@@ -542,5 +543,6 @@ export function useEditorState(clipKey: string) {
     toggleLock,
     undo,
     redo,
+    hadSavedLayers: hadSavedLayers.current,
   };
 }

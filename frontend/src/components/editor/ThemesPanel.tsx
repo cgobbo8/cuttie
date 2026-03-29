@@ -1,14 +1,43 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Pin, Trash2, Save, Loader2 } from "lucide-react";
+import { Pin, Trash2, Save, Loader2, RefreshCw } from "lucide-react";
 import type { Layer } from "../../lib/editorTypes";
 import type { EditorTheme, ThemeLayerTemplate } from "../../lib/editorThemes";
-import { fetchAllThemes, saveTheme, removeTheme, toggleDefault } from "../../lib/editorThemes";
+import { fetchAllThemes, saveTheme, patchTheme, removeTheme, toggleDefault } from "../../lib/editorThemes";
 import { useToast } from "../Toast";
 
 interface Props {
   layers: Layer[];
   onApplyTheme: (templates: ThemeLayerTemplate[]) => void;
+}
+
+function layersToTemplates(layers: Layer[]): ThemeLayerTemplate[] {
+  return layers.map((l) => {
+    const tpl: ThemeLayerTemplate = {
+      type: l.type,
+      name: l.name,
+      transform: { ...l.transform },
+      style: { ...l.style },
+    };
+    if (l.video?.crop) tpl.videoCrop = { ...l.video.crop };
+    if (l.subtitle) {
+      const { words: _w, autoColor: _a, ...rest } = l.subtitle;
+      tpl.subtitle = rest;
+    }
+    if (l.chat) {
+      const { messages: _m, ...rest } = l.chat;
+      tpl.chat = rest;
+    }
+    if (l.shape) tpl.shape = { ...l.shape };
+    if (l.asset) tpl.asset = { ...l.asset };
+    if (l.text) {
+      const { content: _c, ...rest } = l.text;
+      tpl.text = rest;
+    }
+    if (l.animations && l.animations.length > 0) tpl.animations = l.animations.map((a) => ({ ...a }));
+    if (l.keyframes && l.keyframes.length > 0) tpl.keyframes = l.keyframes.map((k) => ({ ...k }));
+    return tpl;
+  });
 }
 
 export default function ThemesPanel({ layers, onApplyTheme }: Props) {
@@ -21,12 +50,8 @@ export default function ThemesPanel({ layers, onApplyTheme }: Props) {
   const [showSave, setShowSave] = useState(false);
 
   const refresh = useCallback(async () => {
-    try {
-      const all = await fetchAllThemes();
-      setThemes(all);
-    } catch {
-      // keep current list on error
-    }
+    const all = await fetchAllThemes();
+    setThemes(all);
   }, []);
 
   useEffect(() => {
@@ -39,37 +64,9 @@ export default function ThemesPanel({ layers, onApplyTheme }: Props) {
   const handleSave = useCallback(async () => {
     const name = saveName.trim();
     if (!name || layers.length === 0) return;
-
-    const templates: ThemeLayerTemplate[] = layers.map((l) => {
-      const tpl: ThemeLayerTemplate = {
-        type: l.type,
-        name: l.name,
-        transform: { ...l.transform },
-        style: { ...l.style },
-      };
-      if (l.video?.crop) tpl.videoCrop = { ...l.video.crop };
-      if (l.subtitle) {
-        const { words: _w, autoColor: _a, ...rest } = l.subtitle;
-        tpl.subtitle = rest;
-      }
-      if (l.chat) {
-        const { messages: _m, ...rest } = l.chat;
-        tpl.chat = rest;
-      }
-      if (l.shape) tpl.shape = { ...l.shape };
-      if (l.asset) tpl.asset = { ...l.asset };
-      if (l.text) {
-        const { content: _c, ...rest } = l.text;
-        tpl.text = rest;
-      }
-      if (l.animations && l.animations.length > 0) tpl.animations = l.animations.map((a) => ({ ...a }));
-      if (l.keyframes && l.keyframes.length > 0) tpl.keyframes = l.keyframes.map((k) => ({ ...k }));
-      return tpl;
-    });
-
     setSaving(true);
     try {
-      await saveTheme(name, templates);
+      await saveTheme(name, layersToTemplates(layers));
       setSaveName("");
       setShowSave(false);
       toast.success(t("editor.themeSaved"));
@@ -81,8 +78,19 @@ export default function ThemesPanel({ layers, onApplyTheme }: Props) {
     }
   }, [saveName, layers, refresh, toast, t]);
 
+  const handleUpdate = useCallback(async (theme: EditorTheme) => {
+    if (typeof theme.id === "string" || layers.length === 0) return;
+    try {
+      await patchTheme(theme.id, { layers: layersToTemplates(layers) });
+      toast.success(t("editor.themeUpdated"));
+      await refresh();
+    } catch {
+      toast.error(t("editor.themeSaveError"));
+    }
+  }, [layers, refresh, toast, t]);
+
   const handleDelete = useCallback(async (id: number | string) => {
-    if (typeof id === "string") return; // can't delete built-in
+    if (typeof id === "string") return;
     try {
       await removeTheme(id);
       toast.success(t("editor.themeDeleted"));
@@ -93,7 +101,7 @@ export default function ThemesPanel({ layers, onApplyTheme }: Props) {
   }, [refresh, toast, t]);
 
   const handleToggleDefault = useCallback(async (id: number | string) => {
-    if (typeof id === "string") return; // can't set built-in as default
+    if (typeof id === "string") return;
     try {
       await toggleDefault(id);
       await refresh();
@@ -175,6 +183,15 @@ export default function ThemesPanel({ layers, onApplyTheme }: Props) {
                     title={isDefault ? t("editor.removeDefault") : t("editor.setDefault")}
                   >
                     <Pin className="w-3.5 h-3.5" fill={isDefault ? "currentColor" : "none"} />
+                  </button>
+                )}
+                {!theme.builtIn && layers.length > 0 && (
+                  <button
+                    onClick={() => handleUpdate(theme)}
+                    className="pointer-events-auto text-[10px] px-1.5 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200 transition-colors"
+                    title={t("editor.updateTheme")}
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
                   </button>
                 )}
                 <button

@@ -4,6 +4,8 @@ import { clipUrl, type HotPoint } from "../lib/api";
 import { useTranslation } from "react-i18next";
 import {
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Pencil,
   Download,
   Clock,
@@ -11,6 +13,8 @@ import {
   Sparkles,
   Zap,
   Play,
+  Check,
+  X,
 } from "lucide-react";
 
 interface Props {
@@ -25,6 +29,9 @@ interface Props {
   isStreaming?: boolean;
   animatedClips?: Set<string>;
   isFinalSort?: boolean;
+  selectionMode?: boolean;
+  selectedClips?: Set<string>;
+  onToggleClip?: (filename: string) => void;
 }
 
 interface SignalInfo {
@@ -94,7 +101,15 @@ function SignalBars({
   );
 }
 
-function VideoPreview({ src, hovering }: { src: string; hovering: boolean }) {
+function VideoPreview({
+  src,
+  hovering,
+  onOpen,
+}: {
+  src: string;
+  hovering: boolean;
+  onOpen: () => void;
+}) {
   const videoRef = useRef<HTMLVideoElement>(null);
 
   // Play/pause based on card hover
@@ -108,10 +123,13 @@ function VideoPreview({ src, hovering }: { src: string; hovering: boolean }) {
     }
   }
 
-  const handleClick = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation();
-    window.open(src, "_blank");
-  }, [src]);
+  const handleClick = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      onOpen();
+    },
+    [onOpen],
+  );
 
   return (
     <div className="relative cursor-pointer" onClick={handleClick}>
@@ -135,6 +153,137 @@ function VideoPreview({ src, hovering }: { src: string; hovering: boolean }) {
         <div className="w-10 h-10 rounded-full bg-white/[0.15] backdrop-blur-sm flex items-center justify-center">
           <Play className="w-4 h-4 text-white ml-0.5" />
         </div>
+      </div>
+    </div>
+  );
+}
+
+function ClipLightbox({
+  clips,
+  currentIndex,
+  jobId,
+  onClose,
+  onNavigate,
+}: {
+  clips: HotPoint[];
+  currentIndex: number;
+  jobId: string;
+  onClose: () => void;
+  onNavigate: (index: number) => void;
+}) {
+  const { t } = useTranslation();
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const clip = clips[currentIndex];
+  const hasPrev = currentIndex > 0;
+  const hasNext = currentIndex < clips.length - 1;
+
+  // Keyboard navigation
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+      if (e.key === "ArrowLeft" && hasPrev) onNavigate(currentIndex - 1);
+      if (e.key === "ArrowRight" && hasNext) onNavigate(currentIndex + 1);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose, onNavigate, currentIndex, hasPrev, hasNext]);
+
+  // Lock body scroll
+  useEffect(() => {
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, []);
+
+  // Autoplay on clip change
+  useEffect(() => {
+    videoRef.current?.play().catch(() => {});
+  }, [currentIndex]);
+
+  const handleDownload = useCallback(async () => {
+    if (!clip.clip_filename) return;
+    const url = clipUrl(jobId, clip.clip_filename);
+    const res = await fetch(url);
+    const blob = await res.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = blobUrl;
+    a.download = clip.clip_name ? `${clip.clip_name}.mp4` : clip.clip_filename;
+    a.click();
+    URL.revokeObjectURL(blobUrl);
+  }, [jobId, clip]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      {/* Backdrop */}
+      <div
+        className="absolute inset-0 bg-black/70 backdrop-blur-xl"
+        onClick={onClose}
+      />
+
+      {/* Close button */}
+      <button
+        onClick={onClose}
+        className="absolute top-5 right-5 z-10 w-10 h-10 rounded-full bg-white/[0.08] hover:bg-white/[0.15] flex items-center justify-center transition-colors"
+      >
+        <X className="w-5 h-5 text-white" />
+      </button>
+
+      {/* Prev arrow */}
+      {hasPrev && (
+        <button
+          onClick={() => onNavigate(currentIndex - 1)}
+          className="absolute left-5 z-10 w-11 h-11 rounded-full bg-white/[0.08] hover:bg-white/[0.15] flex items-center justify-center transition-colors"
+        >
+          <ChevronLeft className="w-5 h-5 text-white" />
+        </button>
+      )}
+
+      {/* Next arrow */}
+      {hasNext && (
+        <button
+          onClick={() => onNavigate(currentIndex + 1)}
+          className="absolute right-5 z-10 w-11 h-11 rounded-full bg-white/[0.08] hover:bg-white/[0.15] flex items-center justify-center transition-colors"
+        >
+          <ChevronRight className="w-5 h-5 text-white" />
+        </button>
+      )}
+
+      {/* Content */}
+      <div className="relative z-10 flex flex-col items-center gap-4 max-h-[90vh] px-16">
+        {/* Title + counter */}
+        <div className="text-center">
+          <h3 className="text-base font-semibold text-white">
+            {clip.clip_name || clip.timestamp_display}
+          </h3>
+          <span className="text-xs text-zinc-500">
+            {t("hotPoints.clipOf", {
+              index: currentIndex + 1,
+              total: clips.length,
+            })}
+          </span>
+        </div>
+
+        {/* Video */}
+        <video
+          ref={videoRef}
+          controls
+          autoPlay
+          loop
+          playsInline
+          className="max-h-[70vh] max-w-[90vw] rounded-2xl bg-black"
+          src={clipUrl(jobId, clip.clip_filename!)}
+        />
+
+        {/* Download button */}
+        <button
+          onClick={handleDownload}
+          className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-zinc-300 bg-white/[0.08] hover:bg-white/[0.15] border border-white/[0.08] rounded-lg transition-colors"
+        >
+          <Download className="w-4 h-4" />
+          {t("hotPoints.download")}
+        </button>
       </div>
     </div>
   );
@@ -165,12 +314,20 @@ function ClipCard({
   jobId,
   activeSignals,
   isNew,
+  selectionMode,
+  selected,
+  onToggle,
+  onOpenLightbox,
 }: {
   point: HotPoint;
   index: number;
   jobId: string;
   activeSignals: SignalInfo[];
   isNew?: boolean;
+  selectionMode?: boolean;
+  selected?: boolean;
+  onToggle?: () => void;
+  onOpenLightbox?: () => void;
 }) {
   const { t } = useTranslation();
   const [showSkeleton, setShowSkeleton] = useState(isNew === true);
@@ -214,17 +371,33 @@ function ClipCard({
 
   return (
     <div
-      className={`surface-static rounded-xl overflow-hidden transition-all duration-200 relative animate-fade-in ${cardHover ? "opacity-100" : "opacity-60"}`}
+      className={`surface-static rounded-xl overflow-hidden transition-all duration-200 relative animate-fade-in ${cardHover ? "opacity-100" : "opacity-60"} ${selectionMode ? "cursor-pointer" : ""} ${selectionMode && selected ? "ring-1 ring-white/20" : ""}`}
       onMouseEnter={() => setCardHover(true)}
       onMouseLeave={() => setCardHover(false)}
+      onClick={selectionMode ? onToggle : undefined}
     >
+      {/* Selection checkbox — top left absolute */}
+      {selectionMode && (
+        <div className="absolute top-4 left-4 z-10">
+          <div
+            className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-all ${
+              selected
+                ? "bg-white border-white text-black"
+                : "border-zinc-600 bg-white/[0.04] hover:border-zinc-400"
+            }`}
+          >
+            {selected && <Check className="w-4 h-4" strokeWidth={3} />}
+          </div>
+        </div>
+      )}
+
       {/* Rank badge — bottom right absolute */}
       <span className="absolute bottom-3 right-4 text-[11px] font-mono text-zinc-600">
         #{index + 1}
       </span>
 
-      {/* CTA buttons — top right absolute */}
-      {point.clip_filename && (
+      {/* CTA buttons — top right absolute (hidden in selection mode) */}
+      {point.clip_filename && !selectionMode && (
         <div className="absolute top-4 right-4 flex items-center gap-2 z-10">
           <Link
             to={`/${jobId}/edit?clip=${encodeURIComponent(point.clip_filename)}`}
@@ -247,7 +420,11 @@ function ClipCard({
         {/* Video preview (left) — muted, card hover triggers play, click opens */}
         {point.clip_filename && (
           <div className="sm:w-[200px] shrink-0 p-4 pb-0 sm:pb-4">
-            <VideoPreview src={clipUrl(jobId, point.clip_filename)} hovering={cardHover} />
+            <VideoPreview
+              src={clipUrl(jobId, point.clip_filename)}
+              hovering={cardHover}
+              onOpen={onOpenLightbox ?? (() => {})}
+            />
           </div>
         )}
 
@@ -454,11 +631,18 @@ export default function HotPoints({
   isStreaming,
   animatedClips,
   isFinalSort,
+  selectionMode,
+  selectedClips,
+  onToggleClip,
 }: Props) {
   const { t } = useTranslation();
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const activeSignals = SIGNALS.filter((signal) =>
     hotPoints.some((hp) => hp.signals[signal.key] > 0.01),
   );
+
+  // Only clips with files are eligible for lightbox navigation
+  const clipsWithFiles = hotPoints.filter((hp) => hp.clip_filename);
 
   return (
     <div className="w-full">
@@ -503,6 +687,9 @@ export default function HotPoints({
       <div className={`space-y-3 ${isFinalSort ? "" : ""}`}>
         {hotPoints.map((point, i) => {
           const clipKey = point.clip_filename || `rank-${i}`;
+          const lightboxIdx = point.clip_filename
+            ? clipsWithFiles.findIndex((c) => c.clip_filename === point.clip_filename)
+            : -1;
           return (
             <ClipCard
               key={point.clip_filename || i}
@@ -511,10 +698,25 @@ export default function HotPoints({
               jobId={jobId}
               activeSignals={activeSignals}
               isNew={animatedClips?.has(clipKey)}
+              selectionMode={selectionMode}
+              selected={point.clip_filename ? selectedClips?.has(point.clip_filename) : false}
+              onToggle={point.clip_filename ? () => onToggleClip?.(point.clip_filename!) : undefined}
+              onOpenLightbox={lightboxIdx >= 0 ? () => setLightboxIndex(lightboxIdx) : undefined}
             />
           );
         })}
       </div>
+
+      {/* Clip lightbox */}
+      {lightboxIndex !== null && (
+        <ClipLightbox
+          clips={clipsWithFiles}
+          currentIndex={lightboxIndex}
+          jobId={jobId}
+          onClose={() => setLightboxIndex(null)}
+          onNavigate={setLightboxIndex}
+        />
+      )}
     </div>
   );
 }

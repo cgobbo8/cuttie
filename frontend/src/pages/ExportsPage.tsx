@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo, useCallback } from "react";
 import { Link } from "react-router";
-import { Loader2, Download, AlertCircle, Film, Search, Gamepad2, Trash2 } from "lucide-react";
+import { Loader2, Download, AlertCircle, Film, Search, Gamepad2, Trash2, ChevronDown, PackageCheck } from "lucide-react";
 import { listRenders, deleteRender, clipUrl, type RenderStatus } from "../lib/api";
 import { useTranslation } from "react-i18next";
 import { useCreatorWorkspace } from "../lib/CreatorWorkspaceContext";
@@ -23,7 +23,8 @@ type StatusFilter = "all" | "done" | "rendering" | "error";
 
 function RenderRow({ render, lng, onDelete }: { render: RenderStatus; lng: string; onDelete: (render: RenderStatus) => void }) {
   const { t } = useTranslation();
-  const isRendering = render.status === "rendering";
+  const isPending = render.status === "pending";
+  const isRendering = render.status === "rendering" || isPending;
   const isDone = render.status === "done";
   const isError = render.status === "error";
 
@@ -162,7 +163,17 @@ export default function ExportsPage() {
     }
   }, [deleteTarget, toast, t]);
 
-  const hasRendering = renders.some((r) => r.status === "rendering");
+  const hasRendering = renders.some((r) => r.status === "rendering" || r.status === "pending");
+  const [collapsedBatches, setCollapsedBatches] = useState<Set<string>>(new Set());
+
+  const toggleBatchCollapse = useCallback((batchId: string) => {
+    setCollapsedBatches((prev) => {
+      const next = new Set(prev);
+      if (next.has(batchId)) next.delete(batchId);
+      else next.add(batchId);
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -254,29 +265,132 @@ export default function ExportsPage() {
         </div>
       </div>
 
-      <div className="surface-static rounded-xl overflow-hidden">
-        {loading ? (
-          <div className="flex items-center justify-center py-16">
-            <Loader2 className="w-5 h-5 animate-spin text-zinc-500" />
-          </div>
-        ) : filtered.length === 0 ? (
-          <div className="text-center py-16">
-            <Film className="w-8 h-8 text-zinc-700 mx-auto mb-3" />
-            <p className="text-sm text-zinc-500">
-              {search || statusFilter !== "all"
-                ? t("common.noResults")
-                : t("exports.noExports")}
+      {loading ? (
+        <div className="surface-static rounded-xl flex items-center justify-center py-16">
+          <Loader2 className="w-5 h-5 animate-spin text-zinc-500" />
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="surface-static rounded-xl text-center py-16">
+          <Film className="w-8 h-8 text-zinc-700 mx-auto mb-3" />
+          <p className="text-sm text-zinc-500">
+            {search || statusFilter !== "all"
+              ? t("common.noResults")
+              : t("exports.noExports")}
+          </p>
+          {!search && statusFilter === "all" && (
+            <p className="text-xs text-zinc-600 mt-1">
+              {t("exports.noExportsHint")}
             </p>
-            {!search && statusFilter === "all" && (
-              <p className="text-xs text-zinc-600 mt-1">
-                {t("exports.noExportsHint")}
-              </p>
-            )}
-          </div>
-        ) : (
-          filtered.map((r) => <RenderRow key={r.render_id} render={r} lng={i18n.language} onDelete={handleDeleteRequest} />)
-        )}
-      </div>
+          )}
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {(() => {
+            const batches = new Map<string, RenderStatus[]>();
+            const solo: RenderStatus[] = [];
+            for (const r of filtered) {
+              if (r.batch_group_id) {
+                const group = batches.get(r.batch_group_id) || [];
+                group.push(r);
+                batches.set(r.batch_group_id, group);
+              } else {
+                solo.push(r);
+              }
+            }
+
+            type Entry = { type: "batch"; id: string; renders: RenderStatus[]; date: string } | { type: "solo"; render: RenderStatus };
+            const entries: Entry[] = [];
+
+            for (const [id, batchRenders] of batches) {
+              entries.push({ type: "batch", id, renders: batchRenders, date: batchRenders[0].created_at });
+            }
+            for (const r of solo) {
+              entries.push({ type: "solo", render: r });
+            }
+            entries.sort((a, b) => {
+              const da = a.type === "batch" ? a.date : a.render.created_at;
+              const db = b.type === "batch" ? b.date : b.render.created_at;
+              return new Date(db).getTime() - new Date(da).getTime();
+            });
+
+            return entries.map((entry) => {
+              if (entry.type === "solo") {
+                return (
+                  <div key={entry.render.render_id} className="surface-static rounded-xl overflow-hidden">
+                    <RenderRow render={entry.render} lng={i18n.language} onDelete={handleDeleteRequest} />
+                  </div>
+                );
+              }
+
+              const { id, renders: batchRenders } = entry;
+              const done = batchRenders.filter((r) => r.status === "done").length;
+              const errors = batchRenders.filter((r) => r.status === "error").length;
+              const total = batchRenders.length;
+              const isCollapsed = collapsedBatches.has(id);
+              const allDone = done === total;
+              const hasError = errors > 0;
+              const vodTitle = batchRenders[0].vod_title;
+
+              return (
+                <div key={id} className="surface-static rounded-xl overflow-hidden">
+                  {/* Batch header */}
+                  <button
+                    onClick={() => toggleBatchCollapse(id)}
+                    className="w-full flex items-center gap-3 px-5 py-3.5 hover:bg-white/[0.03] transition-colors"
+                  >
+                    <PackageCheck className={`w-4.5 h-4.5 shrink-0 ${allDone ? "text-emerald-400" : hasError ? "text-orange-400" : "text-zinc-400"}`} />
+                    <div className="flex-1 min-w-0 text-left">
+                      <span className="text-sm text-zinc-200 font-medium">
+                        {t("exports.batchTitle", { count: total })}
+                      </span>
+                      {vodTitle && (
+                        <span className="text-[11px] text-zinc-500 ml-2">{vodTitle}</span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-3 shrink-0">
+                      {done > 0 && (
+                        <a
+                          href={`/api/renders/batch/${id}/download`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] text-zinc-300 hover:text-white transition-colors font-medium border border-white/[0.08]"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                          ZIP
+                        </a>
+                      )}
+                      {!allDone && (
+                        <div className="flex items-center gap-2">
+                          <div className="w-24 h-1 bg-white/[0.06] rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-white/50 rounded-full transition-all duration-500"
+                              style={{ width: `${Math.round((done / total) * 100)}%` }}
+                            />
+                          </div>
+                          <span className="text-[11px] text-zinc-400 font-mono tabular-nums">
+                            {done}/{total}
+                          </span>
+                        </div>
+                      )}
+                      {allDone && (
+                        <span className="text-[11px] text-emerald-400 font-medium">{done}/{total}</span>
+                      )}
+                      <ChevronDown className={`w-4 h-4 text-zinc-500 transition-transform ${isCollapsed ? "" : "rotate-180"}`} />
+                    </div>
+                  </button>
+                  {/* Batch children */}
+                  {!isCollapsed && (
+                    <div className="border-t border-white/[0.06]">
+                      {batchRenders.map((r) => (
+                        <RenderRow key={r.render_id} render={r} lng={i18n.language} onDelete={handleDeleteRequest} />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            });
+          })()}
+        </div>
+      )}
 
       {/* Delete confirmation modal */}
       <ConfirmModal

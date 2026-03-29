@@ -26,10 +26,12 @@
     "vitest": "^4.1.2"
   },
   "dependencies": {
+    "@ai-sdk/openai": "^3.0.48",
     "@radix-ui/react-tooltip": "^1.2.8",
     "@remotion/media-utils": "^4.0.441",
     "@remotion/player": "^4.0.441",
     "@tailwindcss/vite": "^4.2.2",
+    "ai": "^6.0.141",
     "i18next": "^25.10.10",
     "i18next-browser-languagedetector": "^8.2.1",
     "lucide-react": "^1.7.0",

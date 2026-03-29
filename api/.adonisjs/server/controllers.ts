@@ -16,4 +16,5 @@ export const controllers = {
   NewAccount: () => import('#controllers/new_account_controller'),
   Profile: () => import('#controllers/profile_controller'),
   Renders: () => import('#controllers/renders_controller'),
+  AiEditor: () => import('#controllers/ai_editor_controller'),
 }

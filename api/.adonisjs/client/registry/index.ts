@@ -126,6 +126,12 @@ const routes = {
     tokens: [{"old":"/api/assets/:filename","type":0,"val":"api","end":""},{"old":"/api/assets/:filename","type":0,"val":"assets","end":""},{"old":"/api/assets/:filename","type":1,"val":"filename","end":""}],
     types: placeholder as Registry['assets.show']['types'],
   },
+  'ai_editor.chat': {
+    methods: ["POST"],
+    pattern: '/api/ai/editor/chat',
+    tokens: [{"old":"/api/ai/editor/chat","type":0,"val":"api","end":""},{"old":"/api/ai/editor/chat","type":0,"val":"ai","end":""},{"old":"/api/ai/editor/chat","type":0,"val":"editor","end":""},{"old":"/api/ai/editor/chat","type":0,"val":"chat","end":""}],
+    types: placeholder as Registry['ai_editor.chat']['types'],
+  },
   'renders.store': {
     methods: ["POST"],
     pattern: '/api/clips/:jobId/:filename/render',

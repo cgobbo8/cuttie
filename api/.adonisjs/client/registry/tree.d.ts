@@ -40,6 +40,9 @@ export interface ApiDefinition {
     store: typeof routes['assets.store']
     show: typeof routes['assets.show']
   }
+  aiEditor: {
+    chat: typeof routes['ai_editor.chat']
+  }
   renders: {
     store: typeof routes['renders.store']
     index: typeof routes['renders.index']

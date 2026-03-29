@@ -247,6 +247,18 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/assets_controller').default['show']>>>
     }
   }
+  'ai_editor.chat': {
+    methods: ["POST"]
+    pattern: '/api/ai/editor/chat'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/ai_editor_controller').default['chat']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/ai_editor_controller').default['chat']>>>
+    }
+  }
   'renders.store': {
     methods: ["POST"]
     pattern: '/api/clips/:jobId/:filename/render'

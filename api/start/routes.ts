@@ -59,6 +59,9 @@ router
         router.post('/assets/upload', [() => import('#controllers/assets_controller'), 'store'])
         router.get('/assets/:filename', [() => import('#controllers/assets_controller'), 'show'])
 
+        // AI Editor
+        router.post('/ai/editor/chat', [() => import('#controllers/ai_editor_controller'), 'chat'])
+
         // Renders
         router.post('/clips/:jobId/:filename/render', [() => import('#controllers/renders_controller'), 'store'])
         router.get('/renders', [() => import('#controllers/renders_controller'), 'index'])

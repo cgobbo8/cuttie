@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ArrowLeft, Undo2, Redo2, Loader2, Download, Plus, Video, User, MessageSquare, MessagesSquare, ImagePlus, FolderOpen, Square, Circle, SlidersHorizontal, LayoutTemplate, Sparkles, X, Check, Pencil, Type, Flame, FileText, Layers } from "lucide-react";
+import { ArrowLeft, Undo2, Redo2, Loader2, Download, Plus, Video, User, MessageSquare, MessagesSquare, ImagePlus, FolderOpen, Square, Circle, SlidersHorizontal, LayoutTemplate, Sparkles, X, Check, Pencil, Type, Flame, FileText, Layers, Bot } from "lucide-react";
 import { clipUrl, getEditEnvironment, startRender, renameClip, uploadAsset, listAssets, assetUrl, type EditEnvironment, type HotPoint, type AssetInfo, type TranscriptWord } from "../../lib/api";
 import type { Layer, SubtitleData } from "../../lib/editorTypes";
 import type { ThemeLayerTemplate } from "../../lib/editorThemes";
@@ -15,6 +15,7 @@ import PlaybackBar from "../editor/PlaybackBar";
 import HotPointsPanel from "../editor/HotPointsPanel";
 import TranscriptionPanel from "../editor/TranscriptionPanel";
 import CropEditor from "../editor/CropEditor";
+import AiPanel from "../editor/AiPanel";
 
 interface Props {
   jobId: string;
@@ -22,7 +23,7 @@ interface Props {
   onClose: () => void;
 }
 
-type RightTab = "properties" | "animations" | "themes";
+type RightTab = "properties" | "animations" | "themes" | "ai";
 type LeftTab = "layers" | "hotpoints" | "transcription";
 
 let _nextApplyId = 0;
@@ -40,7 +41,7 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
     addLayer,
     updateTransform, commitTransform, updateStyle, updateSubtitle, updateShape, updateChat, updateAsset, updateText,
     addAnimation, updateAnimation, removeAnimation,
-    toggleKeyframe, removeKeyframe, updateKeyframeEasing,
+    addKeyframe, toggleKeyframe, removeKeyframe, updateKeyframeEasing,
     reorderLayers, duplicateLayer, removeLayer, renameLayer, toggleVisibility, toggleLock,
     undo, redo,
   } = editor;
@@ -817,6 +818,28 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
             {rightTab === "themes" && (
               <ThemesPanel layers={layers} onApplyTheme={handleApplyTheme} />
             )}
+            {rightTab === "ai" && (
+              <AiPanel
+                layers={layers}
+                selectedId={selectedId}
+                currentTime={playerTime}
+                duration={videoDuration ?? 0}
+                trimStart={trimStart}
+                trimEnd={effectiveTrimEnd}
+                updateTransform={updateTransform}
+                updateStyle={updateStyle}
+                commitTransform={commitTransform}
+                setSelectedId={setSelectedId}
+                seek={seek}
+                addKeyframe={addKeyframe}
+                removeKeyframe={removeKeyframe}
+                addAnimation={addAnimation}
+                removeAnimation={removeAnimation}
+                toggleVisibility={toggleVisibility}
+                removeLayer={removeLayer}
+                onTrimChange={handleTrimChange}
+              />
+            )}
           </div>
           <div className="w-11 flex flex-col items-center py-2 gap-1">
             <button
@@ -839,6 +862,14 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
               title={t("editor.themes")}
             >
               <LayoutTemplate className="w-4 h-4" />
+            </button>
+            <div className="w-6 border-t border-white/[0.06] mx-auto my-1" />
+            <button
+              onClick={() => setRightTab("ai")}
+              className={`w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${rightTab === "ai" ? "bg-purple-500/20 text-purple-400" : "text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.05]"}`}
+              title="AI Assistant"
+            >
+              <Bot className="w-4 h-4" />
             </button>
           </div>
         </div>

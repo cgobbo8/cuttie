@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Send, Bot, User, Loader2, Sparkles } from "lucide-react";
+import { useChat } from "@ai-sdk/react";
+import { DefaultChatTransport } from "ai";
 import type { Layer, LayerAnimation, AnimationType, EasingPreset } from "../../lib/editorTypes";
 
 interface EditorActions {
@@ -23,196 +25,158 @@ interface EditorActions {
   onTrimChange: (start: number, end: number) => void;
 }
 
-interface ChatMessage {
-  role: "user" | "assistant";
-  content: string;
-}
-
-interface ToolCall {
-  toolName: string;
-  args: Record<string, unknown>;
-}
-
 let _animUid = 0;
 function animUid() {
   return `anim_ai_${++_animUid}_${Date.now().toString(36)}`;
 }
 
+function buildEditorContext(props: EditorActions) {
+  return {
+    layers: props.layers.map((l) => ({
+      id: l.id,
+      name: l.name,
+      type: l.type,
+      transform: l.transform,
+      style: { opacity: l.style.opacity, blur: l.style.blur, borderRadius: l.style.borderRadius },
+      visible: l.visible,
+      locked: l.locked,
+    })),
+    selectedId: props.selectedId,
+    currentTime: props.currentTime,
+    duration: props.duration,
+    trimStart: props.trimStart,
+    trimEnd: props.trimEnd,
+  };
+}
+
 export default function AiPanel(props: EditorActions) {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [input, setInput] = useState("");
-  const [loading, setLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const [input, setInput] = useState("");
+
+  // Keep a ref to the latest editor context so the transport body reads fresh values
+  const editorContextRef = useRef(buildEditorContext(props));
+  useEffect(() => {
+    editorContextRef.current = buildEditorContext(props);
+  });
+
+  // Stable ref for editor actions (avoids stale closures in onToolCall)
+  const propsRef = useRef(props);
+  propsRef.current = props;
+
+  // Transport with dynamic body via function
+  const [transport] = useState(
+    () =>
+      new DefaultChatTransport({
+        api: "/api/ai/editor/chat",
+        credentials: "include",
+        body: () => ({ editorContext: editorContextRef.current }),
+      }),
+  );
+
+  const executeToolCall = useCallback((toolName: string, input: Record<string, unknown>) => {
+    const p = propsRef.current;
+    switch (toolName) {
+      case "move_layer":
+        p.commitTransform();
+        p.updateTransform(input.layerId as string, { x: input.x as number, y: input.y as number });
+        break;
+      case "resize_layer":
+        p.commitTransform();
+        p.updateTransform(input.layerId as string, { width: input.width as number, height: input.height as number });
+        break;
+      case "set_opacity":
+        p.commitTransform();
+        p.updateStyle(input.layerId as string, { opacity: input.opacity as number });
+        break;
+      case "set_rotation":
+        p.commitTransform();
+        p.updateTransform(input.layerId as string, { rotation: input.rotation as number });
+        break;
+      case "set_blur":
+        p.commitTransform();
+        p.updateStyle(input.layerId as string, { blur: input.blur as number });
+        break;
+      case "set_border_radius":
+        p.commitTransform();
+        p.updateStyle(input.layerId as string, { borderRadius: input.borderRadius as number });
+        break;
+      case "add_keyframe": {
+        const time = input.time as number;
+        p.seek(time);
+        setTimeout(() => propsRef.current.addKeyframe(input.layerId as string), 50);
+        break;
+      }
+      case "remove_keyframe":
+        p.removeKeyframe(input.layerId as string, input.keyframeId as string);
+        break;
+      case "set_trim":
+        p.onTrimChange(input.start as number, input.end as number);
+        break;
+      case "add_animation": {
+        const anim: LayerAnimation = {
+          id: animUid(),
+          type: input.type as AnimationType,
+          time: 0,
+          duration: (input.duration as number) ?? 0.5,
+          easing: "easeOut" as EasingPreset,
+        };
+        p.addAnimation(input.layerId as string, anim);
+        break;
+      }
+      case "remove_animation":
+        p.removeAnimation(input.layerId as string, input.animationId as string);
+        break;
+      case "select_layer":
+        p.setSelectedId(input.layerId as string | null);
+        break;
+      case "seek":
+        p.seek(input.time as number);
+        break;
+      case "toggle_visibility":
+        p.toggleVisibility(input.layerId as string);
+        break;
+      case "remove_layer":
+        p.removeLayer(input.layerId as string);
+        break;
+    }
+  }, []);
+
+  const { messages, sendMessage, addToolOutput, status } = useChat({
+    transport,
+    onToolCall: async ({ toolCall }) => {
+      executeToolCall(toolCall.toolName, toolCall.input as Record<string, unknown>);
+      addToolOutput({
+        tool: toolCall.toolName,
+        toolCallId: toolCall.toolCallId,
+        output: "done",
+      });
+    },
+  });
+
+  const isLoading = status === "streaming" || status === "submitted";
 
   // Auto-scroll to bottom
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages]);
 
-  const executeToolCall = useCallback((tc: ToolCall) => {
-    const { toolName, args } = tc;
-    switch (toolName) {
-      case "move_layer":
-        props.commitTransform();
-        props.updateTransform(args.layerId as string, { x: args.x as number, y: args.y as number });
-        break;
-      case "resize_layer":
-        props.commitTransform();
-        props.updateTransform(args.layerId as string, { width: args.width as number, height: args.height as number });
-        break;
-      case "set_opacity":
-        props.commitTransform();
-        props.updateStyle(args.layerId as string, { opacity: args.opacity as number });
-        break;
-      case "set_rotation":
-        props.commitTransform();
-        props.updateTransform(args.layerId as string, { rotation: args.rotation as number });
-        break;
-      case "set_blur":
-        props.commitTransform();
-        props.updateStyle(args.layerId as string, { blur: args.blur as number });
-        break;
-      case "set_border_radius":
-        props.commitTransform();
-        props.updateStyle(args.layerId as string, { borderRadius: args.borderRadius as number });
-        break;
-      case "add_keyframe": {
-        // Seek first, then add keyframe on next tick so currentTime is updated
-        const time = args.time as number;
-        props.seek(time);
-        setTimeout(() => props.addKeyframe(args.layerId as string), 50);
-        break;
-      }
-      case "remove_keyframe":
-        props.removeKeyframe(args.layerId as string, args.keyframeId as string);
-        break;
-      case "set_trim":
-        props.onTrimChange(args.start as number, args.end as number);
-        break;
-      case "add_animation": {
-        const anim: LayerAnimation = {
-          id: animUid(),
-          type: args.type as AnimationType,
-          time: 0,
-          duration: (args.duration as number) ?? 0.5,
-          easing: "easeOut" as EasingPreset,
-        };
-        props.addAnimation(args.layerId as string, anim);
-        break;
-      }
-      case "remove_animation":
-        props.removeAnimation(args.layerId as string, args.animationId as string);
-        break;
-      case "select_layer":
-        props.setSelectedId(args.layerId as string | null);
-        break;
-      case "seek":
-        props.seek(args.time as number);
-        break;
-      case "toggle_visibility":
-        props.toggleVisibility(args.layerId as string);
-        break;
-      case "remove_layer":
-        props.removeLayer(args.layerId as string);
-        break;
-    }
-  }, [props]);
-
-  const sendMessage = useCallback(async () => {
+  const handleSend = useCallback(() => {
     const text = input.trim();
-    if (!text || loading) return;
-
-    const userMsg: ChatMessage = { role: "user", content: text };
-    const newMessages = [...messages, userMsg];
-    setMessages(newMessages);
+    if (!text || isLoading) return;
     setInput("");
-    setLoading(true);
+    sendMessage({ text });
+  }, [input, isLoading, sendMessage]);
 
-    try {
-      const editorContext = {
-        layers: props.layers.map((l) => ({
-          id: l.id,
-          name: l.name,
-          type: l.type,
-          transform: l.transform,
-          style: { opacity: l.style.opacity, blur: l.style.blur, borderRadius: l.style.borderRadius },
-          visible: l.visible,
-          locked: l.locked,
-        })),
-        selectedId: props.selectedId,
-        currentTime: props.currentTime,
-        duration: props.duration,
-        trimStart: props.trimStart,
-        trimEnd: props.trimEnd,
-      };
-
-      const res = await fetch("/api/ai/editor/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages: newMessages.map((m) => ({ role: m.role, content: m.content })),
-          editorContext,
-        }),
-      });
-
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-      // Parse SSE stream (data: JSON\n\n format)
-      const reader = res.body?.getReader();
-      if (!reader) throw new Error("No response body");
-
-      const decoder = new TextDecoder();
-      let assistantText = "";
-      let buffer = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-
-        const parts = buffer.split("\n\n");
-        buffer = parts.pop() ?? "";
-
-        for (const part of parts) {
-          const line = part.trim();
-          if (!line.startsWith("data: ")) continue;
-          const payload = line.slice(6);
-          if (payload === "[DONE]") continue;
-
-          try {
-            const event = JSON.parse(payload) as { type: string; text?: string; toolName?: string; args?: Record<string, unknown> };
-            if (event.type === "text" && event.text) {
-              assistantText += event.text;
-              setMessages([...newMessages, { role: "assistant", content: assistantText }]);
-            } else if (event.type === "tool-call" && event.toolName) {
-              executeToolCall({ toolName: event.toolName, args: event.args ?? {} });
-            }
-          } catch {
-            // Malformed event — skip
-          }
-        }
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        handleSend();
       }
-
-      if (assistantText) {
-        setMessages([...newMessages, { role: "assistant", content: assistantText }]);
-      }
-    } catch (err) {
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: `Erreur : ${err instanceof Error ? err.message : "inconnu"}` },
-      ]);
-    } finally {
-      setLoading(false);
-    }
-  }, [input, messages, loading, props, executeToolCall]);
-
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage();
-    }
-  }, [sendMessage]);
+    },
+    [handleSend],
+  );
 
   return (
     <div className="flex flex-col h-full">
@@ -240,7 +204,10 @@ export default function AiPanel(props: EditorActions) {
               ].map((suggestion) => (
                 <button
                   key={suggestion}
-                  onClick={() => { setInput(suggestion); inputRef.current?.focus(); }}
+                  onClick={() => {
+                    setInput(suggestion);
+                    inputRef.current?.focus();
+                  }}
                   className="text-[10px] text-zinc-500 hover:text-zinc-300 bg-white/[0.03] hover:bg-white/[0.06] rounded px-2 py-1.5 text-left transition-colors"
                 >
                   {suggestion}
@@ -250,27 +217,39 @@ export default function AiPanel(props: EditorActions) {
           </div>
         )}
 
-        {messages.map((msg, i) => (
-          <div key={i} className={`flex gap-2 ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
-            {msg.role === "assistant" && (
-              <Bot className="w-4 h-4 text-purple-400 shrink-0 mt-0.5" />
-            )}
-            <div
-              className={`max-w-[85%] text-[11px] leading-relaxed rounded-lg px-2.5 py-1.5 ${
-                msg.role === "user"
-                  ? "bg-purple-500/20 text-zinc-200"
-                  : "bg-white/[0.04] text-zinc-400"
-              }`}
-            >
-              {msg.content}
-            </div>
-            {msg.role === "user" && (
-              <User className="w-4 h-4 text-zinc-500 shrink-0 mt-0.5" />
-            )}
-          </div>
-        ))}
+        {messages.map((msg) => {
+          // Extract text from parts
+          const text = msg.parts
+            ?.filter((p) => p.type === "text")
+            .map((p) => (p as { type: "text"; text: string }).text)
+            .join("") || "";
 
-        {loading && (
+          if (!text && msg.role === "assistant") return null;
+
+          return (
+            <div key={msg.id} className={`flex gap-2 ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+              {msg.role === "assistant" && (
+                <Bot className="w-4 h-4 text-purple-400 shrink-0 mt-0.5" />
+              )}
+              <div
+                className={`max-w-[85%] text-[11px] leading-relaxed rounded-lg px-2.5 py-1.5 ${
+                  msg.role === "user"
+                    ? "bg-purple-500/20 text-zinc-200"
+                    : "bg-white/[0.04] text-zinc-400"
+                }`}
+              >
+                {msg.role === "user"
+                  ? msg.parts?.filter((p) => p.type === "text").map((p) => (p as { type: "text"; text: string }).text).join("") || ""
+                  : text}
+              </div>
+              {msg.role === "user" && (
+                <User className="w-4 h-4 text-zinc-500 shrink-0 mt-0.5" />
+              )}
+            </div>
+          );
+        })}
+
+        {isLoading && (
           <div className="flex gap-2 items-center">
             <Bot className="w-4 h-4 text-purple-400 shrink-0" />
             <Loader2 className="w-3 h-3 text-purple-400 animate-spin" />
@@ -291,8 +270,8 @@ export default function AiPanel(props: EditorActions) {
             className="flex-1 text-[11px] bg-white/[0.04] text-zinc-300 rounded-lg px-2.5 py-2 border border-white/[0.06] outline-none focus:border-purple-500/30 resize-none placeholder:text-zinc-600"
           />
           <button
-            onClick={sendMessage}
-            disabled={loading || !input.trim()}
+            onClick={handleSend}
+            disabled={isLoading || !input.trim()}
             className="w-8 h-8 flex items-center justify-center rounded-lg bg-purple-500/20 hover:bg-purple-500/30 text-purple-400 hover:text-purple-300 transition-colors disabled:opacity-30 disabled:cursor-not-allowed shrink-0"
           >
             <Send className="w-3.5 h-3.5" />

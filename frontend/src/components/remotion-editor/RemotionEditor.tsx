@@ -16,6 +16,8 @@ import HotPointsPanel from "../editor/HotPointsPanel";
 import TranscriptionPanel from "../editor/TranscriptionPanel";
 import CropEditor from "../editor/CropEditor";
 import AiPanel from "../editor/AiPanel";
+import { useAccess } from "../../lib/useAccess";
+import { Permissions } from "../../lib/permissions";
 
 interface Props {
   jobId: string;
@@ -45,6 +47,8 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
     reorderLayers, duplicateLayer, removeLayer, renameLayer, toggleVisibility, toggleLock,
     undo, redo,
   } = editor;
+
+  const canUseAi = useAccess(Permissions.EDITOR_AI_WRITE);
 
   const rawClipUrl = clipUrl(jobId, hotPoint.clip_filename!);
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -818,7 +822,7 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
             {rightTab === "themes" && (
               <ThemesPanel layers={layers} onApplyTheme={handleApplyTheme} />
             )}
-            {rightTab === "ai" && (
+            {rightTab === "ai" && canUseAi && (
               <AiPanel
                 layers={layers}
                 selectedId={selectedId}
@@ -863,14 +867,18 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
             >
               <LayoutTemplate className="w-4 h-4" />
             </button>
-            <div className="w-6 border-t border-white/[0.06] mx-auto my-1" />
-            <button
-              onClick={() => setRightTab("ai")}
-              className={`w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${rightTab === "ai" ? "bg-purple-500/20 text-purple-400" : "text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.05]"}`}
-              title="AI Assistant"
-            >
-              <Bot className="w-4 h-4" />
-            </button>
+            {canUseAi && (
+              <>
+                <div className="w-6 border-t border-white/[0.06] mx-auto my-1" />
+                <button
+                  onClick={() => setRightTab("ai")}
+                  className={`w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${rightTab === "ai" ? "bg-purple-500/20 text-purple-400" : "text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.05]"}`}
+                  title="AI Assistant"
+                >
+                  <Bot className="w-4 h-4" />
+                </button>
+              </>
+            )}
           </div>
         </div>
       </div>

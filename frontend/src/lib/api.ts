@@ -2,11 +2,19 @@ const BASE = "/api";
 
 // ── Auth API ────────────────────────────────────────────────────────────────
 
+export interface UserQuota {
+  key: string;
+  limit: number;
+  period: "daily" | "monthly" | "yearly" | "lifetime";
+}
+
 export interface AuthUser {
   id: number;
   fullName: string | null;
   email: string;
   initials: string;
+  permissions: string[];
+  quotas: UserQuota[];
 }
 
 export async function login(email: string, password: string): Promise<AuthUser> {

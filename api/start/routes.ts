@@ -10,6 +10,7 @@
 import router from '@adonisjs/core/services/router'
 import { middleware } from '#start/kernel'
 import { rateLimit } from '#middleware/rate_limit_middleware'
+import { Permissions } from '#services/permissions'
 
 router.get('/', () => {
   return { status: 'ok' }
@@ -60,7 +61,7 @@ router
         router.get('/assets/:filename', [() => import('#controllers/assets_controller'), 'show'])
 
         // AI Editor
-        router.post('/ai/editor/chat', [() => import('#controllers/ai_editor_controller'), 'chat'])
+        router.post('/ai/editor/chat', [() => import('#controllers/ai_editor_controller'), 'chat']).use(rateLimit(20, 60 * 1000)).use(middleware.access({ permission: Permissions.EDITOR_AI_WRITE }))
 
         // Renders
         router.post('/clips/:jobId/:filename/render', [() => import('#controllers/renders_controller'), 'store'])

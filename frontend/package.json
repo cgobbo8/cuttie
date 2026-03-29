@@ -27,6 +27,7 @@
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.48",
+    "@ai-sdk/react": "^3.0.143",
     "@radix-ui/react-tooltip": "^1.2.8",
     "@remotion/media-utils": "^4.0.441",
     "@remotion/player": "^4.0.441",

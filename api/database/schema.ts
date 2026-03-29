@@ -142,6 +142,57 @@ export class SessionSchema extends BaseModel {
   declare userId: string | null
 }
 
+export class ThemeSchema extends BaseModel {
+  static $columns = ['builtIn', 'createdAt', 'id', 'isDefault', 'layers', 'name', 'updatedAt', 'userId'] as const
+  $columns = ThemeSchema.$columns
+  @column()
+  declare builtIn: boolean
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column({ isPrimary: true })
+  declare id: number
+  @column()
+  declare isDefault: boolean
+  @column()
+  declare layers: any
+  @column()
+  declare name: string
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime
+  @column()
+  declare userId: number | null
+}
+
+export class UserPermissionSchema extends BaseModel {
+  static $columns = ['createdAt', 'id', 'permission', 'userId'] as const
+  $columns = UserPermissionSchema.$columns
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column({ isPrimary: true })
+  declare id: number
+  @column()
+  declare permission: string
+  @column()
+  declare userId: number
+}
+
+export class UserQuotaSchema extends BaseModel {
+  static $columns = ['createdAt', 'id', 'key', 'limit', 'period', 'userId'] as const
+  $columns = UserQuotaSchema.$columns
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column({ isPrimary: true })
+  declare id: number
+  @column()
+  declare key: string
+  @column()
+  declare limit: number
+  @column()
+  declare period: string
+  @column()
+  declare userId: number
+}
+
 export class UserSchema extends BaseModel {
   static $columns = ['createdAt', 'email', 'fullName', 'id', 'password', 'updatedAt'] as const
   $columns = UserSchema.$columns

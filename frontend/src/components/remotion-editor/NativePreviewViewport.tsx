@@ -147,8 +147,23 @@ export default function NativePreviewViewport({
     onDuration(e.currentTarget.duration);
   }, [onDuration]);
 
-  // Click-to-select in canvas coordinates — always hit-test by resolved position
+  // Click-to-select — only fire on real clicks (not after a drag).
+  // TransformHandles calls stopPropagation+preventDefault on pointerdown, so the
+  // overlay's pointerdown won't fire when interacting with handles. If
+  // pointerStartRef is null at click time, the click came after a handle drag → skip.
+  const pointerStartRef = useRef<{ x: number; y: number } | null>(null);
+
+  const handleOverlayPointerDown = useCallback((e: React.PointerEvent) => {
+    pointerStartRef.current = { x: e.clientX, y: e.clientY };
+  }, []);
+
   const handleOverlayClick = useCallback((e: React.MouseEvent) => {
+    const start = pointerStartRef.current;
+    pointerStartRef.current = null;
+    if (!start) return; // pointerdown was intercepted by TransformHandles
+    // If pointer moved more than 5px, it was a drag, not a click
+    if (Math.hypot(e.clientX - start.x, e.clientY - start.y) > 5) return;
+
     const rect = e.currentTarget.getBoundingClientRect();
     const cx = (e.clientX - rect.left) / scale;
     const cy = (e.clientY - rect.top) / scale;
@@ -212,6 +227,8 @@ export default function NativePreviewViewport({
             const kfRotation = kf.rotation ?? (layer.transform.rotation ?? 0);
             const kfOpacity = kf.opacity ?? style.opacity;
             const kfScale = kf.scale ?? 1;
+            const kfBorderRadius = kf.borderRadius ?? style.borderRadius;
+            const kfBlur = kf.blur ?? style.blur;
 
             const animResult = evaluateAnimations(layer, animTime, duration);
             const transformParts: string[] = [];
@@ -229,9 +246,9 @@ export default function NativePreviewViewport({
               opacity: animResult.opacity * kfOpacity,
               transform: combinedTransform,
               transformOrigin: "center center",
-              borderRadius: !layer.shape && style.borderRadius > 0 ? style.borderRadius : undefined,
-              overflow: !layer.shape && style.borderRadius > 0 ? "hidden" : undefined,
-              filter: style.blur > 0 ? `blur(${style.blur}px)` : undefined,
+              borderRadius: !layer.shape && kfBorderRadius > 0 ? kfBorderRadius : undefined,
+              overflow: !layer.shape && kfBorderRadius > 0 ? "hidden" : undefined,
+              filter: kfBlur > 0 ? `blur(${kfBlur}px)` : undefined,
             };
 
             // ── Gameplay ──
@@ -454,6 +471,7 @@ export default function NativePreviewViewport({
         {/* Interaction overlay + transform handles (screen coordinates) */}
         <div
           style={{ position: "absolute", inset: 0, cursor: "default" }}
+          onPointerDown={handleOverlayPointerDown}
           onClick={handleOverlayClick}
         >
           {selectedLayer && (() => {
@@ -477,7 +495,7 @@ export default function NativePreviewViewport({
               }}
             >
               <TransformHandles
-                transform={selectedLayer.transform}
+                transform={{ x: selX, y: selY, width: selW, height: selH, rotation: selR }}
                 scale={scale}
                 locked={selectedLayer.locked}
                 onTransformChange={(patch) => onTransformChange(selectedLayer.id, patch)}

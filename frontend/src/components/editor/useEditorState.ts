@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { AssetData, ChatData, Layer, LayerAnimation, LayerType, ShapeData, SubtitleData, TextData, VideoLayerData, KeyframeSnapshot, EasingPreset } from "../../lib/editorTypes";
 type AssetPatch = Partial<Omit<AssetData, "src">>;
 import { DEFAULT_STYLE } from "../../lib/editorTypes";
+import { KF_TOLERANCE } from "../../lib/animations";
 
 const MAX_HISTORY = 50;
 
@@ -52,8 +53,12 @@ export function useEditorState(clipKey: string) {
   const [layers, setLayers] = useState<Layer[]>(() => loadLayers(clipKey) ?? []);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
+  const currentTimeRef = useRef(0);
   const [duration, setDuration] = useState(0);
   const [playing, setPlaying] = useState(false);
+
+  // Keep currentTimeRef in sync so callbacks can read it without stale closures
+  useEffect(() => { currentTimeRef.current = currentTime; }, [currentTime]);
 
   // ── Undo / Redo ──
   const historyRef = useRef<Layer[][]>([]);
@@ -172,11 +177,47 @@ export function useEditorState(clipKey: string) {
   }, [pushHistory]);
 
   // Layer CRUD — live transform updates (no history push, called every pointer move)
+  // When keyframes exist on the layer, we MUST also update (or auto-create) the
+  // keyframe at the current playhead — otherwise resolveKeyframes() overrides the
+  // visual position and the drag appears to do nothing.
   const updateTransform = useCallback((id: string, patch: Partial<Layer["transform"]>) => {
     setLayers((prev) =>
-      prev.map((l) =>
-        l.id === id ? { ...l, transform: { ...l.transform, ...patch } } : l,
-      ),
+      prev.map((l) => {
+        if (l.id !== id) return l;
+        const updated = { ...l, transform: { ...l.transform, ...patch } };
+        if (!l.keyframes?.length) return updated;
+        const t = currentTimeRef.current;
+        const kfIdx = l.keyframes.findIndex((kf) => Math.abs(kf.time - t) < KF_TOLERANCE);
+        if (kfIdx >= 0) {
+          // Update existing keyframe
+          const kfs = [...l.keyframes];
+          const kfPatch: Partial<KeyframeSnapshot> = {};
+          if (patch.x !== undefined) kfPatch.x = patch.x;
+          if (patch.y !== undefined) kfPatch.y = patch.y;
+          if (patch.width !== undefined) kfPatch.width = patch.width;
+          if (patch.height !== undefined) kfPatch.height = patch.height;
+          if (patch.rotation !== undefined) kfPatch.rotation = patch.rotation;
+          kfs[kfIdx] = { ...kfs[kfIdx], ...kfPatch };
+          return { ...updated, keyframes: kfs };
+        }
+        // No keyframe here — auto-create one so the drag is visible
+        const newKf: KeyframeSnapshot = {
+          id: uid(),
+          time: t,
+          easing: "easeInOut" as EasingPreset,
+          x: updated.transform.x,
+          y: updated.transform.y,
+          width: updated.transform.width,
+          height: updated.transform.height,
+          rotation: updated.transform.rotation ?? 0,
+          opacity: l.style.opacity,
+          scale: 1,
+          borderRadius: l.style.borderRadius,
+          blur: l.style.blur,
+        };
+        const kfs = [...l.keyframes, newKf].sort((a, b) => a.time - b.time);
+        return { ...updated, keyframes: kfs };
+      }),
     );
   }, []);
 
@@ -188,9 +229,42 @@ export function useEditorState(clipKey: string) {
   /** Live style update (no history push — call commitTransform before starting a slider drag). */
   const updateStyle = useCallback((id: string, patch: Partial<Layer["style"]>) => {
     setLayers((prev) =>
-      prev.map((l) =>
-        l.id === id ? { ...l, style: { ...l.style, ...patch } } : l,
-      ),
+      prev.map((l) => {
+        if (l.id !== id) return l;
+        const updated = { ...l, style: { ...l.style, ...patch } };
+        // Sync keyframable style properties (opacity, borderRadius, blur)
+        const kfStylePatch: Partial<KeyframeSnapshot> = {};
+        if (patch.opacity !== undefined) kfStylePatch.opacity = patch.opacity;
+        if (patch.borderRadius !== undefined) kfStylePatch.borderRadius = patch.borderRadius;
+        if (patch.blur !== undefined) kfStylePatch.blur = patch.blur;
+        if (Object.keys(kfStylePatch).length > 0 && l.keyframes?.length) {
+          const t = currentTimeRef.current;
+          const kfIdx = l.keyframes.findIndex((kf) => Math.abs(kf.time - t) < KF_TOLERANCE);
+          if (kfIdx >= 0) {
+            const kfs = [...l.keyframes];
+            kfs[kfIdx] = { ...kfs[kfIdx], ...kfStylePatch };
+            return { ...updated, keyframes: kfs };
+          }
+          // Auto-create keyframe so style change is visible
+          const newKf: KeyframeSnapshot = {
+            id: uid(),
+            time: t,
+            easing: "easeInOut" as EasingPreset,
+            x: l.transform.x,
+            y: l.transform.y,
+            width: l.transform.width,
+            height: l.transform.height,
+            rotation: l.transform.rotation ?? 0,
+            opacity: patch.opacity ?? l.style.opacity,
+            scale: 1,
+            borderRadius: patch.borderRadius ?? l.style.borderRadius,
+            blur: patch.blur ?? l.style.blur,
+          };
+          const kfs = [...l.keyframes, newKf].sort((a, b) => a.time - b.time);
+          return { ...updated, keyframes: kfs };
+        }
+        return updated;
+      }),
     );
   }, []);
 
@@ -300,9 +374,11 @@ export function useEditorState(clipKey: string) {
           rotation: l.transform.rotation ?? 0,
           opacity: l.style.opacity,
           scale: 1,
+          borderRadius: l.style.borderRadius,
+          blur: l.style.blur,
         };
         const kfs = [...(l.keyframes ?? [])];
-        const existingIdx = kfs.findIndex((kf) => Math.abs(kf.time - currentTime) < 0.05);
+        const existingIdx = kfs.findIndex((kf) => Math.abs(kf.time - currentTime) < KF_TOLERANCE);
         if (existingIdx >= 0) {
           kfs[existingIdx] = snapshot;
         } else {
@@ -326,12 +402,26 @@ export function useEditorState(clipKey: string) {
     );
   }, [pushHistory]);
 
+  /** Update the easing of a keyframe (controls interpolation to the next keyframe). */
+  const updateKeyframeEasing = useCallback((layerId: string, keyframeId: string, easing: EasingPreset) => {
+    pushHistory();
+    setLayers((prev) =>
+      prev.map((l) => {
+        if (l.id !== layerId) return l;
+        const kfs = (l.keyframes ?? []).map((kf) =>
+          kf.id === keyframeId ? { ...kf, easing } : kf,
+        );
+        return { ...l, keyframes: kfs };
+      }),
+    );
+  }, [pushHistory]);
+
   /** Toggle keyframe at current time: remove if one exists, add if not. */
   const toggleKeyframe = useCallback((layerId: string) => {
     setLayers((cur) => {
       const layer = cur.find((l) => l.id === layerId);
       if (!layer) return cur;
-      const existing = (layer.keyframes ?? []).find((kf) => Math.abs(kf.time - currentTime) < 0.05);
+      const existing = (layer.keyframes ?? []).find((kf) => Math.abs(kf.time - currentTime) < KF_TOLERANCE);
       if (existing) {
         removeKeyframe(layerId, existing.id);
       } else {
@@ -441,6 +531,7 @@ export function useEditorState(clipKey: string) {
     removeAnimation,
     addKeyframe,
     removeKeyframe,
+    updateKeyframeEasing,
     toggleKeyframe,
     moveLayer,
     reorderLayers,

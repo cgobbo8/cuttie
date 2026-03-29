@@ -1,8 +1,8 @@
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Plus, Trash2, ChevronDown } from "lucide-react";
-import type { Layer, LayerAnimation, AnimationType, EasingPreset } from "../../lib/editorTypes";
-import { ANIMATION_DEFS, EASING_LABELS } from "../../lib/animations";
+import { Plus, Trash2, ChevronDown, Diamond } from "lucide-react";
+import type { Layer, LayerAnimation, AnimationType, EasingPreset, KeyframeSnapshot } from "../../lib/editorTypes";
+import { ANIMATION_DEFS, EASING_LABELS, KF_TOLERANCE } from "../../lib/animations";
 
 interface Props {
   layer: Layer;
@@ -11,6 +11,11 @@ interface Props {
   onUpdateAnimation: (layerId: string, animId: string, patch: Partial<LayerAnimation>) => void;
   onRemoveAnimation: (layerId: string, animId: string) => void;
   onCommit: () => void;
+  keyframes?: KeyframeSnapshot[];
+  currentTime?: number;
+  onRemoveKeyframe?: (keyframeId: string) => void;
+  onSeekToKeyframe?: (time: number) => void;
+  onUpdateKeyframeEasing?: (keyframeId: string, easing: EasingPreset) => void;
 }
 
 let _animUid = 0;
@@ -77,10 +82,12 @@ function DurationInput({
 
 export default function AnimationsPanel({
   layer, clipDuration, onAddAnimation, onUpdateAnimation, onRemoveAnimation, onCommit,
+  keyframes, currentTime = 0, onRemoveKeyframe, onSeekToKeyframe, onUpdateKeyframeEasing,
 }: Props) {
   const { t } = useTranslation();
   const [addMenuOpen, setAddMenuOpen] = useState(false);
   const anims = layer.animations ?? [];
+  const kfs = keyframes ?? [];
 
   const handleAdd = useCallback((type: AnimationType) => {
     const def = ANIMATION_DEFS[type];
@@ -104,7 +111,70 @@ export default function AnimationsPanel({
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto">
-        {anims.length === 0 && (
+        {/* ── Keyframes section ── */}
+        {kfs.length > 0 && (
+          <div className="border-b border-white/[0.06]">
+            <div className="px-3 py-2 flex items-center gap-1.5">
+              <Diamond className="w-3 h-3 text-yellow-400" />
+              <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-widest">
+                Keyframes
+              </span>
+              <span className="text-[9px] text-zinc-600 ml-auto">{kfs.length}</span>
+            </div>
+            {kfs.map((kf, idx) => {
+              const isActive = Math.abs(kf.time - currentTime) < KF_TOLERANCE;
+              const isLast = idx === kfs.length - 1;
+              return (
+                <div key={kf.id}>
+                  <div
+                    className={`flex items-center gap-2 px-3 py-1.5 cursor-pointer transition-colors ${
+                      isActive ? "bg-yellow-500/10" : "hover:bg-white/[0.03]"
+                    }`}
+                    onClick={() => onSeekToKeyframe?.(kf.time)}
+                  >
+                    <Diamond className={`w-3 h-3 shrink-0 ${isActive ? "text-yellow-400" : "text-zinc-600"}`} fill="currentColor" />
+                    <span className={`text-[11px] font-mono tabular-nums ${isActive ? "text-yellow-300" : "text-zinc-400"}`}>
+                      {kf.time.toFixed(2)}s
+                    </span>
+                    <span className="text-[9px] text-zinc-600 truncate ml-auto mr-1">
+                      {Math.round(kf.x)},{Math.round(kf.y)} · {Math.round(kf.width)}×{Math.round(kf.height)}
+                    </span>
+                    {onRemoveKeyframe && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); onRemoveKeyframe(kf.id); }}
+                        className="w-5 h-5 flex items-center justify-center rounded text-zinc-600 hover:text-red-400 hover:bg-red-500/10 transition-colors shrink-0"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    )}
+                  </div>
+                  {/* Easing picker between this keyframe and the next */}
+                  {!isLast && onUpdateKeyframeEasing && (
+                    <div className="flex items-center gap-1.5 px-3 py-1 ml-3 border-l border-dashed border-zinc-700">
+                      <span className="text-[9px] text-zinc-600 shrink-0">easing</span>
+                      <div className="relative flex-1">
+                        <select
+                          value={kf.easing}
+                          onChange={(e) => onUpdateKeyframeEasing(kf.id, e.target.value as EasingPreset)}
+                          onClick={(e) => e.stopPropagation()}
+                          className="w-full text-[10px] bg-white/[0.04] text-zinc-400 rounded px-1.5 py-0.5 border border-white/[0.06] outline-none appearance-none cursor-pointer hover:bg-white/[0.08] transition-colors"
+                        >
+                          {EASING_OPTIONS.map(([key, label]) => (
+                            <option key={key} value={key}>{t(`easings.${key}`, { defaultValue: label })}</option>
+                          ))}
+                        </select>
+                        <ChevronDown className="absolute right-1 top-1/2 -translate-y-1/2 w-2.5 h-2.5 text-zinc-600 pointer-events-none" />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* ── Animations section ── */}
+        {anims.length === 0 && kfs.length === 0 && (
           <div className="px-3 py-6 text-center">
             <p className="text-[11px] text-zinc-600">{t("editor.noAnimations")}</p>
             <p className="text-[10px] text-zinc-700 mt-1">{t("editor.noAnimationsHint")}</p>

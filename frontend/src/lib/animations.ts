@@ -253,7 +253,10 @@ export function layerVisibilityAtTime(
 
 /* ── Keyframe snapshot interpolation ─────────────────────── */
 
-const KF_PROPS: KeyframableProperty[] = ["x", "y", "width", "height", "rotation", "opacity", "scale"];
+const KF_PROPS: KeyframableProperty[] = ["x", "y", "width", "height", "rotation", "opacity", "scale", "borderRadius", "blur"];
+
+/** Tolerance (in seconds) when matching the playhead to a keyframe time. */
+export const KF_TOLERANCE = 0.15;
 
 /**
  * Resolve all keyframed properties for a layer at a given time.
@@ -302,13 +305,13 @@ export function resolveKeyframes(
 }
 
 /** Check if a keyframe snapshot exists at (or very near) the given time */
-export function hasKeyframeAt(keyframes: KeyframeSnapshot[] | undefined, time: number, tolerance: number = 0.05): boolean {
+export function hasKeyframeAt(keyframes: KeyframeSnapshot[] | undefined, time: number, tolerance: number = KF_TOLERANCE): boolean {
   if (!keyframes || keyframes.length === 0) return false;
   return keyframes.some((kf) => Math.abs(kf.time - time) <= tolerance);
 }
 
 /** Find a keyframe snapshot at a given time (within tolerance) */
-export function findKeyframeAt(keyframes: KeyframeSnapshot[] | undefined, time: number, tolerance: number = 0.05): KeyframeSnapshot | undefined {
+export function findKeyframeAt(keyframes: KeyframeSnapshot[] | undefined, time: number, tolerance: number = KF_TOLERANCE): KeyframeSnapshot | undefined {
   if (!keyframes || keyframes.length === 0) return undefined;
   return keyframes.find((kf) => Math.abs(kf.time - time) <= tolerance);
 }

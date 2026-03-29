@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { Crop } from "lucide-react";
+import { Crop, Diamond } from "lucide-react";
 import { HintBadge } from "../ui/Tooltip";
 import type { Layer, LayerStyle, ShapeData, SubtitleData, ChatData, TextData, AssetData } from "../../lib/editorTypes";
 import { SUBTITLE_FONTS, TEXT_FONTS, BOX_SHADOW_PRESETS } from "../../lib/editorTypes";
@@ -33,23 +33,14 @@ function KeyframeButton({
   return (
     <button
       onClick={onClick}
-      className={`w-4 h-4 flex items-center justify-center shrink-0 transition-colors ${
+      className={`w-5 h-5 flex items-center justify-center shrink-0 transition-colors ${
         hasKeyframe
           ? "text-yellow-400 hover:text-yellow-300"
           : "text-zinc-600 hover:text-zinc-400"
       }`}
       title={hasKeyframe ? "Remove keyframe" : "Add keyframe"}
     >
-      <svg viewBox="0 0 12 12" className="w-3 h-3">
-        <rect
-          x="6" y="1" width="5" height="5"
-          rx="0.8"
-          transform="rotate(45 6 6)"
-          fill={hasKeyframe ? "currentColor" : "none"}
-          stroke="currentColor"
-          strokeWidth="1.2"
-        />
-      </svg>
+      <Diamond className="w-3.5 h-3.5" fill={hasKeyframe ? "currentColor" : "none"} />
     </button>
   );
 }

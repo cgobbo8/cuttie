@@ -136,7 +136,7 @@ export type EasingPreset =
 /* ── Keyframe system ─────────────────────────────────────── */
 
 /** Properties captured in a keyframe snapshot */
-export type KeyframableProperty = "x" | "y" | "width" | "height" | "rotation" | "opacity" | "scale";
+export type KeyframableProperty = "x" | "y" | "width" | "height" | "rotation" | "opacity" | "scale" | "borderRadius" | "blur";
 
 /** A snapshot of all layer properties at a specific time */
 export interface KeyframeSnapshot {
@@ -150,6 +150,8 @@ export interface KeyframeSnapshot {
   rotation: number;
   opacity: number;
   scale: number;
+  borderRadius: number;
+  blur: number;
 }
 
 export interface LayerAnimation {

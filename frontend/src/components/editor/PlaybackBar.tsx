@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Play, Pause } from "lucide-react";
+import { Play, Pause, Diamond } from "lucide-react";
 import type { Layer, LayerAnimation, KeyframeSnapshot } from "../../lib/editorTypes";
 import { layerVisibilityAtTime, ANIMATION_DEFS } from "../../lib/animations";
 
@@ -505,9 +505,7 @@ export default function PlaybackBar({
                 style={{ left: `${pct(kf.time)}%` }}
                 title={`${kf.time.toFixed(1)}s`}
               >
-                <svg viewBox="0 0 12 12" className="w-3 h-3 text-yellow-400">
-                  <rect x="6" y="1" width="5" height="5" rx="0.8" transform="rotate(45 6 6)" fill="currentColor" />
-                </svg>
+                <Diamond className="w-3 h-3 text-yellow-400" fill="currentColor" />
               </div>
             ))}
           </div>

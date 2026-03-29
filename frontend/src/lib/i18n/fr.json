@@ -263,6 +263,7 @@
     "delete": "Supprimer",
     "unlock": "Déverrouiller",
     "lock": "Verrouiller",
+    "safeZones": "Zones sûres (TikTok / Reels / Shorts)",
 
     "properties": "Propriétés",
     "layer": "Calque",
@@ -367,6 +368,7 @@
     "noAssets": "Aucun asset importé pour l'instant.",
     "importNewImage": "Importer une nouvelle image",
 
+    "exportSettings": "Paramètres d'export",
     "exportStarted": "Export lancé",
     "exportStartedHint": "Tu peux suivre la progression et télécharger dans la page Exports.",
     "viewExports": "Voir les exports",
@@ -449,6 +451,9 @@
     "modalTitle": "Export par lot",
     "chooseTheme": "Choisir un thème",
 
+    "resolution": "Résolution",
+    "fastest": "— plus rapide",
+    "smoothest": "— plus fluide",
     "startExport": "Lancer l'export",
     "summary": "Exporter {{count}} clips avec le thème « {{theme}} »",
     "started_one": "{{count}} export lancé",

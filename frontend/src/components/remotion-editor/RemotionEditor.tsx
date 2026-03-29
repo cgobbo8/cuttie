@@ -61,6 +61,7 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
   const [rightTab, setRightTab] = useState<RightTab>("properties");
   const [leftTab, setLeftTab] = useState<LeftTab>("layers");
   const [transcriptWords, setTranscriptWords] = useState<TranscriptWord[]>([]);
+  const [showSafeZones, setShowSafeZones] = useState(false);
 
   // ── Clip name state ──
   const [clipName, setClipName] = useState(hotPoint.clip_name || `Clip ${hotPoint.timestamp_display}`);
@@ -496,7 +497,19 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
   /* ── Export ──────────────────────────────────────────────── */
 
   const [exporting, setExporting] = useState(false);
-  const [exportToast, setExportToast] = useState(false);
+  const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [exportSuccessOpen, setExportSuccessOpen] = useState(false);
+
+  type Resolution = "480p" | "720p" | "1080p";
+  type FpsOption = 24 | 30 | 60;
+  const RESOLUTIONS: { value: Resolution; label: string; w: number; h: number }[] = [
+    { value: "480p", label: "480p", w: 480, h: 854 },
+    { value: "720p", label: "HD 720p", w: 720, h: 1280 },
+    { value: "1080p", label: "Full HD 1080p", w: 1080, h: 1920 },
+  ];
+  const FPS_OPTIONS: FpsOption[] = [24, 30, 60];
+  const [resolution, setResolution] = useState<Resolution>("1080p");
+  const [fps, setFps] = useState<FpsOption>(30);
 
   const handleExport = useCallback(async () => {
     if (exporting || layers.length === 0) return;
@@ -517,15 +530,21 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
         }
       }
       const hasTrim = trimStart > 0 || effectiveTrimEnd < (videoDuration ?? 0);
-      await startRender(jobId, hotPoint.clip_filename!, exportLayers, hasTrim ? { trimStart, trimEnd: effectiveTrimEnd } : undefined, clipName);
-      setExportToast(true);
-      setTimeout(() => setExportToast(false), 6000);
+      const res = RESOLUTIONS.find((r) => r.value === resolution)!;
+      await startRender(
+        jobId, hotPoint.clip_filename!, exportLayers,
+        hasTrim ? { trimStart, trimEnd: effectiveTrimEnd } : undefined,
+        clipName,
+        { width: res.w, height: res.h, fps },
+      );
+      setExportModalOpen(false);
+      setExportSuccessOpen(true);
     } catch (err) {
       alert(t("editor.exportFailed", { error: err instanceof Error ? err.message : "erreur inconnue" }));
     } finally {
       setExporting(false);
     }
-  }, [exporting, layers, jobId, hotPoint.clip_filename, updateSubtitle, trimStart, effectiveTrimEnd, videoDuration, clipName]);
+  }, [exporting, layers, jobId, hotPoint.clip_filename, updateSubtitle, trimStart, effectiveTrimEnd, videoDuration, clipName, resolution, fps]);
 
   /* ── Popups & keyboard ──────────────────────────────────── */
 
@@ -621,15 +640,11 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
         <div className="flex items-center gap-3">
           <span className="text-[10px] text-zinc-600 font-mono">1080×1920</span>
           <button
-            onClick={handleExport}
-            disabled={exporting || layers.length === 0}
+            onClick={() => setExportModalOpen(true)}
+            disabled={layers.length === 0}
             className="text-xs px-3 py-1.5 rounded-lg bg-white hover:bg-zinc-200 text-black font-medium transition-colors flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            {exporting ? (
-              <><Loader2 className="w-3.5 h-3.5 animate-spin" />{t("editor.exporting")}</>
-            ) : (
-              <><Download className="w-3.5 h-3.5" />{t("editor.export")}</>
-            )}
+            <Download className="w-3.5 h-3.5" />{t("editor.export")}
           </button>
         </div>
       </div>
@@ -682,6 +697,8 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
                 <LayerPanel
                   layers={layers}
                   selectedId={selectedId}
+                  showSafeZones={showSafeZones}
+                  onToggleSafeZones={() => setShowSafeZones((v) => !v)}
                   onSelect={setSelectedId}
                   onToggleVisibility={toggleVisibility}
                   onToggleLock={toggleLock}
@@ -765,6 +782,7 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
         <NativePreviewViewport
           layers={layers}
           selectedId={selectedId}
+          showSafeZones={showSafeZones}
           videoRef={videoRef}
           duration={videoDuration ?? 0}
           onSelect={setSelectedId}
@@ -950,22 +968,113 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
         </div>
       )}
 
-      {/* Export toast */}
-      {exportToast && (
-        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-[200] bg-zinc-900 border border-white/[0.1] rounded-xl shadow-2xl px-5 py-4 flex items-center gap-4">
-          <div className="w-8 h-8 rounded-full bg-white/[0.08] flex items-center justify-center shrink-0">
-            <Check className="w-4 h-4 text-white" />
+      {/* Export settings modal */}
+      {exportModalOpen && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => !exporting && setExportModalOpen(false)} />
+          <div className="relative w-full max-w-md mx-4 bg-zinc-900 border border-white/[0.08] rounded-2xl shadow-2xl animate-fade-in">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.06]">
+              <h2 className="text-base font-semibold text-white">{t("editor.exportSettings")}</h2>
+              <button onClick={() => !exporting && setExportModalOpen(false)} className="text-zinc-500 hover:text-zinc-300 transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="px-6 py-5">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-medium text-zinc-400 uppercase tracking-wider mb-2 block">
+                    {t("batchExport.resolution")}
+                  </label>
+                  <div className="flex flex-col gap-1">
+                    {RESOLUTIONS.map((res) => (
+                      <button
+                        key={res.value}
+                        onClick={() => setResolution(res.value)}
+                        className={`text-left text-xs px-3 py-2 rounded-lg border transition-all ${
+                          resolution === res.value
+                            ? "border-white/20 bg-white/[0.06] text-zinc-200"
+                            : "border-white/[0.04] bg-white/[0.02] text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-300"
+                        }`}
+                      >
+                        {res.label}
+                        <span className="text-[10px] text-zinc-600 ml-1.5">{res.w}×{res.h}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-zinc-400 uppercase tracking-wider mb-2 block">
+                    FPS
+                  </label>
+                  <div className="flex flex-col gap-1">
+                    {FPS_OPTIONS.map((f) => (
+                      <button
+                        key={f}
+                        onClick={() => setFps(f)}
+                        className={`text-left text-xs px-3 py-2 rounded-lg border transition-all ${
+                          fps === f
+                            ? "border-white/20 bg-white/[0.06] text-zinc-200"
+                            : "border-white/[0.04] bg-white/[0.02] text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-300"
+                        }`}
+                      >
+                        {f} fps
+                        {f === 24 && <span className="text-[10px] text-zinc-600 ml-1.5">{t("batchExport.fastest")}</span>}
+                        {f === 60 && <span className="text-[10px] text-zinc-600 ml-1.5">{t("batchExport.smoothest")}</span>}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-white/[0.06] flex justify-end gap-2">
+              <button
+                onClick={() => setExportModalOpen(false)}
+                disabled={exporting}
+                className="text-xs px-4 py-2 rounded-lg border border-white/[0.08] text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.04] transition-colors"
+              >
+                {t("common.cancel")}
+              </button>
+              <button
+                onClick={handleExport}
+                disabled={exporting || layers.length === 0}
+                className="text-xs px-4 py-2 rounded-lg bg-white hover:bg-zinc-200 text-black font-medium transition-colors flex items-center gap-1.5 disabled:opacity-40"
+              >
+                {exporting ? (
+                  <><Loader2 className="w-3.5 h-3.5 animate-spin" />{t("editor.exporting")}</>
+                ) : (
+                  <><Download className="w-3.5 h-3.5" />{t("editor.export")}</>
+                )}
+              </button>
+            </div>
           </div>
-          <div>
-            <p className="text-sm text-white font-medium">{t("editor.exportStarted")}</p>
-            <p className="text-[11px] text-zinc-400">{t("editor.exportStartedHint")}</p>
+        </div>
+      )}
+
+      {/* Export success modal */}
+      {exportSuccessOpen && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setExportSuccessOpen(false)} />
+          <div className="relative w-full max-w-sm mx-4 bg-zinc-900 border border-white/[0.08] rounded-2xl shadow-2xl animate-fade-in text-center px-6 py-8">
+            <div className="w-12 h-12 rounded-full bg-white/[0.08] flex items-center justify-center mx-auto mb-4">
+              <Check className="w-6 h-6 text-white" />
+            </div>
+            <h3 className="text-base font-semibold text-white mb-1">{t("editor.exportStarted")}</h3>
+            <p className="text-sm text-zinc-400 mb-6">{t("editor.exportStartedHint")}</p>
+            <div className="flex gap-2 justify-center">
+              <button
+                onClick={() => setExportSuccessOpen(false)}
+                className="text-xs px-4 py-2 rounded-lg border border-white/[0.08] text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.04] transition-colors"
+              >
+                {t("common.cancel")}
+              </button>
+              <a
+                href="/exports"
+                className="text-xs px-4 py-2 rounded-lg bg-white hover:bg-zinc-200 text-black font-medium transition-colors"
+              >
+                {t("editor.viewExports")}
+              </a>
+            </div>
           </div>
-          <a href="/exports" className="text-xs px-3 py-1.5 rounded-lg bg-white/[0.08] hover:bg-white/[0.12] text-zinc-200 hover:text-zinc-100 transition-colors font-medium whitespace-nowrap">
-            {t("editor.viewExports")}
-          </a>
-          <button onClick={() => setExportToast(false)} className="text-zinc-600 hover:text-white transition-colors ml-1">
-            <X className="w-4 h-4" />
-          </button>
         </div>
       )}
 

@@ -579,6 +579,7 @@ export async function startRender(
   layers: unknown[],
   trim?: { trimStart: number; trimEnd: number },
   clipName?: string,
+  renderOptions?: { width?: number; height?: number; fps?: number },
 ): Promise<string> {
   const res = await fetch(`${BASE}/clips/${jobId}/${clipFilename}/render`, {
     method: "POST",
@@ -587,6 +588,7 @@ export async function startRender(
       layers,
       ...(trim ? { trim_start: trim.trimStart, trim_end: trim.trimEnd } : {}),
       ...(clipName ? { clip_name: clipName } : {}),
+      ...(renderOptions ? { render_options: renderOptions } : {}),
     }),
   });
   if (!res.ok) {
@@ -726,6 +728,7 @@ export async function startBatchRender(
   jobId: string,
   clipFilenames: string[],
   themeLayers: unknown[],
+  renderOptions?: { width?: number; height?: number; fps?: number },
 ): Promise<BatchRenderResponse> {
   const res = await fetch(`${BASE}/jobs/${jobId}/batch-render`, {
     method: "POST",
@@ -733,6 +736,7 @@ export async function startBatchRender(
     body: JSON.stringify({
       clip_filenames: clipFilenames,
       theme_layers: themeLayers,
+      render_options: renderOptions,
     }),
   });
   if (!res.ok) {

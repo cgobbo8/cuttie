@@ -64,8 +64,8 @@ export default class RendersController {
   async store({ params, request, response, auth }: HttpContext) {
     const user = auth.getUserOrFail()
     const { jobId, filename } = params
-    const body = request.body() as { layers: unknown[]; trim_start?: number; trim_end?: number; clip_name?: string }
-    const { layers, trim_start, trim_end, clip_name } = body
+    const body = request.body() as { layers: unknown[]; trim_start?: number; trim_end?: number; clip_name?: string; render_options?: { width?: number; height?: number; fps?: number } }
+    const { layers, trim_start, trim_end, clip_name, render_options } = body
 
     if (!layers || !Array.isArray(layers)) {
       return response.badRequest({ error: 'layers array required' })
@@ -94,7 +94,7 @@ export default class RendersController {
     })
 
     // Enqueue render (sequential queue ensures one at a time)
-    enqueueRender(() => runRender({ renderId, jobId, clipFilename: filename, layers: layers as Layer[], outputPath, outputFilename, trim }))
+    enqueueRender(() => runRender({ renderId, jobId, clipFilename: filename, layers: layers as Layer[], outputPath, outputFilename, trim, renderOptions: render_options }))
 
     return response.created({ render_id: renderId })
   }
@@ -111,9 +111,10 @@ export default class RendersController {
     const body = request.body() as {
       clip_filenames: string[]
       theme_layers: ThemeLayerTemplate[]
+      render_options?: { width?: number; height?: number; fps?: number }
     }
 
-    const { clip_filenames, theme_layers } = body
+    const { clip_filenames, theme_layers, render_options } = body
 
     if (!clip_filenames?.length || !theme_layers?.length) {
       return response.badRequest({ error: 'clip_filenames and theme_layers required' })
@@ -167,7 +168,7 @@ export default class RendersController {
             clipSrc: clipFilename, // placeholder, replaced by presigned URL in remotion_renderer
           })
 
-          await runRender({ renderId, jobId, clipFilename, layers, outputPath, outputFilename })
+          await runRender({ renderId, jobId, clipFilename, layers, outputPath, outputFilename, renderOptions: render_options })
         } catch (err: any) {
           console.error(`[BatchRender] Failed for ${clipFilename}:`, err.message)
           await db.from('renders').where('id', renderId).update({
@@ -293,8 +294,9 @@ async function runRender(opts: {
   outputPath: string
   outputFilename: string
   trim?: { start: number; end: number }
+  renderOptions?: { width?: number; height?: number; fps?: number }
 }) {
-  const { renderId, jobId, clipFilename, layers, outputPath, outputFilename, trim } = opts
+  const { renderId, jobId, clipFilename, layers, outputPath, outputFilename, trim, renderOptions } = opts
 
   const updateRender = async (fields: Record<string, unknown>) => {
     await db.from('renders').where('id', renderId).update({
@@ -314,6 +316,9 @@ async function runRender(opts: {
       clipFilename,
       outputPath,
       trim,
+      width: renderOptions?.width,
+      height: renderOptions?.height,
+      fps: renderOptions?.fps,
       onProgress: async (pct) => {
         await updateRender({ progress: pct })
       },

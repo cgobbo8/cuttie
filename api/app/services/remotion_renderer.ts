@@ -125,6 +125,12 @@ export interface RenderOptions {
   outputPath: string
   /** Optional trim range in seconds */
   trim?: { start: number; end: number }
+  /** Output width (default 1080) */
+  width?: number
+  /** Output height (default 1920) */
+  height?: number
+  /** Output FPS (default 30) */
+  fps?: number
   onProgress: (pct: number) => void
 }
 
@@ -133,7 +139,9 @@ export async function renderClip(opts: RenderOptions): Promise<{ sizeMb: number 
 
   // Read dimensions from probe JSON (no ffprobe, no local clip needed)
   const { durationSeconds, width: nativeW, height: nativeH } = readProbe(jobId, clipFilename)
-  const fps = 30
+  const fps = opts.fps ?? 30
+  const outputWidth = opts.width ?? 1080
+  const outputHeight = opts.height ?? 1920
   const fullDurationInFrames = Math.ceil(durationSeconds * fps)
 
   // Calculate frame range from trim
@@ -194,20 +202,72 @@ export async function renderClip(opts: RenderOptions): Promise<{ sizeMb: number 
     })
   )
 
+  // Scale layers if output resolution differs from the 1080×1920 canvas
+  const CANVAS_W = 1080
+  const CANVAS_H = 1920
+  const scaleX = outputWidth / CANVAS_W
+  const scaleY = outputHeight / CANVAS_H
+  const needsScale = Math.abs(scaleX - 1) > 0.001 || Math.abs(scaleY - 1) > 0.001
+
+  const finalLayers = needsScale
+    ? enrichedLayers.map((layer) => {
+        const scaled = {
+          ...layer,
+          transform: {
+            ...layer.transform,
+            x: Math.round(layer.transform.x * scaleX),
+            y: Math.round(layer.transform.y * scaleY),
+            width: Math.round(layer.transform.width * scaleX),
+            height: Math.round(layer.transform.height * scaleY),
+          },
+          style: {
+            ...layer.style,
+            blur: layer.style.blur * scaleX,
+            borderRadius: Math.round(layer.style.borderRadius * scaleX),
+          },
+        }
+        // Scale subtitle font size
+        if (scaled.subtitle) {
+          scaled.subtitle = { ...scaled.subtitle, fontSize: Math.round(scaled.subtitle.fontSize * scaleX) }
+        }
+        // Scale text font size
+        if (scaled.text) {
+          scaled.text = { ...scaled.text, fontSize: Math.round(scaled.text.fontSize * scaleX) }
+        }
+        // Scale chat font size
+        if (scaled.chat) {
+          scaled.chat = { ...scaled.chat, fontSize: Math.round(scaled.chat.fontSize * scaleX) }
+        }
+        // Scale keyframes
+        if (scaled.keyframes) {
+          scaled.keyframes = scaled.keyframes.map((kf) => ({
+            ...kf,
+            x: Math.round(kf.x * scaleX),
+            y: Math.round(kf.y * scaleY),
+            width: Math.round(kf.width * scaleX),
+            height: Math.round(kf.height * scaleY),
+            borderRadius: Math.round(kf.borderRadius * scaleX),
+            blur: kf.blur * scaleX,
+          }))
+        }
+        return scaled
+      })
+    : enrichedLayers
+
   const serveUrl = await getBundle()
 
   const composition = await selectComposition({
     serveUrl,
     id: 'CuttieVideo',
-    inputProps: { layers: enrichedLayers },
+    inputProps: { layers: finalLayers },
   })
 
   await renderMedia({
-    composition: { ...composition, durationInFrames: fullDurationInFrames, fps, width: 1080, height: 1920 },
+    composition: { ...composition, durationInFrames: fullDurationInFrames, fps, width: outputWidth, height: outputHeight },
     serveUrl,
     codec: 'h264',
     outputLocation: outputPath,
-    inputProps: { layers: enrichedLayers },
+    inputProps: { layers: finalLayers },
     frameRange: (startFrame > 0 || endFrame < fullDurationInFrames)
       ? [startFrame, endFrame - 1] as [number, number]
       : null,

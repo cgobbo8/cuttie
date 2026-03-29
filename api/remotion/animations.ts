@@ -3,7 +3,7 @@
  * Never import framework-specific code here.
  */
 
-import type { Layer, LayerAnimation, AnimationType, AnimationCategory, EasingPreset } from "./editorTypes";
+import type { Layer, LayerAnimation, AnimationType, AnimationCategory, EasingPreset, KeyframeSnapshot, KeyframableProperty } from "./editorTypes";
 
 /* ── Easing functions ────────────────────────────────────── */
 
@@ -250,4 +250,53 @@ export function layerVisibilityAtTime(
 ): number {
   const result = evaluateAnimations(layer, time, clipDuration);
   return result.opacity;
+}
+
+/* ── Keyframe snapshot interpolation ─────────────────────── */
+
+const KF_PROPS: KeyframableProperty[] = ["x", "y", "width", "height", "rotation", "opacity", "scale", "borderRadius", "blur"];
+
+/**
+ * Resolve all keyframed properties for a layer at a given time.
+ * Interpolates between the two surrounding snapshots with easing.
+ */
+export function resolveKeyframes(
+  keyframes: KeyframeSnapshot[] | undefined,
+  time: number,
+): Partial<Record<KeyframableProperty, number>> {
+  if (!keyframes || keyframes.length === 0) return {};
+
+  const sorted = keyframes.length > 1
+    ? [...keyframes].sort((a, b) => a.time - b.time)
+    : keyframes;
+
+  // Before first → hold first snapshot values
+  if (time <= sorted[0].time) {
+    const s = sorted[0];
+    return { x: s.x, y: s.y, width: s.width, height: s.height, rotation: s.rotation, opacity: s.opacity, scale: s.scale, borderRadius: s.borderRadius, blur: s.blur };
+  }
+
+  // After last → hold last snapshot values
+  if (time >= sorted[sorted.length - 1].time) {
+    const s = sorted[sorted.length - 1];
+    return { x: s.x, y: s.y, width: s.width, height: s.height, rotation: s.rotation, opacity: s.opacity, scale: s.scale, borderRadius: s.borderRadius, blur: s.blur };
+  }
+
+  // Find surrounding snapshots and interpolate
+  for (let i = 0; i < sorted.length - 1; i++) {
+    const a = sorted[i];
+    const b = sorted[i + 1];
+    if (time >= a.time && time <= b.time) {
+      const raw = (time - a.time) / (b.time - a.time);
+      const t = applyEasing(a.easing, raw);
+      const result: Partial<Record<KeyframableProperty, number>> = {};
+      for (const p of KF_PROPS) {
+        result[p] = a[p] + (b[p] - a[p]) * t;
+      }
+      return result;
+    }
+  }
+
+  const s = sorted[sorted.length - 1];
+  return { x: s.x, y: s.y, width: s.width, height: s.height, rotation: s.rotation, opacity: s.opacity, scale: s.scale, borderRadius: s.borderRadius, blur: s.blur };
 }

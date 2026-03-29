@@ -144,6 +144,23 @@ export interface LayerAnimation {
   easing: EasingPreset;
 }
 
+export type KeyframableProperty = "x" | "y" | "width" | "height" | "rotation" | "opacity" | "scale" | "borderRadius" | "blur";
+
+export interface KeyframeSnapshot {
+  id: string;
+  time: number;         // seconds
+  easing: EasingPreset; // easing curve to the NEXT keyframe
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation: number;
+  opacity: number;
+  scale: number;
+  borderRadius: number;
+  blur: number;
+}
+
 export interface Layer {
   id: string;
   name: string;
@@ -159,4 +176,5 @@ export interface Layer {
   chat?: ChatData;
   text?: TextData;
   animations?: LayerAnimation[];
+  keyframes?: KeyframeSnapshot[];
 }

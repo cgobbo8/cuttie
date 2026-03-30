@@ -123,7 +123,8 @@ export default class RendersController {
     // Load shared job data once (facecam, dominant_color, chat)
     const shared = await loadJobSharedData(jobId, clip_filenames[0])
 
-    const batchGroupId = randomUUID()
+    const isBatch = clip_filenames.length > 1
+    const batchGroupId = isBatch ? randomUUID() : null
     const renderIds: string[] = []
 
     // Get clip names from hot_points for display

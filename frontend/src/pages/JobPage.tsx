@@ -49,6 +49,7 @@ export default function JobPage() {
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedClips, setSelectedClips] = useState<Set<string>>(new Set());
   const [showBatchModal, setShowBatchModal] = useState(false);
+  const [quickExportClip, setQuickExportClip] = useState<string | null>(null);
 
   const sseCleanupRef = useRef<(() => void) | null>(null);
 
@@ -297,6 +298,7 @@ export default function JobPage() {
           selectionMode={selectionMode}
           selectedClips={selectedClips}
           onToggleClip={handleToggleClip}
+          onQuickExport={(filename) => setQuickExportClip(filename)}
         />
       )}
 
@@ -341,6 +343,16 @@ export default function JobPage() {
           clipFilenames={Array.from(selectedClips)}
           onClose={() => setShowBatchModal(false)}
           onDone={handleBatchExportDone}
+        />
+      )}
+
+      {/* Quick export modal (single clip) */}
+      {quickExportClip && (
+        <BatchExportModal
+          jobId={jobId!}
+          clipFilenames={[quickExportClip]}
+          onClose={() => setQuickExportClip(null)}
+          onDone={() => { setQuickExportClip(null); }}
         />
       )}
     </div>

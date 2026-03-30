@@ -8,6 +8,7 @@ import {
   ChevronRight,
   Pencil,
   Download,
+  Upload,
   Clock,
   Flame,
   Sparkles,
@@ -32,6 +33,7 @@ interface Props {
   selectionMode?: boolean;
   selectedClips?: Set<string>;
   onToggleClip?: (filename: string) => void;
+  onQuickExport?: (clipFilename: string) => void;
 }
 
 interface SignalInfo {
@@ -318,6 +320,7 @@ function ClipCard({
   selected,
   onToggle,
   onOpenLightbox,
+  onQuickExport,
 }: {
   point: HotPoint;
   index: number;
@@ -328,6 +331,7 @@ function ClipCard({
   selected?: boolean;
   onToggle?: () => void;
   onOpenLightbox?: () => void;
+  onQuickExport?: () => void;
 }) {
   const { t } = useTranslation();
   const [showSkeleton, setShowSkeleton] = useState(isNew === true);
@@ -406,6 +410,13 @@ function ClipCard({
             <Pencil className="w-3.5 h-3.5" />
             {t("hotPoints.edit")}
           </Link>
+          <button
+            onClick={(e) => { e.stopPropagation(); onQuickExport?.(); }}
+            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-zinc-300 bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.08] rounded-lg transition-colors"
+          >
+            <Upload className="w-3.5 h-3.5" />
+            {t("hotPoints.quickExport")}
+          </button>
           <button
             onClick={handleDownload}
             className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-zinc-300 bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.08] rounded-lg transition-colors"
@@ -634,6 +645,7 @@ export default function HotPoints({
   selectionMode,
   selectedClips,
   onToggleClip,
+  onQuickExport,
 }: Props) {
   const { t } = useTranslation();
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
@@ -702,6 +714,7 @@ export default function HotPoints({
               selected={point.clip_filename ? selectedClips?.has(point.clip_filename) : false}
               onToggle={point.clip_filename ? () => onToggleClip?.(point.clip_filename!) : undefined}
               onOpenLightbox={lightboxIdx >= 0 ? () => setLightboxIndex(lightboxIdx) : undefined}
+              onQuickExport={point.clip_filename ? () => onQuickExport?.(point.clip_filename!) : undefined}
             />
           );
         })}

@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
+import { Loader2 } from "lucide-react";
 import type { Layer, SubtitleWord, ChatMessage } from "../../lib/editorTypes";
 import { BOX_SHADOW_PRESETS } from "../../lib/editorTypes";
 import { evaluateAnimations, resolveKeyframes } from "../../lib/animations";
@@ -89,6 +90,20 @@ export default function NativePreviewViewport({
   const [scale, setScale] = useState(0.3);
   const secondaryRefs = useRef<Map<string, HTMLVideoElement>>(new Map());
 
+  // Video loading state — show spinner until primary video has data
+  const [videoReady, setVideoReady] = useState(false);
+  const hasVideoLayer = useMemo(() => layers.some((l) => l.type === "gameplay" && l.video), [layers]);
+
+  // Reset videoReady when the video src changes
+  const videoSrc = useMemo(() => layers.find((l) => l.type === "gameplay" && l.video)?.video?.src, [layers]);
+  const prevSrcRef = useRef(videoSrc);
+  useEffect(() => {
+    if (videoSrc !== prevSrcRef.current) {
+      setVideoReady(false);
+      prevSrcRef.current = videoSrc;
+    }
+  }, [videoSrc]);
+
   // High-frequency time for smooth animations (60 Hz via rAF when playing)
   const [animTime, setAnimTime] = useState(0);
   const rafRef = useRef<number>(0);
@@ -147,6 +162,7 @@ export default function NativePreviewViewport({
 
   const handleLoadedMetadata = useCallback((e: React.SyntheticEvent<HTMLVideoElement>) => {
     onDuration(e.currentTarget.duration);
+    setVideoReady(true);
   }, [onDuration]);
 
   // Click-to-select — only fire on real clicks (not after a drag).
@@ -541,6 +557,13 @@ export default function NativePreviewViewport({
 
         {/* Canvas border */}
         <div style={{ position: "absolute", inset: 0, border: "1px solid rgba(255,255,255,0.1)", pointerEvents: "none" }} />
+
+        {/* Video loading overlay */}
+        {hasVideoLayer && !videoReady && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/60 z-20" style={{ pointerEvents: "none" }}>
+            <Loader2 className="w-8 h-8 animate-spin text-zinc-400" />
+          </div>
+        )}
 
         {layers.length === 0 && (
           <div className="absolute inset-0 flex items-center justify-center" style={{ pointerEvents: "none" }}>

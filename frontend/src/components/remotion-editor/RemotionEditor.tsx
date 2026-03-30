@@ -61,7 +61,7 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
   const [rightTab, setRightTab] = useState<RightTab>("properties");
   const [leftTab, setLeftTab] = useState<LeftTab>("layers");
   const [transcriptWords, setTranscriptWords] = useState<TranscriptWord[]>([]);
-  const [showSafeZones, setShowSafeZones] = useState(false);
+  const [showSafeZones, setShowSafeZones] = useState(() => localStorage.getItem("cuttie_safe_zones") === "1");
 
   // ── Clip name state ──
   const [clipName, setClipName] = useState(hotPoint.clip_name || `Clip ${hotPoint.timestamp_display}`);
@@ -698,7 +698,7 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
                   layers={layers}
                   selectedId={selectedId}
                   showSafeZones={showSafeZones}
-                  onToggleSafeZones={() => setShowSafeZones((v) => !v)}
+                  onToggleSafeZones={() => setShowSafeZones((v) => { const next = !v; localStorage.setItem("cuttie_safe_zones", next ? "1" : "0"); return next; })}
                   onSelect={setSelectedId}
                   onToggleVisibility={toggleVisibility}
                   onToggleLock={toggleLock}

@@ -16,6 +16,7 @@ interface Props {
   layers: Layer[];
   selectedId: string | null;
   currentTime: number;
+  showSafeZones?: boolean;
   registerVideo: (id: string, el: HTMLVideoElement | null) => void;
   onSelect: (id: string | null) => void;
   onTransformChange: (id: string, patch: Partial<Layer["transform"]>) => void;
@@ -26,6 +27,7 @@ export default function CanvasViewport({
   layers,
   selectedId,
   currentTime,
+  showSafeZones,
   registerVideo,
   onSelect,
   onTransformChange,
@@ -181,6 +183,36 @@ export default function CanvasViewport({
         <div style={{ position: "absolute", left: -9999, top: 0, width: 9999, height: CANVAS_H, background: "rgba(24,24,27,0.75)", zIndex: 2, pointerEvents: "none" }} />
         {/* Right */}
         <div style={{ position: "absolute", right: -9999, top: 0, width: 9999, height: CANVAS_H, background: "rgba(24,24,27,0.75)", zIndex: 2, pointerEvents: "none" }} />
+
+        {/* Safe zones overlay — shows areas covered by TikTok/Reels/Shorts UI */}
+        {showSafeZones && (
+          <>
+            {/* Bottom-left: username, description, music */}
+            <div style={{
+              position: "absolute",
+              left: 0,
+              bottom: 0,
+              width: 860,
+              height: 520,
+              background: "rgba(239,68,68,0.25)",
+              zIndex: 2,
+              pointerEvents: "none",
+              borderTopRightRadius: 12,
+            }} />
+            {/* Right side: like, comment, share, bookmark */}
+            <div style={{
+              position: "absolute",
+              right: 0,
+              top: 830,
+              width: 200,
+              bottom: 0,
+              background: "rgba(239,68,68,0.25)",
+              zIndex: 2,
+              pointerEvents: "none",
+              borderTopLeftRadius: 12,
+            }} />
+          </>
+        )}
 
         {/* Canvas border (on top of masks) */}
         <div

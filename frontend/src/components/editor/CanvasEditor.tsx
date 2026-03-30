@@ -59,6 +59,7 @@ export default function CanvasEditor({
   // Left sidebar
   const [leftTab, setLeftTab] = useState<LeftTab>("layers");
   const [transcriptWords, setTranscriptWords] = useState<TranscriptWord[]>([]);
+  const [showSafeZones, setShowSafeZones] = useState(() => localStorage.getItem("cuttie_safe_zones") === "1");
 
   // Right sidebar
   const [rightTab, setRightTab] = useState<RightTab>("properties");
@@ -522,6 +523,8 @@ export default function CanvasEditor({
                 <LayerPanel
                   layers={layers}
                   selectedId={selectedId}
+                  showSafeZones={showSafeZones}
+                  onToggleSafeZones={() => setShowSafeZones((v) => { const next = !v; localStorage.setItem("cuttie_safe_zones", next ? "1" : "0"); return next; })}
                   onSelect={setSelectedId}
                   onToggleVisibility={toggleVisibility}
                   onToggleLock={toggleLock}
@@ -615,6 +618,7 @@ export default function CanvasEditor({
           layers={layers}
           selectedId={selectedId}
           currentTime={currentTime}
+          showSafeZones={showSafeZones}
           registerVideo={registerVideo}
           onSelect={setSelectedId}
           onTransformChange={updateTransform}

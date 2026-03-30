@@ -58,6 +58,7 @@ function chatAuthorColor(name: string): string {
 interface Props {
   layers: Layer[];
   selectedId: string | null;
+  showSafeZones?: boolean;
   videoRef: React.MutableRefObject<HTMLVideoElement | null>;
   duration: number;
   onSelect: (id: string | null) => void;
@@ -72,6 +73,7 @@ interface Props {
 export default function NativePreviewViewport({
   layers,
   selectedId,
+  showSafeZones,
   videoRef,
   duration,
   onSelect,
@@ -469,6 +471,34 @@ export default function NativePreviewViewport({
 
             return null;
           })}
+
+          {/* Safe zones overlay — shows areas covered by TikTok/Reels/Shorts UI */}
+          {showSafeZones && (
+            <>
+              {/* Bottom-left: username, description, music */}
+              <div style={{
+                position: "absolute",
+                left: 0,
+                bottom: 0,
+                width: 860,
+                height: 520,
+                background: "rgba(239,68,68,0.25)",
+                pointerEvents: "none",
+                borderTopRightRadius: 12,
+              }} />
+              {/* Right side: like, comment, share, bookmark */}
+              <div style={{
+                position: "absolute",
+                right: 0,
+                top: 830,
+                width: 200,
+                bottom: 0,
+                background: "rgba(239,68,68,0.25)",
+                pointerEvents: "none",
+                borderTopLeftRadius: 12,
+              }} />
+            </>
+          )}
         </div>
 
         {/* Interaction overlay + transform handles (screen coordinates) */}

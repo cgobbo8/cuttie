@@ -1,11 +1,13 @@
 import { useState, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { Video, User, MessageSquare, MessagesSquare, Image, Square, Type, Eye, EyeOff, Lock, GripVertical, Copy, Trash2 } from "lucide-react";
+import { Video, User, MessageSquare, MessagesSquare, Image, Square, Type, Eye, EyeOff, Lock, GripVertical, Copy, Trash2, Smartphone } from "lucide-react";
 import type { Layer, LayerType } from "../../lib/editorTypes";
 
 interface Props {
   layers: Layer[];
   selectedId: string | null;
+  showSafeZones?: boolean;
+  onToggleSafeZones?: () => void;
   onSelect: (id: string) => void;
   onToggleVisibility: (id: string) => void;
   onToggleLock: (id: string) => void;
@@ -33,6 +35,8 @@ function LayerIcon({ type }: { type: LayerType }) {
 export default function LayerPanel({
   layers,
   selectedId,
+  showSafeZones,
+  onToggleSafeZones,
   onSelect,
   onToggleVisibility,
   onToggleLock,
@@ -112,7 +116,22 @@ export default function LayerPanel({
         <h4 className="text-[10px] font-semibold text-zinc-500 uppercase tracking-widest">
           {t("editor.layers")}
         </h4>
-        <span className="text-[10px] text-zinc-600">{layers.length}</span>
+        <div className="flex items-center gap-1.5">
+          {onToggleSafeZones && (
+            <button
+              className={`w-5 h-5 flex items-center justify-center rounded transition-colors ${
+                showSafeZones
+                  ? "text-red-400 bg-red-500/15 hover:bg-red-500/25"
+                  : "text-zinc-600 hover:text-zinc-400 hover:bg-white/[0.06]"
+              }`}
+              onClick={onToggleSafeZones}
+              title={t("editor.safeZones")}
+            >
+              <Smartphone className="w-3 h-3" />
+            </button>
+          )}
+          <span className="text-[10px] text-zinc-600">{layers.length}</span>
+        </div>
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto">

@@ -18,8 +18,85 @@ class JobStatus(str, Enum):
     ERROR = "ERROR"
 
 
+class AudioCategoryGroup(BaseModel):
+    """A named group of AudioSet class indices with per-class weights.
+
+    Used to configure which audio events PANNs should listen for.
+    Keys are AudioSet class indices (0-526), values are weights (0.0-1.0).
+    """
+    classes: dict[int, float]
+    aggregation: str = "weighted_sum"  # "weighted_sum" or "max"
+
+
+class ClassificationConfig(BaseModel):
+    """Configuration for PANNs audio classification categories.
+
+    Each group produces a score per window. The scorer then uses these
+    scores with the boost factors defined in ScoringConfig.
+    """
+    speech: AudioCategoryGroup = AudioCategoryGroup(
+        classes={0: 1.0, 1: 1.0, 2: 1.0},
+        aggregation="max",
+    )
+    excitement: AudioCategoryGroup = AudioCategoryGroup(
+        classes={
+            8: 1.0, 10: 0.8, 11: 1.0, 12: 1.0, 14: 1.0,
+            16: 1.0, 18: 0.8, 20: 1.0, 44: 0.7, 66: 0.9,
+        },
+        aggregation="weighted_sum",
+    )
+    game_audio: AudioCategoryGroup = AudioCategoryGroup(
+        classes={
+            137: 0.8, 287: 0.6, 426: 1.0, 427: 1.0,
+            428: 0.9, 436: 0.8, 469: 0.7,
+        },
+        aggregation="weighted_sum",
+    )
+    extra_groups: dict[str, AudioCategoryGroup] = {}
+
+
+class ScoringConfig(BaseModel):
+    """Configuration for composite scoring weights and boost factors."""
+    # Base signal weights (should sum to ~1.0)
+    weights: dict[str, float] = {
+        "rms": 0.18,
+        "chat_speed": 0.18,
+        "flux": 0.12,
+        "onset": 0.10,
+        "pitch_var": 0.10,
+        "centroid": 0.05,
+        "zcr": 0.02,
+        "chat_burst": 0.10,
+        "emote_density": 0.08,
+        "caps_ratio": 0.07,
+    }
+    # Multiplicative boost factors for classification signals
+    agreement_boost: float = 0.3       # audio+chat agreement (up to 1+X)
+    sentiment_boost: float = 0.15      # chat sentiment intensity
+    voice_energy_boost: float = 0.15   # speech * rms
+    excitement_additive: float = 0.10  # rare vocal excitement (additive)
+    game_dampening: float = 0.15       # game-only audio dampening
+    # Extra group boosts: group_name -> (mode, factor)
+    # mode: "additive" or "multiplicative"
+    extra_group_boosts: dict[str, tuple[str, float]] = {}
+    # Peak detection
+    min_peak_distance_sec: float = 60.0
+    smooth_sigma: float = 2.5
+    top_n_candidates: int = 50
+    top_n_keep: int = 20
+
+
+class PipelineConfig(BaseModel):
+    """Full pipeline configuration. All fields have sensible defaults
+    matching the current behavior. Override selectively to customize.
+    """
+    classification: ClassificationConfig = ClassificationConfig()
+    scoring: ScoringConfig = ScoringConfig()
+
+
 class AnalyzeRequest(BaseModel):
     url: str
+    config: PipelineConfig | None = None
 
 
 class SignalBreakdown(BaseModel):

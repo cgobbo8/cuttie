@@ -51,7 +51,7 @@ async def analyze_vod(req: AnalyzeRequest, bg: BackgroundTasks) -> dict:
 
     job_id = uuid.uuid4().hex[:12]
     create_job(job_id, req.url)
-    bg.add_task(run_pipeline_sync, job_id, req.url)
+    bg.add_task(run_pipeline_sync, job_id, req.url, config=req.config)
     return {"job_id": job_id}
 
 

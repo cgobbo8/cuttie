@@ -3,39 +3,27 @@
 Combines normalized audio and chat signals into a single score per window,
 then detects peaks with minimum distance between them.
 
+Scoring weights and boost factors are configurable via ScoringConfig.
+Default values match the original behavior.
+
 Improvements over v1:
 - Score smoothing (Gaussian) before peak detection for cleaner peaks
 - Chat burst and emote density as additional signals
 - Signal agreement bonus (when audio + chat both spike)
 """
 
+from __future__ import annotations
+
 import numpy as np
 from scipy.ndimage import gaussian_filter1d
 from scipy.signal import find_peaks
 
-from app.models.schemas import HotPoint, SignalBreakdown
+from app.models.schemas import HotPoint, ScoringConfig, SignalBreakdown
 
-# Default weights for composite score (base signals, total = 1.0)
-# Bonus signals (agreement, classification, sentiment) are multiplicative, not additive
-WEIGHTS = {
-    "rms": 0.18,
-    "chat_speed": 0.18,
-    "flux": 0.12,
-    "onset": 0.10,       # Onset strength: catches moment transitions
-    "pitch_var": 0.10,
-    "centroid": 0.05,
-    "zcr": 0.02,
-    # Chat signals
-    "chat_burst": 0.10,
-    "emote_density": 0.08,
-    "caps_ratio": 0.07,
-}
-
-# Minimum distance between peaks in seconds
-MIN_PEAK_DISTANCE_SEC = 60.0
-
-# Smoothing sigma (in windows). ~3 windows = 7.5s smoothing at 2.5s hop
-SMOOTH_SIGMA = 2.5
+# Default weights kept as module-level constant for backward compatibility
+WEIGHTS = ScoringConfig().weights
+MIN_PEAK_DISTANCE_SEC = ScoringConfig().min_peak_distance_sec
+SMOOTH_SIGMA = ScoringConfig().smooth_sigma
 
 
 def seconds_to_display(s: float) -> str:
@@ -67,11 +55,13 @@ def compute_scores(
     top_n: int = 20,
     hop_sec: float = 2.5,
     classification_features: list[dict] | None = None,
+    scoring_config: ScoringConfig | None = None,
 ) -> list[HotPoint]:
     """Compute composite scores and detect peak hot points."""
     if not audio_features:
         return []
 
+    cfg = scoring_config or ScoringConfig()
     n = len(audio_features)
 
     # Extract audio signals
@@ -144,10 +134,11 @@ def compute_scores(
         "caps_ratio": _normalize(caps_ratio),
     }
 
-    # Compute composite score
+    # Compute composite score using configured weights
     score = np.zeros(n)
-    for signal_name, weight in WEIGHTS.items():
-        score += weight * norm[signal_name]
+    for signal_name, weight in cfg.weights.items():
+        if signal_name in norm:
+            score += weight * norm[signal_name]
 
     # ── Multiplicative modifiers (boost peaks, don't inflate baseline) ──
 
@@ -155,14 +146,13 @@ def compute_scores(
     audio_combined = (norm["rms"] + norm["flux"]) / 2
     chat_combined = norm["chat_speed"]
     agreement = audio_combined * chat_combined  # high only when both high
-    # Boost up to 1.3x when both signals agree
-    score *= 1.0 + 0.3 * _normalize(agreement)
+    score *= 1.0 + cfg.agreement_boost * _normalize(agreement)
 
     # Semantic sentiment: boost when chat shows strong sentiment
     norm_sentiment = _normalize(sentiment_intensity)
     has_sentiment = np.any(sentiment_intensity > 0.05)
     if has_sentiment:
-        score *= 1.0 + 0.15 * norm_sentiment
+        score *= 1.0 + cfg.sentiment_boost * norm_sentiment
 
     # Audio classification signals (PANNs CNN14)
     has_classification = np.any(speech_presence > 0.05)
@@ -173,21 +163,38 @@ def compute_scores(
 
         # Boost: loud + streamer speaking = streamer is reacting
         voice_energy = norm_speech * norm["rms"]
-        score *= 1.0 + 0.15 * _normalize(voice_energy)
+        score *= 1.0 + cfg.voice_energy_boost * _normalize(voice_energy)
 
         # Strong boost: vocal excitement (laughter, screaming) — rare but gold
         # Additive here is OK because it's genuinely rare and should spike
-        score += 0.10 * norm_excite
+        score += cfg.excitement_additive * norm_excite
 
         # Dampen: loud game audio without speech = just game noise
         game_only = np.clip(norm_game - norm_speech, 0, 1)
-        score *= 1.0 - 0.15 * game_only
+        score *= 1.0 - cfg.game_dampening * game_only
+
+    # Extra classification groups (custom categories from config)
+    if classification_features:
+        for group_name, (mode, factor) in cfg.extra_group_boosts.items():
+            raw_signal = np.zeros(n)
+            cls_times = np.array([c["time"] for c in classification_features])
+            cls_values = np.array([c.get(group_name, 0) for c in classification_features])
+            for i, t in enumerate(times):
+                diffs = np.abs(cls_times - t)
+                nearest = np.argmin(diffs)
+                if diffs[nearest] < hop_sec:
+                    raw_signal[i] = cls_values[nearest]
+            norm_signal = _normalize(raw_signal)
+            if mode == "additive":
+                score += factor * norm_signal
+            else:  # multiplicative
+                score *= 1.0 + factor * norm_signal
 
     # Smooth score curve for cleaner peak detection
-    score_smooth = gaussian_filter1d(score, sigma=SMOOTH_SIGMA)
+    score_smooth = gaussian_filter1d(score, sigma=cfg.smooth_sigma)
 
     # Find peaks on smoothed curve with minimum distance
-    min_distance = max(1, int(MIN_PEAK_DISTANCE_SEC / hop_sec))
+    min_distance = max(1, int(cfg.min_peak_distance_sec / hop_sec))
     peak_indices, _ = find_peaks(score_smooth, distance=min_distance, prominence=0.05)
 
     if len(peak_indices) == 0:

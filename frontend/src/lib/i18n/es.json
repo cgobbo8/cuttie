@@ -134,7 +134,11 @@
     "placeholder": "https://www.twitch.tv/videos/...",
     "analyzing": "Analizando...",
     "analyze": "Analizar",
-    "cancel": "Cancelar"
+    "cancel": "Cancelar",
+    "importClip": "Importar",
+    "uploading": "Subiendo...",
+    "dropZoneHint": "Arrastra un archivo de vídeo o haz clic para buscar",
+    "dropZoneActive": "Suelta para subir"
   },
 
   "hotPoints": {

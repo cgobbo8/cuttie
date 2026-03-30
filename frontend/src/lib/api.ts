@@ -351,6 +351,20 @@ export async function submitVod(url: string): Promise<{ job_id: string }> {
   return res.json();
 }
 
+export async function importClip(file: File): Promise<{ job_id: string }> {
+  const form = new FormData();
+  form.append("file", file);
+  const res = await fetch(`${BASE}/import-clip`, {
+    method: "POST",
+    body: form,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: "Upload failed" }));
+    throw new Error(err.error || "Upload failed");
+  }
+  return res.json();
+}
+
 export async function getJobStatus(jobId: string): Promise<JobResponse> {
   const res = await fetch(`${BASE}/jobs/${jobId}`);
   if (!res.ok) throw new Error("Failed to fetch job status");

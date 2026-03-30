@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback, type FormEvent } from "react";
 import { useNavigate } from "react-router";
-import { X, Loader2, Link as LinkIcon, Upload, MonitorPlay } from "lucide-react";
-import { submitVod } from "../lib/api";
+import { X, Loader2, Link as LinkIcon, Upload, MonitorPlay, FileVideo } from "lucide-react";
+import { submitVod, importClip } from "../lib/api";
 import { useTranslation } from "react-i18next";
 
 type ImportTab = "twitch" | "youtube" | "upload";
@@ -16,7 +16,7 @@ interface Tab {
 const TABS: Tab[] = [
   { id: "twitch", labelKey: "newProject.twitchVod", icon: <MonitorPlay className="w-4 h-4" />, enabled: true },
   { id: "youtube", labelKey: "newProject.youtube", icon: <MonitorPlay className="w-4 h-4" />, enabled: false },
-  { id: "upload", labelKey: "newProject.upload", icon: <Upload className="w-4 h-4" />, enabled: false },
+  { id: "upload", labelKey: "newProject.upload", icon: <Upload className="w-4 h-4" />, enabled: true },
 ];
 
 interface Props {
@@ -31,7 +31,10 @@ export default function NewProjectModal({ open, onClose }: Props) {
   const [url, setUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const [dragActive, setDragActive] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const backdropRef = useRef<HTMLDivElement>(null);
 
   // Focus input when modal opens
@@ -80,11 +83,41 @@ export default function NewProjectModal({ open, onClose }: Props) {
         setLoading(false);
       }
     }
+
+    if (activeTab === "upload") {
+      if (!file) return;
+      setLoading(true);
+      try {
+        const { job_id } = await importClip(file);
+        setFile(null);
+        onClose();
+        navigate(`/${job_id}`);
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : t("common.error"));
+      } finally {
+        setLoading(false);
+      }
+    }
   }
+
+  const ACCEPTED_VIDEO = ".mp4,.mov,.webm,.mkv,.avi";
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setDragActive(false);
+    const dropped = e.dataTransfer.files[0];
+    if (dropped) { setFile(dropped); setError(""); }
+  }, []);
+
+  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const selected = e.target.files?.[0];
+    if (selected) { setFile(selected); setError(""); }
+  }, []);
 
   function handleClose() {
     if (!loading) {
       setUrl("");
+      setFile(null);
       setError("");
       onClose();
     }
@@ -151,6 +184,50 @@ export default function NewProjectModal({ open, onClose }: Props) {
             </div>
           )}
 
+          {activeTab === "upload" && (
+            <>
+              <input ref={fileInputRef} type="file" accept={ACCEPTED_VIDEO} onChange={handleFileSelect} className="hidden" />
+              <div
+                onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
+                onDragLeave={() => setDragActive(false)}
+                onDrop={handleDrop}
+                onClick={() => !loading && fileInputRef.current?.click()}
+                className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all ${
+                  dragActive
+                    ? "border-white/30 bg-white/[0.06]"
+                    : file
+                      ? "border-white/[0.15] bg-white/[0.04]"
+                      : "border-white/[0.08] bg-white/[0.02] hover:border-white/[0.15] hover:bg-white/[0.04]"
+                } ${loading ? "opacity-50 pointer-events-none" : ""}`}
+              >
+                {file ? (
+                  <div className="flex items-center justify-center gap-3">
+                    <FileVideo className="w-8 h-8 text-zinc-400" />
+                    <div className="text-left">
+                      <p className="text-sm text-white font-medium truncate max-w-[280px]">{file.name}</p>
+                      <p className="text-xs text-zinc-500">{(file.size / 1024 / 1024).toFixed(1)} Mo</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); setFile(null); }}
+                      className="text-zinc-600 hover:text-zinc-300 transition-colors p-1"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <Upload className="w-8 h-8 text-zinc-600 mx-auto mb-3" />
+                    <p className="text-sm text-zinc-400 mb-1">
+                      {dragActive ? t("newProject.dropZoneActive") : t("newProject.dropZoneHint")}
+                    </p>
+                    <p className="text-xs text-zinc-600">.mp4, .mov, .webm, .mkv</p>
+                  </>
+                )}
+              </div>
+            </>
+          )}
+
           {error && (
             <p className="text-xs text-red-400 mt-2 px-1">{error}</p>
           )}
@@ -167,16 +244,16 @@ export default function NewProjectModal({ open, onClose }: Props) {
             </button>
             <button
               type="submit"
-              disabled={loading || !url.trim()}
+              disabled={loading || (activeTab === "twitch" ? !url.trim() : !file)}
               className="px-5 py-2 bg-white text-black text-sm font-medium rounded-lg hover:bg-zinc-200 disabled:bg-zinc-800 disabled:text-zinc-500 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
             >
               {loading ? (
                 <>
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  {t("newProject.analyzing")}
+                  {activeTab === "upload" ? t("newProject.uploading") : t("newProject.analyzing")}
                 </>
               ) : (
-                t("newProject.analyze")
+                activeTab === "upload" ? t("newProject.importClip") : t("newProject.analyze")
               )}
             </button>
           </div>

@@ -1,6 +1,6 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import { randomUUID } from 'node:crypto'
-import { existsSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
 import path from 'node:path'
 import Job from '#models/job'
 import db from '@adonisjs/lucid/services/db'
@@ -29,6 +29,50 @@ export default class JobsController {
     await redis.lpush('cuttie:jobs_queue', JSON.stringify({ job_id: job.id, url }))
 
     return response.created({ job_id: job.id })
+  }
+
+  // POST /api/import-clip
+  async importClip({ request, response, auth }: HttpContext) {
+    const user = auth.getUserOrFail()
+
+    const file = request.file('file', {
+      extnames: ['mp4', 'mov', 'webm', 'mkv', 'avi'],
+      size: '500mb',
+    })
+
+    if (!file || !file.isValid) {
+      return response.badRequest({ error: file?.errors?.[0]?.message || 'Invalid video file' })
+    }
+
+    const jobId = randomUUID()
+    const clipDir = path.join(CLIPS_BASE, jobId)
+    mkdirSync(clipDir, { recursive: true })
+
+    // Move uploaded file to clips directory
+    await file.move(clipDir, { name: 'clip_01.mp4' })
+
+    if (!file.filePath) {
+      return response.internalServerError({ error: 'File upload failed' })
+    }
+
+    // Create job record
+    const originalFilename = file.clientName
+    await Job.create({
+      id: jobId,
+      url: `import://${originalFilename}`,
+      status: 'PENDING',
+      vodTitle: originalFilename.replace(/\.[^.]+$/, ''),
+      userId: user.id,
+    })
+
+    // Push to Redis — worker picks up and runs import pipeline
+    await redis.lpush('cuttie:jobs_queue', JSON.stringify({
+      job_id: jobId,
+      type: 'import_clip',
+      original_filename: originalFilename,
+    }))
+
+    return response.created({ job_id: jobId })
   }
 
   // GET /api/jobs

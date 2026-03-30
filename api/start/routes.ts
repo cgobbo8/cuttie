@@ -44,6 +44,7 @@ router
 
         // Jobs
         router.post('/analyze', [() => import('#controllers/jobs_controller'), 'store'])
+        router.post('/import-clip', [() => import('#controllers/jobs_controller'), 'importClip'])
         router.get('/jobs', [() => import('#controllers/jobs_controller'), 'index'])
         router.get('/jobs/:id', [() => import('#controllers/jobs_controller'), 'show'])
         router.post('/jobs/:id/retry', [() => import('#controllers/jobs_controller'), 'retry'])

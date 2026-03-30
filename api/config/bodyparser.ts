@@ -66,7 +66,7 @@ const bodyParserConfig = defineConfig({
     /**
      * Maximum accepted payload size for multipart requests.
      */
-    limit: '20mb',
+    limit: '500mb',
 
     /**
      * Content types handled by the multipart parser.

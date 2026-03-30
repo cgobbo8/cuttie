@@ -6,6 +6,7 @@ import {
   ChevronDown,
   Pencil,
   Download,
+  Upload,
   Clock,
   Flame,
   Sparkles,
@@ -233,6 +234,13 @@ function ClipCard({
             <Pencil className="w-3.5 h-3.5" />
             {t("hotPoints.edit")}
           </Link>
+          <button
+            onClick={() => {}}
+            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-zinc-300 bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.08] rounded-lg transition-colors"
+          >
+            <Upload className="w-3.5 h-3.5" />
+            {t("hotPoints.exportDirectly")}
+          </button>
           <button
             onClick={handleDownload}
             className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-zinc-300 bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.08] rounded-lg transition-colors"

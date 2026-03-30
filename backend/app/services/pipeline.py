@@ -7,7 +7,7 @@ import shutil
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from app.models.schemas import StepTiming
+from app.models.schemas import PipelineConfig, StepTiming
 from app.services.audio_analyzer import analyze_audio
 from app.services.audio_classifier import classify_audio
 from app.services.chat_analyzer import analyze_chat
@@ -160,11 +160,18 @@ def _run_clipping_and_analysis(
     logger.info(f"Clipping + analysis complete: {extracted} clips, {done_llm} analyzed")
 
 
-def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> None:
+def run_pipeline_sync(
+    job_id: str,
+    url: str,
+    resume_from: str | None = None,
+    config: PipelineConfig | None = None,
+) -> None:
     """Synchronous pipeline — FastAPI runs this in a threadpool automatically.
 
     If resume_from is set, skip completed steps and resume from that point.
+    Config allows overriding classification categories and scoring weights.
     """
+    config = config or PipelineConfig()
     output_dir = os.path.join("data", job_id)
     timer = StepTimer()
 
@@ -219,7 +226,7 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
             update_job(job_id, status="ANALYZING_AUDIO", progress="Analyzing audio signals + classification...", step_timings=timer.timings)
             with ThreadPoolExecutor(max_workers=2) as audio_pool:
                 features_future = audio_pool.submit(analyze_audio, audio_path)
-                classify_future = audio_pool.submit(classify_audio, audio_path)
+                classify_future = audio_pool.submit(classify_audio, audio_path, config=config.classification)
                 audio_features = features_future.result()
                 classification_features = classify_future.result()
 
@@ -233,8 +240,9 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
             update_job(job_id, status="SCORING", progress="Computing scores and finding hot points...", step_timings=timer.timings)
             hot_points = compute_scores(
                 audio_features, chat_features,
-                total_duration=duration, top_n=50,
+                total_duration=duration, top_n=config.scoring.top_n_candidates,
                 classification_features=classification_features,
+                scoring_config=config.scoring,
             )
 
             # 6. Save initial hot points to DB
@@ -254,7 +262,8 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
             hot_points, triage_transcripts = run_triage(
                 job_id, audio_path, hot_points, duration,
                 chat_messages, vod_meta,
-                candidates_n=50, keep_n=20,
+                candidates_n=config.scoring.top_n_candidates,
+                keep_n=config.scoring.top_n_keep,
             )
 
         # Steps 8+9: Clipping + LLM Analysis (pipelined — download & analyze concurrently)

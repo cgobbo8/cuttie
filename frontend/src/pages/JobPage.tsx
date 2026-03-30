@@ -28,6 +28,7 @@ export default function JobPage() {
   const [status, setStatus] = useState<JobStatusType>("PENDING");
   const [progress, setProgress] = useState(t("job.starting"));
   const [stepTimings, setStepTimings] = useState<Record<string, StepTiming> | null>(null);
+  const [vodUrl, setVodUrl] = useState("");
   const [vodTitle, setVodTitle] = useState("");
   const [vodGame, setVodGame] = useState("");
   const [vodDuration, setVodDuration] = useState(0);
@@ -48,6 +49,7 @@ export default function JobPage() {
     setStatus(job.status);
     setProgress(job.progress || "");
     if (job.step_timings) setStepTimings(job.step_timings);
+    if (job.url) setVodUrl(job.url);
     if (job.vod_title) setVodTitle(job.vod_title);
     if (job.vod_game) setVodGame(job.vod_game);
     if (job.vod_duration_seconds) setVodDuration(job.vod_duration_seconds);
@@ -224,6 +226,7 @@ export default function JobPage() {
       {clipsWithFiles.length > 0 && (
         <HotPoints
           hotPoints={clipsWithFiles}
+          vodUrl={vodUrl}
           vodTitle={vodTitle || "VOD"}
           vodGame={vodGame}
           vodDuration={vodDuration}

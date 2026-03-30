@@ -97,6 +97,7 @@ export interface StepTiming {
 
 export interface JobResponse {
   job_id: string;
+  url: string | null;
   status: JobStatusType;
   progress: string | null;
   hot_points: HotPoint[] | null;
@@ -141,6 +142,7 @@ export interface PaginatedJobs {
 
 interface ServerJobResponse {
   id: string;
+  url?: string | null;
   status: JobStatusType;
   progress?: string | null;
   hotPoints?: ServerHotPoint[] | null;
@@ -180,6 +182,7 @@ function mapJobResponse(raw: ServerJobResponse): JobResponse {
     : null;
   return {
     job_id: raw.id,
+    url: raw.url ?? null,
     status: raw.status,
     progress: raw.progress ?? null,
     hot_points: hotPoints,

@@ -111,6 +111,7 @@
 
   "hotPoints": {
     "views": "vistas",
+    "vodLink": "Ver el VOD",
     "clipsReady_one": "{{count}} clip listo",
     "clipsReady_other": "{{count}} clips listos",
     "hotPointsDetected": "{{count}} momentos destacados detectados",

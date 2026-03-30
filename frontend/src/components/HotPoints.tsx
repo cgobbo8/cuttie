@@ -11,10 +11,12 @@ import {
   Sparkles,
   Zap,
   Play,
+  ExternalLink,
 } from "lucide-react";
 
 interface Props {
   hotPoints: HotPoint[];
+  vodUrl: string;
   vodTitle: string;
   vodGame: string;
   vodDuration: number;
@@ -444,6 +446,7 @@ function ClipCard({
 
 export default function HotPoints({
   hotPoints,
+  vodUrl,
   vodTitle,
   vodGame,
   vodDuration,
@@ -464,7 +467,20 @@ export default function HotPoints({
     <div className="w-full">
       {/* VOD Header */}
       <div className="mb-8">
-        <h2 className="text-xl font-semibold text-white mb-2">{vodTitle}</h2>
+        <div className="flex items-center gap-3 mb-2">
+          <h2 className="text-xl font-semibold text-white">{vodTitle}</h2>
+          {vodUrl && (
+            <a
+              href={vodUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-300 transition-colors shrink-0"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+              {t("hotPoints.vodLink")}
+            </a>
+          )}
+        </div>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-zinc-500">
           {streamer && (
             <span className="flex items-center gap-1.5">

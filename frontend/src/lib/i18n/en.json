@@ -37,7 +37,8 @@
     "games": "Games",
     "creators": "Creators",
     "exports": "Exports",
-    "profile": "Profile"
+    "profile": "Profile",
+    "importClip": "Import clip"
   },
 
   "workspace": {
@@ -134,11 +135,7 @@
     "placeholder": "https://www.twitch.tv/videos/...",
     "analyzing": "Analyzing...",
     "analyze": "Analyze",
-    "cancel": "Cancel",
-    "importClip": "Import",
-    "uploading": "Uploading...",
-    "dropZoneHint": "Drag & drop a video file or click to browse",
-    "dropZoneActive": "Drop to upload"
+    "cancel": "Cancel"
   },
 
   "hotPoints": {
@@ -464,5 +461,12 @@
     "started_one": "{{count}} export started",
     "started_other": "{{count}} exports started",
     "error": "Failed to start export"
+  },
+  "importClip": {
+    "title": "Import clip",
+    "import": "Import",
+    "uploading": "Uploading...",
+    "dropZoneHint": "Drag & drop a video file or click to browse",
+    "dropZoneActive": "Drop to upload"
   }
 }

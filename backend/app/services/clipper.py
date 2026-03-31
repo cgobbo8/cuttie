@@ -404,6 +404,7 @@ def plan_downloads(
 
         start, end = _compute_segment_clip_boundary(
             seg_start, seg_end, hp_list, vod_duration,
+            rms_times, rms_values, rms_threshold,
         )
 
         # Sort by score descending — best HP gets the clip
@@ -429,7 +430,9 @@ def plan_downloads(
 
     # Process orphans: one clip per orphan HP
     for orig_idx, hp in orphans:
-        start, end = _compute_fallback_boundary(hp, vod_duration)
+        start, end = _compute_fallback_boundary(
+            hp, vod_duration, rms_times, rms_values, rms_threshold,
+        )
         rank_counter += 1
         clips_with_bounds.append({
             "rank": rank_counter, "index": orig_idx, "hp": hp,

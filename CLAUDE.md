@@ -1,6 +1,6 @@
 # Cuttie
 
-Outil d'extraction automatique des moments forts de VODs Twitch. URL in -> clips verticaux (9:16) avec facecam + sous-titres out. Editeur de clips integre avec export Remotion.
+Outil d'extraction automatique des moments forts de VODs Twitch. URL in -> clips horizontaux analyses et scores out. Editeur de clips integre avec export Remotion.
 
 ## Stack
 
@@ -8,8 +8,8 @@ Outil d'extraction automatique des moments forts de VODs Twitch. URL in -> clips
 - **Worker** : Python 3.10+, FastAPI, SQLite (WAL), uv
 - **Frontend** : React 19, TypeScript 5.9, Tailwind CSS 4, Vite 8, React Router 7
 - **Editor** : Remotion 4 (player + renderer), canvas editor custom
-- **ML/Audio** : librosa (11025 Hz), PANNs CNN14 (AudioSet), MediaPipe (face detection)
-- **LLM** : OpenAI — Whisper (transcription), GPT-4.5 (analyse), gpt-4o-mini (correction sous-titres)
+- **ML/Audio** : librosa (11025 Hz), PANNs CNN14 (AudioSet)
+- **LLM** : Groq — Whisper large-v3-turbo (transcription), Gemini Flash (vision, analyse, correction sous-titres)
 - **Video** : FFmpeg, OpenCV, yt-dlp
 - **Storage** : S3/Minio (clips, assets, renders)
 - **Tests** : Vitest (frontend + backend unit/functional)
@@ -88,7 +88,7 @@ cuttie/
 │   │   ├── routers/analyze.py                 # Endpoints clips, renders, assets
 │   │   ├── models/schemas.py                  # Pydantic v2
 │   │   └── services/
-│   │       ├── pipeline.py                    # Orchestrateur (10 etapes)
+│   │       ├── pipeline.py                    # Orchestrateur (8 etapes)
 │   │       ├── downloader.py                  # yt-dlp : audio WAV + chat Twitch GQL
 │   │       ├── audio_analyzer.py              # librosa : RMS, flux, pitch, centroid, ZCR, onset
 │   │       ├── audio_classifier.py            # PANNs CNN14 : events audio
@@ -96,9 +96,6 @@ cuttie/
 │   │       ├── scorer.py                      # Score composite + peak detection (scipy)
 │   │       ├── triage.py                      # Whisper + LLM light scoring : 50 -> 20
 │   │       ├── clipper.py                     # Extraction clips video
-│   │       ├── vertical_clipper.py            # Generation 9:16 : facecam + game + sous-titres
-│   │       ├── facecam_detector.py            # MediaPipe + Canny + HoughLinesP
-│   │       ├── subtitle_generator.py          # Whisper -> LLM rewrite -> ASS karaoke
 │   │       ├── frame_extractor.py             # Extraction frames pour vision
 │   │       ├── vision_analyzer.py             # GPT-4.5 vision
 │   │       ├── llm_analyzer.py                # Synthese narrative + scoring
@@ -141,7 +138,7 @@ cuttie/
             └── i18n/index.ts                  # i18next (fr/en/es)
 ```
 
-## Pipeline (10 etapes)
+## Pipeline (8 etapes)
 
 ```
 1. DOWNLOADING_AUDIO   -> yt-dlp : audio 11025Hz mono WAV
@@ -151,14 +148,11 @@ cuttie/
 5. SCORING             -> Score composite pondere + peak detection -> top 50
 6. TRIAGE              -> Whisper segments + LLM light scoring -> top 20
 7. CLIPPING            -> yt-dlp video + FFmpeg extraction (bornes dynamiques RMS)
-8. VERTICAL            -> 2 phases paralleles :
-                          Phase 1 : Whisper + LLM rewrite + ASS (5 workers API-bound)
-                          Phase 2 : FFmpeg render 1080x1920 (3 workers CPU-bound)
-9. LLM_ANALYSIS        -> Frames + GPT-4.5 vision + synthese narrative
-10. DONE
+                          + LLM_ANALYSIS pipeline (frames + vision + synthese narrative)
+8. DONE
 ```
 
-Checkpoints resumables : CLIPPING, VERTICAL, TRANSCRIBING, LLM_ANALYSIS.
+Checkpoints resumables : CLIPPING, TRANSCRIBING, LLM_ANALYSIS.
 
 ## Scoring
 
@@ -167,39 +161,6 @@ Checkpoints resumables : CLIPPING, VERTICAL, TRANSCRIBING, LLM_ANALYSIS.
 - chat_burst 10%, emote_density 8%, caps_ratio 7%, centroid 5%, zcr 2%
 
 **Score final** : `0.3 * heuristique + 0.7 * LLM virality`
-
-## Layout vertical (1080x1920)
-
-```
-+--------------------+
-|   (blurred bg)     |
-|  +-------------+   |
-|  |  facecam    |   |  560px, top center, border-radius 20px
-|  +-------------+   |
-|                    |
-|  +-------------+   |
-|  |   game      |   |  70% hauteur, centre
-|  |  (cropped)  |   |
-|  +-------------+   |
-|  (bande floue)     |  marge bottom 60px
-+--------------------+
-```
-
-## Detection facecam
-
-1. MediaPipe face detection sur 5 frames par clip
-2. Median des positions sur tous les clips, filtrage outliers (>2x largeur face)
-3. Carte d'edges persistantes (Canny sur 20+ frames, seuil >50%)
-4. HoughLinesP -> bordures de l'overlay (lignes droites persistantes)
-5. Snap aux bords du frame si <8%, inner crop 5px
-
-## Sous-titres
-
-- Whisper word-level timestamps -> LLM rewrite (gpt-4o-mini, correction francais)
-- ASS karaoke (\kf tags) : remplissage progressif mot par mot
-- Couleur remplissage : blanc legerement teinte vers la couleur dominante du clip
-- Couleur base : couleur dominante (k-means sur 3 frames)
-- Font : Luckiest Guy, bold, uppercase, outline noire
 
 ## Authentification
 

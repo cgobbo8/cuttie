@@ -10,7 +10,7 @@ import subprocess
 
 import cv2
 import numpy as np
-from app.services.openai_client import get_openai_client, GPT_MINI_MODEL, WHISPER_MODEL
+from app.services.openai_client import get_openai_client, get_groq_client, LLM_MODEL, WHISPER_MODEL
 
 logger = logging.getLogger(__name__)
 
@@ -73,7 +73,7 @@ def transcribe_with_words(clip_path: str) -> tuple[str, float, list[dict]]:
     Returns (full_text, speech_rate, words) where words is a list of
     {"word": str, "start": float, "end": float}.
     """
-    client = get_openai_client()
+    client = get_groq_client()
 
     # Extract audio as mp3
     audio_path = clip_path.replace(".mp4", "_sub_audio.mp3")
@@ -203,7 +203,7 @@ def _rewrite_words_with_llm(words: list[dict]) -> list[dict]:
     client = get_openai_client()
     try:
         response = client.chat.completions.create(
-            model=GPT_MINI_MODEL,
+            model=LLM_MODEL,
             temperature=0,
             messages=[
                 {

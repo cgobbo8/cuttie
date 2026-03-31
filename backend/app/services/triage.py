@@ -18,7 +18,7 @@ from app.models.schemas import HotPoint
 from app.services.clipper import POST_PEAK_WINDOW, PRE_PEAK_WINDOW
 from app.services.db import save_hot_points, update_job
 from app.services.llm_analyzer import _extract_chat_for_clip
-from app.services.openai_client import get_openai_client, GPT_MODEL, WHISPER_MODEL
+from app.services.openai_client import get_openai_client, get_groq_client, LLM_MODEL, WHISPER_MODEL
 
 logger = logging.getLogger(__name__)
 
@@ -61,14 +61,13 @@ def _transcribe_segment(segment_path: str) -> tuple[str, float]:
 
     Returns (transcript_text, speech_rate).
     """
-    client = get_openai_client()
+    client = get_groq_client()
     try:
         with open(segment_path, "rb") as f:
             result = client.audio.transcriptions.create(
                 model=WHISPER_MODEL,
                 file=f,
                 response_format="verbose_json",
-                timestamp_granularities=["segment"],
             )
 
         text = result.text or ""
@@ -103,9 +102,18 @@ def _triage_batch(
     candidates_text = ""
     for c in candidates:
         mood_line = f"\nMood chat: {c['chat_mood']}" if c["chat_mood"] else ""
+        signals = c.get("signals")
+        if signals:
+            signals_line = (
+                f"\nSignaux: volume={signals.rms:.0%}, chat={signals.chat_speed:.0%}, "
+                f"flux={signals.spectral_flux:.0%}, pitch={signals.pitch_variance:.0%}"
+            )
+        else:
+            signals_line = ""
         candidates_text += f"""
 ---
 **Candidat #{c['idx']}** — {c['timestamp_display']} (score heuristique: {c['score']:.0%})
+{signals_line}
 Transcription: {c['transcript'] if c['transcript'] else '(silence)'}
 Chat: {c['chat_context'] if c['chat_context'] else '(pas de chat)'}
 {mood_line}
@@ -124,24 +132,31 @@ Pour CHAQUE candidat, évalue son potentiel viral de 0 à 1 :
 - 0.2-0.5 = moyen (activité mais rien de remarquable)
 - <0.2 = à skip (bruit de fond, silence, conversation banale)
 
-Retourne un JSON array :
-[{{"idx": N, "interest": 0.X}}]
+Retourne un JSON object :
+{{"results": [{{"idx": N, "interest": 0.X}}, ...]}}
 
 Sois exigeant. JSON uniquement, pas de markdown."""
 
     try:
         response = client.chat.completions.create(
-            model=GPT_MODEL,
+            model=LLM_MODEL,
             messages=[{"role": "user", "content": prompt}],
             temperature=0.3,
-            max_completion_tokens=500,
+            max_completion_tokens=1000,
+            response_format={"type": "json_object"},
         )
 
         content = response.choices[0].message.content.strip()
-        if content.startswith("```"):
-            content = content.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+        parsed = json.loads(content)
 
-        return json.loads(content)
+        # json_object mode returns an object — extract the array
+        if isinstance(parsed, dict):
+            for v in parsed.values():
+                if isinstance(v, list):
+                    return v
+        if isinstance(parsed, list):
+            return parsed
+        return []
 
     except Exception as e:
         logger.error(f"Triage LLM call failed: {e}")
@@ -237,6 +252,7 @@ def run_triage(
                 "idx": i,
                 "timestamp_display": hp.timestamp_display,
                 "score": hp.score,
+                "signals": hp.signals,
                 "transcript": transcript,
                 "chat_context": chat_context,
                 "chat_mood": hp.chat_mood,

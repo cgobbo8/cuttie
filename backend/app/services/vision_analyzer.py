@@ -10,7 +10,7 @@ import logging
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from app.services.openai_client import get_openai_client, GPT_MODEL
+from app.services.openai_client import get_openai_client, LLM_MODEL
 
 logger = logging.getLogger(__name__)
 
@@ -136,25 +136,32 @@ Pour chaque moment:
 - "label": titre court (5-8 mots), en français{", référençant le gameplay de " + vod_game if vod_game else ""}
 - "description": 1 phrase, ce qui se passe visuellement (inclure les infos du HUD si pertinentes : vie basse, gros dégâts, kill, loot, etc.)
 
-JSON array uniquement."""
+JSON object : {{"moments": [...]}}"""
 
     content_parts.insert(0, {"type": "text", "text": prompt})
 
     try:
         response = client.chat.completions.create(
-            model=GPT_MODEL,
+            model=LLM_MODEL,
             messages=[{"role": "user", "content": content_parts}],
             temperature=0.3,
-            max_completion_tokens=800,
+            max_completion_tokens=1500,
+            response_format={"type": "json_object"},
         )
 
-        content = response.choices[0].message.content.strip()
-        if content.startswith("```"):
-            content = content.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+        content = response.choices[0].message.content or ""
+        finish = response.choices[0].finish_reason
+        content = content.strip()
+        logger.debug(f"Vision raw ({finish}, {len(content)} chars): {content[:200]}")
 
-        moments = json.loads(content)
-        if not isinstance(moments, list):
-            moments = [moments]
+        parsed = json.loads(content)
+        # json_object mode returns an object — extract the array
+        if isinstance(parsed, dict):
+            moments = parsed.get("moments") or next((v for v in parsed.values() if isinstance(v, list)), [])
+        elif isinstance(parsed, list):
+            moments = parsed
+        else:
+            moments = [parsed]
 
         # Validate, clean, and snap timestamps to nearest actual frame
         frame_times = [f["time"] for f in frames]

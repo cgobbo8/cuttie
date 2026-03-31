@@ -15,14 +15,14 @@ import subprocess
 from app.models.schemas import HotPoint, KeyMoment, LlmAnalysis
 from app.services.db import publish_clip_ready, save_hot_points, update_job
 from app.services.frame_extractor import extract_frames
-from app.services.openai_client import get_openai_client, GPT_MODEL, WHISPER_MODEL
+from app.services.openai_client import get_openai_client, get_groq_client, LLM_MODEL, WHISPER_MODEL
 from app.services.vision_analyzer import analyze_clip_frames
 
 logger = logging.getLogger(__name__)
 
 CLIPS_DIR = "clips"
-HEURISTIC_WEIGHT = 0.3
-LLM_WEIGHT = 0.7
+HEURISTIC_WEIGHT = 0.4
+LLM_WEIGHT = 0.6
 
 
 def _extract_audio_segment(clip_path: str, output_path: str) -> bool:
@@ -51,7 +51,7 @@ def transcribe_clip(clip_path: str) -> tuple[str, float, list[float]]:
 
     Returns (transcript_text, speech_rate, segment_start_timestamps).
     """
-    client = get_openai_client()
+    client = get_groq_client()
 
     audio_path = clip_path.replace(".mp4", "_audio.mp3")
     if not _extract_audio_segment(clip_path, audio_path):
@@ -63,7 +63,6 @@ def transcribe_clip(clip_path: str) -> tuple[str, float, list[float]]:
                 model=WHISPER_MODEL,
                 file=f,
                 response_format="verbose_json",
-                timestamp_granularities=["segment"],
             )
 
         text = result.text or ""
@@ -122,6 +121,7 @@ def synthesize_analysis(
     vod_meta: dict,
     chat_context: str = "",
     chat_mood: str = "",
+    signals: "SignalBreakdown | None" = None,
 ) -> tuple[LlmAnalysis, str]:
     """Final synthesis: combine transcript + vision moments into full analysis."""
     client = get_openai_client()
@@ -170,11 +170,18 @@ def synthesize_analysis(
 
 Note sur le chat : ce streamer a une petite communauté. Le chat mélange des viewers classiques et des amis proches du streamer qui font parfois des private jokes. Utilise le chat comme indicateur de réaction (emotes, exclamations, questions) mais ne te fie pas aveuglément aux messages — distingue les réactions spontanées des conversations entre potes."""
 
+    signals_text = ""
+    if signals:
+        signals_text = (
+            f"\n**Signaux détectés:** volume={signals.rms:.0%}, activité chat={signals.chat_speed:.0%}, "
+            f"flux spectral={signals.spectral_flux:.0%}, variation pitch={signals.pitch_variance:.0%}"
+        )
+
     prompt = f"""Tu es un expert en contenu viral pour Twitch/YouTube. Analyse cet extrait de stream.
 
 {identity_card}
 **Timestamp:** {timestamp_display}
-**Score audio:** {score:.0%}
+**Score heuristique:** {score:.0%}{signals_text}
 **Debit:** {speech_rate:.1f} mots/s
 
 **Transcription :**
@@ -195,15 +202,17 @@ JSON uniquement, pas de markdown."""
 
     try:
         response = client.chat.completions.create(
-            model=GPT_MODEL,
+            model=LLM_MODEL,
             messages=[{"role": "user", "content": prompt}],
             temperature=0.4,
-            max_completion_tokens=600,
+            max_completion_tokens=1500,
+            response_format={"type": "json_object"},
         )
 
-        content = response.choices[0].message.content.strip()
-        if content.startswith("```"):
-            content = content.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+        content = response.choices[0].message.content or ""
+        finish = response.choices[0].finish_reason
+        content = content.strip()
+        logger.debug(f"Synthesis raw ({finish}, {len(content)} chars): {content[:200]}")
 
         data = json.loads(content)
 
@@ -287,6 +296,7 @@ def analyze_single_clip(
         vod_meta=vod_meta,
         chat_context=chat_context,
         chat_mood=hp.chat_mood,
+        signals=hp.signals,
     )
 
     hp.llm = llm

@@ -21,9 +21,8 @@ export default class GamesController {
 
     const rows = await baseQuery
       .select(
-        db.raw("COALESCE(NULLIF(vod_game_id, ''), vod_game) as game_key"),
-        db.raw('MAX(vod_game) as vod_game'),
-        db.raw("MAX(vod_game_id) as vod_game_id"),
+        db.raw('vod_game'),
+        db.raw("MAX(NULLIF(vod_game_id, '')) as vod_game_id"),
         db.raw("MAX(vod_game_thumbnail) as vod_game_thumbnail"),
         db.raw('COUNT(*) as vod_count'),
         db.raw('COUNT(DISTINCT streamer) as streamer_count'),
@@ -32,7 +31,7 @@ export default class GamesController {
         db.raw('MAX(stream_date) as last_stream_date'),
         db.raw("GROUP_CONCAT(DISTINCT streamer) as streamers")
       )
-      .groupByRaw("COALESCE(NULLIF(vod_game_id, ''), vod_game)")
+      .groupBy('vod_game')
       .orderBy('vod_count', 'desc')
 
     const games = rows.map((row) => ({

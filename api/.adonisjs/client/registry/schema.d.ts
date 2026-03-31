@@ -115,6 +115,18 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/jobs_controller').default['store']>>> | { status: 422; response: { errors: SimpleError[] } }
     }
   }
+  'jobs.add_clip': {
+    methods: ["POST"]
+    pattern: '/api/jobs/:id/add-clip'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { id: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/jobs_controller').default['addClip']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/jobs_controller').default['addClip']>>>
+    }
+  }
   'jobs.index': {
     methods: ["GET","HEAD"]
     pattern: '/api/jobs'

@@ -60,6 +60,12 @@ const routes = {
     tokens: [{"old":"/api/analyze","type":0,"val":"api","end":""},{"old":"/api/analyze","type":0,"val":"analyze","end":""}],
     types: placeholder as Registry['jobs.store']['types'],
   },
+  'jobs.add_clip': {
+    methods: ["POST"],
+    pattern: '/api/jobs/:id/add-clip',
+    tokens: [{"old":"/api/jobs/:id/add-clip","type":0,"val":"api","end":""},{"old":"/api/jobs/:id/add-clip","type":0,"val":"jobs","end":""},{"old":"/api/jobs/:id/add-clip","type":1,"val":"id","end":""},{"old":"/api/jobs/:id/add-clip","type":0,"val":"add-clip","end":""}],
+    types: placeholder as Registry['jobs.add_clip']['types'],
+  },
   'jobs.index': {
     methods: ["GET","HEAD"],
     pattern: '/api/jobs',

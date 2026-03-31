@@ -31,9 +31,13 @@ export default class JobsController {
     return response.created({ job_id: job.id })
   }
 
-  // POST /api/import-clip
-  async importClip({ request, response, auth }: HttpContext) {
+  // POST /api/jobs/:id/add-clip
+  async addClip({ params, request, response, auth }: HttpContext) {
     const user = auth.getUserOrFail()
+    const jobId = params.id
+
+    const job = await Job.query().where('id', jobId).where('user_id', user.id).first()
+    if (!job) return response.notFound({ error: 'job not found' })
 
     const file = request.file('file', {
       extnames: ['mp4', 'mov', 'webm', 'mkv', 'avi'],
@@ -44,35 +48,36 @@ export default class JobsController {
       return response.badRequest({ error: file?.errors?.[0]?.message || 'Invalid video file' })
     }
 
-    const jobId = randomUUID()
+    // Determine next clip number from existing hot_points
+    const hotPoints: any[] = job.hotPoints ?? []
+    const existingNums = hotPoints
+      .map((hp: any) => hp.clip_filename?.match(/clip_(\d+)/)?.[1])
+      .filter(Boolean)
+      .map(Number)
+    const nextNum = (existingNums.length > 0 ? Math.max(...existingNums) : 0) + 1
+    const clipFilename = `clip_${String(nextNum).padStart(2, '0')}.mp4`
+
     const clipDir = path.join(CLIPS_BASE, jobId)
     mkdirSync(clipDir, { recursive: true })
 
-    // Move uploaded file to clips directory
-    await file.move(clipDir, { name: 'clip_01.mp4' })
+    await file.move(clipDir, { name: clipFilename })
 
     if (!file.filePath) {
       return response.internalServerError({ error: 'File upload failed' })
     }
 
-    // Create job record
-    const originalFilename = file.clientName
-    await Job.create({
-      id: jobId,
-      url: `import://${originalFilename}`,
-      status: 'PENDING',
-      vodTitle: originalFilename.replace(/\.[^.]+$/, ''),
-      userId: user.id,
-    })
+    const clipName = file.clientName.replace(/\.[^.]+$/, '')
 
-    // Push to Redis — worker picks up and runs import pipeline
+    // Push to Redis — worker processes the clip and publishes clip_ready via SSE
     await redis.lpush('cuttie:jobs_queue', JSON.stringify({
       job_id: jobId,
-      type: 'import_clip',
-      original_filename: originalFilename,
+      type: 'add_clip',
+      clip_filename: clipFilename,
+      clip_name: clipName,
+      rank: nextNum,
     }))
 
-    return response.created({ job_id: jobId })
+    return response.created({ clip_filename: clipFilename, clip_name: clipName })
   }
 
   // GET /api/jobs
@@ -96,9 +101,9 @@ export default class JobsController {
       const q = `%${search}%`
       query.where((builder) => {
         builder
-          .whereILike('vod_title', q)
-          .orWhereILike('streamer', q)
-          .orWhereILike('vod_game', q)
+          .whereLike('vod_title', q)
+          .orWhereLike('streamer', q)
+          .orWhereLike('vod_game', q)
       })
     }
 

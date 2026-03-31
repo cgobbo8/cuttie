@@ -24,6 +24,7 @@ export interface ApiDefinition {
   }
   jobs: {
     store: typeof routes['jobs.store']
+    addClip: typeof routes['jobs.add_clip']
     index: typeof routes['jobs.index']
     show: typeof routes['jobs.show']
     retry: typeof routes['jobs.retry']

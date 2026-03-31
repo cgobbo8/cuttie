@@ -13,10 +13,12 @@ async function processQueue() {
   while (queue.length > 0 && running < MAX_CONCURRENT) {
     const task = queue.shift()!
     running++
+    console.log(`[RenderQueue] Starting task (running=${running}, queued=${queue.length})`)
     task()
-      .catch(() => {})
+      .catch((err) => { console.error('[RenderQueue] Task error:', err.message) })
       .finally(() => {
         running--
+        console.log(`[RenderQueue] Task finished (running=${running}, queued=${queue.length})`)
         processQueue()
       })
   }
@@ -25,6 +27,7 @@ async function processQueue() {
 /** Enqueue a render task. Up to MAX_CONCURRENT tasks run in parallel. */
 export function enqueueRender(task: RenderTask) {
   queue.push(task)
+  console.log(`[RenderQueue] Enqueued (running=${running}, queued=${queue.length})`)
   processQueue()
 }
 

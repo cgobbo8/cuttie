@@ -37,8 +37,7 @@
     "games": "Juegos",
     "creators": "Creadores",
     "exports": "Exportaciones",
-    "profile": "Perfil",
-    "importClip": "Importar clip"
+    "profile": "Perfil"
   },
 
   "workspace": {
@@ -140,6 +139,7 @@
 
   "hotPoints": {
     "views": "vistas",
+    "vodLink": "Ver el VOD",
     "clipsReady_one": "{{count}} clip listo",
     "clipsReady_other": "{{count}} clips listos",
     "hotPointsDetected": "{{count}} momentos destacados detectados",
@@ -464,8 +464,10 @@
   },
   "importClip": {
     "title": "Importar clip",
+    "addClip": "Importar un clip",
     "import": "Importar",
     "uploading": "Subiendo...",
+    "started": "\"{{name}}\" en proceso, aparecerá en la lista",
     "dropZoneHint": "Arrastra un archivo de vídeo o haz clic para buscar",
     "dropZoneActive": "Suelta para subir"
   }

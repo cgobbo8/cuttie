@@ -105,6 +105,7 @@ export interface StepTiming {
 
 export interface JobResponse {
   job_id: string;
+  url: string | null;
   status: JobStatusType;
   progress: string | null;
   hot_points: HotPoint[] | null;
@@ -150,6 +151,7 @@ export interface PaginatedJobs {
 
 interface ServerJobResponse {
   id: string;
+  url?: string | null;
   status: JobStatusType;
   progress?: string | null;
   hotPoints?: ServerHotPoint[] | null;
@@ -190,6 +192,7 @@ function mapJobResponse(raw: ServerJobResponse): JobResponse {
     : null;
   return {
     job_id: raw.id,
+    url: raw.url ?? null,
     status: raw.status,
     progress: raw.progress ?? null,
     hot_points: hotPoints,
@@ -351,10 +354,10 @@ export async function submitVod(url: string): Promise<{ job_id: string }> {
   return res.json();
 }
 
-export async function importClip(file: File): Promise<{ job_id: string }> {
+export async function addClipToJob(jobId: string, file: File): Promise<{ clip_filename: string; clip_name: string }> {
   const form = new FormData();
   form.append("file", file);
-  const res = await fetch(`${BASE}/import-clip`, {
+  const res = await fetch(`${BASE}/jobs/${jobId}/add-clip`, {
     method: "POST",
     body: form,
   });

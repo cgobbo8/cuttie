@@ -1,8 +1,7 @@
 import { NavLink, useNavigate } from "react-router";
 import { useState } from "react";
-import { Film, FolderOpen, Gamepad2, Home, LogOut, Plus, Upload, Users } from "lucide-react";
+import { Film, FolderOpen, Gamepad2, Home, LogOut, Plus, Users } from "lucide-react";
 import NewProjectModal from "./NewProjectModal";
-import ImportClipModal from "./ImportClipModal";
 import CreatorSelector from "./CreatorSelector";
 import { useAuth } from "../lib/AuthContext";
 import { useCreatorWorkspace } from "../lib/CreatorWorkspaceContext";
@@ -11,7 +10,6 @@ import { useTranslation } from "react-i18next";
 export default function Sidebar() {
   const { t } = useTranslation();
   const [modalOpen, setModalOpen] = useState(false);
-  const [importModalOpen, setImportModalOpen] = useState(false);
   const { user, logout } = useAuth();
   const { isAllMode } = useCreatorWorkspace();
   const navigate = useNavigate();
@@ -46,20 +44,13 @@ export default function Sidebar() {
         </div>
 
         {/* New project button */}
-        <div className="px-3 mb-1 space-y-1">
+        <div className="px-3 mb-1">
           <button
             onClick={() => setModalOpen(true)}
             className="w-full flex items-center gap-2 px-3 py-2 text-sm font-medium text-white bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.08] rounded-lg transition-colors"
           >
             <Plus className="w-4 h-4" />
             {t("sidebar.newProject")}
-          </button>
-          <button
-            onClick={() => setImportModalOpen(true)}
-            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.04] rounded-lg transition-colors"
-          >
-            <Upload className="w-4 h-4" />
-            {t("sidebar.importClip")}
           </button>
         </div>
 
@@ -110,7 +101,6 @@ export default function Sidebar() {
       </aside>
 
       <NewProjectModal open={modalOpen} onClose={() => setModalOpen(false)} />
-      <ImportClipModal open={importModalOpen} onClose={() => setImportModalOpen(false)} />
     </>
   );
 }

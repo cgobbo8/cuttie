@@ -12,11 +12,12 @@ import {
 } from "../lib/api";
 import JobStatus from "../components/JobStatus";
 import HotPoints from "../components/HotPoints";
-import { ArrowLeft, RotateCcw, Loader2, X, PackageCheck } from "lucide-react";
+import { ArrowLeft, RotateCcw, Loader2, X, PackageCheck, Upload } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useToast } from "../components/Toast";
 import { useCreatorWorkspace } from "../lib/CreatorWorkspaceContext";
 import BatchExportModal from "../components/BatchExportModal";
+import ImportClipModal from "../components/ImportClipModal";
 
 export default function JobPage() {
   const { t } = useTranslation();
@@ -31,6 +32,7 @@ export default function JobPage() {
   const [status, setStatus] = useState<JobStatusType>("PENDING");
   const [progress, setProgress] = useState(t("job.starting"));
   const [stepTimings, setStepTimings] = useState<Record<string, StepTiming> | null>(null);
+  const [vodUrl, setVodUrl] = useState("");
   const [vodTitle, setVodTitle] = useState("");
   const [vodGame, setVodGame] = useState("");
   const [vodDuration, setVodDuration] = useState(0);
@@ -50,6 +52,8 @@ export default function JobPage() {
   const [selectedClips, setSelectedClips] = useState<Set<string>>(new Set());
   const [showBatchModal, setShowBatchModal] = useState(false);
   const [quickExportClip, setQuickExportClip] = useState<string | null>(null);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [pendingImports, setPendingImports] = useState<Set<string>>(new Set());
 
   const sseCleanupRef = useRef<(() => void) | null>(null);
 
@@ -57,6 +61,7 @@ export default function JobPage() {
     setStatus(job.status);
     setProgress(job.progress || "");
     if (job.step_timings) setStepTimings(job.step_timings);
+    if (job.url) setVodUrl(job.url);
     if (job.vod_title) setVodTitle(job.vod_title);
     if (job.vod_game) setVodGame(job.vod_game);
     if (job.vod_duration_seconds) setVodDuration(job.vod_duration_seconds);
@@ -93,6 +98,15 @@ export default function JobPage() {
       });
       const clipKey = event.hot_point.clip_filename || `rank-${event.rank}`;
       setAnimatedClips((prev) => new Set(prev).add(clipKey));
+      // Remove from pending imports if it was one
+      if (event.hot_point.clip_filename) {
+        setPendingImports((prev) => {
+          if (!prev.has(event.hot_point.clip_filename!)) return prev;
+          const next = new Set(prev);
+          next.delete(event.hot_point.clip_filename!);
+          return next;
+        });
+      }
       return;
     }
 
@@ -226,14 +240,25 @@ export default function JobPage() {
           <ArrowLeft className="w-4 h-4" />
           {t("job.backToProjects")}
         </Link>
-        {status === "DONE" && clipsWithFilesForSelection.length > 0 && !selectionMode && (
-          <button
-            onClick={handleStartSelection}
-            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-zinc-300 bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.08] rounded-lg transition-colors"
-          >
-            <PackageCheck className="w-4 h-4" />
-            {t("batchExport.exportClips")}
-          </button>
+        {status === "DONE" && !selectionMode && (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowImportModal(true)}
+              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-zinc-300 bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.08] rounded-lg transition-colors"
+            >
+              <Upload className="w-4 h-4" />
+              {t("importClip.addClip")}
+            </button>
+            {clipsWithFilesForSelection.length > 0 && (
+              <button
+                onClick={handleStartSelection}
+                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-zinc-300 bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.08] rounded-lg transition-colors"
+              >
+                <PackageCheck className="w-4 h-4" />
+                {t("batchExport.exportClips")}
+              </button>
+            )}
+          </div>
         )}
       </div>
 
@@ -282,9 +307,10 @@ export default function JobPage() {
       )}
 
       {/* Results */}
-      {clipsWithFiles.length > 0 && (
+      {(clipsWithFiles.length > 0 || pendingImports.size > 0) && (
         <HotPoints
           hotPoints={clipsWithFiles}
+          vodUrl={vodUrl}
           vodTitle={vodTitle || "VOD"}
           vodGame={vodGame}
           vodDuration={vodDuration}
@@ -299,6 +325,7 @@ export default function JobPage() {
           selectedClips={selectedClips}
           onToggleClip={handleToggleClip}
           onQuickExport={(filename) => setQuickExportClip(filename)}
+          pendingImports={pendingImports}
         />
       )}
 
@@ -355,6 +382,16 @@ export default function JobPage() {
           onDone={() => { setQuickExportClip(null); }}
         />
       )}
+
+      {/* Import clip modal */}
+      <ImportClipModal
+        jobId={jobId!}
+        open={showImportModal}
+        onClose={() => setShowImportModal(false)}
+        onImported={(clipFilename) => {
+          setPendingImports((prev) => new Set(prev).add(clipFilename));
+        }}
+      />
     </div>
   );
 }

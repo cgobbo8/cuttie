@@ -14,6 +14,17 @@ interface Props {
   onDone: () => void;
 }
 
+type Resolution = "480p" | "720p" | "1080p";
+type FpsOption = 24 | 30 | 60;
+
+const RESOLUTIONS: { value: Resolution; label: string; w: number; h: number }[] = [
+  { value: "480p", label: "480p", w: 480, h: 854 },
+  { value: "720p", label: "HD 720p", w: 720, h: 1280 },
+  { value: "1080p", label: "Full HD 1080p", w: 1080, h: 1920 },
+];
+
+const FPS_OPTIONS: FpsOption[] = [24, 30, 60];
+
 export default function BatchExportModal({ jobId, clipFilenames, onClose, onDone }: Props) {
   const { t } = useTranslation();
   const toast = useToast();
@@ -23,6 +34,8 @@ export default function BatchExportModal({ jobId, clipFilenames, onClose, onDone
   const [selectedTheme, setSelectedTheme] = useState<EditorTheme | null>(null);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
+  const [resolution, setResolution] = useState<Resolution>("1080p");
+  const [fps, setFps] = useState<FpsOption>(30);
 
   useEffect(() => {
     Promise.all([fetchAllThemes(), fetchDefaultTheme()]).then(([all, defaultTheme]) => {
@@ -36,7 +49,12 @@ export default function BatchExportModal({ jobId, clipFilenames, onClose, onDone
     if (!selectedTheme) return;
     setExporting(true);
     try {
-      await startBatchRender(jobId, clipFilenames, selectedTheme.layers);
+      const res = RESOLUTIONS.find((r) => r.value === resolution)!;
+      await startBatchRender(jobId, clipFilenames, selectedTheme.layers, {
+        width: res.w,
+        height: res.h,
+        fps,
+      });
 
       toast.success(t("batchExport.started", { count: clipFilenames.length }));
       onDone();
@@ -46,7 +64,7 @@ export default function BatchExportModal({ jobId, clipFilenames, onClose, onDone
     } finally {
       setExporting(false);
     }
-  }, [selectedTheme, jobId, clipFilenames, toast, t, onDone, navigate]);
+  }, [selectedTheme, resolution, fps, jobId, clipFilenames, toast, t, onDone, navigate]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -89,7 +107,6 @@ export default function BatchExportModal({ jobId, clipFilenames, onClose, onDone
                             : "border-white/[0.04] bg-white/[0.02] hover:bg-white/[0.04]"
                         }`}
                       >
-                        {/* Mini layer dots */}
                         <div className="shrink-0 w-8 h-8 rounded-md bg-white/[0.04] border border-white/[0.06] flex items-center justify-center gap-0.5 flex-wrap p-0.5">
                           {theme.layers.map((l, i) => (
                             <div
@@ -115,6 +132,56 @@ export default function BatchExportModal({ jobId, clipFilenames, onClose, onDone
                       </button>
                     );
                   })}
+                </div>
+              </div>
+
+              {/* Resolution + FPS */}
+              <div className="grid grid-cols-2 gap-4">
+                {/* Resolution */}
+                <div>
+                  <label className="text-xs font-medium text-zinc-400 uppercase tracking-wider mb-2 block">
+                    {t("batchExport.resolution")}
+                  </label>
+                  <div className="flex flex-col gap-1">
+                    {RESOLUTIONS.map((res) => (
+                      <button
+                        key={res.value}
+                        onClick={() => setResolution(res.value)}
+                        className={`text-left text-xs px-3 py-2 rounded-lg border transition-all ${
+                          resolution === res.value
+                            ? "border-white/20 bg-white/[0.06] text-zinc-200"
+                            : "border-white/[0.04] bg-white/[0.02] text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-300"
+                        }`}
+                      >
+                        {res.label}
+                        <span className="text-[10px] text-zinc-600 ml-1.5">{res.w}×{res.h}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* FPS */}
+                <div>
+                  <label className="text-xs font-medium text-zinc-400 uppercase tracking-wider mb-2 block">
+                    FPS
+                  </label>
+                  <div className="flex flex-col gap-1">
+                    {FPS_OPTIONS.map((f) => (
+                      <button
+                        key={f}
+                        onClick={() => setFps(f)}
+                        className={`text-left text-xs px-3 py-2 rounded-lg border transition-all ${
+                          fps === f
+                            ? "border-white/20 bg-white/[0.06] text-zinc-200"
+                            : "border-white/[0.04] bg-white/[0.02] text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-300"
+                        }`}
+                      >
+                        {f} fps
+                        {f === 24 && <span className="text-[10px] text-zinc-600 ml-1.5">{t("batchExport.fastest")}</span>}
+                        {f === 60 && <span className="text-[10px] text-zinc-600 ml-1.5">{t("batchExport.smoothest")}</span>}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
 

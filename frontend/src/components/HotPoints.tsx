@@ -14,12 +14,14 @@ import {
   Sparkles,
   Zap,
   Play,
+  ExternalLink,
   Check,
   X,
 } from "lucide-react";
 
 interface Props {
   hotPoints: HotPoint[];
+  vodUrl: string;
   vodTitle: string;
   vodGame: string;
   vodDuration: number;
@@ -34,6 +36,7 @@ interface Props {
   selectedClips?: Set<string>;
   onToggleClip?: (filename: string) => void;
   onQuickExport?: (clipFilename: string) => void;
+  pendingImports?: Set<string>;
 }
 
 interface SignalInfo {
@@ -632,6 +635,7 @@ function ClipCard({
 
 export default function HotPoints({
   hotPoints,
+  vodUrl,
   vodTitle,
   vodGame,
   vodDuration,
@@ -646,6 +650,7 @@ export default function HotPoints({
   selectedClips,
   onToggleClip,
   onQuickExport,
+  pendingImports,
 }: Props) {
   const { t } = useTranslation();
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
@@ -660,7 +665,20 @@ export default function HotPoints({
     <div className="w-full">
       {/* VOD Header */}
       <div className="mb-8">
-        <h2 className="text-xl font-semibold text-white mb-2">{vodTitle}</h2>
+        <div className="flex items-center gap-3 mb-2">
+          <h2 className="text-xl font-semibold text-white">{vodTitle}</h2>
+          {vodUrl && (
+            <a
+              href={vodUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-zinc-400 bg-white/5 border border-white/10 rounded-full hover:bg-white/10 hover:border-white/20 hover:text-zinc-200 transition-all duration-200 shrink-0"
+            >
+              <ExternalLink className="w-3 h-3" />
+              {t("hotPoints.vodLink")}
+            </a>
+          )}
+        </div>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-zinc-500">
           {streamer && (
             <span className="flex items-center gap-1.5">
@@ -697,6 +715,10 @@ export default function HotPoints({
 
       {/* Clips list */}
       <div className={`space-y-3 ${isFinalSort ? "" : ""}`}>
+        {/* Pending imports — skeleton placeholders at top */}
+        {pendingImports && Array.from(pendingImports).map((filename) => (
+          <SkeletonCard key={`pending-${filename}`} />
+        ))}
         {hotPoints.map((point, i) => {
           const clipKey = point.clip_filename || `rank-${i}`;
           const lightboxIdx = point.clip_filename

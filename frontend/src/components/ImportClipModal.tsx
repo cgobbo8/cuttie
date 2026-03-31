@@ -1,19 +1,21 @@
 import { useState, useRef, useCallback, useEffect, type FormEvent } from "react";
-import { useNavigate } from "react-router";
 import { X, Loader2, Upload, FileVideo } from "lucide-react";
-import { importClip } from "../lib/api";
+import { addClipToJob } from "../lib/api";
 import { useTranslation } from "react-i18next";
+import { useToast } from "./Toast";
 
 interface Props {
+  jobId: string;
   open: boolean;
   onClose: () => void;
+  onImported?: (clipFilename: string, clipName: string) => void;
 }
 
 const ACCEPTED_VIDEO = ".mp4,.mov,.webm,.mkv,.avi";
 
-export default function ImportClipModal({ open, onClose }: Props) {
+export default function ImportClipModal({ jobId, open, onClose, onImported }: Props) {
   const { t } = useTranslation();
-  const navigate = useNavigate();
+  const toast = useToast();
   const [file, setFile] = useState<File | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -43,10 +45,11 @@ export default function ImportClipModal({ open, onClose }: Props) {
     setError("");
     setLoading(true);
     try {
-      const { job_id } = await importClip(file);
+      const { clip_filename, clip_name } = await addClipToJob(jobId, file);
       setFile(null);
       onClose();
-      navigate(`/${job_id}`);
+      onImported?.(clip_filename, clip_name);
+      toast.success(t("importClip.started", { name: clip_name }));
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : t("common.error"));
     } finally {

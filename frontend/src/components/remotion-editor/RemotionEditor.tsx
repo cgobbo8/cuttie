@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { ArrowLeft, Undo2, Redo2, Loader2, Download, Plus, Video, User, MessageSquare, MessagesSquare, ImagePlus, FolderOpen, Square, Circle, SlidersHorizontal, LayoutTemplate, Sparkles, X, Check, Pencil, Type, Flame, FileText, Layers, Bot } from "lucide-react";
 import { clipUrl, getEditEnvironment, startRender, renameClip, uploadAsset, listAssets, assetUrl, type EditEnvironment, type HotPoint, type AssetInfo, type TranscriptWord } from "../../lib/api";
 import type { Layer, SubtitleData } from "../../lib/editorTypes";
+import { DEFAULT_SUBTITLE_CONFIG } from "../../lib/editorTypes";
 import type { ThemeLayerTemplate } from "../../lib/editorThemes";
 import { fetchDefaultTheme } from "../../lib/editorThemes";
 import { useEditorState } from "../editor/useEditorState";
@@ -446,8 +447,9 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
           h: Math.round(Math.min(env?.clip_width ?? 1920, env?.clip_height ?? 1080) / 3),
         };
         base.video = { src: rawClipUrl, crop };
-      } else if (tpl.type === "subtitles" && tpl.subtitle) {
-        const sub: SubtitleData = { ...tpl.subtitle, words: env?.words ?? [], autoColor };
+      } else if (tpl.type === "subtitles") {
+        const subtitleConfig = tpl.subtitle ?? DEFAULT_SUBTITLE_CONFIG;
+        const sub: SubtitleData = { ...subtitleConfig, words: env?.words ?? [], autoColor };
         base.subtitle = sub;
       } else if (tpl.type === "shape" && tpl.shape) {
         base.shape = { ...tpl.shape };

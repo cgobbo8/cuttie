@@ -117,8 +117,7 @@ export async function resolveEditEnv(
   const base = path.basename(clipFilename, path.extname(clipFilename))
 
   // Words (per-clip)
-  const verticalBase = base.replace('clip_', 'vertical_')
-  const wordsPath = path.join(CLIPS_BASE, jobId, `${verticalBase}_words.json`)
+  const wordsPath = path.join(CLIPS_BASE, jobId, `${base}_words.json`)
   let words: { word: string; start: number; end: number }[] = []
   if (existsSync(wordsPath)) {
     try { words = JSON.parse(readFileSync(wordsPath, 'utf-8')) } catch {}
@@ -147,14 +146,26 @@ export async function resolveEditEnv(
 
     if (existsSync(clipPath)) {
       const BACKEND = path.resolve('../backend')
-      try {
-        const { stdout } = await execFileAsync(
-          'uv', ['run', 'python', 'transcribe_clip.py', clipPath, wordsPath],
-          { cwd: BACKEND, timeout: 120_000 }
-        )
-        words = JSON.parse(stdout)
-      } catch (err) {
-        logger.warn({ err }, 'Lazy transcription failed for %s/%s', jobId, clipFilename)
+      const MAX_RETRIES = 2
+      for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+        try {
+          logger.info('Whisper transcription attempt %d/%d for %s/%s...', attempt, MAX_RETRIES, jobId, clipFilename)
+          const { stdout, stderr } = await execFileAsync(
+            'uv', ['run', 'python', 'transcribe_clip.py', clipPath, wordsPath],
+            { cwd: BACKEND, timeout: 180_000, maxBuffer: 10 * 1024 * 1024 }
+          )
+          if (stderr) logger.info('Whisper stderr: %s', stderr.slice(0, 500))
+          words = JSON.parse(stdout)
+          logger.info('Whisper done for %s/%s: %d words', jobId, clipFilename, words.length)
+          if (words.length > 0) break
+          logger.warn('Whisper returned 0 words for %s/%s (attempt %d/%d)', jobId, clipFilename, attempt, MAX_RETRIES)
+        } catch (err: any) {
+          logger.error('Transcription failed for %s/%s (attempt %d/%d): code=%s killed=%s stderr=%s', jobId, clipFilename, attempt, MAX_RETRIES, err.code, err.killed, err.stderr?.slice(0, 500))
+          if (attempt < MAX_RETRIES) {
+            // Wait briefly before retry (in case of transient rate limit)
+            await new Promise((r) => setTimeout(r, 3000))
+          }
+        }
       }
     }
 

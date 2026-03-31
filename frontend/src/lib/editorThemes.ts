@@ -1,5 +1,5 @@
 import type { LayerType, LayerTransform, LayerStyle, LayerAnimation, KeyframeSnapshot, SubtitleData, ShapeData, AssetData, ChatData, TextData } from "./editorTypes";
-import { DEFAULT_STYLE } from "./editorTypes";
+import { DEFAULT_STYLE, DEFAULT_SUBTITLE_CONFIG } from "./editorTypes";
 import { listThemes, createTheme, updateTheme, deleteTheme, toggleThemeDefault, type ThemeResponse } from "./api";
 
 /* ── Theme layer template ─────────────────────────────────── */
@@ -71,13 +71,7 @@ export const BUILTIN_THEMES: EditorTheme[] = [
         name: "Sous-titres",
         transform: { x: 40, y: 1650, width: 1000, height: 200 },
         style: { ...DEFAULT_STYLE },
-        subtitle: {
-          fontFamily: "Luckiest Guy",
-          fontSize: 75,
-          colorMode: "auto",
-          customColor: "#6464C8",
-          uppercase: true,
-        },
+        subtitle: { ...DEFAULT_SUBTITLE_CONFIG },
       },
     ],
   },

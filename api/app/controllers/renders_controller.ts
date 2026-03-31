@@ -153,23 +153,35 @@ export default class RendersController {
       })
 
       // Enqueue render — resolves edit env + theme per clip then renders
+      console.log(`[BatchRender] Enqueuing ${clipFilename} (render=${renderId})`)
       enqueueRender(async () => {
         const outputFilename = `render_${renderId}.mp4`
         const outputPath = path.join(CLIPS_BASE, jobId, outputFilename)
 
         try {
+          console.log(`[BatchRender] Starting ${clipFilename}...`)
           // Mark as rendering
           await db.from('renders').where('id', renderId).update({ status: 'rendering', updated_at: new Date().toISOString() })
 
-          // Resolve clip-specific edit environment
+          // Resolve clip-specific edit environment (triggers Whisper if needed)
+          console.log(`[BatchRender] Resolving edit env for ${clipFilename}...`)
           const env = await resolveEditEnv(jobId, clipFilename, shared)
+          console.log(`[BatchRender] Edit env resolved: ${env.words.length} words, facecam=${!!env.facecam}`)
+
+          // Warn if theme expects subtitles but transcription produced no words
+          const hasSubtitleLayer = theme_layers.some((tl) => tl.type === 'subtitles')
+          if (hasSubtitleLayer && env.words.length === 0) {
+            console.warn(`[BatchRender] ⚠️ Subtitle layer present but 0 words for ${clipFilename} — subtitles will be empty!`)
+          }
 
           // Resolve theme → layers for this clip
           const layers = resolveThemeForClip(theme_layers, env, {
             clipSrc: clipFilename, // placeholder, replaced by presigned URL in remotion_renderer
           })
+          console.log(`[BatchRender] Theme resolved: ${layers.length} layers, rendering...`)
 
           await runRender({ renderId, jobId, clipFilename, layers, outputPath, outputFilename, renderOptions: render_options })
+          console.log(`[BatchRender] Done ${clipFilename}`)
         } catch (err: any) {
           console.error(`[BatchRender] Failed for ${clipFilename}:`, err.message)
           await db.from('renders').where('id', renderId).update({

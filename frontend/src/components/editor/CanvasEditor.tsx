@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { ArrowLeft, Undo2, Redo2, Loader2, Download, Plus, Video, User, MessageSquare, MessagesSquare, ImagePlus, FolderOpen, Square, Circle, SlidersHorizontal, LayoutTemplate, X, Check, Type, Flame, FileText, Layers } from "lucide-react";
 import { clipUrl, getEditEnvironment, startRender, uploadAsset, listAssets, assetUrl, type EditEnvironment, type HotPoint, type AssetInfo, type TranscriptWord } from "../../lib/api";
 import type { Layer, SubtitleData } from "../../lib/editorTypes";
+import { DEFAULT_SUBTITLE_CONFIG } from "../../lib/editorTypes";
 import type { ThemeLayerTemplate } from "../../lib/editorThemes";
 import { fetchDefaultTheme } from "../../lib/editorThemes";
 import { useEditorState } from "./useEditorState";
@@ -292,9 +293,10 @@ export default function CanvasEditor({
           h: Math.round(Math.min(env?.clip_width ?? 1920, env?.clip_height ?? 1080) / 3),
         };
         base.video = { src: rawClipUrl, crop };
-      } else if (tpl.type === "subtitles" && tpl.subtitle) {
+      } else if (tpl.type === "subtitles") {
+        const subtitleConfig = tpl.subtitle ?? DEFAULT_SUBTITLE_CONFIG;
         const sub: SubtitleData = {
-          ...tpl.subtitle,
+          ...subtitleConfig,
           words: env?.words ?? [],
           autoColor,
         };

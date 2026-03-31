@@ -62,8 +62,16 @@ export function resolveThemeForClip(
         h: Math.round(Math.min(env.clip_width ?? 1920, env.clip_height ?? 1080) / 3),
       }
       base.video = { src: options.clipSrc, crop }
-    } else if (tpl.type === 'subtitles' && tpl.subtitle) {
-      base.subtitle = { ...tpl.subtitle, words: env.words ?? [], autoColor } as SubtitleData
+    } else if (tpl.type === 'subtitles') {
+      // Keep in sync with DEFAULT_SUBTITLE_CONFIG in frontend/src/lib/editorTypes.ts
+      const subtitleConfig = tpl.subtitle ?? {
+        fontFamily: 'Luckiest Guy',
+        fontSize: 75,
+        colorMode: 'auto' as const,
+        customColor: '#6464C8',
+        uppercase: true,
+      }
+      base.subtitle = { ...subtitleConfig, words: env.words ?? [], autoColor } as SubtitleData
     } else if (tpl.type === 'shape' && tpl.shape) {
       base.shape = { ...tpl.shape }
     } else if (tpl.type === 'chat') {

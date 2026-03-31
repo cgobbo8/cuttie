@@ -43,6 +43,15 @@ export interface SubtitleData {
   uppercase: boolean;
 }
 
+/** Default subtitle settings — used as fallback when theme has a subtitle layer but no config. */
+export const DEFAULT_SUBTITLE_CONFIG: Omit<SubtitleData, "words" | "autoColor"> = {
+  fontFamily: "Luckiest Guy",
+  fontSize: 75,
+  colorMode: "auto",
+  customColor: "#6464C8",
+  uppercase: true,
+};
+
 export const SUBTITLE_FONTS = [
   { value: "Luckiest Guy", label: "Luckiest Guy" },
   { value: "Bebas Neue", label: "Bebas Neue" },

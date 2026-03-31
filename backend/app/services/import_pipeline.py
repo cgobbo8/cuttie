@@ -1,18 +1,19 @@
 """Mini-pipeline for user-imported clips.
 
-Steps: probe → S3 upload → facecam detection → transcription → dominant color → DONE.
-Reuses existing services — no audio analysis, no scoring, no LLM triage.
+Steps: probe → S3 upload → transcription → DONE.
+Reuses existing services. Skips facecam/dominant color (reuses job's existing data).
+Publishes the new hot_point via clip_ready SSE so AdonisJS persists it.
 """
 
 import json
 import logging
 import os
+import time
 
-from app.models.schemas import HotPoint, LlmAnalysis, SignalBreakdown, StepTiming
+from app.models.schemas import HotPoint, LlmAnalysis, SignalBreakdown
 from app.services.clipper import _write_probe_and_upload
-from app.services.db import create_job, save_hot_points, update_job
-from app.services.facecam_detector import detect_facecam
-from app.services.subtitle_generator import extract_dominant_color, transcribe_with_words
+from app.services.db import publish_clip_ready, update_job
+from app.services.subtitle_generator import transcribe_with_words
 
 logger = logging.getLogger(__name__)
 
@@ -26,26 +27,23 @@ def _format_timestamp(seconds: float) -> str:
     return f"{h}:{m:02d}:{s:02d}"
 
 
-def run_import_pipeline(job_id: str, original_filename: str) -> None:
-    """Process an imported clip through the mini-pipeline."""
+def run_add_clip_pipeline(job_id: str, clip_filename: str, clip_name: str, rank: int) -> None:
+    """Process an imported clip and add it to an existing job.
+
+    The clip file must already be at clips/<job_id>/<clip_filename>.
+    Facecam and dominant color are reused from the job's existing data.
+    """
     clip_dir = os.path.join(CLIPS_DIR, job_id)
-    clip_path = os.path.join(clip_dir, "clip_01.mp4")
+    clip_path = os.path.join(clip_dir, clip_filename)
 
     if not os.path.isfile(clip_path):
         raise FileNotFoundError(f"Imported clip not found: {clip_path}")
 
-    step_timings: dict[str, StepTiming] = {}
-
     # ── Step 1: Probe + S3 upload ──
-    import time
+    logger.info(f"[AddClip] Probing {clip_filename}...")
+    _write_probe_and_upload(clip_dir, job_id, clip_filename, clip_path)
 
-    update_job(job_id, status="CLIPPING", progress="Analyse du fichier...")
-    t0 = time.time()
-
-    _write_probe_and_upload(clip_dir, job_id, "clip_01.mp4", clip_path)
-
-    # Read probe data
-    probe_path = os.path.join(clip_dir, "clip_01_probe.json")
+    probe_path = os.path.join(clip_dir, clip_filename.replace(".mp4", "_probe.json"))
     if not os.path.isfile(probe_path):
         raise RuntimeError("Failed to probe clip — ffprobe error")
 
@@ -53,78 +51,32 @@ def run_import_pipeline(job_id: str, original_filename: str) -> None:
         probe = json.load(f)
 
     duration = probe.get("duration", 0)
-    width = probe.get("width", 1920)
-    height = probe.get("height", 1080)
-
-    step_timings["PROBING"] = StepTiming(start=t0, duration_seconds=time.time() - t0)
+    logger.info(f"[AddClip] Probe: {duration:.1f}s")
 
     # Write clip meta (used by edit-env resolver)
-    meta_path = os.path.join(clip_dir, "clip_01_meta.json")
+    base = os.path.splitext(clip_filename)[0]
+    meta_path = os.path.join(clip_dir, f"{base}_meta.json")
     with open(meta_path, "w") as f:
         json.dump({"vod_start": 0, "vod_end": duration}, f)
 
-    logger.info(f"[Import] Probe: {width}x{height}, {duration:.1f}s")
-
-    # Update job with duration
-    update_job(
-        job_id,
-        vod_duration_seconds=duration,
-        step_timings=step_timings,
-    )
-
-    # ── Step 2: Facecam detection ──
-    update_job(job_id, progress="Détection facecam...")
-    t0 = time.time()
-
-    facecam = detect_facecam(clip_path)
-    facecam_path = os.path.join(clip_dir, "facecam.json")
-    if facecam:
-        with open(facecam_path, "w") as f:
-            json.dump(facecam, f)
-        logger.info(f"[Import] Facecam: {facecam}")
-    else:
-        logger.info("[Import] No facecam detected")
-
-    step_timings["FACECAM"] = StepTiming(start=t0, duration_seconds=time.time() - t0)
-    update_job(job_id, step_timings=step_timings)
-
-    # ── Step 3: Transcription (Whisper) ──
-    update_job(job_id, status="TRANSCRIBING", progress="Transcription...")
-    t0 = time.time()
-
+    # ── Step 2: Transcription (Whisper via Groq) ──
+    logger.info(f"[AddClip] Transcribing {clip_filename}...")
     text, speech_rate, words = transcribe_with_words(clip_path)
 
-    # Save words for edit-env resolver (naming convention: vertical_XX_words.json)
-    words_path = os.path.join(clip_dir, "vertical_01_words.json")
+    words_path = os.path.join(clip_dir, f"{base}_words.json")
     with open(words_path, "w") as f:
         json.dump(words, f, ensure_ascii=False)
 
-    logger.info(f"[Import] Transcription: {len(words)} words, rate={speech_rate:.1f}")
+    logger.info(f"[AddClip] Transcription: {len(words)} words")
 
-    step_timings["TRANSCRIBING"] = StepTiming(start=t0, duration_seconds=time.time() - t0)
-    update_job(job_id, step_timings=step_timings)
-
-    # ── Step 4: Dominant color ──
-    update_job(job_id, progress="Extraction couleur...")
-    t0 = time.time()
-
-    r, g, b = extract_dominant_color(clip_path)
-    color_path = os.path.join(clip_dir, "dominant_color.json")
-    with open(color_path, "w") as f:
-        json.dump({"r": r, "g": g, "b": b}, f)
-
-    step_timings["COLOR"] = StepTiming(start=t0, duration_seconds=time.time() - t0)
-
-    # ── Step 5: Create hot_point + finalize ──
-    clip_name = os.path.splitext(original_filename)[0]
-
+    # ── Step 3: Build hot_point and publish via SSE ──
     hot_point = HotPoint(
         timestamp_seconds=0,
         timestamp_display=_format_timestamp(duration),
         score=1.0,
         final_score=1.0,
         signals=SignalBreakdown(),
-        clip_filename="clip_01.mp4",
+        clip_filename=clip_filename,
         clip_name=clip_name,
         chat_mood="",
         llm=LlmAnalysis(
@@ -138,12 +90,7 @@ def run_import_pipeline(job_id: str, original_filename: str) -> None:
         ),
     )
 
-    update_job(
-        job_id,
-        status="DONE",
-        progress="Terminé",
-        hot_points=[hot_point],
-        step_timings=step_timings,
-    )
+    # Publish via Redis SSE — AdonisJS job_status_bus will persist the hot_point
+    publish_clip_ready(job_id, rank, hot_point)
 
-    logger.info(f"[Import] Done — job {job_id}")
+    logger.info(f"[AddClip] Done — {clip_filename} added to job {job_id}")

@@ -180,7 +180,7 @@ def get_edit_environment(job_id: str, clip_filename: str) -> JSONResponse:
                     with open(facecam_path, "w", encoding="utf-8") as f:
                         json.dump(facecam, f)
         except Exception as e:
-            logger.debug("Facecam detection skipped for %s: %s", job_id, e)
+            logger.warning("Facecam detection failed for %s: %s", job_id, e, exc_info=True)
 
     # Compute game crop (same logic as _build_filtergraph)
     from app.services.vertical_clipper import (
@@ -201,8 +201,7 @@ def get_edit_environment(job_id: str, clip_filename: str) -> JSONResponse:
 
     # Words — try cached file, else transcribe on the fly
     base, _ = os.path.splitext(clip_filename)
-    vertical_base = base.replace("clip_", "vertical_")
-    words_path = os.path.join(CLIPS_DIR, job_id, f"{vertical_base}_words.json")
+    words_path = os.path.join(CLIPS_DIR, job_id, f"{base}_words.json")
     words = []
     if os.path.isfile(words_path):
         with open(words_path, encoding="utf-8") as f:

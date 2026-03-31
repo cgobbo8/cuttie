@@ -48,6 +48,7 @@ def upload_file(local_path: str, s3_key: str, content_type: str = "video/mp4"):
     logger.info(f"Uploaded to S3: {s3_key} ({size_mb:.1f} MB)")
 
 
+
 def upload_and_cleanup(local_path: str, s3_key: str, content_type: str = "video/mp4"):
     """Upload to S3, then delete the local file."""
     upload_file(local_path, s3_key, content_type)

@@ -1,20 +1,19 @@
 """Extract short video clips around hot points using yt-dlp + ffmpeg compression.
 
-Dynamic clip boundaries: uses the RMS energy curve to find natural IN/OUT points.
-- IN: scan backwards from peak to find a quiet moment (natural scene start)
-- OUT: extend forward while the streamer is still reacting (don't cut mid-dialogue)
+Activity-segment approach: instead of centering clips on a single peak with
+limited extension, we detect contiguous high-energy regions in the RMS curve
+and clip the full segment. Hot points that fall within the same segment share
+a single clip (deduplication).
 """
 
 import json
 import logging
 import os
 import subprocess
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import numpy as np
 
 from app.models.schemas import HotPoint
-from app.services.db import update_hot_point_clip
 from app.services.s3_storage import upload_file as s3_upload
 
 logger = logging.getLogger(__name__)
@@ -64,29 +63,30 @@ CLIPS_DIR = "clips"
 MAX_CLIPS = 20
 MAX_CLIP_WORKERS = 5
 
-# Default boundaries (used as starting point for dynamic adjustment)
-PRE_PEAK_WINDOW = 20   # default seconds before peak
-POST_PEAK_WINDOW = 15  # default seconds after peak
+# --- Activity segment detection ---
+SEGMENT_GAP_TOLERANCE = 5.0   # seconds of quiet tolerated within one segment
+SEGMENT_PADDING = 5.0         # seconds of padding before/after a detected segment
+SEGMENT_MATCH_RADIUS = 10.0   # HP within this distance of a segment edge is assigned
 
-# Hard limits for dynamic extension
-MAX_PRE_PEAK = 25      # never start more than 25s before peak
-MAX_POST_PEAK = 25     # never extend more than 25s after peak
-MIN_CLIP_DURATION = 30
-MAX_CLIP_DURATION = 60
-CLIP_HALF_DURATION = 30  # fallback (exported for other modules)
+# --- Clip duration limits ---
+MIN_CLIP_DURATION = 45
+MAX_CLIP_DURATION = 90
+IDEAL_CLIP_DURATION = 60      # target when sub-windowing a long segment
 
-# Merge threshold: if two clips overlap or are within this gap, merge them
-MERGE_GAP_SEC = 10
+# --- Fallback for orphan hot points (no matching segment) ---
+FALLBACK_PRE_PEAK = 25
+FALLBACK_POST_PEAK = 20
 
-# RMS threshold: fraction above baseline to consider "active"
-# e.g., 0.3 means 30% above median RMS = still active
+# --- RMS threshold ---
 ACTIVITY_THRESHOLD_FACTOR = 0.3
 
-# Number of consecutive quiet windows to confirm "calm" for OUT point
-CALM_CONFIRM_WINDOWS = 2
-
-# Batch download: merge clips closer than this gap into one yt-dlp call
+# --- Batch download ---
 BATCH_GAP_SEC = 15
+
+# --- Backward-compatible aliases (imported by triage.py, llm_analyzer.py) ---
+PRE_PEAK_WINDOW = 25
+POST_PEAK_WINDOW = 20
+CLIP_HALF_DURATION = 30
 
 
 def _build_rms_lookup(audio_features: list[dict] | None) -> tuple[np.ndarray, np.ndarray, float, float]:
@@ -115,258 +115,222 @@ def _get_rms_at(time: float, rms_times: np.ndarray, rms_values: np.ndarray) -> f
     return float(rms_values[idx])
 
 
-def _find_dynamic_start(
-    peak: float,
+def _detect_activity_segments(
     rms_times: np.ndarray,
     rms_values: np.ndarray,
     threshold: float,
     vod_duration: float,
-) -> float:
-    """Find a natural IN point by scanning backwards for a quiet moment.
+) -> list[tuple[float, float]]:
+    """Detect contiguous high-energy regions in the RMS curve.
 
-    Logic: from the default start (PRE_PEAK_WINDOW before peak), scan backwards.
-    If it's already quiet at default start, use it.
-    If it's active, look further back for a quiet spot (up to MAX_PRE_PEAK).
+    Bridges short gaps (< SEGMENT_GAP_TOLERANCE) and adds SEGMENT_PADDING
+    around each detected segment.
     """
-    default_start = max(0, peak - PRE_PEAK_WINDOW)
-    earliest_start = max(0, peak - MAX_PRE_PEAK)
+    if len(rms_times) < 2:
+        return []
 
-    if len(rms_times) == 0:
-        return default_start
+    hop = float(rms_times[1] - rms_times[0])
+    active = rms_values >= threshold
 
-    # Check if default start is already quiet
-    rms_at_default = _get_rms_at(default_start, rms_times, rms_values)
-    if rms_at_default < threshold:
-        return default_start
+    # Find rising/falling edges
+    diff = np.diff(active.astype(np.int8))
+    starts = np.where(diff == 1)[0] + 1  # index where active begins
+    ends = np.where(diff == -1)[0] + 1    # index where active ends
 
-    # Default start is in the middle of activity — scan backwards for quiet
-    hop = rms_times[1] - rms_times[0] if len(rms_times) > 1 else 2.5
-    t = default_start - hop
-    while t >= earliest_start:
-        rms_val = _get_rms_at(t, rms_times, rms_values)
-        if rms_val < threshold:
-            return max(0, t)
-        t -= hop
+    # Handle edge cases: starts/ends at array boundaries
+    if active[0]:
+        starts = np.concatenate(([0], starts))
+    if active[-1]:
+        ends = np.concatenate((ends, [len(active)]))
 
-    # No quiet spot found — use max pre-peak
-    return earliest_start
+    if len(starts) == 0:
+        return []
 
+    # Build raw segments as (start_time, end_time)
+    raw_segments = []
+    for s, e in zip(starts, ends):
+        raw_segments.append((float(rms_times[s]), float(rms_times[min(e, len(rms_times) - 1)])))
 
-def _find_dynamic_end(
-    peak: float,
-    rms_times: np.ndarray,
-    rms_values: np.ndarray,
-    threshold: float,
-    vod_duration: float,
-) -> float:
-    """Find a natural OUT point by extending while there's still activity.
-
-    Logic: from the default end (POST_PEAK_WINDOW after peak), check if still active.
-    If quiet, stop there. If still active (streamer reacting), extend until calm.
-    Requires CALM_CONFIRM_WINDOWS consecutive quiet windows to confirm end.
-    """
-    default_end = min(vod_duration, peak + POST_PEAK_WINDOW)
-    latest_end = min(vod_duration, peak + MAX_POST_PEAK)
-
-    if len(rms_times) == 0:
-        return default_end
-
-    # Check if default end is already quiet
-    rms_at_default = _get_rms_at(default_end, rms_times, rms_values)
-    if rms_at_default < threshold:
-        return default_end
-
-    # Still active at default end — extend until calm
-    hop = rms_times[1] - rms_times[0] if len(rms_times) > 1 else 2.5
-    calm_count = 0
-    t = default_end + hop
-    while t <= latest_end:
-        rms_val = _get_rms_at(t, rms_times, rms_values)
-        if rms_val < threshold:
-            calm_count += 1
-            if calm_count >= CALM_CONFIRM_WINDOWS:
-                return min(vod_duration, t)
+    # Merge segments separated by less than gap tolerance
+    merged = [raw_segments[0]]
+    for seg_start, seg_end in raw_segments[1:]:
+        prev_start, prev_end = merged[-1]
+        if seg_start - prev_end <= SEGMENT_GAP_TOLERANCE:
+            merged[-1] = (prev_start, seg_end)
         else:
-            calm_count = 0
-        t += hop
+            merged.append((seg_start, seg_end))
 
-    # Hit max — stop here
-    return latest_end
+    # Apply padding and clamp
+    padded = []
+    for seg_start, seg_end in merged:
+        padded.append((
+            max(0.0, seg_start - SEGMENT_PADDING),
+            min(vod_duration, seg_end + SEGMENT_PADDING),
+        ))
+
+    return padded
 
 
-def _compute_clip_boundaries(
-    hp: HotPoint,
+def _assign_hotpoints_to_segments(
+    hot_points: list[HotPoint],
+    segments: list[tuple[float, float]],
+) -> tuple[dict[int, list[tuple[int, HotPoint]]], list[tuple[int, HotPoint]]]:
+    """Assign each hot point to its containing activity segment.
+
+    Returns (segment_map, orphans) where:
+    - segment_map[seg_idx] = [(original_index, hp), ...]
+    - orphans = [(original_index, hp), ...] for HPs not in any segment
+    """
+    segment_map: dict[int, list[tuple[int, HotPoint]]] = {}
+    orphans: list[tuple[int, HotPoint]] = []
+
+    for i, hp in enumerate(hot_points):
+        t = hp.timestamp_seconds
+        assigned = False
+        for seg_idx, (seg_start, seg_end) in enumerate(segments):
+            # Match if inside segment or within match radius of its edges
+            if (seg_start - SEGMENT_MATCH_RADIUS) <= t <= (seg_end + SEGMENT_MATCH_RADIUS):
+                segment_map.setdefault(seg_idx, []).append((i, hp))
+                assigned = True
+                break
+        if not assigned:
+            orphans.append((i, hp))
+
+    return segment_map, orphans
+
+
+def _pick_best_subwindow(
+    seg_start: float,
+    seg_end: float,
+    hot_points: list[tuple[int, HotPoint]],
+) -> tuple[float, float]:
+    """Pick the densest sub-window within a long segment.
+
+    Uses a sliding window of IDEAL_CLIP_DURATION, maximizing total HP score.
+    Then extends to MAX_CLIP_DURATION if possible.
+    """
+    seg_duration = seg_end - seg_start
+    window = min(IDEAL_CLIP_DURATION, seg_duration)
+    step = 2.5
+
+    best_start = seg_start
+    best_score = -1.0
+
+    t = seg_start
+    while t + window <= seg_end + 0.1:
+        total = sum(
+            hp.score for _, hp in hot_points
+            if t <= hp.timestamp_seconds <= t + window
+        )
+        if total > best_score:
+            best_score = total
+            best_start = t
+        t += step
+
+    # Try to extend symmetrically up to MAX_CLIP_DURATION
+    extra = min(MAX_CLIP_DURATION - window, seg_duration - window) / 2
+    clip_start = max(seg_start, best_start - extra)
+    clip_end = min(seg_end, best_start + window + extra)
+
+    return clip_start, clip_end
+
+
+SNAP_SEARCH_SEC = 5.0  # how far to look for a quiet spot at clip edges
+
+
+def _snap_to_quiet(
+    time: float,
+    direction: int,
+    rms_times: np.ndarray,
+    rms_values: np.ndarray,
+    threshold: float,
     vod_duration: float,
-    all_hot_points: list[HotPoint] | None = None,
+) -> float:
+    """Nudge a clip boundary toward a quieter spot to avoid cutting mid-speech.
+
+    direction: -1 = move earlier (for start), +1 = move later (for end).
+    Scans up to SNAP_SEARCH_SEC in the given direction for RMS below threshold.
+    """
+    if len(rms_times) < 2:
+        return time
+
+    hop = float(rms_times[1] - rms_times[0])
+    best_t = time
+    best_rms = _get_rms_at(time, rms_times, rms_values)
+
+    t = time + direction * hop
+    limit = time + direction * SNAP_SEARCH_SEC
+    while (direction > 0 and t <= limit) or (direction < 0 and t >= limit):
+        if t < 0 or t > vod_duration:
+            break
+        rms_val = _get_rms_at(t, rms_times, rms_values)
+        if rms_val < threshold:
+            return round(max(0, min(vod_duration, t)), 1)
+        if rms_val < best_rms:
+            best_rms = rms_val
+            best_t = t
+        t += direction * hop
+
+    return round(max(0, min(vod_duration, best_t)), 1)
+
+
+def _compute_segment_clip_boundary(
+    seg_start: float,
+    seg_end: float,
+    hot_points: list[tuple[int, HotPoint]],
+    vod_duration: float,
     rms_times: np.ndarray | None = None,
     rms_values: np.ndarray | None = None,
     rms_threshold: float = 0.0,
 ) -> tuple[float, float]:
-    """Compute dynamic clip start/end around a hot point.
+    """Compute clip start/end for an activity segment."""
+    seg_duration = seg_end - seg_start
 
-    Uses RMS energy to find natural IN/OUT points, then applies merge logic
-    for nearby hot points, and enforces min/max duration.
-    """
-    peak = hp.timestamp_seconds
-
-    # Step 1: Dynamic boundaries based on RMS
-    if rms_times is not None and len(rms_times) > 0:
-        start = _find_dynamic_start(peak, rms_times, rms_values, rms_threshold, vod_duration)
-        end = _find_dynamic_end(peak, rms_times, rms_values, rms_threshold, vod_duration)
+    if seg_duration <= MAX_CLIP_DURATION:
+        start, end = seg_start, seg_end
     else:
-        # Fallback to fixed boundaries
-        start = max(0, peak - PRE_PEAK_WINDOW)
-        end = min(vod_duration, peak + POST_PEAK_WINDOW)
+        start, end = _pick_best_subwindow(seg_start, seg_end, hot_points)
 
-    # Step 2: Merge nearby hot points
-    if all_hot_points:
-        for other in all_hot_points:
-            if other is hp:
-                continue
-            other_t = other.timestamp_seconds
-            if end < other_t < end + MERGE_GAP_SEC:
-                end = min(vod_duration, other_t + POST_PEAK_WINDOW)
-            if start - MERGE_GAP_SEC < other_t < start:
-                start = max(0, other_t - PRE_PEAK_WINDOW)
-
-    # Step 3: Enforce min/max duration
+    # Enforce minimum duration
     duration = end - start
     if duration < MIN_CLIP_DURATION:
         pad = (MIN_CLIP_DURATION - duration) / 2
         start = max(0, start - pad)
         end = min(vod_duration, end + pad)
-    elif duration > MAX_CLIP_DURATION:
-        start = max(0, peak - MAX_CLIP_DURATION / 2)
-        end = min(vod_duration, peak + MAX_CLIP_DURATION / 2)
+
+    # Snap boundaries to quieter spots to avoid cutting mid-speech
+    if rms_times is not None and len(rms_times) > 0:
+        start = _snap_to_quiet(start, -1, rms_times, rms_values, rms_threshold, vod_duration)
+        end = _snap_to_quiet(end, +1, rms_times, rms_values, rms_threshold, vod_duration)
 
     return round(start, 1), round(end, 1)
 
 
-def _extract_single_clip(
-    job_id: str,
-    url: str,
+def _compute_fallback_boundary(
     hp: HotPoint,
-    rank: int,
     vod_duration: float,
-    clip_dir: str,
-    all_hot_points: list[HotPoint] | None = None,
     rms_times: np.ndarray | None = None,
     rms_values: np.ndarray | None = None,
     rms_threshold: float = 0.0,
-) -> tuple[int, str | None]:
-    """Extract and compress a single clip. Returns (rank, filename or None)."""
-    start, end = _compute_clip_boundaries(
-        hp, vod_duration, all_hot_points,
-        rms_times, rms_values, rms_threshold,
-    )
-    raw_file = os.path.join(clip_dir, f"raw_{rank:02d}.mp4")
-    filename = f"clip_{rank:02d}.mp4"
-    filepath = os.path.join(clip_dir, filename)
+) -> tuple[float, float]:
+    """Fallback boundaries for orphan hot points (not in any activity segment)."""
+    peak = hp.timestamp_seconds
+    start = max(0, peak - FALLBACK_PRE_PEAK)
+    end = min(vod_duration, peak + FALLBACK_POST_PEAK)
 
-    logger.info(f"Extracting clip {rank}: {_fmt_time(start)} - {_fmt_time(end)} ({end-start:.0f}s)")
+    duration = end - start
+    if duration < MIN_CLIP_DURATION:
+        pad = (MIN_CLIP_DURATION - duration) / 2
+        start = max(0, start - pad)
+        end = min(vod_duration, end + pad)
 
-    try:
-        subprocess.run(
-            [
-                "yt-dlp",
-                "--download-sections", f"*{_fmt_time(start)}-{_fmt_time(end)}",
-                "--force-keyframes-at-cuts",
-                "-f", "best",
-                "-o", raw_file,
-                "--no-warnings",
-                url,
-            ],
-            check=True,
-            timeout=300,
-            capture_output=True,
-            text=True,
-        )
+    # Snap boundaries to quieter spots to avoid cutting mid-speech
+    if rms_times is not None and len(rms_times) > 0:
+        start = _snap_to_quiet(start, -1, rms_times, rms_values, rms_threshold, vod_duration)
+        end = _snap_to_quiet(end, +1, rms_times, rms_values, rms_threshold, vod_duration)
 
-        if not os.path.isfile(raw_file):
-            logger.warning(f"Clip {rank}: raw file not created")
-            return rank, None
+    return round(start, 1), round(end, 1)
 
-        subprocess.run(
-            [
-                "ffmpeg", "-y",
-                "-i", raw_file,
-                "-c:v", "libx264", "-preset", "fast",
-                "-crf", "18",
-                "-c:a", "aac", "-b:a", "128k",
-                "-movflags", "+faststart",
-                filepath,
-            ],
-            check=True,
-            timeout=240,
-            capture_output=True,
-            text=True,
-        )
-
-        if os.path.isfile(raw_file):
-            os.remove(raw_file)
-
-        if os.path.isfile(filepath):
-            size_mb = os.path.getsize(filepath) / (1024 * 1024)
-            logger.info(f"Clip {rank} saved: {filepath} ({size_mb:.1f}MB)")
-            # Save VOD timing metadata for editor/chat filtering
-            meta_path = os.path.join(clip_dir, f"clip_{rank:02d}_meta.json")
-            with open(meta_path, "w") as f:
-                json.dump({"vod_start": start, "vod_end": end}, f)
-            _write_probe_and_upload(clip_dir, job_id, filename, filepath)
-            return rank, filename
-        else:
-            logger.warning(f"Clip {rank}: compressed file not created")
-            return rank, None
-
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
-        logger.error(f"Clip {rank} failed: {e}")
-        for f in [raw_file, filepath]:
-            if os.path.isfile(f):
-                os.remove(f)
-        return rank, None
-
-
-def extract_clips(
-    job_id: str,
-    url: str,
-    hot_points: list[HotPoint],
-    vod_duration: float,
-    audio_features: list[dict] | None = None,
-) -> None:
-    """Download and compress video segments around each hot point (parallel).
-
-    If audio_features are provided, uses RMS for dynamic clip boundaries.
-    """
-    clip_dir = os.path.join(CLIPS_DIR, job_id)
-    os.makedirs(clip_dir, exist_ok=True)
-
-    # Build RMS lookup for dynamic boundaries
-    rms_times, rms_values, _, rms_threshold = _build_rms_lookup(audio_features)
-
-    to_clip = hot_points[:MAX_CLIPS]
-
-    with ThreadPoolExecutor(max_workers=MAX_CLIP_WORKERS) as executor:
-        futures = {}
-        for i, hp in enumerate(to_clip):
-            rank = i + 1
-            future = executor.submit(
-                _extract_single_clip, job_id, url, hp, rank, vod_duration, clip_dir, to_clip,
-                rms_times, rms_values, rms_threshold,
-            )
-            futures[future] = (rank, hp)
-
-        for future in as_completed(futures):
-            rank, hp = futures[future]
-            try:
-                _, filename = future.result()
-                if filename:
-                    hp.clip_filename = filename
-                    update_hot_point_clip(job_id, rank, filename)
-            except Exception as e:
-                logger.error(f"Clip {rank} extraction error: {e}")
-
-    extracted = sum(1 for hp in to_clip if hp.clip_filename)
-    logger.info(f"Clipping complete: {extracted}/{len(to_clip)} clips extracted")
 
 
 def _fmt_time(seconds: float) -> str:
@@ -404,34 +368,78 @@ def plan_downloads(
     hot_points: list[HotPoint],
     vod_duration: float,
     audio_features: list[dict] | None = None,
-) -> list[dict]:
-    """Pre-compute clip boundaries and group nearby clips for batch download.
+) -> tuple[list[dict], dict[int, list[int]]]:
+    """Pre-compute clip boundaries using activity segments and group for batch download.
 
-    Clips within BATCH_GAP_SEC of each other are merged into a single yt-dlp
-    call, reducing connection overhead.
+    Detects contiguous high-energy segments in the RMS curve, assigns hot points
+    to segments, and deduplicates: multiple HPs in one segment produce a single clip.
 
-    Returns list of download groups, each with:
-    - start/end: download time range
-    - clips: list of {rank, index, hp, start, end}
+    Returns:
+    - groups: list of download groups {start, end, clips: [{rank, index, hp, start, end}]}
+    - shared_clips: {rank -> [hp_indices sharing this clip]} for deduplication
     """
     rms_times, rms_values, _, rms_threshold = _build_rms_lookup(audio_features)
     to_clip = hot_points[:MAX_CLIPS]
 
-    clips_with_bounds = []
-    for i, hp in enumerate(to_clip):
-        start, end = _compute_clip_boundaries(
-            hp, vod_duration, to_clip,
-            rms_times, rms_values, rms_threshold,
+    if not to_clip:
+        return [], {}
+
+    # Detect activity segments from RMS curve
+    segments = _detect_activity_segments(rms_times, rms_values, rms_threshold, vod_duration)
+    logger.info(f"Activity segments detected: {len(segments)}")
+    for i, (s, e) in enumerate(segments):
+        logger.debug(f"  Segment {i}: {_fmt_time(s)}-{_fmt_time(e)} ({e-s:.0f}s)")
+
+    # Assign hot points to segments
+    segment_map, orphans = _assign_hotpoints_to_segments(to_clip, segments)
+
+    clips_with_bounds: list[dict] = []
+    shared_clips: dict[int, list[int]] = {}  # rank -> [hp indices]
+    rank_counter = 0
+
+    # Process segments: one clip per segment, assigned to best-scoring HP
+    for seg_idx in sorted(segment_map.keys()):
+        hp_list = segment_map[seg_idx]
+        seg_start, seg_end = segments[seg_idx]
+
+        start, end = _compute_segment_clip_boundary(
+            seg_start, seg_end, hp_list, vod_duration,
         )
+
+        # Sort by score descending — best HP gets the clip
+        hp_list_sorted = sorted(hp_list, key=lambda x: x[1].score, reverse=True)
+        primary_idx, primary_hp = hp_list_sorted[0]
+
+        rank_counter += 1
+        rank = rank_counter
+
         clips_with_bounds.append({
-            "rank": i + 1, "index": i, "hp": hp,
+            "rank": rank, "index": primary_idx, "hp": primary_hp,
+            "start": start, "end": end,
+        })
+
+        # Track shared clip for dedup
+        all_indices = [idx for idx, _ in hp_list_sorted]
+        if len(all_indices) > 1:
+            shared_clips[rank] = all_indices
+            logger.info(
+                f"Segment {seg_idx}: {len(hp_list)} HPs merged into clip {rank} "
+                f"({_fmt_time(start)}-{_fmt_time(end)}, {end-start:.0f}s)"
+            )
+
+    # Process orphans: one clip per orphan HP
+    for orig_idx, hp in orphans:
+        start, end = _compute_fallback_boundary(hp, vod_duration)
+        rank_counter += 1
+        clips_with_bounds.append({
+            "rank": rank_counter, "index": orig_idx, "hp": hp,
             "start": start, "end": end,
         })
 
     if not clips_with_bounds:
-        return []
+        return [], {}
 
-    # Sort by start time and group nearby clips
+    # Sort by start time and group nearby clips for batch download
     sorted_clips = sorted(clips_with_bounds, key=lambda c: c["start"])
 
     groups: list[dict] = []
@@ -450,13 +458,15 @@ def plan_downloads(
             g_end = clip["end"]
     groups.append({"start": g_start, "end": g_end, "clips": current})
 
+    total = len(clips_with_bounds)
+    deduped = sum(len(v) - 1 for v in shared_clips.values())
     single = sum(1 for g in groups if len(g["clips"]) == 1)
     batched = sum(1 for g in groups if len(g["clips"]) > 1)
     logger.info(
-        f"Download plan: {len(clips_with_bounds)} clips -> "
+        f"Download plan: {total} clips ({deduped} HPs deduplicated) -> "
         f"{len(groups)} groups ({single} single, {batched} batched)"
     )
-    return groups
+    return groups, shared_clips
 
 
 def extract_group(

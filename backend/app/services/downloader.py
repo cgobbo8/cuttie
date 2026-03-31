@@ -33,7 +33,7 @@ def extract_metadata(url: str) -> dict:
         stream_date = f"{upload_date_raw[:4]}-{upload_date_raw[4:6]}-{upload_date_raw[6:]}"
 
     vod_id = info.get("id", "")
-    game_id, game_thumbnail = _fetch_game_info(vod_id)
+    game_id, game_thumbnail = _fetch_game_info(vod_id, game)
     streamer_login = info.get("uploader", "")
     streamer_thumbnail = _fetch_streamer_thumbnail(streamer_login)
 
@@ -75,36 +75,60 @@ def download_audio(url: str, output_dir: str) -> str:
     return os.path.join(output_dir, "audio.wav")
 
 
-def _fetch_game_info(vod_id: str) -> tuple[str, str]:
-    """Fetch game ID and box art URL from Twitch GQL for a given VOD."""
+def _fetch_game_info(vod_id: str, game_name: str = "") -> tuple[str, str]:
+    """Fetch game ID and box art URL from Twitch GQL for a given VOD.
+    Falls back to searching by game name if VOD lookup fails."""
     import requests
-
-    if not vod_id:
-        return "", ""
 
     gql_url = "https://gql.twitch.tv/gql"
     headers = {"Client-ID": "kimne78kx3ncx6brgo4mv6wki5h1ko"}
 
-    query = """query {
-        video(id: "%s") {
-            game {
-                id
-                displayName
-                boxArtURL(width: 285, height: 380)
+    # Try by VOD ID first
+    if vod_id:
+        query = """query {
+            video(id: "%s") {
+                game {
+                    id
+                    displayName
+                    boxArtURL(width: 285, height: 380)
+                }
             }
+        }""" % vod_id
+
+        try:
+            resp = requests.post(gql_url, json={"query": query}, headers=headers, timeout=10)
+            data = resp.json()
+            game_data = data.get("data", {}).get("video", {}).get("game") or {}
+            game_id = game_data.get("id", "")
+            box_art = game_data.get("boxArtURL", "")
+            if game_id:
+                logger.info(f"Twitch GQL game info (via VOD): id={game_id}, boxArt={'yes' if box_art else 'no'}")
+                return game_id, box_art
+        except Exception as e:
+            logger.warning(f"Failed to fetch game info from Twitch GQL (via VOD): {e}")
+
+    # Fallback: search by game name
+    if not game_name:
+        return "", ""
+
+    query = """query {
+        game(name: "%s") {
+            id
+            displayName
+            boxArtURL(width: 285, height: 380)
         }
-    }""" % vod_id
+    }""" % game_name.replace('"', '\\"')
 
     try:
         resp = requests.post(gql_url, json={"query": query}, headers=headers, timeout=10)
         data = resp.json()
-        game_data = data.get("data", {}).get("video", {}).get("game") or {}
+        game_data = data.get("data", {}).get("game") or {}
         game_id = game_data.get("id", "")
         box_art = game_data.get("boxArtURL", "")
-        logger.info(f"Twitch GQL game info: id={game_id}, boxArt={'yes' if box_art else 'no'}")
+        logger.info(f"Twitch GQL game info (via name '{game_name}'): id={game_id}, boxArt={'yes' if box_art else 'no'}")
         return game_id, box_art
     except Exception as e:
-        logger.warning(f"Failed to fetch game info from Twitch GQL: {e}")
+        logger.warning(f"Failed to fetch game info from Twitch GQL (via name): {e}")
         return "", ""
 
 

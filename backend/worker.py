@@ -74,31 +74,18 @@ def run_job(job_id: str, url: str) -> None:
         update_job(job_id, status="ERROR", error=str(e))
 
 
-def run_import_job(job_id: str, original_filename: str) -> None:
-    """Run the mini-pipeline for an imported clip."""
-    from app.services.db import _get_conn, get_job, init_db, update_job
-    from app.services.import_pipeline import run_import_pipeline
+def run_add_clip_job(job_id: str, clip_filename: str, clip_name: str, rank: int) -> None:
+    """Process an imported clip and add it to an existing job."""
+    from app.services.db import init_db
+    from app.services.import_pipeline import run_add_clip_pipeline
 
     init_db()
 
-    # Create job row if not present
-    existing = get_job(job_id)
-    if not existing:
-        conn = _get_conn()
-        now = datetime.now(timezone.utc).isoformat()
-        conn.execute(
-            "INSERT OR IGNORE INTO jobs (job_id, url, status, created_at, updated_at) VALUES (?, ?, 'PENDING', ?, ?)",
-            (job_id, f"import://{original_filename}", now, now),
-        )
-        conn.commit()
-        conn.close()
-
-    logger.info("Starting import pipeline for job %s (file=%s)", job_id, original_filename)
+    logger.info("Adding clip %s to job %s (rank=%d)", clip_filename, job_id, rank)
     try:
-        run_import_pipeline(job_id, original_filename)
+        run_add_clip_pipeline(job_id, clip_filename, clip_name, rank)
     except Exception as e:
-        logger.exception("Import pipeline failed for job %s", job_id)
-        update_job(job_id, status="ERROR", error=str(e))
+        logger.exception("Add clip failed for job %s / %s", job_id, clip_filename)
 
 
 def main() -> None:
@@ -137,9 +124,13 @@ def main() -> None:
 
             logger.info("Dequeued job %s (type=%s)", job_id, job_type or "analyze")
 
-            if job_type == "import_clip":
-                original_filename = payload.get("original_filename", "clip.mp4")
-                run_import_job(job_id, original_filename)
+            if job_type == "add_clip":
+                run_add_clip_job(
+                    job_id,
+                    payload["clip_filename"],
+                    payload.get("clip_name", "Imported clip"),
+                    payload.get("rank", 99),
+                )
             else:
                 url = payload.get("url")
                 if not url:

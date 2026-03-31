@@ -52,7 +52,7 @@ class HotPoint(BaseModel):
     timestamp_seconds: float
     timestamp_display: str
     score: float  # heuristic score from audio/chat analysis
-    final_score: float | None = None  # blended score after LLM (0.3 heuristic + 0.7 LLM)
+    final_score: float | None = None  # blended score after LLM (0.4 heuristic + 0.6 LLM)
     signals: SignalBreakdown
     chat_mood: str = ""  # pre-tag from chat sentiment: "hype", "fun", "rip", or ""
     clip_filename: str | None = None

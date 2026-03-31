@@ -1,276 +1,162 @@
-"""Detect facecam overlay position in a clip.
+"""Detect facecam overlay position using YOLOv8 pose estimation.
 
 Strategy:
-1. Detect face with MediaPipe → know where the webcam overlay is
-2. Build persistent edge map (accumulate Canny edges over many frames)
-3. Use HoughLinesP to find straight lines → overlay borders are persistent straight lines
-4. Select border lines closest to the face in each direction
-5. Snap to frame edge when close
+1. Run YOLOv8n-pose on sampled frames across multiple clips
+2. Cluster person detections by center proximity
+3. Pick the cluster spanning the most distinct clips (the facecam is static,
+   game characters change between clips)
+4. Compute tight face bounding box from facial keypoints (nose, eyes, ears)
 """
 
 import logging
-import os
-import urllib.request
 
 import cv2
-import mediapipe as mp
 import numpy as np
-from mediapipe.tasks.python import BaseOptions, vision
+from ultralytics import YOLO
 
 logger = logging.getLogger(__name__)
 
-MODEL_URL = "https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite"
-MODEL_PATH = os.path.join(os.path.expanduser("~"), ".cache", "mediapipe", "blaze_face_short_range.tflite")
+_model: YOLO | None = None
 
-# How many frames to sample
-N_FRAMES_FACE = 5
-N_FRAMES_EDGES = 30
-FACE_SAMPLE_POSITIONS = [0.2, 0.35, 0.5, 0.65, 0.8]
+SAMPLE_POSITIONS = [0.2, 0.35, 0.5, 0.65, 0.8]
+MIN_CONFIDENCE = 0.4
+CLUSTER_DISTANCE_RATIO = 0.15
 
-# Edge persistence: keep edges present in > 35% of frames
-# (lowered from 50% to catch thinner / semi-transparent overlay borders)
-EDGE_PERSISTENCE_RATIO = 0.35
-
-# Snap to frame edge if within this fraction of frame dimension
-SNAP_MARGIN = 0.08
-# Inner crop offset (pixels) to avoid capturing thin border artifacts
-INNER_CROP = 5
-
-# Hough line detection params
-HOUGH_THRESHOLD = 30
-HOUGH_MIN_LENGTH = 40
-HOUGH_MAX_GAP = 10
-
-# Max angle deviation (pixels) for a line to be horizontal/vertical
-LINE_TOLERANCE = 5
+# YOLOv8 pose keypoint indices for face
+KP_NOSE = 0
+KP_LEFT_EYE = 1
+KP_RIGHT_EYE = 2
+KP_LEFT_EAR = 3
+KP_RIGHT_EAR = 4
+FACE_KP_INDICES = [KP_NOSE, KP_LEFT_EYE, KP_RIGHT_EYE, KP_LEFT_EAR, KP_RIGHT_EAR]
+# Minimum keypoint confidence to be considered visible
+KP_MIN_CONF = 0.5
 
 
-def _ensure_model() -> str:
-    if os.path.isfile(MODEL_PATH):
-        return MODEL_PATH
-    os.makedirs(os.path.dirname(MODEL_PATH), exist_ok=True)
-    logger.info("Downloading MediaPipe face detection model...")
-    urllib.request.urlretrieve(MODEL_URL, MODEL_PATH)
-    return MODEL_PATH
+def _get_model() -> YOLO:
+    global _model
+    if _model is None:
+        _model = YOLO("yolov8n-pose.pt")
+    return _model
 
 
-def _detect_face(clip_path: str) -> tuple[int, int, int, int, int, int] | None:
-    """Detect face position (median across frames).
-    Returns (fx, fy, fw, fh, frame_w, frame_h) or None.
+# Detection tuple: (clip_idx, person_x, person_y, person_w, person_h, conf,
+#                    face_x, face_y, face_w, face_h)
+Detection = tuple[int, int, int, int, int, float, int, int, int, int]
+
+
+def _face_bbox_from_keypoints(
+    keypoints: np.ndarray,
+) -> tuple[int, int, int, int] | None:
+    """Compute tight face bbox from facial keypoints.
+
+    keypoints shape: (17, 3) — x, y, confidence per keypoint.
+    Returns (x, y, w, h) or None if not enough visible keypoints.
     """
-    model_path = _ensure_model()
-    options = vision.FaceDetectorOptions(
-        base_options=BaseOptions(model_asset_path=model_path),
-        min_detection_confidence=0.5,
-    )
-    detector = vision.FaceDetector.create_from_options(options)
+    face_kps = keypoints[FACE_KP_INDICES]
+    visible = face_kps[:, 2] > KP_MIN_CONF
+    if visible.sum() < 2:
+        return None
 
-    try:
+    pts = face_kps[visible, :2]
+    x_min, y_min = pts.min(axis=0)
+    x_max, y_max = pts.max(axis=0)
+
+    # Expand to a square with margin around the keypoints
+    cx = (x_min + x_max) / 2
+    cy = (y_min + y_max) / 2
+    span = max(x_max - x_min, y_max - y_min)
+    # Face is roughly 1.6x the eye-to-ear span
+    half = span * 0.8
+
+    x = int(cx - half)
+    y = int(cy - half)
+    size = int(half * 2)
+    return x, y, size, size
+
+
+def _collect_detections(clip_paths: list[str]) -> tuple[list[Detection], int, int]:
+    """Detect persons + face keypoints on sampled frames from multiple clips."""
+    model = _get_model()
+    detections: list[Detection] = []
+    frame_w = frame_h = 0
+
+    for clip_idx, clip_path in enumerate(clip_paths):
         cap = cv2.VideoCapture(clip_path)
         if not cap.isOpened():
-            return None
+            continue
 
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         frame_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         frame_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
-        faces = []
-        for pos in FACE_SAMPLE_POSITIONS:
+        for pos in SAMPLE_POSITIONS:
             cap.set(cv2.CAP_PROP_POS_FRAMES, int(total_frames * pos))
             ret, frame = cap.read()
             if not ret:
                 continue
-            rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
-            results = detector.detect(image)
-            if results.detections:
-                b = results.detections[0].bounding_box
-                faces.append((b.origin_x, b.origin_y, b.width, b.height))
+            results = model(frame, conf=MIN_CONFIDENCE, verbose=False)
+
+            for i, box in enumerate(results[0].boxes):
+                x1, y1, x2, y2 = box.xyxy[0].cpu().numpy().astype(int)
+                conf = float(box.conf[0])
+                pw, ph = x2 - x1, y2 - y1
+
+                # Extract face bbox from keypoints
+                kps = results[0].keypoints.data[i].cpu().numpy()
+                face = _face_bbox_from_keypoints(kps)
+                if face is None:
+                    continue
+                fx, fy, fw, fh = face
+
+                detections.append((clip_idx, x1, y1, pw, ph, conf, fx, fy, fw, fh))
 
         cap.release()
 
-        if not faces:
-            return None
-
-        fx = int(np.median([f[0] for f in faces]))
-        fy = int(np.median([f[1] for f in faces]))
-        fw = int(np.median([f[2] for f in faces]))
-        fh = int(np.median([f[3] for f in faces]))
-        return fx, fy, fw, fh, frame_w, frame_h
-
-    finally:
-        detector.close()
+    return detections, frame_w, frame_h
 
 
-def _build_persistent_edges(clip_paths: list[str], frame_w: int, frame_h: int) -> np.ndarray:
-    """Build a map of edges that persist across many frames from multiple clips.
+def _cluster_detections(
+    detections: list[Detection], merge_distance: float,
+) -> list[list[Detection]]:
+    """Group detections by person center proximity."""
+    clusters: list[list[Detection]] = []
+    for det in detections:
+        _, px, py, pw, ph = det[0], det[1], det[2], det[3], det[4]
+        cx, cy = px + pw // 2, py + ph // 2
+        merged = False
+        for cluster in clusters:
+            avg_cx = np.mean([d[1] + d[3] // 2 for d in cluster])
+            avg_cy = np.mean([d[2] + d[4] // 2 for d in cluster])
+            if np.sqrt((cx - avg_cx) ** 2 + (cy - avg_cy) ** 2) < merge_distance:
+                cluster.append(det)
+                merged = True
+                break
+        if not merged:
+            clusters.append([det])
+    return clusters
 
-    Using multiple clips makes overlay borders even more persistent while
-    game content (which varies per clip) gets washed out.
+
+def _pick_best_cluster(clusters: list[list[Detection]]) -> list[Detection]:
+    """Pick the cluster most likely to be the facecam.
+
+    Priority: most distinct clips > most detections > smaller average size.
     """
-    edge_sum = np.zeros((frame_h, frame_w), dtype=np.float32)
-    total_sampled = 0
+    def score(cluster: list[Detection]) -> tuple:
+        n_clips = len(set(d[0] for d in cluster))
+        n_dets = len(cluster)
+        avg_area = np.mean([d[3] * d[4] for d in cluster])
+        return (n_clips, n_dets, -avg_area)
 
-    frames_per_clip = max(4, N_FRAMES_EDGES // len(clip_paths))
-    for clip_path in clip_paths:
-        cap = cv2.VideoCapture(clip_path)
-        total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-
-        for i in range(frames_per_clip):
-            pos = int(total * (i + 1) / (frames_per_clip + 1))
-            cap.set(cv2.CAP_PROP_POS_FRAMES, pos)
-            ret, frame = cap.read()
-            if ret:
-                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-                edges = cv2.Canny(gray, 50, 150)
-                edge_sum += edges.astype(np.float32)
-                total_sampled += 1
-        cap.release()
-
-    threshold = total_sampled * 255 * EDGE_PERSISTENCE_RATIO
-    persistent = ((edge_sum > threshold) * 255).astype(np.uint8)
-
-    # Morphological closing to bridge small gaps in overlay borders
-    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
-    persistent = cv2.morphologyEx(persistent, cv2.MORPH_CLOSE, kernel, iterations=2)
-
-    return persistent
-
-
-def _find_overlay_rect(
-    persistent: np.ndarray,
-    fx: int, fy: int, fw: int, fh: int,
-    frame_w: int, frame_h: int,
-) -> tuple[int, int, int, int]:
-    """Find the webcam overlay rectangle using Hough line detection on persistent edges.
-
-    Lines are scored by a combination of length and proximity to the face,
-    and constrained to a reasonable search radius around the face.
-    Returns (x, y, w, h).
-    """
-    lines = cv2.HoughLinesP(
-        persistent, 1, np.pi / 180,
-        threshold=HOUGH_THRESHOLD,
-        minLineLength=HOUGH_MIN_LENGTH,
-        maxLineGap=HOUGH_MAX_GAP,
-    )
-
-    face_cx = fx + fw // 2
-    face_cy = fy + fh // 2
-    face_diag = np.sqrt(fw**2 + fh**2)
-
-    # Max search distance from face center — overlay is typically < 4× face size
-    max_search = face_diag * 4
-
-    # Classify lines as horizontal or vertical, filtering by search radius
-    h_lines = []  # (y, x1, x2, length)
-    v_lines = []  # (x, y1, y2, length)
-
-    if lines is not None:
-        for line in lines:
-            x1, y1, x2, y2 = line[0]
-            dx = abs(x2 - x1)
-            dy = abs(y2 - y1)
-            length = np.sqrt(dx**2 + dy**2)
-
-            if dy <= LINE_TOLERANCE and dx > LINE_TOLERANCE:
-                y_avg = (y1 + y2) // 2
-                if abs(y_avg - face_cy) <= max_search:
-                    h_lines.append((y_avg, min(x1, x2), max(x1, x2), length))
-            elif dx <= LINE_TOLERANCE and dy > LINE_TOLERANCE:
-                x_avg = (x1 + x2) // 2
-                if abs(x_avg - face_cx) <= max_search:
-                    v_lines.append((x_avg, min(y1, y2), max(y1, y2), length))
-
-    def _score_line(length: float, distance: float) -> float:
-        """Score a line: balance length and proximity to face.
-
-        Proximity matters more — a shorter line close to the face beats
-        a long game-HUD line far away.
-        """
-        proximity = 1.0 / (1.0 + distance / face_diag)
-        return length * (proximity ** 2)
-
-    # --- Find best border in each direction from face ---
-
-    # LEFT: vertical line left of face
-    left_edge = 0
-    left_candidates = [v for v in v_lines if v[0] < fx]
-    if left_candidates:
-        left_candidates.sort(key=lambda v: -_score_line(v[3], fx - v[0]))
-        left_edge = left_candidates[0][0]
-
-    # RIGHT: vertical line right of face
-    right_edge = frame_w
-    right_candidates = [v for v in v_lines if v[0] > fx + fw]
-    if right_candidates:
-        right_candidates.sort(key=lambda v: -_score_line(v[3], v[0] - (fx + fw)))
-        right_edge = right_candidates[0][0]
-
-    # TOP: horizontal line above face (must overlap face x-range)
-    top_edge = 0
-    top_candidates = [
-        h for h in h_lines
-        if h[0] < fy and h[2] > fx and h[1] < fx + fw
-    ]
-    if top_candidates:
-        top_candidates.sort(key=lambda h: -_score_line(h[3], fy - h[0]))
-        top_edge = top_candidates[0][0]
-
-    # BOTTOM: horizontal line below face (must overlap face x-range)
-    bottom_edge = frame_h
-    bottom_candidates = [
-        h for h in h_lines
-        if h[0] > fy + fh and h[2] > fx and h[1] < fx + fw
-    ]
-    if bottom_candidates:
-        bottom_candidates.sort(key=lambda h: -_score_line(h[3], h[0] - (fy + fh)))
-        bottom_edge = bottom_candidates[0][0]
-
-    # Snap to frame edge if close
-    if left_edge < frame_w * SNAP_MARGIN:
-        left_edge = 0
-    if right_edge > frame_w * (1 - SNAP_MARGIN):
-        right_edge = frame_w
-    if top_edge < frame_h * SNAP_MARGIN:
-        top_edge = 0
-    if bottom_edge > frame_h * (1 - SNAP_MARGIN):
-        bottom_edge = frame_h
-
-    # Inner crop: shrink by a few pixels to avoid thin border artifacts
-    left_edge += INNER_CROP
-    top_edge += INNER_CROP
-    right_edge -= INNER_CROP
-    bottom_edge -= INNER_CROP
-
-    return left_edge, top_edge, right_edge - left_edge, bottom_edge - top_edge
-
-
-def _face_centered_fallback(
-    fx: int, fy: int, fw: int, fh: int,
-    frame_w: int, frame_h: int,
-) -> tuple[int, int, int, int]:
-    """Build a crop rect centered on the detected face with generous padding.
-
-    Used when Hough border detection fails (overlay rect covers most of the frame).
-    Assumes the face occupies roughly 35-40% of the webcam overlay width.
-    """
-    pad = max(fw, fh)
-    x = max(INNER_CROP, fx - pad)
-    y = max(INNER_CROP, fy - int(pad * 0.6))
-    r = min(frame_w - INNER_CROP, fx + fw + pad)
-    b = min(frame_h - INNER_CROP, fy + fh + int(pad * 1.4))
-    return x, y, r - x, b - y
+    return max(clusters, key=score)
 
 
 def detect_facecam(clip_path: str, extra_clips: list[str] | None = None) -> dict | None:
-    """Detect the facecam overlay region using one or more clips.
+    """Detect the facecam face region using YOLOv8 pose estimation.
 
-    The overlay is a static element, so using multiple clips makes detection
-    more robust: overlay borders persist while game content washes out.
-
-    Filters outlier clips where face detection picks up game characters instead
-    of the streamer's webcam (face too far from median position).
+    Uses multiple clips for robustness. Person detections are clustered by
+    position, and the cluster spanning the most distinct clips is selected.
+    The face bounding box is computed from facial keypoints (nose, eyes, ears).
 
     Returns dict with keys: x, y, w, h (pixel coords in clip resolution)
     or None if no face found.
@@ -279,67 +165,43 @@ def detect_facecam(clip_path: str, extra_clips: list[str] | None = None) -> dict
     if extra_clips:
         all_clips.extend(extra_clips)
 
-    # Detect face on each clip independently
-    faces_per_clip: list[tuple[str, int, int, int, int, int, int]] = []
-    for cp in all_clips:
-        face = _detect_face(cp)
-        if face:
-            faces_per_clip.append((cp, *face))
+    detections, frame_w, frame_h = _collect_detections(all_clips)
 
-    if not faces_per_clip:
+    if not detections:
         logger.info("No face detected in any clip")
         return None
 
-    # Compute median face center across all clips
-    centers_x = [fx + fw // 2 for _, fx, fy, fw, fh, _, _ in faces_per_clip]
-    centers_y = [fy + fh // 2 for _, fx, fy, fw, fh, _, _ in faces_per_clip]
-    median_cx = np.median(centers_x)
-    median_cy = np.median(centers_y)
+    merge_dist = min(frame_w, frame_h) * CLUSTER_DISTANCE_RATIO
+    clusters = _cluster_detections(detections, merge_dist)
 
-    # Filter outliers: keep clips where face center is within 2× median face width
-    median_fw = np.median([fw for _, fx, fy, fw, fh, _, _ in faces_per_clip])
-    max_dist = median_fw * 2
-
-    good_clips = []
-    for cp, fx, fy, fw, fh, frame_w, frame_h in faces_per_clip:
-        cx = fx + fw // 2
-        cy = fy + fh // 2
-        dist = np.sqrt((cx - median_cx) ** 2 + (cy - median_cy) ** 2)
-        if dist <= max_dist:
-            good_clips.append(cp)
-        else:
-            logger.info(f"Outlier face in {cp}: ({cx},{cy}) dist={dist:.0f} > {max_dist:.0f}")
-
-    if not good_clips:
-        good_clips = [faces_per_clip[0][0]]
-
-    # Use consensus face from good clips
-    good_faces = [(fx, fy, fw, fh, frame_w, frame_h)
-                  for cp, fx, fy, fw, fh, frame_w, frame_h in faces_per_clip
-                  if cp in good_clips]
-    fx = int(np.median([f[0] for f in good_faces]))
-    fy = int(np.median([f[1] for f in good_faces]))
-    fw = int(np.median([f[2] for f in good_faces]))
-    fh = int(np.median([f[3] for f in good_faces]))
-    frame_w = good_faces[0][4]
-    frame_h = good_faces[0][5]
-
-    logger.info(f"Face consensus: ({fx},{fy}) {fw}x{fh} [from {len(good_clips)}/{len(all_clips)} clips]")
-
-    persistent = _build_persistent_edges(good_clips, frame_w, frame_h)
-    x, y, w, h = _find_overlay_rect(persistent, fx, fy, fw, fh, frame_w, frame_h)
-
-    # Validate: if detected overlay is too large, border detection likely failed.
-    # Fall back to a face-centered crop with generous padding.
-    overlay_area = w * h
-    frame_area = frame_w * frame_h
-    if overlay_area > frame_area * 0.35:
-        logger.info(
-            f"Overlay rect too large ({overlay_area / frame_area * 100:.0f}% of frame), "
-            "falling back to face-centered crop"
+    for i, cluster in enumerate(clusters):
+        n_clips = len(set(d[0] for d in cluster))
+        avg_fw = int(np.mean([d[8] for d in cluster]))
+        avg_fh = int(np.mean([d[9] for d in cluster]))
+        logger.debug(
+            f"Cluster {i}: face {avg_fw}x{avg_fh}, "
+            f"{len(cluster)} dets, {n_clips}/{len(all_clips)} clips"
         )
-        x, y, w, h = _face_centered_fallback(fx, fy, fw, fh, frame_w, frame_h)
+
+    best = _pick_best_cluster(clusters)
+    n_clips = len(set(d[0] for d in best))
+
+    # Use person bbox (the webcam overlay area), not the face bbox
+    x = int(np.median([d[1] for d in best]))
+    y = int(np.median([d[2] for d in best]))
+    w = int(np.median([d[3] for d in best]))
+    h = int(np.median([d[4] for d in best]))
+
+    # Clamp to frame
+    x = max(0, x)
+    y = max(0, y)
+    w = min(frame_w - x, w)
+    h = min(frame_h - y, h)
+
+    logger.info(
+        f"Facecam region: ({x},{y}) {w}x{h} "
+        f"[{len(best)} dets across {n_clips}/{len(all_clips)} clips]"
+    )
 
     result = {"x": x, "y": y, "w": w, "h": h}
-    logger.info(f"Facecam overlay detected: {w}x{h} at ({x},{y})")
     return result

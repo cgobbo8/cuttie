@@ -83,7 +83,7 @@ def _run_clipping_and_analysis(
             with open(chat_path, "w", encoding="utf-8") as f:
                 json.dump(chat_messages, f, ensure_ascii=False)
 
-    groups = plan_downloads(hot_points, vod_duration, audio_features)
+    groups, shared_clips = plan_downloads(hot_points, vod_duration, audio_features)
     total_clips = sum(len(g["clips"]) for g in groups)
 
     DL_WORKERS = 5
@@ -128,6 +128,13 @@ def _run_clipping_and_analysis(
                     )
             except Exception as e:
                 logger.error(f"Group extraction error: {e}")
+
+        # Propagate clip filenames to hot points that share a segment
+        for rank, sibling_indices in shared_clips.items():
+            primary = hot_points[sibling_indices[0]]
+            if primary.clip_filename:
+                for idx in sibling_indices[1:]:
+                    hot_points[idx].clip_filename = primary.clip_filename
 
         # All downloads done — wait for remaining LLM analyses
         if timer:
@@ -285,6 +292,7 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
                 raise RuntimeError("No hot points available for clipping")
             timer.start("CLIPPING")
             update_job(job_id, status="CLIPPING", progress="Extraction des clips...", step_timings=timer.timings)
+
             _run_clipping_and_analysis(
                 job_id, url, hot_points, duration, vod_meta,
                 audio_features=audio_features,

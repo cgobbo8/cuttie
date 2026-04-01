@@ -53,7 +53,30 @@ def extract_metadata(url: str) -> dict:
 
 def download_audio(url: str, output_dir: str) -> str:
     """Download audio from a Twitch VOD as WAV, downsampled to 11025Hz mono."""
+    import glob
+    import threading
+    import time
+
     os.makedirs(output_dir, exist_ok=True)
+
+    # Monitor file size in a background thread (yt-dlp progress hooks don't work with FFmpeg HLS)
+    stop_monitor = threading.Event()
+    part_pattern = os.path.join(output_dir, "audio.*")
+
+    def _monitor():
+        last_size = 0
+        while not stop_monitor.is_set():
+            stop_monitor.wait(15)
+            files = glob.glob(part_pattern)
+            if not files:
+                continue
+            total = sum(os.path.getsize(f) for f in files if os.path.isfile(f))
+            if total != last_size:
+                logger.info(f"Audio download: {total / (1024 * 1024):.0f} MB downloaded...")
+                last_size = total
+
+    monitor = threading.Thread(target=_monitor, daemon=True)
+    monitor.start()
 
     opts = {
         "format": "bestaudio/best",
@@ -67,12 +90,26 @@ def download_audio(url: str, output_dir: str) -> str:
         "postprocessor_args": {"FFmpegExtractAudio": ["-ar", "11025", "-ac", "1"]},
         "quiet": True,
         "no_warnings": True,
+        "concurrent_fragment_downloads": 5,  # parallel HLS segment downloads — helps with slow CDNs
     }
 
-    with yt_dlp.YoutubeDL(opts) as ydl:
-        ydl.extract_info(url, download=True)
+    logger.info("yt-dlp: starting audio download for %s...", url)
+    try:
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            ydl.extract_info(url, download=True)
+    except Exception as e:
+        logger.error("yt-dlp audio download failed: %s", e)
+        raise
+    finally:
+        stop_monitor.set()
 
-    return os.path.join(output_dir, "audio.wav")
+    wav_path = os.path.join(output_dir, "audio.wav")
+    if not os.path.isfile(wav_path):
+        raise FileNotFoundError(f"WAV not found after download: {wav_path}")
+
+    size_mb = os.path.getsize(wav_path) / (1024 * 1024)
+    logger.info("Audio WAV ready: %.0f MB", size_mb)
+    return wav_path
 
 
 def _fetch_game_info(vod_id: str, game_name: str = "") -> tuple[str, str]:
@@ -207,9 +244,11 @@ def download_chat(url: str) -> list[dict]:
     empty_streak = 0  # consecutive empty responses
     seen_ts: set[tuple[float, str]] = set()  # dedup (offset pagination overlaps)
     max_requests = 2000  # safety limit
+    last_log_count = 0
 
+    logger.info("Chat download: starting for VOD %s (%ds)", video_id, vod_duration)
     try:
-        for _ in range(max_requests):
+        for req_num in range(max_requests):
             payload = {
                 "operationName": "VideoCommentsByOffsetOrCursor",
                 "query": query,
@@ -254,8 +293,14 @@ def download_chat(url: str) -> list[dict]:
             # Always offset-based (cursor pagination fails with integrity check)
             content_offset = last_ts + 1
 
+            # Log progress every 5000 messages
+            if len(messages) - last_log_count >= 5000:
+                pct = int(content_offset / max(vod_duration, 1) * 100)
+                logger.info("Chat download: %d messages so far (%d%% of VOD)", len(messages), pct)
+                last_log_count = len(messages)
+
     except Exception as e:
-        logger.warning("Chat download interrupted after %d messages: %s", len(messages), e)
+        logger.error("Chat download failed after %d messages at offset %ds: %s", len(messages), content_offset, e)
 
     logger.info(f"Chat download: {len(messages)} messages over {vod_duration}s VOD")
     return messages

@@ -247,6 +247,7 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
             logger.info(f"Metadata extracted: {streamer} — {vod_game} — {vod_title}")
 
             # Now download audio + chat in parallel (slow I/O bound)
+            logger.info(f"[{job_id[:8]}] Starting audio + chat download...")
             update_job(job_id, progress="Downloading audio + chat...")
             with ThreadPoolExecutor(max_workers=2) as dl_pool:
                 audio_future = dl_pool.submit(download_audio, url, output_dir)
@@ -255,35 +256,42 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
                 audio_path = audio_future.result()
                 chat_messages = chat_future.result()
 
-            logger.info(f"Downloaded {len(chat_messages)} chat messages")
+            audio_size = os.path.getsize(audio_path) / (1024 * 1024) if os.path.isfile(audio_path) else 0
+            logger.info(f"[{job_id[:8]}] Download complete: audio={audio_size:.0f}MB, chat={len(chat_messages)} messages")
             check_cancelled(job_id)
 
             # 3. Analyze audio signals + classify audio events in parallel
             timer.start("ANALYZING_AUDIO")
+            logger.info(f"[{job_id[:8]}] Analyzing audio signals + classification...")
             update_job(job_id, status="ANALYZING_AUDIO", progress="Analyzing audio signals + classification...", step_timings=timer.timings)
             with ThreadPoolExecutor(max_workers=2) as audio_pool:
                 features_future = audio_pool.submit(analyze_audio, audio_path)
                 classify_future = audio_pool.submit(classify_audio, audio_path)
                 audio_features = features_future.result()
                 classification_features = classify_future.result()
+            logger.info(f"[{job_id[:8]}] Audio analysis done: {len(audio_features)} windows")
 
             check_cancelled(job_id)
 
             # 4. Analyze chat
             timer.start("ANALYZING_CHAT")
+            logger.info(f"[{job_id[:8]}] Analyzing chat ({len(chat_messages)} messages)...")
             update_job(job_id, status="ANALYZING_CHAT", progress="Analyzing chat activity...", step_timings=timer.timings)
             chat_features = analyze_chat(chat_messages, duration)
+            logger.info(f"[{job_id[:8]}] Chat analysis done: {len(chat_features)} windows")
 
             check_cancelled(job_id)
 
             # 5. Score and find peaks — get top 50 candidates for triage
             timer.start("SCORING")
+            logger.info(f"[{job_id[:8]}] Computing scores...")
             update_job(job_id, status="SCORING", progress="Computing scores and finding hot points...", step_timings=timer.timings)
             hot_points = compute_scores(
                 audio_features, chat_features,
                 total_duration=duration, top_n=50,
                 classification_features=classification_features,
             )
+            logger.info(f"[{job_id[:8]}] Scoring done: {len(hot_points)} hot points")
 
             # 6. Save initial hot points to DB
             update_job(job_id, hot_points=hot_points)
@@ -300,6 +308,7 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
                 "duration": duration,
             }
             timer.start("TRIAGE")
+            logger.info(f"[{job_id[:8]}] Triage: transcribing + LLM scoring {len(hot_points)} candidates...")
             update_job(job_id, status="TRIAGE", progress="Sélection des meilleurs moments...", step_timings=timer.timings)
             hot_points, triage_transcripts = run_triage(
                 job_id, audio_path, hot_points, duration,
@@ -323,6 +332,7 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
             if hot_points is None:
                 raise RuntimeError("No hot points available for clipping")
             timer.start("CLIPPING")
+            logger.info(f"[{job_id[:8]}] Clipping + LLM analysis for {len(hot_points)} hot points...")
             update_job(job_id, status="CLIPPING", progress="Extraction des clips...", step_timings=timer.timings)
 
             _run_clipping_and_analysis(
@@ -345,6 +355,7 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
             )
 
         # Done — finalize timings and re-publish full enriched hot_points
+        logger.info(f"[{job_id[:8]}] Pipeline complete!")
         timer.finish()
         final_job = get_job(job_id)
         update_job(

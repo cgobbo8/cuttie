@@ -98,6 +98,17 @@ def main() -> None:
         logger.error("Cannot connect to Redis: %s", e)
         sys.exit(1)
 
+    # Cleanup orphaned temp data from previous runs (killed workers, crashes)
+    import shutil
+    for temp_dir in ("data", "triage_audio"):
+        full_path = os.path.join(os.path.dirname(__file__), temp_dir)
+        if os.path.isdir(full_path):
+            for entry in os.listdir(full_path):
+                entry_path = os.path.join(full_path, entry)
+                if os.path.isdir(entry_path):
+                    shutil.rmtree(entry_path, ignore_errors=True)
+                    logger.info("Cleaned up orphaned temp dir: %s/%s", temp_dir, entry)
+
     logger.info("Waiting for jobs on queue: %s", QUEUE_KEY)
 
     def handle_signal(sig, frame):

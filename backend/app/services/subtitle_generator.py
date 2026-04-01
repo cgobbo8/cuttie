@@ -10,7 +10,7 @@ import subprocess
 
 import cv2
 import numpy as np
-from app.services.openai_client import get_openai_client, get_groq_client, LLM_MODEL, WHISPER_MODEL
+from app.services.openai_client import get_openrouter_client, get_groq_client, LLM_MODEL, WHISPER_MODEL
 
 logger = logging.getLogger(__name__)
 
@@ -200,7 +200,7 @@ def _rewrite_words_with_llm(words: list[dict]) -> list[dict]:
     if not raw_text.strip():
         return words
 
-    client = get_openai_client()
+    client = get_openrouter_client()
     try:
         response = client.chat.completions.create(
             model=LLM_MODEL,

@@ -144,6 +144,8 @@ def _run_clipping_and_analysis(
                             chat_messages=chat_messages, pre_transcript=pre,
                         )
                         llm_futures[af] = (idx, hp)
+                    else:
+                        logger.warning(f"Clip {rank} ({hp.timestamp_display}) extraction failed — skipping")
 
                     update_job(
                         job_id,
@@ -179,6 +181,12 @@ def _run_clipping_and_analysis(
                 progress=f"Analyse IA : {done_llm}/{total_llm} clips ({hp.timestamp_display})",
             )
 
+    # Remove hot points that failed extraction — no point keeping them
+    failed = [hp for hp in hot_points if not hp.clip_filename]
+    if failed:
+        logger.warning(f"{len(failed)} clips failed extraction and were removed")
+    hot_points = [hp for hp in hot_points if hp.clip_filename]
+
     # Re-sort by final_score and persist
     hot_points.sort(
         key=lambda hp: hp.final_score if hp.final_score is not None else -1,
@@ -186,8 +194,7 @@ def _run_clipping_and_analysis(
     )
     save_hot_points(job_id, hot_points)
 
-    extracted = sum(1 for hp in hot_points if hp.clip_filename)
-    logger.info(f"Clipping + analysis complete: {extracted} clips, {done_llm} analyzed")
+    logger.info(f"Clipping + analysis complete: {len(hot_points)} clips, {done_llm} analyzed")
 
 
 def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> None:

@@ -498,32 +498,40 @@ def extract_group(
 
         logger.info(f"Clip {rank}: {_fmt_time(start)}-{_fmt_time(end)} ({end-start:.0f}s)")
 
-        try:
-            subprocess.run(
-                [
-                    "yt-dlp",
-                    "--download-sections", f"*{_fmt_time(start)}-{_fmt_time(end)}",
-                    "--force-keyframes-at-cuts", "-f", "best",
-                    "-o", raw_file, "--no-warnings", url,
-                ],
-                check=True, timeout=300, capture_output=True, text=True,
-            )
+        MAX_RETRIES = 2
+        for attempt in range(1, MAX_RETRIES + 1):
+            try:
+                subprocess.run(
+                    [
+                        "yt-dlp",
+                        "--download-sections", f"*{_fmt_time(start)}-{_fmt_time(end)}",
+                        "--force-keyframes-at-cuts", "-f", "best",
+                        "--concurrent-fragments", "5",
+                        "-o", raw_file, "--no-warnings", url,
+                    ],
+                    check=True, timeout=600, capture_output=True, text=True,
+                )
 
-            if os.path.isfile(raw_file) and _compress_clip(raw_file, filepath):
-                size_mb = os.path.getsize(filepath) / (1024 * 1024)
-                logger.info(f"Clip {rank}: {filepath} ({size_mb:.1f}MB)")
-                # Save VOD timing metadata for editor chat layer
-                meta_path = os.path.join(clip_dir, f"clip_{rank:02d}_meta.json")
-                with open(meta_path, "w") as mf:
-                    json.dump({"vod_start": start, "vod_end": end}, mf)
-                _write_probe_and_upload(clip_dir, job_id, filename, filepath)
-                results.append((rank, idx, filename))
-            else:
-                results.append((rank, idx, None))
+                if os.path.isfile(raw_file) and _compress_clip(raw_file, filepath):
+                    size_mb = os.path.getsize(filepath) / (1024 * 1024)
+                    logger.info(f"Clip {rank}: {filepath} ({size_mb:.1f}MB)")
+                    meta_path = os.path.join(clip_dir, f"clip_{rank:02d}_meta.json")
+                    with open(meta_path, "w") as mf:
+                        json.dump({"vod_start": start, "vod_end": end}, mf)
+                    _write_probe_and_upload(clip_dir, job_id, filename, filepath)
+                    results.append((rank, idx, filename))
+                    break
+                else:
+                    logger.warning(f"Clip {rank}: raw file missing or compression failed (attempt {attempt}/{MAX_RETRIES})")
+                    if attempt == MAX_RETRIES:
+                        results.append((rank, idx, None))
 
-        except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
-            logger.error(f"Clip {rank} failed: {e}")
-            results.append((rank, idx, None))
+            except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
+                logger.error(f"Clip {rank} failed (attempt {attempt}/{MAX_RETRIES}): {e}")
+                if os.path.isfile(raw_file):
+                    os.remove(raw_file)
+                if attempt == MAX_RETRIES:
+                    results.append((rank, idx, None))
 
         finally:
             if os.path.isfile(raw_file):
@@ -545,9 +553,10 @@ def extract_group(
                     "yt-dlp",
                     "--download-sections", f"*{_fmt_time(g_start)}-{_fmt_time(g_end)}",
                     "--force-keyframes-at-cuts", "-f", "best",
+                    "--concurrent-fragments", "5",
                     "-o", group_file, "--no-warnings", url,
                 ],
-                check=True, timeout=300, capture_output=True, text=True,
+                check=True, timeout=600, capture_output=True, text=True,
             )
 
             if not os.path.isfile(group_file):

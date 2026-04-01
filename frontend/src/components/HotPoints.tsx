@@ -673,12 +673,11 @@ function ClipsList({
   const [manualCollapsed, setManualCollapsed] = useState(false);
 
   const renderClip = (point: HotPoint, i: number) => {
+    // Placeholder (import in progress — has clip_name but no file yet) → skeleton
     if (!point.clip_filename) {
-      // Import placeholder (has clip_name but no file yet) → skeleton
       if (point.clip_name) {
         return <SkeletonCard key={`pending-${point.clip_name}`} />;
       }
-      // Failed extraction (no filename, no name) → hide
       return null;
     }
     const clipKey = point.clip_filename;

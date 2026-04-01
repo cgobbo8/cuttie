@@ -324,23 +324,24 @@ def _build_unified_prompt(
 
 **Visual-audio alignment:** If the game screen shows a menu, inventory, or idle moment while people are chatting about unrelated topics, this is a strong signal of a LOW-value clip. High-value clips usually show a clear connection between what happens on screen and the emotional reaction.
 
-## Visual analysis instructions
+## How to use the visual frames
 
-Each image is a frame captured from the clip at the exact timestamp shown. Analyze them carefully:
+The frames are provided for CONTEXT only — they help you understand the gameplay situation (combat, menu, exploration, cutscene, etc.). Do NOT over-interpret specific visual details or base your scoring primarily on what you see. The frames tell you WHERE the streamer is and WHAT they're doing in the game, but virality comes from the AUDIO: the transcript, the vocal reactions, the emotional intensity.
 
-**Streamer face & body language:**
-- Facial expressions: shock, laughter, frustration, disbelief, joy, fear, focus
-- Body language: leaning forward (tension), leaning back (surprise/relief), hands on head, facepalm
-- Mouth open = screaming/shock, eyes wide = surprise, looking away = embarrassment
+Use frames to determine:
+- Is the streamer in active combat, in a menu, exploring, in a cutscene?
+- Is there a HUD showing low health, kill feeds, damage numbers, defeat/victory screens?
+- Does the visual context match what the streamer is reacting to in the transcript?
+- Is there a streamer facecam visible showing facial expressions?
 
-**Game HUD & visual context:**
-- Health bars (low HP = clutch moment), kill feeds, damage numbers
-- Victory/defeat screens, achievements, rare loot drops
-- Score, ranking, critical timer, kill streaks
-- Screen effects (red screen = near death, special FX = big play)
-- Number of enemies on screen, encirclement situations
+Do NOT:
+- Describe frame-by-frame visual details in the narrative as if narrating a slideshow
+- Score based on how "exciting" the game visuals look — a mundane-looking screen with an insane vocal reaction is MORE viral than epic visuals with calm commentary
+- Assume what's happening based on a single frozen frame — the transcript is the ground truth
 
 ## Scoring guidelines
+
+Your scoring should be driven primarily by the TRANSCRIPT and AUDIO SIGNALS (~70%), with visual context as a secondary factor (~30%). A crazy vocal reaction with a boring-looking screen is still viral. An epic-looking screen with calm commentary is usually not.
 
 Be very demanding. Most clips are NOT viral. Use the full scale:
 - **0.8-1.0** = Exceptional moment (epic clutch, hilarious fail, intense rage, shocking reaction)
@@ -349,7 +350,7 @@ Be very demanding. Most clips are NOT viral. Use the full scale:
 - **0.05-0.2** = Boring (routine gameplay, calm discussion, nothing notable)
 - **< 0.05** = Skip (menu navigation, idle chat about daily life, dead air)
 
-The vocal excitement signal is important: if the audio analysis detected laughter, screaming, or shouting, this is a strong positive signal. If it detected only calm speech with no excitement, be skeptical about virality even if volume is high.
+The vocal excitement signal is the strongest indicator: if the audio analysis detected laughter, screaming, or shouting, this is a very strong positive signal. If it detected only calm speech with no excitement, be skeptical about virality even if volume is high.
 
 ## Output
 
@@ -363,7 +364,7 @@ Return a single JSON object:
   - "time": float, MUST be one of the exact frame timestamps shown on the images
   - "label": short title (5-8 words), in French{game_narrative}
   - "description": 1 sentence describing what happens visually (include HUD info if relevant)
-- "narrative": fluid story of the clip (3-5 sentences), second-by-second combining audio + visuals + chat reactions{game_narrative}. In French.
+- "narrative": fluid story of the clip (3-5 sentences), driven by what is SAID and HEARD (transcript + reactions), using visuals only for gameplay context{game_narrative}. In French.
 
 JSON only, no markdown."""
 

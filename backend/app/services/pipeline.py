@@ -21,6 +21,29 @@ from app.services.triage import run_triage
 logger = logging.getLogger(__name__)
 
 
+class JobCancelled(Exception):
+    """Raised when a job is cancelled via the admin UI."""
+    pass
+
+
+def check_cancelled(job_id: str) -> None:
+    """Check Redis for cancellation flag and raise if set."""
+    try:
+        import redis as _redis
+        r = _redis.Redis(
+            host=os.getenv("REDIS_HOST", "127.0.0.1"),
+            port=int(os.getenv("REDIS_PORT", "6379")),
+            password=os.getenv("REDIS_PASSWORD") or None,
+        )
+        if r.exists(f"cuttie:cancel:{job_id}"):
+            r.delete(f"cuttie:cancel:{job_id}")
+            raise JobCancelled(f"Job {job_id} cancelled by user")
+    except JobCancelled:
+        raise
+    except Exception:
+        pass  # Redis not available — don't block pipeline
+
+
 class StepTimer:
     """Tracks per-step wall-clock timings throughout the pipeline."""
 
@@ -233,6 +256,7 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
                 chat_messages = chat_future.result()
 
             logger.info(f"Downloaded {len(chat_messages)} chat messages")
+            check_cancelled(job_id)
 
             # 3. Analyze audio signals + classify audio events in parallel
             timer.start("ANALYZING_AUDIO")
@@ -243,10 +267,14 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
                 audio_features = features_future.result()
                 classification_features = classify_future.result()
 
+            check_cancelled(job_id)
+
             # 4. Analyze chat
             timer.start("ANALYZING_CHAT")
             update_job(job_id, status="ANALYZING_CHAT", progress="Analyzing chat activity...", step_timings=timer.timings)
             chat_features = analyze_chat(chat_messages, duration)
+
+            check_cancelled(job_id)
 
             # 5. Score and find peaks — get top 50 candidates for triage
             timer.start("SCORING")
@@ -259,6 +287,8 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
 
             # 6. Save initial hot points to DB
             update_job(job_id, hot_points=hot_points)
+
+            check_cancelled(job_id)
 
             # 7. LLM triage: transcribe 50 candidates, LLM scores, keep top 20
             vod_meta = {
@@ -286,6 +316,8 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
             "stream_date": stream_date or "",
             "duration": duration,
         }
+
+        check_cancelled(job_id)
 
         if not resume_from or resume_from == "CLIPPING":
             if hot_points is None:
@@ -324,6 +356,11 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
             hot_points=final_job.hot_points if final_job and final_job.hot_points else [],
             step_timings=timer.timings,
         )
+
+    except JobCancelled:
+        logger.info(f"Pipeline cancelled for {job_id}")
+        timer.finish()
+        update_job(job_id, status="ERROR", error="Cancelled by user", progress="Cancelled.", step_timings=timer.timings)
 
     except Exception as e:
         logger.error(f"Pipeline error for {job_id}: {e}", exc_info=True)

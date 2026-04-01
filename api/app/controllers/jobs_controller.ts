@@ -300,18 +300,11 @@ export default class JobsController {
     // Send current state immediately
     send(job.serialize())
 
-    // If already terminal, close immediately
-    if (job.status === 'DONE' || job.status === 'ERROR') {
-      res.end()
-      return
-    }
+    // Keep connection open even for terminal jobs — clip imports can still emit clip_ready events.
+    // The client decides when to disconnect.
 
     const onUpdate = (update: JobStatusUpdate) => {
       send(update)
-      if (update.status === 'DONE' || update.status === 'ERROR') {
-        cleanup()
-        res.end()
-      }
     }
 
     jobStatusBus.on(params.id, onUpdate)

@@ -36,7 +36,6 @@ interface Props {
   selectedClips?: Set<string>;
   onToggleClip?: (filename: string) => void;
   onQuickExport?: (clipFilename: string) => void;
-  pendingImports?: Set<string>;
 }
 
 interface SignalInfo {
@@ -646,7 +645,6 @@ function ClipsList({
   selectedClips,
   onToggleClip,
   onQuickExport,
-  pendingImports,
   onOpenLightbox,
   t,
 }: {
@@ -660,35 +658,36 @@ function ClipsList({
   selectedClips?: Set<string>;
   onToggleClip?: (filename: string) => void;
   onQuickExport?: (clipFilename: string) => void;
-  pendingImports?: Set<string>;
   onOpenLightbox: (idx: number) => void;
   t: (key: string, opts?: Record<string, unknown>) => string;
 }) {
   const autoClips = hotPoints.filter((hp) => hp.clip_source !== "manual");
   const manualClips = hotPoints.filter((hp) => hp.clip_source === "manual");
-  const hasBoth = autoClips.length > 0 && (manualClips.length > 0 || (pendingImports?.size ?? 0) > 0);
+  const hasBoth = autoClips.length > 0 && manualClips.length > 0;
 
   const [autoCollapsed, setAutoCollapsed] = useState(false);
   const [manualCollapsed, setManualCollapsed] = useState(false);
 
   const renderClip = (point: HotPoint, i: number) => {
-    const clipKey = point.clip_filename || `rank-${i}`;
-    const lightboxIdx = point.clip_filename
-      ? clipsWithFiles.findIndex((c) => c.clip_filename === point.clip_filename)
-      : -1;
+    // Placeholder clips (no filename yet) → skeleton
+    if (!point.clip_filename) {
+      return <SkeletonCard key={`pending-${point.clip_name || i}`} />;
+    }
+    const clipKey = point.clip_filename;
+    const lightboxIdx = clipsWithFiles.findIndex((c) => c.clip_filename === point.clip_filename);
     return (
       <ClipCard
-        key={point.clip_filename || i}
+        key={point.clip_filename}
         point={point}
         index={i}
         jobId={jobId}
         activeSignals={activeSignals}
         isNew={animatedClips?.has(clipKey)}
         selectionMode={selectionMode}
-        selected={point.clip_filename ? selectedClips?.has(point.clip_filename) : false}
-        onToggle={point.clip_filename ? () => onToggleClip?.(point.clip_filename!) : undefined}
+        selected={selectedClips?.has(point.clip_filename) ?? false}
+        onToggle={() => onToggleClip?.(point.clip_filename!)}
         onOpenLightbox={lightboxIdx >= 0 ? () => onOpenLightbox(lightboxIdx) : undefined}
-        onQuickExport={point.clip_filename ? () => onQuickExport?.(point.clip_filename!) : undefined}
+        onQuickExport={() => onQuickExport?.(point.clip_filename!)}
       />
     );
   };
@@ -697,9 +696,6 @@ function ClipsList({
     // No grouping needed — flat list
     return (
       <div className={`space-y-3 ${isFinalSort ? "" : ""}`}>
-        {pendingImports && Array.from(pendingImports).map((name) => (
-          <SkeletonCard key={`pending-${name}`} />
-        ))}
         {hotPoints.map(renderClip)}
       </div>
     );
@@ -737,13 +733,10 @@ function ClipsList({
           <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider group-hover:text-zinc-300 transition-colors">
             {t("hotPoints.manualClips")}
           </span>
-          <span className="text-[10px] text-zinc-600 tabular-nums">{manualClips.length + (pendingImports?.size ?? 0)}</span>
+          <span className="text-[10px] text-zinc-600 tabular-nums">{manualClips.length}</span>
         </button>
         {!manualCollapsed && (
           <div className="space-y-3">
-            {pendingImports && Array.from(pendingImports).map((name) => (
-              <SkeletonCard key={`pending-${name}`} />
-            ))}
             {manualClips.map((point) => renderClip(point, hotPoints.indexOf(point)))}
           </div>
         )}
@@ -769,7 +762,6 @@ export default function HotPoints({
   selectedClips,
   onToggleClip,
   onQuickExport,
-  pendingImports,
 }: Props) {
   const { t } = useTranslation();
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
@@ -844,7 +836,6 @@ export default function HotPoints({
         selectedClips={selectedClips}
         onToggleClip={onToggleClip}
         onQuickExport={onQuickExport}
-        pendingImports={pendingImports}
         onOpenLightbox={setLightboxIndex}
         t={t}
       />

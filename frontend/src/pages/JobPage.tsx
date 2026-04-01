@@ -53,7 +53,6 @@ export default function JobPage() {
   const [showBatchModal, setShowBatchModal] = useState(false);
   const [quickExportClip, setQuickExportClip] = useState<string | null>(null);
   const [showImportModal, setShowImportModal] = useState(false);
-  const [pendingImports, setPendingImports] = useState<Set<string>>(new Set());
 
   const sseCleanupRef = useRef<(() => void) | null>(null);
 
@@ -86,8 +85,11 @@ export default function JobPage() {
   const handleSSEEvent = useCallback((event: SSEEvent) => {
     if ("type" in event && event.type === "clip_ready") {
       setClips((prev) => {
+        // Match by clip_filename OR by clip_name (for placeholders that don't have a filename yet)
         const existing = prev.findIndex(
-          (c) => c.clip_filename === event.hot_point.clip_filename,
+          (c) =>
+            (c.clip_filename && c.clip_filename === event.hot_point.clip_filename) ||
+            (!c.clip_filename && c.clip_name && c.clip_name === event.hot_point.clip_name),
         );
         if (existing >= 0) {
           const next = [...prev];
@@ -98,15 +100,6 @@ export default function JobPage() {
       });
       const clipKey = event.hot_point.clip_filename || `rank-${event.rank}`;
       setAnimatedClips((prev) => new Set(prev).add(clipKey));
-      // Remove from pending imports (match by clip_name since filename changes during slug rename)
-      if (event.hot_point.clip_name) {
-        setPendingImports((prev) => {
-          if (!prev.has(event.hot_point.clip_name!)) return prev;
-          const next = new Set(prev);
-          next.delete(event.hot_point.clip_name!);
-          return next;
-        });
-      }
       return;
     }
 
@@ -131,7 +124,12 @@ export default function JobPage() {
 
     if (update.status === "DONE" && update.hot_points?.length) {
       setIsFinalSort(true);
-      setTimeout(() => setClips(update.hot_points!), 300);
+      // Only replace clips if we're transitioning TO done (not on initial SSE state for already-done jobs)
+      setClips((prev) => {
+        // If clips are already loaded and include real files, don't overwrite (avoids killing placeholders)
+        if (prev.length > 0 && prev.some((c) => c.clip_filename)) return prev;
+        return update.hot_points!;
+      });
     }
   }, [parseClipsTotal, selectByStreamer]);
 
@@ -144,10 +142,9 @@ export default function JobPage() {
         if (cancelled) return;
         applyJobData(job);
         setLoading(false);
-        if (job.status !== "DONE" && job.status !== "ERROR") {
-          const cleanup = subscribeJobSSE(jobId, handleSSEEvent);
-          sseCleanupRef.current = cleanup;
-        }
+        // Always connect SSE — even for DONE jobs, clip imports can emit clip_ready events
+        const cleanup = subscribeJobSSE(jobId, handleSSEEvent);
+        sseCleanupRef.current = cleanup;
       })
       .catch(() => {
         if (!cancelled) navigate("/");
@@ -307,9 +304,9 @@ export default function JobPage() {
       )}
 
       {/* Results */}
-      {(clipsWithFiles.length > 0 || pendingImports.size > 0) && (
+      {clips.length > 0 && (
         <HotPoints
-          hotPoints={clipsWithFiles}
+          hotPoints={clips}
           vodUrl={vodUrl}
           vodTitle={vodTitle || "VOD"}
           vodGame={vodGame}
@@ -325,7 +322,6 @@ export default function JobPage() {
           selectedClips={selectedClips}
           onToggleClip={handleToggleClip}
           onQuickExport={(filename) => setQuickExportClip(filename)}
-          pendingImports={pendingImports}
         />
       )}
 
@@ -389,7 +385,21 @@ export default function JobPage() {
         open={showImportModal}
         onClose={() => setShowImportModal(false)}
         onImported={(_clipFilename, clipName) => {
-          setPendingImports((prev) => new Set(prev).add(clipName));
+          // Add a placeholder clip — will be replaced by the real one via SSE clip_ready
+          setClips((prev) => [{
+            timestamp_seconds: 0,
+            timestamp_display: "",
+            score: 0,
+            final_score: null,
+            signals: { rms: 0, spectral_flux: 0, pitch_variance: 0, spectral_centroid: 0, zcr: 0, chat_speed: 0 },
+            clip_filename: null,
+            vertical_filename: null,
+            clip_name: clipName,
+            clip_source: "manual",
+            llm: null,
+            chat_mood: null,
+            chat_message_count: null,
+          }, ...prev]);
         }}
       />
     </div>

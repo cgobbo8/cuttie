@@ -2,6 +2,9 @@
 import type { routes } from './index.ts'
 
 export interface ApiDefinition {
+  eventStream: typeof routes['event_stream']
+  subscribe: typeof routes['subscribe']
+  unsubscribe: typeof routes['unsubscribe']
   accessToken: {
     store: typeof routes['access_token.store']
     destroy: typeof routes['access_token.destroy']
@@ -29,7 +32,7 @@ export interface ApiDefinition {
     show: typeof routes['jobs.show']
     retry: typeof routes['jobs.retry']
     destroy: typeof routes['jobs.destroy']
-    stream: typeof routes['jobs.stream']
+    destroyClip: typeof routes['jobs.destroy_clip']
     renameClip: typeof routes['jobs.rename_clip']
   }
   renders: {
@@ -59,5 +62,11 @@ export interface ApiDefinition {
     update: typeof routes['themes.update']
     destroy: typeof routes['themes.destroy']
     setDefault: typeof routes['themes.set_default']
+  }
+  workers: {
+    index: typeof routes['workers.index']
+    flush: typeof routes['workers.flush']
+    cancel: typeof routes['workers.cancel']
+    cancelRender: typeof routes['workers.cancel_render']
   }
 }

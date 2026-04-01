@@ -7,6 +7,42 @@ import type { InferInput, SimpleError } from '@vinejs/vine/types'
 export type ParamValue = string | number | bigint | boolean
 
 export interface Registry {
+  'event_stream': {
+    methods: ["GET","HEAD"]
+    pattern: '/__transmit/events'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: unknown
+      errorResponse: unknown
+    }
+  }
+  'subscribe': {
+    methods: ["POST"]
+    pattern: '/__transmit/subscribe'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: unknown
+      errorResponse: unknown
+    }
+  }
+  'unsubscribe': {
+    methods: ["POST"]
+    pattern: '/__transmit/unsubscribe'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: unknown
+      errorResponse: unknown
+    }
+  }
   'access_token.store': {
     methods: ["POST"]
     pattern: '/api/auth/login'
@@ -175,16 +211,16 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/jobs_controller').default['destroy']>>>
     }
   }
-  'jobs.stream': {
-    methods: ["GET","HEAD"]
-    pattern: '/api/jobs/:id/sse'
+  'jobs.destroy_clip': {
+    methods: ["DELETE"]
+    pattern: '/api/jobs/:id/clips/:clipFilename'
     types: {
       body: {}
-      paramsTuple: [ParamValue]
-      params: { id: ParamValue }
+      paramsTuple: [ParamValue, ParamValue]
+      params: { id: ParamValue; clipFilename: ParamValue }
       query: {}
-      response: ExtractResponse<Awaited<ReturnType<import('#controllers/jobs_controller').default['stream']>>>
-      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/jobs_controller').default['stream']>>>
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/jobs_controller').default['destroyClip']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/jobs_controller').default['destroyClip']>>>
     }
   }
   'jobs.rename_clip': {
@@ -341,6 +377,54 @@ export interface Registry {
       query: {}
       response: ExtractResponse<Awaited<ReturnType<import('#controllers/themes_controller').default['setDefault']>>>
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/themes_controller').default['setDefault']>>>
+    }
+  }
+  'workers.index': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/workers'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/workers_controller').default['index']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/workers_controller').default['index']>>>
+    }
+  }
+  'workers.flush': {
+    methods: ["POST"]
+    pattern: '/api/workers/flush'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/workers_controller').default['flush']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/workers_controller').default['flush']>>>
+    }
+  }
+  'workers.cancel': {
+    methods: ["POST"]
+    pattern: '/api/workers/cancel/:id'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { id: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/workers_controller').default['cancel']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/workers_controller').default['cancel']>>>
+    }
+  }
+  'workers.cancel_render': {
+    methods: ["POST"]
+    pattern: '/api/workers/cancel-render/:id'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { id: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/workers_controller').default['cancelRender']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/workers_controller').default['cancelRender']>>>
     }
   }
   'renders.store': {

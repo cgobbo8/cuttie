@@ -18,4 +18,5 @@ export const controllers = {
   Profile: () => import('#controllers/profile_controller'),
   Renders: () => import('#controllers/renders_controller'),
   Themes: () => import('#controllers/themes_controller'),
+  Workers: () => import('#controllers/workers_controller'),
 }

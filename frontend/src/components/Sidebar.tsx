@@ -1,6 +1,6 @@
 import { NavLink, useNavigate } from "react-router";
 import { useState } from "react";
-import { Film, FolderOpen, Gamepad2, Home, LogOut, Plus, Users } from "lucide-react";
+import { Cpu, Film, FolderOpen, Gamepad2, Home, LogOut, Plus, Users } from "lucide-react";
 import NewProjectModal from "./NewProjectModal";
 import CreatorSelector from "./CreatorSelector";
 import { useAuth } from "../lib/AuthContext";
@@ -77,6 +77,10 @@ export default function Sidebar() {
           <NavLink to="/exports" className={navClass}>
             <Film className="w-4 h-4" />
             {t("sidebar.exports")}
+          </NavLink>
+          <NavLink to="/workers" className={navClass}>
+            <Cpu className="w-4 h-4" />
+            {t("sidebar.workers")}
           </NavLink>
         </nav>
 

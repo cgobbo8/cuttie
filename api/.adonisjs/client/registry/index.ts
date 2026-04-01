@@ -6,6 +6,24 @@ import type { ApiDefinition } from './tree.d.ts'
 const placeholder: any = {}
 
 const routes = {
+  'event_stream': {
+    methods: ["GET","HEAD"],
+    pattern: '/__transmit/events',
+    tokens: [{"old":"/__transmit/events","type":0,"val":"__transmit","end":""},{"old":"/__transmit/events","type":0,"val":"events","end":""}],
+    types: placeholder as Registry['event_stream']['types'],
+  },
+  'subscribe': {
+    methods: ["POST"],
+    pattern: '/__transmit/subscribe',
+    tokens: [{"old":"/__transmit/subscribe","type":0,"val":"__transmit","end":""},{"old":"/__transmit/subscribe","type":0,"val":"subscribe","end":""}],
+    types: placeholder as Registry['subscribe']['types'],
+  },
+  'unsubscribe': {
+    methods: ["POST"],
+    pattern: '/__transmit/unsubscribe',
+    tokens: [{"old":"/__transmit/unsubscribe","type":0,"val":"__transmit","end":""},{"old":"/__transmit/unsubscribe","type":0,"val":"unsubscribe","end":""}],
+    types: placeholder as Registry['unsubscribe']['types'],
+  },
   'access_token.store': {
     methods: ["POST"],
     pattern: '/api/auth/login',
@@ -90,11 +108,11 @@ const routes = {
     tokens: [{"old":"/api/jobs/:id","type":0,"val":"api","end":""},{"old":"/api/jobs/:id","type":0,"val":"jobs","end":""},{"old":"/api/jobs/:id","type":1,"val":"id","end":""}],
     types: placeholder as Registry['jobs.destroy']['types'],
   },
-  'jobs.stream': {
-    methods: ["GET","HEAD"],
-    pattern: '/api/jobs/:id/sse',
-    tokens: [{"old":"/api/jobs/:id/sse","type":0,"val":"api","end":""},{"old":"/api/jobs/:id/sse","type":0,"val":"jobs","end":""},{"old":"/api/jobs/:id/sse","type":1,"val":"id","end":""},{"old":"/api/jobs/:id/sse","type":0,"val":"sse","end":""}],
-    types: placeholder as Registry['jobs.stream']['types'],
+  'jobs.destroy_clip': {
+    methods: ["DELETE"],
+    pattern: '/api/jobs/:id/clips/:clipFilename',
+    tokens: [{"old":"/api/jobs/:id/clips/:clipFilename","type":0,"val":"api","end":""},{"old":"/api/jobs/:id/clips/:clipFilename","type":0,"val":"jobs","end":""},{"old":"/api/jobs/:id/clips/:clipFilename","type":1,"val":"id","end":""},{"old":"/api/jobs/:id/clips/:clipFilename","type":0,"val":"clips","end":""},{"old":"/api/jobs/:id/clips/:clipFilename","type":1,"val":"clipFilename","end":""}],
+    types: placeholder as Registry['jobs.destroy_clip']['types'],
   },
   'jobs.rename_clip': {
     methods: ["PATCH"],
@@ -173,6 +191,30 @@ const routes = {
     pattern: '/api/themes/:id/default',
     tokens: [{"old":"/api/themes/:id/default","type":0,"val":"api","end":""},{"old":"/api/themes/:id/default","type":0,"val":"themes","end":""},{"old":"/api/themes/:id/default","type":1,"val":"id","end":""},{"old":"/api/themes/:id/default","type":0,"val":"default","end":""}],
     types: placeholder as Registry['themes.set_default']['types'],
+  },
+  'workers.index': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/workers',
+    tokens: [{"old":"/api/workers","type":0,"val":"api","end":""},{"old":"/api/workers","type":0,"val":"workers","end":""}],
+    types: placeholder as Registry['workers.index']['types'],
+  },
+  'workers.flush': {
+    methods: ["POST"],
+    pattern: '/api/workers/flush',
+    tokens: [{"old":"/api/workers/flush","type":0,"val":"api","end":""},{"old":"/api/workers/flush","type":0,"val":"workers","end":""},{"old":"/api/workers/flush","type":0,"val":"flush","end":""}],
+    types: placeholder as Registry['workers.flush']['types'],
+  },
+  'workers.cancel': {
+    methods: ["POST"],
+    pattern: '/api/workers/cancel/:id',
+    tokens: [{"old":"/api/workers/cancel/:id","type":0,"val":"api","end":""},{"old":"/api/workers/cancel/:id","type":0,"val":"workers","end":""},{"old":"/api/workers/cancel/:id","type":0,"val":"cancel","end":""},{"old":"/api/workers/cancel/:id","type":1,"val":"id","end":""}],
+    types: placeholder as Registry['workers.cancel']['types'],
+  },
+  'workers.cancel_render': {
+    methods: ["POST"],
+    pattern: '/api/workers/cancel-render/:id',
+    tokens: [{"old":"/api/workers/cancel-render/:id","type":0,"val":"api","end":""},{"old":"/api/workers/cancel-render/:id","type":0,"val":"workers","end":""},{"old":"/api/workers/cancel-render/:id","type":0,"val":"cancel-render","end":""},{"old":"/api/workers/cancel-render/:id","type":1,"val":"id","end":""}],
+    types: placeholder as Registry['workers.cancel_render']['types'],
   },
   'renders.store': {
     methods: ["POST"],

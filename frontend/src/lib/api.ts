@@ -429,30 +429,7 @@ export function clipUrl(jobId: string, filename: string): string {
   return `${BASE}/clips/${jobId}/${filename}`;
 }
 
-// ── SSE (Server-Sent Events) ─────────────────────────────
-
-export interface SSEClipReady {
-  type: "clip_ready";
-  job_id: string;
-  rank: number;
-  hot_point: HotPoint;
-}
-
-export interface SSEStatusUpdate {
-  status: JobStatusType;
-  progress?: string;
-  error?: string | null;
-  step_timings?: Record<string, StepTiming>;
-  hot_points?: HotPoint[];
-  vod_title?: string | null;
-  vod_game?: string | null;
-  vod_duration_seconds?: number | null;
-  streamer?: string | null;
-  view_count?: number | null;
-  stream_date?: string | null;
-}
-
-export type SSEEvent = SSEClipReady | SSEStatusUpdate;
+// ── Hot point mapping ────────────────────────────────────
 
 export function mapSSEHotPoint(raw: ServerHotPoint): HotPoint {
   return { ...raw, clip_name: raw.clip_name ?? "", clip_source: (raw as any).clip_source ?? "auto" } as HotPoint;

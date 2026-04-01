@@ -27,12 +27,11 @@ export function TransmitProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const uid = uidRef.current;
     const url = `${BASE_URL}/__transmit/events?uid=${uid}`;
-    // console.log(`[Transmit] Opening tunnel: ${url}`);
     const es = new EventSource(url);
     esRef.current = es;
 
     es.onopen = () => {
-      // console.log(`[Transmit] Tunnel opened`);
+
       // Re-subscribe all active channels (in case of reconnect)
       for (const channel of subscribedChannelsRef.current) {
         postSubscribe(uid, channel);
@@ -60,11 +59,11 @@ export function TransmitProvider({ children }: { children: ReactNode }) {
     };
 
     es.onerror = () => {
-      // console.log(`[Transmit] Tunnel error (will auto-reconnect)`);
+
     };
 
     return () => {
-      // console.log(`[Transmit] Closing tunnel`);
+
       // Unsubscribe all channels
       for (const channel of subscribedChannelsRef.current) {
         postUnsubscribe(uid, channel);
@@ -121,17 +120,14 @@ export function useTransmitChannel(channel: string | null, listener: (data: unkn
 }
 
 function postSubscribe(uid: string, channel: string) {
-  // console.log(`[Transmit] Subscribing to ${channel}`);
   fetch(`${BASE_URL}/__transmit/subscribe`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ uid, channel }),
-  }).then((r) => // console.log(`[Transmit] Subscribe ${channel}: ${r.status}`))
-    .catch((e) => console.error(`[Transmit] Subscribe failed:`, e));
+  }).catch(() => {});
 }
 
 function postUnsubscribe(uid: string, channel: string) {
-  // console.log(`[Transmit] Unsubscribing from ${channel}`);
   fetch(`${BASE_URL}/__transmit/unsubscribe`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

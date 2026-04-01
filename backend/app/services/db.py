@@ -3,7 +3,9 @@
 import json
 import logging
 import os
+import re
 import sqlite3
+import uuid
 from datetime import datetime, timezone
 from typing import Any
 
@@ -229,6 +231,44 @@ def publish_clip_ready(job_id: str, rank: int, hp: HotPoint) -> None:
         "rank": rank,
         "hot_point": hp.model_dump(),
     })
+
+
+def slugify_clip_name(clip_name: str) -> str:
+    """Convert a clip name to a filesystem-safe slug.
+
+    "Pardon Sous Estime" → "pardon_sous_estime_a7f3x.mp4"
+    """
+    # Normalize: lowercase, strip accents, keep only alphanum + spaces
+    import unicodedata
+    s = unicodedata.normalize("NFKD", clip_name).encode("ascii", "ignore").decode()
+    s = s.lower().strip()
+    s = re.sub(r"[^a-z0-9\s]", "", s)
+    s = re.sub(r"\s+", "_", s).strip("_")
+    if not s:
+        s = "clip"
+    # Truncate to 50 chars and append short UUID
+    s = s[:50].rstrip("_")
+    short_id = uuid.uuid4().hex[:5]
+    return f"{s}_{short_id}.mp4"
+
+
+def rename_clip_files(job_id: str, old_filename: str, new_filename: str) -> None:
+    """Rename all local sidecar files (meta, probe, words) for a clip."""
+    from app.services.clipper import CLIPS_DIR
+
+    clip_dir = os.path.join(CLIPS_DIR, job_id)
+    if not os.path.isdir(clip_dir):
+        return
+
+    old_base = os.path.splitext(old_filename)[0]
+    new_base = os.path.splitext(new_filename)[0]
+
+    for suffix in ("_meta.json", "_probe.json", "_words.json"):
+        old_path = os.path.join(clip_dir, old_base + suffix)
+        new_path = os.path.join(clip_dir, new_base + suffix)
+        if os.path.isfile(old_path):
+            os.rename(old_path, new_path)
+            logger.debug(f"Renamed {old_base + suffix} → {new_base + suffix}")
 
 
 def update_hot_point_clip(job_id: str, rank: int, clip_filename: str) -> None:

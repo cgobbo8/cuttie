@@ -13,7 +13,7 @@ import os
 import subprocess
 
 from app.models.schemas import HotPoint, KeyMoment, LlmAnalysis
-from app.services.db import publish_clip_ready, save_hot_points, update_job
+from app.services.db import publish_clip_ready, rename_clip_files, save_hot_points, slugify_clip_name, update_hot_point_clip, update_job
 from app.services.frame_extractor import extract_frames
 from app.services.openai_client import get_openai_client, get_groq_client, LLM_MODEL, WHISPER_MODEL
 from app.services.vision_analyzer import analyze_clip_frames
@@ -305,6 +305,20 @@ def analyze_single_clip(
     hp.final_score = round(
         HEURISTIC_WEIGHT * hp.score + LLM_WEIGHT * llm.virality_score, 3
     )
+
+    # Rename clip file from clip_XX.mp4 to slug of generated name
+    if clip_name and hp.clip_filename:
+        new_filename = slugify_clip_name(clip_name)
+        old_filename = hp.clip_filename
+        try:
+            from app.services.s3_storage import rename_object
+            rename_object(f"clips/{job_id}/{old_filename}", f"clips/{job_id}/{new_filename}")
+            rename_clip_files(job_id, old_filename, new_filename)
+            update_hot_point_clip(job_id, clip_index, new_filename)
+            hp.clip_filename = new_filename
+            logger.info(f"  Renamed {old_filename} → {new_filename}")
+        except Exception as e:
+            logger.warning(f"  Clip rename failed ({old_filename} → {new_filename}): {e}")
 
     logger.info(
         f"  → {llm.category} | viral={llm.virality_score:.0%} | "

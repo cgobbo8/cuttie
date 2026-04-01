@@ -49,6 +49,15 @@ def upload_file(local_path: str, s3_key: str, content_type: str = "video/mp4"):
 
 
 
+def rename_object(old_key: str, new_key: str) -> None:
+    """Rename an S3 object (copy + delete)."""
+    client = _get_client()
+    bucket = _bucket()
+    client.copy_object(Bucket=bucket, CopySource={"Bucket": bucket, "Key": old_key}, Key=new_key)
+    client.delete_object(Bucket=bucket, Key=old_key)
+    logger.info(f"S3 rename: {old_key} → {new_key}")
+
+
 def upload_and_cleanup(local_path: str, s3_key: str, content_type: str = "video/mp4"):
     """Upload to S3, then delete the local file."""
     upload_file(local_path, s3_key, content_type)

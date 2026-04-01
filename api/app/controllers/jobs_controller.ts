@@ -188,9 +188,8 @@ export default class JobsController {
       for (const hp of data.hotPoints) {
         hp.chat_message_count = 0
         if (!hp.clip_filename || allChat.length === 0) continue
-        const clipNum = hp.clip_filename.match(/clip_(\d+)/)?.[1]
-        if (!clipNum) continue
-        const metaPath = path.join(CLIPS_BASE, job.id, `clip_${clipNum}_meta.json`)
+        const clipBase = path.basename(hp.clip_filename, path.extname(hp.clip_filename))
+        const metaPath = path.join(CLIPS_BASE, job.id, `${clipBase}_meta.json`)
         try {
           if (existsSync(metaPath)) {
             const { vod_start, vod_end } = JSON.parse(readFileSync(metaPath, 'utf-8'))

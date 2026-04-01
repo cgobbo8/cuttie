@@ -71,7 +71,7 @@ export async function loadJobSharedData(jobId: string, sampleClipFilename: strin
     try {
       const s3Keys = await listObjects(`clips/${jobId}/`)
       const clipKeys = s3Keys
-        .filter((k: string) => /\/clip_\d+\.mp4$/.test(k))
+        .filter((k: string) => k.endsWith('.mp4'))
         .sort()
         .slice(0, 5)
       if (clipKeys.length > 0) {
@@ -176,10 +176,9 @@ export async function resolveEditEnv(
   }
 
   // Chat messages (per-clip window)
-  const clipNumber = base.match(/clip_(\d+)/)?.[1] ?? null
-  const metaPath = clipNumber ? path.join(CLIPS_BASE, jobId, `clip_${clipNumber}_meta.json`) : null
+  const metaPath = path.join(CLIPS_BASE, jobId, `${base}_meta.json`)
   let chatMessages: { author: string; text: string; timestamp: number }[] = []
-  if (metaPath && existsSync(metaPath) && shared.allChat.length > 0) {
+  if (existsSync(metaPath) && shared.allChat.length > 0) {
     try {
       const { vod_start, vod_end } = JSON.parse(readFileSync(metaPath, 'utf-8'))
       chatMessages = shared.allChat

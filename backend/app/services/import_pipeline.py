@@ -12,7 +12,7 @@ import time
 
 from app.models.schemas import HotPoint, LlmAnalysis, SignalBreakdown
 from app.services.clipper import _write_probe_and_upload
-from app.services.db import publish_clip_ready, update_job
+from app.services.db import publish_clip_ready, rename_clip_files, slugify_clip_name, update_job
 from app.services.subtitle_generator import transcribe_with_words
 
 logger = logging.getLogger(__name__)
@@ -90,7 +90,19 @@ def run_add_clip_pipeline(job_id: str, clip_filename: str, clip_name: str, rank:
         ),
     )
 
+    # Rename clip to slug of clip_name
+    if clip_name:
+        new_filename = slugify_clip_name(clip_name)
+        try:
+            from app.services.s3_storage import rename_object
+            rename_object(f"clips/{job_id}/{clip_filename}", f"clips/{job_id}/{new_filename}")
+            rename_clip_files(job_id, clip_filename, new_filename)
+            hot_point.clip_filename = new_filename
+            logger.info(f"[AddClip] Renamed {clip_filename} → {new_filename}")
+        except Exception as e:
+            logger.warning(f"[AddClip] Clip rename failed: {e}")
+
     # Publish via Redis SSE — AdonisJS job_status_bus will persist the hot_point
     publish_clip_ready(job_id, rank, hot_point)
 
-    logger.info(f"[AddClip] Done — {clip_filename} added to job {job_id}")
+    logger.info(f"[AddClip] Done — {hot_point.clip_filename} added to job {job_id}")

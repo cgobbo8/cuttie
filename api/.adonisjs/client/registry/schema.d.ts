@@ -187,6 +187,18 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/jobs_controller').default['show']>>>
     }
   }
+  'jobs.update': {
+    methods: ["PATCH"]
+    pattern: '/api/jobs/:id'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { id: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/jobs_controller').default['update']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/jobs_controller').default['update']>>>
+    }
+  }
   'jobs.retry': {
     methods: ["POST"]
     pattern: '/api/jobs/:id/retry'

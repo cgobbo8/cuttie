@@ -120,7 +120,8 @@
     "errorOccurred": "Une erreur est survenue",
     "retry": "Reprendre",
     "back": "Retour",
-    "retryFailed": "Échec de la reprise"
+    "retryFailed": "Échec de la reprise",
+    "renamed": "Projet renommé"
   },
 
   "newProject": {
@@ -139,6 +140,7 @@
 
   "hotPoints": {
     "views": "vues",
+    "renameProject": "Renommer le projet",
     "vodLink": "Voir la VOD",
     "clipsReady_one": "{{count}} clip prêt",
     "clipsReady_other": "{{count}} clips prêts",

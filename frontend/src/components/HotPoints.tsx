@@ -38,6 +38,8 @@ interface Props {
   onToggleClip?: (filename: string) => void;
   onQuickExport?: (clipFilename: string) => void;
   onDeleteClip?: (clipFilename: string) => void;
+  customTitle?: string | null;
+  onRenameTitle?: (newTitle: string) => void;
 }
 
 interface SignalInfo {
@@ -773,9 +775,15 @@ export default function HotPoints({
   onToggleClip,
   onQuickExport,
   onDeleteClip,
+  customTitle,
+  onRenameTitle,
 }: Props) {
   const { t } = useTranslation();
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const displayTitle = customTitle || vodTitle;
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState(displayTitle);
+  const titleInputRef = useRef<HTMLInputElement>(null);
   const activeSignals = SIGNALS.filter((signal) =>
     hotPoints.some((hp) => hp.signals[signal.key] > 0.01),
   );
@@ -783,13 +791,56 @@ export default function HotPoints({
   // Only clips with files are eligible for lightbox navigation
   const clipsWithFiles = hotPoints.filter((hp) => hp.clip_filename);
 
+  const handleTitleSave = useCallback(() => {
+    const trimmed = titleDraft.trim();
+    if (trimmed && trimmed !== displayTitle) {
+      onRenameTitle?.(trimmed);
+    }
+    setEditingTitle(false);
+  }, [titleDraft, displayTitle, onRenameTitle]);
+
+  const handleTitleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleTitleSave();
+    } else if (e.key === "Escape") {
+      setTitleDraft(displayTitle);
+      setEditingTitle(false);
+    }
+  }, [handleTitleSave, displayTitle]);
+
+  const startEditingTitle = useCallback(() => {
+    setTitleDraft(displayTitle);
+    setEditingTitle(true);
+    setTimeout(() => titleInputRef.current?.select(), 0);
+  }, [displayTitle]);
+
   return (
     <div className="w-full">
       {/* VOD Header */}
       <div className="mb-8">
         <div className="flex items-center gap-3 mb-2">
-          <h2 className="text-xl font-semibold text-white">{vodTitle}</h2>
-          {vodUrl && (
+          {editingTitle ? (
+            <input
+              ref={titleInputRef}
+              autoFocus
+              value={titleDraft}
+              onChange={(e) => setTitleDraft(e.target.value)}
+              onBlur={handleTitleSave}
+              onKeyDown={handleTitleKeyDown}
+              className="text-xl font-semibold text-white bg-transparent border-b border-white/20 focus:border-white/50 outline-none py-0.5 min-w-0 flex-1"
+            />
+          ) : (
+            <button
+              onClick={startEditingTitle}
+              className="group flex items-center gap-2 text-left"
+              title={t("hotPoints.renameProject")}
+            >
+              <h2 className="text-xl font-semibold text-white">{displayTitle}</h2>
+              <Pencil className="w-3.5 h-3.5 text-zinc-600 opacity-0 group-hover:opacity-100 transition-opacity" />
+            </button>
+          )}
+          {vodUrl && !editingTitle && (
             <a
               href={vodUrl}
               target="_blank"
@@ -801,6 +852,9 @@ export default function HotPoints({
             </a>
           )}
         </div>
+        {customTitle && vodTitle !== customTitle && (
+          <p className="text-sm text-zinc-500 mb-1">{vodTitle}</p>
+        )}
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-zinc-500">
           {streamer && (
             <span className="flex items-center gap-1.5">

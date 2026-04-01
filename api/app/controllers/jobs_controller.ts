@@ -102,6 +102,7 @@ export default class JobsController {
       query.where((builder) => {
         builder
           .whereLike('vod_title', q)
+          .orWhereLike('custom_title', q)
           .orWhereLike('streamer', q)
           .orWhereLike('vod_game', q)
       })
@@ -144,6 +145,7 @@ export default class JobsController {
         url: serialized.url,
         status: serialized.status,
         vodTitle: serialized.vodTitle,
+        customTitle: serialized.customTitle,
         vodGame: serialized.vodGame,
         vodDurationSeconds: serialized.vodDurationSeconds,
         streamer: serialized.streamer,
@@ -202,6 +204,22 @@ export default class JobsController {
     }
 
     return data
+  }
+
+  // PATCH /api/jobs/:id
+  async update({ params, request, response, auth }: HttpContext) {
+    const user = auth.getUserOrFail()
+    const job = await Job.find(params.id)
+    if (!job || job.userId !== user.id) return response.notFound({ error: 'job not found' })
+
+    const body = request.body() as { custom_title?: string }
+    const customTitle = body.custom_title?.trim()
+    if (!customTitle) return response.badRequest({ error: 'custom_title is required' })
+
+    job.customTitle = customTitle
+    await job.save()
+
+    return { custom_title: customTitle }
   }
 
   // POST /api/jobs/:id/retry

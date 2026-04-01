@@ -4,6 +4,7 @@ import {
   getJobStatus,
   retryJob,
   deleteClip,
+  renameJob,
   type JobResponse,
   type JobStatusType,
   type HotPoint,
@@ -36,6 +37,7 @@ export default function JobPage() {
   const [stepTimings, setStepTimings] = useState<Record<string, StepTiming> | null>(null);
   const [vodUrl, setVodUrl] = useState("");
   const [vodTitle, setVodTitle] = useState("");
+  const [customTitle, setCustomTitle] = useState<string | null>(null);
   const [vodGame, setVodGame] = useState("");
   const [vodDuration, setVodDuration] = useState(0);
   const [streamer, setStreamer] = useState("");
@@ -63,6 +65,7 @@ export default function JobPage() {
     if (job.step_timings) setStepTimings(job.step_timings);
     if (job.url) setVodUrl(job.url);
     if (job.vod_title) setVodTitle(job.vod_title);
+    if (job.custom_title) setCustomTitle(job.custom_title);
     if (job.vod_game) setVodGame(job.vod_game);
     if (job.vod_duration_seconds) setVodDuration(job.vod_duration_seconds);
     if (job.streamer) {
@@ -195,6 +198,17 @@ export default function JobPage() {
     setSelectedClips(new Set());
   }, []);
 
+  const handleRenameTitle = useCallback(async (newTitle: string) => {
+    if (!jobId) return;
+    setCustomTitle(newTitle); // optimistic
+    try {
+      await renameJob(jobId, newTitle);
+      toast.success(t("job.renamed"));
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : t("common.error"));
+    }
+  }, [jobId, t]);
+
   const handleConfirmDeleteClip = useCallback(() => {
     if (!jobId || !clipToDelete) return;
     const filename = clipToDelete;
@@ -318,6 +332,7 @@ export default function JobPage() {
           hotPoints={clips}
           vodUrl={vodUrl}
           vodTitle={vodTitle || "VOD"}
+          customTitle={customTitle}
           vodGame={vodGame}
           vodDuration={vodDuration}
           jobId={jobId!}
@@ -332,6 +347,7 @@ export default function JobPage() {
           onToggleClip={handleToggleClip}
           onQuickExport={(filename) => setQuickExportClip(filename)}
           onDeleteClip={(filename) => setClipToDelete(filename)}
+          onRenameTitle={handleRenameTitle}
         />
       )}
 

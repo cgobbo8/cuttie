@@ -96,6 +96,12 @@ const routes = {
     tokens: [{"old":"/api/jobs/:id","type":0,"val":"api","end":""},{"old":"/api/jobs/:id","type":0,"val":"jobs","end":""},{"old":"/api/jobs/:id","type":1,"val":"id","end":""}],
     types: placeholder as Registry['jobs.show']['types'],
   },
+  'jobs.update': {
+    methods: ["PATCH"],
+    pattern: '/api/jobs/:id',
+    tokens: [{"old":"/api/jobs/:id","type":0,"val":"api","end":""},{"old":"/api/jobs/:id","type":0,"val":"jobs","end":""},{"old":"/api/jobs/:id","type":1,"val":"id","end":""}],
+    types: placeholder as Registry['jobs.update']['types'],
+  },
   'jobs.retry': {
     methods: ["POST"],
     pattern: '/api/jobs/:id/retry',

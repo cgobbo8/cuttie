@@ -182,7 +182,7 @@ export default function ProjectsPage() {
       case "date":
         return dir * (new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
       case "title":
-        return dir * (a.vod_title || "").localeCompare(b.vod_title || "");
+        return dir * (a.custom_title || a.vod_title || "").localeCompare(b.custom_title || b.vod_title || "");
       case "status":
         return dir * a.status.localeCompare(b.status);
       default:
@@ -390,7 +390,7 @@ export default function ProjectsPage() {
                   )}
                   <div className="min-w-0">
                   <p className="text-sm text-zinc-300 truncate group-hover:text-white transition-colors">
-                    {job.vod_title || t("home.untitledVod")}
+                    {job.custom_title || job.vod_title || t("home.untitledVod")}
                   </p>
                   <div className="text-[11px] text-zinc-500 flex items-center gap-2 mt-0.5">
                     {job.streamer && (

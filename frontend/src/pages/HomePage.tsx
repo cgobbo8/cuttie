@@ -118,7 +118,7 @@ function AllDashboard({ data, lng }: { data: DashboardData; lng: string }) {
                   </div>
                 )}
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm text-zinc-300 truncate">{p.vod_title || "Untitled VOD"}</p>
+                  <p className="text-sm text-zinc-300 truncate">{p.custom_title || p.vod_title || "Untitled VOD"}</p>
                   <div className="text-[11px] text-zinc-500 flex items-center gap-2">
                     {p.streamer && <span>{p.streamer}</span>}
                     {p.vod_game && (
@@ -255,7 +255,7 @@ function CreatorDashboard({ data, lng }: { data: DashboardData; lng: string }) {
                 className="flex items-center gap-3 px-4 py-3 hover:bg-white/[0.03] transition-colors"
               >
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm text-zinc-300 truncate">{p.vod_title || "Untitled VOD"}</p>
+                  <p className="text-sm text-zinc-300 truncate">{p.custom_title || p.vod_title || "Untitled VOD"}</p>
                   {p.vod_game && (
                     <p className="text-[11px] text-zinc-500 flex items-center gap-1">
                       <Gamepad2 className="w-2.5 h-2.5" /> {p.vod_game}

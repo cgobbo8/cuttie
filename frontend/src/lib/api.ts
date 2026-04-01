@@ -113,6 +113,7 @@ export interface JobResponse {
   hot_points: HotPoint[] | null;
   error: string | null;
   vod_title: string | null;
+  custom_title: string | null;
   vod_game: string | null;
   vod_duration_seconds: number | null;
   streamer: string | null;
@@ -126,6 +127,7 @@ export interface JobSummary {
   url: string;
   status: string;
   vod_title: string | null;
+  custom_title: string | null;
   vod_game: string | null;
   vod_duration_seconds: number | null;
   streamer: string | null;
@@ -159,6 +161,7 @@ interface ServerJobResponse {
   hotPoints?: ServerHotPoint[] | null;
   error?: string | null;
   vodTitle?: string | null;
+  customTitle?: string | null;
   vodGame?: string | null;
   vodDurationSeconds?: number | null;
   streamer?: string | null;
@@ -177,6 +180,7 @@ interface ServerJobSummary {
   url: string;
   status: string;
   vodTitle?: string | null;
+  customTitle?: string | null;
   vodGame?: string | null;
   vodDurationSeconds?: number | null;
   streamer?: string | null;
@@ -200,6 +204,7 @@ function mapJobResponse(raw: ServerJobResponse): JobResponse {
     hot_points: hotPoints,
     error: raw.error ?? null,
     vod_title: raw.vodTitle ?? null,
+    custom_title: raw.customTitle ?? null,
     vod_game: raw.vodGame ?? null,
     vod_duration_seconds: raw.vodDurationSeconds ?? null,
     streamer: raw.streamer ?? null,
@@ -215,6 +220,7 @@ function mapJobSummary(raw: ServerJobSummary): JobSummary {
     url: raw.url,
     status: raw.status,
     vod_title: raw.vodTitle ?? null,
+    custom_title: raw.customTitle ?? null,
     vod_game: raw.vodGame ?? null,
     vod_duration_seconds: raw.vodDurationSeconds ?? null,
     streamer: raw.streamer ?? null,
@@ -295,6 +301,7 @@ export async function listCreators(): Promise<CreatorSummary[]> {
 export interface DashboardProject {
   id: string;
   vod_title: string | null;
+  custom_title: string | null;
   streamer: string | null;
   streamer_thumbnail: string | null;
   vod_game: string | null;
@@ -403,6 +410,16 @@ export async function listJobs(params?: ListJobsParams): Promise<PaginatedJobs> 
     data: ((json.data ?? []) as ServerJobSummary[]).map(mapJobSummary),
     meta: json.meta,
   };
+}
+
+export async function renameJob(jobId: string, customTitle: string): Promise<{ custom_title: string }> {
+  const res = await fetch(`${BASE}/jobs/${jobId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ custom_title: customTitle }),
+  });
+  if (!res.ok) throw new Error("Failed to rename job");
+  return res.json();
 }
 
 export async function deleteJob(jobId: string): Promise<void> {

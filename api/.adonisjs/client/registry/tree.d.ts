@@ -30,6 +30,7 @@ export interface ApiDefinition {
     addClip: typeof routes['jobs.add_clip']
     index: typeof routes['jobs.index']
     show: typeof routes['jobs.show']
+    update: typeof routes['jobs.update']
     retry: typeof routes['jobs.retry']
     destroy: typeof routes['jobs.destroy']
     destroyClip: typeof routes['jobs.destroy_clip']

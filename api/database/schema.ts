@@ -54,7 +54,7 @@ export class CreatorSchema extends BaseModel {
 }
 
 export class JobSchema extends BaseModel {
-  static $columns = ['clips', 'createdAt', 'creatorId', 'error', 'hotPoints', 'id', 'progress', 'status', 'stepTimings', 'streamDate', 'streamer', 'streamerThumbnail', 'updatedAt', 'url', 'userId', 'viewCount', 'vodDurationSeconds', 'vodGame', 'vodGameId', 'vodGameThumbnail', 'vodTitle'] as const
+  static $columns = ['clips', 'createdAt', 'creatorId', 'customTitle', 'error', 'hotPoints', 'id', 'progress', 'status', 'stepTimings', 'streamDate', 'streamer', 'streamerThumbnail', 'updatedAt', 'url', 'userId', 'viewCount', 'vodDurationSeconds', 'vodGame', 'vodGameId', 'vodGameThumbnail', 'vodTitle'] as const
   $columns = JobSchema.$columns
   @column()
   declare clips: any | null
@@ -62,6 +62,8 @@ export class JobSchema extends BaseModel {
   declare createdAt: DateTime | null
   @column()
   declare creatorId: number | null
+  @column()
+  declare customTitle: string | null
   @column()
   declare error: string | null
   @column()

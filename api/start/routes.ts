@@ -51,6 +51,7 @@ router
         router.post('/jobs/:id/add-clip', [() => import('#controllers/jobs_controller'), 'addClip'])
         router.get('/jobs', [() => import('#controllers/jobs_controller'), 'index'])
         router.get('/jobs/:id', [() => import('#controllers/jobs_controller'), 'show'])
+        router.patch('/jobs/:id', [() => import('#controllers/jobs_controller'), 'update'])
         router.post('/jobs/:id/retry', [() => import('#controllers/jobs_controller'), 'retry'])
         router.delete('/jobs/:id', [() => import('#controllers/jobs_controller'), 'destroy'])
         router.delete('/jobs/:id/clips/:clipFilename', [() => import('#controllers/jobs_controller'), 'destroyClip'])

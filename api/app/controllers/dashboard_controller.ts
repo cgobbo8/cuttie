@@ -53,7 +53,7 @@ export default class DashboardController {
       .from('jobs')
       .where('user_id', userId)
       .where('status', 'DONE')
-      .select('id', 'vod_title', 'streamer', 'streamer_thumbnail', 'vod_game', 'created_at')
+      .select('id', 'vod_title', 'custom_title', 'streamer', 'streamer_thumbnail', 'vod_game', 'created_at')
       .orderBy('created_at', 'desc')
       .limit(5)
 
@@ -82,6 +82,7 @@ export default class DashboardController {
       latest_projects: latestProjects.map((j) => ({
         id: j.id,
         vod_title: j.vod_title,
+        custom_title: j.custom_title || null,
         streamer: j.streamer,
         streamer_thumbnail: j.streamer_thumbnail || null,
         vod_game: j.vod_game,
@@ -149,7 +150,7 @@ export default class DashboardController {
       .where('user_id', userId)
       .where('creator_id', creatorId)
       .where('status', 'DONE')
-      .select('id', 'vod_title', 'streamer', 'streamer_thumbnail', 'vod_game', 'created_at')
+      .select('id', 'vod_title', 'custom_title', 'streamer', 'streamer_thumbnail', 'vod_game', 'created_at')
       .orderBy('created_at', 'desc')
       .limit(5)
 
@@ -197,6 +198,7 @@ export default class DashboardController {
       latest_projects: latestProjects.map((j) => ({
         id: j.id,
         vod_title: j.vod_title,
+        custom_title: j.custom_title || null,
         streamer: j.streamer,
         streamer_thumbnail: j.streamer_thumbnail || null,
         vod_game: j.vod_game,

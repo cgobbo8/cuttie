@@ -18,11 +18,11 @@ from app.models.schemas import HotPoint, SignalBreakdown
 # Default weights for composite score (base signals, total = 1.0)
 # Bonus signals (agreement, classification, sentiment) are multiplicative, not additive
 WEIGHTS = {
-    "rms": 0.18,
+    "rms": 0.10,           # Volume alone is weak (loud != interesting)
     "chat_speed": 0.18,
     "flux": 0.12,
-    "onset": 0.10,       # Onset strength: catches moment transitions
-    "pitch_var": 0.10,
+    "onset": 0.14,         # Onset strength: catches sudden sounds (screams, impacts)
+    "pitch_var": 0.14,     # Voice pitch variation: streamer getting excited
     "centroid": 0.05,
     "zcr": 0.02,
     # Chat signals
@@ -30,6 +30,8 @@ WEIGHTS = {
     "emote_density": 0.08,
     "caps_ratio": 0.07,
 }
+# Note: vocal_excitement is added separately as a strong additive bonus (0.25)
+# outside of these base weights — see classification section below
 
 # Minimum distance between peaks in seconds
 MIN_PEAK_DISTANCE_SEC = 60.0
@@ -166,18 +168,19 @@ def compute_scores(
 
     # Audio classification signals (PANNs CNN14)
     has_classification = np.any(speech_presence > 0.05)
+    norm_speech = _normalize(speech_presence) if has_classification else np.zeros(n)
+    norm_excite = _normalize(vocal_excitement) if has_classification else np.zeros(n)
+    norm_game = _normalize(game_audio) if has_classification else np.zeros(n)
+
     if has_classification:
-        norm_speech = _normalize(speech_presence)
-        norm_excite = _normalize(vocal_excitement)
-        norm_game = _normalize(game_audio)
 
         # Boost: loud + streamer speaking = streamer is reacting
         voice_energy = norm_speech * norm["rms"]
         score *= 1.0 + 0.15 * _normalize(voice_energy)
 
         # Strong boost: vocal excitement (laughter, screaming) — rare but gold
-        # Additive here is OK because it's genuinely rare and should spike
-        score += 0.10 * norm_excite
+        # Additive and high weight: this is the strongest signal for virality
+        score += 0.25 * norm_excite
 
         # Dampen: loud game audio without speech = just game noise
         game_only = np.clip(norm_game - norm_speech, 0, 1)
@@ -211,8 +214,8 @@ def compute_scores(
                     spectral_centroid=round(float(norm["centroid"][idx]), 3),
                     zcr=round(float(norm["zcr"][idx]), 3),
                     chat_speed=round(float(norm["chat_speed"][idx]), 3),
-                    vocal_excitement=round(float(vocal_excitement[idx]), 3),
-                    speech_presence=round(float(speech_presence[idx]), 3),
+                    vocal_excitement=round(float(norm_excite[idx]), 3),
+                    speech_presence=round(float(norm_speech[idx]), 3),
                 ),
                 chat_mood=dominant_moods[idx],
             )

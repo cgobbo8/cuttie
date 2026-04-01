@@ -29,7 +29,7 @@ from app.services.frame_extractor import (
     extract_frames_from_url,
     get_vod_direct_url,
 )
-from app.services.openai_client import get_groq_client, get_openai_client, LLM_MODEL, WHISPER_MODEL
+from app.services.openai_client import get_groq_client, get_openrouter_client, LLM_MODEL, WHISPER_MODEL
 
 logger = logging.getLogger(__name__)
 
@@ -392,19 +392,28 @@ def _call_unified_llm(
             "image_url": {"url": data_url, "detail": "low"},
         })
 
-    client = get_openai_client()
+    client = get_openrouter_client()
 
-    response = client.chat.completions.create(
+    # OpenRouter models: skip response_format (unreliable on some providers)
+    is_openrouter = "openrouter" in (client.base_url.host or "")
+
+    kwargs: dict = dict(
         model=LLM_MODEL,
         messages=[{"role": "user", "content": content_parts}],
         temperature=0.4,
         max_completion_tokens=2000,
-        response_format={"type": "json_object"},
     )
+    if not is_openrouter:
+        kwargs["response_format"] = {"type": "json_object"}
+
+    response = client.chat.completions.create(**kwargs)
 
     content = response.choices[0].message.content or ""
     finish = response.choices[0].finish_reason
     content = content.strip()
+    # Strip markdown code fences if present (some models wrap JSON in ```json...```)
+    if content.startswith("```"):
+        content = content.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
     logger.debug(f"LLM raw ({finish}, {len(content)} chars): {content[:200]}")
 
     data = json.loads(content)

@@ -51,6 +51,8 @@ export interface SignalBreakdown {
   spectral_centroid: number;
   zcr: number;
   chat_speed: number;
+  vocal_excitement: number;
+  speech_presence: number;
 }
 
 export interface KeyMoment {

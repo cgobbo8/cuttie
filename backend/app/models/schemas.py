@@ -28,6 +28,8 @@ class SignalBreakdown(BaseModel):
     spectral_centroid: float = 0.0
     zcr: float = 0.0
     chat_speed: float = 0.0
+    vocal_excitement: float = 0.0
+    speech_presence: float = 0.0
 
 
 class KeyMoment(BaseModel):

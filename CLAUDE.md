@@ -164,7 +164,7 @@ Checkpoints resumables : CLIPPING, LLM_ANALYSIS.
 - RMS 18%, chat_speed 18%, spectral_flux 12%, onset 10%, pitch_var 10%
 - chat_burst 10%, emote_density 8%, caps_ratio 7%, centroid 5%, zcr 2%
 
-**Score final** : `0.4 * heuristique + 0.6 * LLM virality`
+**Score final** : `0.2 * heuristique + 0.8 * LLM virality`
 
 ## Authentification
 

@@ -48,6 +48,8 @@ interface SignalInfo {
 const SIGNALS: SignalInfo[] = [
   { labelKey: "signals.rms", key: "rms" },
   { labelKey: "signals.chat_speed", key: "chat_speed" },
+  { labelKey: "signals.vocal_excitement", key: "vocal_excitement" },
+  { labelKey: "signals.speech_presence", key: "speech_presence" },
   { labelKey: "signals.spectral_flux", key: "spectral_flux" },
   { labelKey: "signals.pitch_variance", key: "pitch_variance" },
   { labelKey: "signals.spectral_centroid", key: "spectral_centroid" },

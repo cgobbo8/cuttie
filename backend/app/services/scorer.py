@@ -211,6 +211,8 @@ def compute_scores(
                     spectral_centroid=round(float(norm["centroid"][idx]), 3),
                     zcr=round(float(norm["zcr"][idx]), 3),
                     chat_speed=round(float(norm["chat_speed"][idx]), 3),
+                    vocal_excitement=round(float(vocal_excitement[idx]), 3),
+                    speech_presence=round(float(speech_presence[idx]), 3),
                 ),
                 chat_mood=dominant_moods[idx],
             )

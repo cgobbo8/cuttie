@@ -37,6 +37,7 @@
     "games": "Juegos",
     "creators": "Creadores",
     "exports": "Exportaciones",
+    "workers": "Workers",
     "profile": "Perfil"
   },
 
@@ -160,7 +161,9 @@
     "rawClip": "Clip original",
     "download": "Descargar",
     "msg": "msg",
-    "clipOf": "Clip {{index}} de {{total}}"
+    "clipOf": "Clip {{index}} de {{total}}",
+    "autoClips": "Clips automáticos",
+    "manualClips": "Clips importados"
   },
 
   "signals": {
@@ -470,5 +473,24 @@
     "started": "\"{{name}}\" en proceso, aparecerá en la lista",
     "dropZoneHint": "Arrastra un archivo de vídeo o haz clic para buscar",
     "dropZoneActive": "Suelta para subir"
+  },
+
+  "workers": {
+    "title": "Workers",
+    "queue": "Cola",
+    "queueEmpty": "Sin trabajos pendientes",
+    "activeJobs": "Trabajos activos",
+    "noActiveJobs": "Sin trabajos activos",
+    "cancel": "Cancelar",
+    "cancelled": "Trabajo cancelado",
+    "cancelError": "Error al cancelar",
+    "flushAll": "Detener todo",
+    "flushed": "{{queue}} trabajos retirados de la cola, {{jobs}} trabajos cancelados",
+    "flushError": "Error al detener",
+    "activeRenders": "Exportaciones activas",
+    "noActiveRenders": "Sin exportaciones activas",
+    "flushConfirmTitle": "Detener todo?",
+    "flushConfirmMessage": "Esto vaciará la cola y cancelará todos los trabajos y exportaciones activos. Esta acción no se puede deshacer.",
+    "flushConfirmButton": "Detener todo"
   }
 }

@@ -37,6 +37,7 @@
     "games": "Jeux",
     "creators": "Créateurs",
     "exports": "Exports",
+    "workers": "Workers",
     "profile": "Profil"
   },
 
@@ -160,7 +161,9 @@
     "rawClip": "Clip brut",
     "download": "Télécharger",
     "msg": "msg",
-    "clipOf": "Clip {{index}} sur {{total}}"
+    "clipOf": "Clip {{index}} sur {{total}}",
+    "autoClips": "Clips auto",
+    "manualClips": "Clips importés"
   },
 
   "signals": {
@@ -470,5 +473,24 @@
     "started": "\"{{name}}\" en cours de traitement, il apparaitra dans la liste",
     "dropZoneHint": "Glisse-dépose un fichier vidéo ou clique pour parcourir",
     "dropZoneActive": "Dépose pour uploader"
+  },
+
+  "workers": {
+    "title": "Workers",
+    "queue": "File d'attente",
+    "queueEmpty": "Aucun job en attente",
+    "activeJobs": "Jobs actifs",
+    "noActiveJobs": "Aucun job en cours",
+    "cancel": "Annuler",
+    "cancelled": "Job annulé",
+    "cancelError": "Erreur lors de l'annulation",
+    "flushAll": "Tout arrêter",
+    "flushed": "{{queue}} en file retirés, {{jobs}} jobs annulés",
+    "flushError": "Erreur lors de l'arrêt",
+    "activeRenders": "Exports en cours",
+    "noActiveRenders": "Aucun export en cours",
+    "flushConfirmTitle": "Tout arrêter ?",
+    "flushConfirmMessage": "Cela va vider la file d'attente et annuler tous les jobs et exports en cours. Cette action est irréversible.",
+    "flushConfirmButton": "Tout arrêter"
   }
 }

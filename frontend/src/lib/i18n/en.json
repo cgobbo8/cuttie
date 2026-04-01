@@ -37,6 +37,7 @@
     "games": "Games",
     "creators": "Creators",
     "exports": "Exports",
+    "workers": "Workers",
     "profile": "Profile"
   },
 
@@ -160,7 +161,9 @@
     "rawClip": "Raw clip",
     "download": "Download",
     "msg": "msg",
-    "clipOf": "Clip {{index}} of {{total}}"
+    "clipOf": "Clip {{index}} of {{total}}",
+    "autoClips": "Auto clips",
+    "manualClips": "Imported clips"
   },
 
   "signals": {
@@ -470,5 +473,24 @@
     "started": "\"{{name}}\" is being processed, it will appear in the list",
     "dropZoneHint": "Drag & drop a video file or click to browse",
     "dropZoneActive": "Drop to upload"
+  },
+
+  "workers": {
+    "title": "Workers",
+    "queue": "Queue",
+    "queueEmpty": "No pending jobs",
+    "activeJobs": "Active jobs",
+    "noActiveJobs": "No active jobs",
+    "cancel": "Cancel",
+    "cancelled": "Job cancelled",
+    "cancelError": "Failed to cancel",
+    "flushAll": "Stop all",
+    "flushed": "{{queue}} jobs removed from queue, {{jobs}} jobs cancelled",
+    "flushError": "Failed to stop",
+    "activeRenders": "Active exports",
+    "noActiveRenders": "No active exports",
+    "flushConfirmTitle": "Stop everything?",
+    "flushConfirmMessage": "This will clear the queue and cancel all active jobs and exports. This action cannot be undone.",
+    "flushConfirmButton": "Stop all"
   }
 }

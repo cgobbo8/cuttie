@@ -98,12 +98,12 @@ export default function JobPage() {
       });
       const clipKey = event.hot_point.clip_filename || `rank-${event.rank}`;
       setAnimatedClips((prev) => new Set(prev).add(clipKey));
-      // Remove from pending imports if it was one
-      if (event.hot_point.clip_filename) {
+      // Remove from pending imports (match by clip_name since filename changes during slug rename)
+      if (event.hot_point.clip_name) {
         setPendingImports((prev) => {
-          if (!prev.has(event.hot_point.clip_filename!)) return prev;
+          if (!prev.has(event.hot_point.clip_name!)) return prev;
           const next = new Set(prev);
-          next.delete(event.hot_point.clip_filename!);
+          next.delete(event.hot_point.clip_name!);
           return next;
         });
       }
@@ -388,8 +388,8 @@ export default function JobPage() {
         jobId={jobId!}
         open={showImportModal}
         onClose={() => setShowImportModal(false)}
-        onImported={(clipFilename) => {
-          setPendingImports((prev) => new Set(prev).add(clipFilename));
+        onImported={(_clipFilename, clipName) => {
+          setPendingImports((prev) => new Set(prev).add(clipName));
         }}
       />
     </div>

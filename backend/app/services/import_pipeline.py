@@ -78,6 +78,7 @@ def run_add_clip_pipeline(job_id: str, clip_filename: str, clip_name: str, rank:
         signals=SignalBreakdown(),
         clip_filename=clip_filename,
         clip_name=clip_name,
+        clip_source="manual",
         chat_mood="",
         llm=LlmAnalysis(
             summary="",

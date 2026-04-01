@@ -79,6 +79,7 @@ export interface HotPoint {
   clip_filename: string | null;
   vertical_filename: string | null;
   clip_name: string;
+  clip_source: "auto" | "manual";
   llm: LlmAnalysis | null;
   chat_mood: string | null;
   chat_message_count: number | null;
@@ -188,7 +189,7 @@ interface ServerJobSummary {
 
 function mapJobResponse(raw: ServerJobResponse): JobResponse {
   const hotPoints = raw.hotPoints
-    ? raw.hotPoints.map((hp) => ({ ...hp, clip_name: hp.clip_name ?? "" } as HotPoint))
+    ? raw.hotPoints.map((hp) => ({ ...hp, clip_name: hp.clip_name ?? "", clip_source: (hp as any).clip_source ?? "auto" } as HotPoint))
     : null;
   return {
     job_id: raw.id,
@@ -454,7 +455,7 @@ export interface SSEStatusUpdate {
 export type SSEEvent = SSEClipReady | SSEStatusUpdate;
 
 function mapSSEHotPoint(raw: ServerHotPoint): HotPoint {
-  return { ...raw, clip_name: raw.clip_name ?? "" } as HotPoint;
+  return { ...raw, clip_name: raw.clip_name ?? "", clip_source: (raw as any).clip_source ?? "auto" } as HotPoint;
 }
 
 export function subscribeJobSSE(
@@ -761,4 +762,80 @@ export async function startBatchRender(
     throw new Error(err.error || "Batch render failed");
   }
   return res.json();
+}
+
+// ── Workers API ──────────────────────────────────────────────────────────────
+
+export interface ActiveJob {
+  id: string;
+  url: string;
+  status: string;
+  progress: string | null;
+  streamer: string | null;
+  vod_title: string | null;
+  vod_game: string | null;
+  step_timings: Record<string, { start: number; duration_seconds: number | null }> | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface QueueItem {
+  job_id?: string;
+  url?: string;
+  type?: string;
+  raw?: string;
+}
+
+export interface ActiveRender {
+  id: string;
+  job_id: string;
+  clip_filename: string;
+  clip_name: string | null;
+  status: string;
+  progress: number;
+  batch_group_id: string | null;
+  created_at: string | null;
+}
+
+export interface WorkersStatus {
+  active_jobs: ActiveJob[];
+  active_renders: ActiveRender[];
+  queue: {
+    length: number;
+    items: QueueItem[];
+  };
+}
+
+export interface FlushResult {
+  flushed_queue: number;
+  cancelled_jobs: number;
+  cancelled_renders: number;
+}
+
+export async function getWorkersStatus(): Promise<WorkersStatus> {
+  const res = await fetch(`${BASE}/workers`);
+  if (!res.ok) throw new Error("Failed to fetch workers status");
+  return res.json();
+}
+
+export async function flushWorkers(): Promise<FlushResult> {
+  const res = await fetch(`${BASE}/workers/flush`, { method: "POST" });
+  if (!res.ok) throw new Error("Failed to flush workers");
+  return res.json();
+}
+
+export async function cancelWorkerJob(jobId: string): Promise<void> {
+  const res = await fetch(`${BASE}/workers/cancel/${jobId}`, { method: "POST" });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: "Cancel failed" }));
+    throw new Error(err.error || "Cancel failed");
+  }
+}
+
+export async function cancelWorkerRender(renderId: string): Promise<void> {
+  const res = await fetch(`${BASE}/workers/cancel-render/${renderId}`, { method: "POST" });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: "Cancel failed" }));
+    throw new Error(err.error || "Cancel failed");
+  }
 }

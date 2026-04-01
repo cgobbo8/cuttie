@@ -107,9 +107,8 @@
     "ANALYZING_AUDIO": "Analyse audio",
     "ANALYZING_CHAT": "Analyse du chat",
     "SCORING": "Calcul des scores",
-    "TRIAGE": "Pré-analyse LLM",
+    "ANALYZING_CLIPS": "Analyse IA des candidats",
     "CLIPPING": "Extraction des clips",
-    "TRANSCRIBING": "Transcription",
     "LLM_ANALYSIS": "Analyse IA",
     "DONE": "Terminé !",
     "ERROR": "Erreur"
@@ -145,15 +144,14 @@
     "clipsReady_other": "{{count}} clips prêts",
     "hotPointsDetected": "{{count}} moments forts détectés",
     "viralityScore": "Score de viralité :",
-    "viralPotential": "Potentiel viral :",
     "hideDetails": "Masquer les détails",
     "showDetails": "Voir les détails",
     "narrative": "Récit",
     "transcript": "Transcription",
     "scoreBreakdown": "Décomposition du score",
     "finalScore": "Score final",
-    "heuristic": "Heuristique (x0.3)",
-    "llmVirality": "LLM viralité (x0.7)",
+    "heuristic": "Heuristique (x0.4)",
+    "llmVirality": "LLM viralité (x0.6)",
     "signals": "Signaux",
     "keyMoments": "Moments clés",
     "edit": "Éditer",
@@ -163,7 +161,12 @@
     "msg": "msg",
     "clipOf": "Clip {{index}} sur {{total}}",
     "autoClips": "Clips auto",
-    "manualClips": "Clips importés"
+    "manualClips": "Clips importés",
+    "deleteClip": "Supprimer",
+    "deleteClipTitle": "Supprimer ce clip",
+    "deleteClipMessage": "Le clip, ses fichiers associés et ses exports seront définitivement supprimés. Cette action est irréversible.",
+    "deletingClip": "Suppression en cours...",
+    "clipDeleted": "Clip supprimé"
   },
 
   "signals": {

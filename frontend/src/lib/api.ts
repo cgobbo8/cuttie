@@ -92,9 +92,8 @@ export type JobStatusType =
   | "ANALYZING_AUDIO"
   | "ANALYZING_CHAT"
   | "SCORING"
-  | "TRIAGE"
+  | "ANALYZING_CLIPS"
   | "CLIPPING"
-  | "TRANSCRIBING"
   | "LLM_ANALYSIS"
   | "DONE"
   | "ERROR";

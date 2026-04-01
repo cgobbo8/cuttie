@@ -533,9 +533,9 @@ def extract_group(
                 if attempt == MAX_RETRIES:
                     results.append((rank, idx, None))
 
-        finally:
-            if os.path.isfile(raw_file):
-                os.remove(raw_file)
+            finally:
+                if os.path.isfile(raw_file):
+                    os.remove(raw_file)
 
     else:
         # Multi-clip group: download merged range, then split + compress each

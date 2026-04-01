@@ -88,7 +88,7 @@ async def retry_job(job_id: str, bg: BackgroundTasks) -> dict:
     if has_llm:
         resume_from = "LLM_ANALYSIS"
     elif has_clips:
-        resume_from = "TRANSCRIBING"
+        resume_from = "CLIPPING"
     elif job.hot_points:
         resume_from = "CLIPPING"
     else:

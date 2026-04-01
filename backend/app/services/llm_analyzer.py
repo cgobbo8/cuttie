@@ -1,32 +1,75 @@
-"""Whisper transcription + Vision analysis + GPT synthesis of hot point clips.
+"""Unified LLM analysis of hot point candidates.
 
-Pipeline per clip:
-1. Whisper transcription (get text + segment timestamps)
-2. Frame extraction (at segment timestamps + regular intervals)
-3. Vision analysis (GPT-5.4 with frames → key moments with precise timestamps)
-4. Synthesis (GPT-5.4: transcript + vision → category, virality, summary, narrative)
+Two modes:
+- analyze_candidates(): PRE-CLIPPING — extracts frames from VOD URL + audio segments
+  from WAV, runs unified LLM, re-ranks and keeps top N. No video download needed.
+- analyze_single_clip(): POST-CLIPPING — re-analyzes a single clip from local file
+  (used for resume/retry).
+
+Pipeline per candidate (pre-clipping):
+1. Extract audio segment from WAV → Whisper transcription
+2. Extract 6 frames from VOD URL via ffmpeg seek
+3. Unified LLM call (frames + transcript + chat → score + analysis)
 """
 
+import base64
 import json
 import logging
 import os
 import subprocess
+import time as _time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from app.models.schemas import HotPoint, KeyMoment, LlmAnalysis
-from app.services.db import publish_clip_ready, rename_clip_files, save_hot_points, slugify_clip_name, update_hot_point_clip, update_job
-from app.services.frame_extractor import extract_frames
-from app.services.openai_client import get_openai_client, get_groq_client, LLM_MODEL, WHISPER_MODEL
-from app.services.vision_analyzer import analyze_clip_frames
+from app.services.clipper import CLIP_HALF_DURATION
+from app.services.db import save_hot_points, update_job
+from app.services.frame_extractor import (
+    NUM_FRAMES,
+    extract_frames,
+    extract_frames_from_url,
+    get_vod_direct_url,
+)
+from app.services.openai_client import get_groq_client, get_openai_client, LLM_MODEL, WHISPER_MODEL
 
 logger = logging.getLogger(__name__)
 
 CLIPS_DIR = "clips"
 HEURISTIC_WEIGHT = 0.4
 LLM_WEIGHT = 0.6
+MAX_LLM_WORKERS = 5  # Parallel LLM calls (API-bound)
+MAX_WHISPER_WORKERS = 5  # Parallel Whisper calls
+KEEP_TOP_N = 20  # How many candidates to keep after LLM scoring
 
 
-def _extract_audio_segment(clip_path: str, output_path: str) -> bool:
-    """Extract audio from clip as mp3 for Whisper (much smaller than video)."""
+# ─── Audio extraction & transcription ────────────────────────────────────────
+
+def _extract_audio_from_wav(
+    wav_path: str, start: float, end: float, output_path: str,
+) -> bool:
+    """Extract an audio segment from the full WAV as mp3 for Whisper."""
+    try:
+        subprocess.run(
+            [
+                "ffmpeg", "-y",
+                "-i", wav_path,
+                "-ss", str(start),
+                "-t", str(end - start),
+                "-vn",
+                "-c:a", "libmp3lame", "-b:a", "64k",
+                output_path,
+            ],
+            check=True,
+            timeout=15,
+            capture_output=True,
+        )
+        return os.path.isfile(output_path)
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
+        logger.warning("Failed to extract audio segment %s: %s", output_path, e)
+        return False
+
+
+def _extract_audio_from_clip(clip_path: str, output_path: str) -> bool:
+    """Extract audio from a local clip file as mp3 for Whisper."""
     try:
         subprocess.run(
             [
@@ -46,17 +89,12 @@ def _extract_audio_segment(clip_path: str, output_path: str) -> bool:
         return False
 
 
-def transcribe_clip(clip_path: str) -> tuple[str, float, list[float]]:
-    """Transcribe a clip using Whisper API.
+def _transcribe_audio(audio_path: str) -> tuple[str, float]:
+    """Transcribe an audio file using Whisper API via Groq.
 
-    Returns (transcript_text, speech_rate, segment_start_timestamps).
+    Returns (transcript_text, speech_rate).
     """
     client = get_groq_client()
-
-    audio_path = clip_path.replace(".mp4", "_audio.mp3")
-    if not _extract_audio_segment(clip_path, audio_path):
-        return "", 0.0, []
-
     try:
         with open(audio_path, "rb") as f:
             result = client.audio.transcriptions.create(
@@ -68,22 +106,96 @@ def transcribe_clip(clip_path: str) -> tuple[str, float, list[float]]:
         text = result.text or ""
         word_count = len(text.split())
 
-        segment_times: list[float] = []
         duration = 0.0
         if hasattr(result, "segments") and result.segments:
-            segment_times = [s.start for s in result.segments]
             duration = max(s.end for s in result.segments)
 
         speech_rate = word_count / duration if duration > 0 else 0.0
-        return text, speech_rate, segment_times
+        return text, speech_rate
 
     except Exception as e:
         logger.error(f"Whisper transcription failed: {e}")
-        return "", 0.0, []
-    finally:
-        if os.path.isfile(audio_path):
-            os.remove(audio_path)
+        return "", 0.0
 
+
+def _transcribe_candidates(
+    wav_path: str,
+    candidates: list[tuple[int, HotPoint]],
+    vod_duration: float,
+    job_id: str,
+) -> dict[int, tuple[str, float]]:
+    """Transcribe audio segments for all candidates in parallel.
+
+    Extracts segments from the full WAV (already on disk), transcribes via Whisper.
+    Returns dict: candidate_index -> (transcript, speech_rate).
+    """
+    import shutil
+
+    triage_dir = os.path.join("triage_audio", job_id)
+    os.makedirs(triage_dir, exist_ok=True)
+
+    total = len(candidates)
+    logger.info(f"Transcribing {total} candidates with {MAX_WHISPER_WORKERS} workers...")
+    t0 = _time.time()
+
+    transcripts: dict[int, tuple[str, float]] = {}
+
+    def _do_one(idx: int, hp: HotPoint) -> tuple[int, str, float]:
+        start = max(0, hp.timestamp_seconds - CLIP_HALF_DURATION)
+        end = min(vod_duration, hp.timestamp_seconds + CLIP_HALF_DURATION)
+        seg_path = os.path.join(triage_dir, f"seg_{idx:03d}.mp3")
+
+        if _extract_audio_from_wav(wav_path, start, end, seg_path):
+            transcript, speech_rate = _transcribe_audio(seg_path)
+            if os.path.isfile(seg_path):
+                os.remove(seg_path)
+            return idx, transcript, speech_rate
+        return idx, "", 0.0
+
+    with ThreadPoolExecutor(max_workers=MAX_WHISPER_WORKERS) as executor:
+        futures = {
+            executor.submit(_do_one, idx, hp): idx
+            for idx, hp in candidates
+        }
+        done = 0
+        for future in as_completed(futures):
+            done += 1
+            try:
+                idx, transcript, speech_rate = future.result()
+                transcripts[idx] = (transcript, speech_rate)
+                if done % 10 == 0 or done == total:
+                    logger.info(f"Whisper progress: {done}/{total}")
+                    update_job(job_id, progress=f"Transcription : {done}/{total} segments...")
+            except Exception as e:
+                idx = futures[future]
+                logger.error(f"Whisper failed for candidate {idx}: {e}")
+                transcripts[idx] = ("", 0.0)
+
+    elapsed = _time.time() - t0
+    non_empty = sum(1 for t, _ in transcripts.values() if t)
+    logger.info(f"Transcription complete: {non_empty}/{total} with speech in {elapsed:.1f}s")
+
+    # Cleanup temp dir
+    if os.path.exists(triage_dir):
+        shutil.rmtree(triage_dir, ignore_errors=True)
+
+    return transcripts
+
+
+# ─── Frame encoding ──────────────────────────────────────────────────────────
+
+def _encode_frame(path: str) -> str | None:
+    """Encode a frame as base64 data URL for the API."""
+    try:
+        with open(path, "rb") as f:
+            data = base64.b64encode(f.read()).decode("utf-8")
+        return f"data:image/jpeg;base64,{data}"
+    except OSError as e:
+        logger.debug("Failed to encode frame %s: %s", path, e)
+        return None
+
+
+# ─── Chat extraction ─────────────────────────────────────────────────────────
 
 def _extract_chat_for_clip(
     chat_messages: list[dict],
@@ -99,7 +211,6 @@ def _extract_chat_for_clip(
     if not relevant:
         return ""
 
-    # If too many messages, sample evenly
     if len(relevant) > max_messages:
         step = len(relevant) / max_messages
         relevant = [relevant[int(i * step)] for i in range(max_messages)]
@@ -112,20 +223,19 @@ def _extract_chat_for_clip(
     return "\n".join(lines)
 
 
-def synthesize_analysis(
+# ─── Unified prompt ──────────────────────────────────────────────────────────
+
+def _build_unified_prompt(
     transcript: str,
     speech_rate: float,
-    key_moments: list[dict],
     score: float,
     timestamp_display: str,
     vod_meta: dict,
     chat_context: str = "",
     chat_mood: str = "",
     signals: "SignalBreakdown | None" = None,
-) -> tuple[LlmAnalysis, str]:
-    """Final synthesis: combine transcript + vision moments into full analysis."""
-    client = get_openai_client()
-
+) -> str:
+    """Build the unified analysis prompt (English, vision + synthesis in one)."""
     vod_title = vod_meta.get("title", "")
     vod_game = vod_meta.get("game", "")
     streamer = vod_meta.get("streamer", "")
@@ -133,110 +243,352 @@ def synthesize_analysis(
     stream_date = vod_meta.get("stream_date", "")
     vod_duration = vod_meta.get("duration", 0)
 
-    moments_text = ""
-    if key_moments:
-        moments_text = "\n**Moments clés identifiés par analyse visuelle :**\n"
-        for m in key_moments:
-            moments_text += f"- [{m['time']:.1f}s] {m['label']}: {m.get('description', '')}\n"
-
-    # Build VOD identity card
     duration_h = int(vod_duration // 3600)
     duration_m = int((vod_duration % 3600) // 60)
+
+    # Stream identity card
     identity_lines = [f"**Stream:** {vod_title}"]
     if streamer:
         identity_lines.append(f"**Streamer:** {streamer}")
     if vod_game:
-        identity_lines.append(f"**Jeu:** {vod_game}")
+        identity_lines.append(f"**Game:** {vod_game}")
     if stream_date:
         identity_lines.append(f"**Date:** {stream_date}")
     if vod_duration:
-        identity_lines.append(f"**Durée du stream:** {duration_h}h{duration_m:02d}")
+        identity_lines.append(f"**Stream duration:** {duration_h}h{duration_m:02d}")
     if view_count:
-        identity_lines.append(f"**Vues:** {view_count}")
+        identity_lines.append(f"**Views:** {view_count}")
 
-    # Add chat mood pre-tag if available
-    mood_labels = {"hype": "Hype/Skill (PogChamp, GG...)", "fun": "Humour/Fail (KEKW, LUL...)", "rip": "Mort/Sadness (F, RIP...)"}
+    mood_labels = {
+        "hype": "Hype/Skill (PogChamp, GG...)",
+        "fun": "Humor/Fail (KEKW, LUL...)",
+        "rip": "Death/Sadness (F, RIP...)",
+    }
     if chat_mood and chat_mood in mood_labels:
-        identity_lines.append(f"**Mood chat détecté:** {mood_labels[chat_mood]}")
+        identity_lines.append(f"**Chat mood:** {mood_labels[chat_mood]}")
 
     identity_card = "\n".join(identity_lines)
+
+    signals_text = ""
+    if signals:
+        signals_text = (
+            f"\n**Detected signals:** volume={signals.rms:.0%}, chat_activity={signals.chat_speed:.0%}, "
+            f"spectral_flux={signals.spectral_flux:.0%}, pitch_variance={signals.pitch_variance:.0%}"
+        )
 
     chat_section = ""
     if chat_context:
         chat_section = f"""
 
-**Chat Twitch (messages des viewers pendant le clip) :**
-{chat_context}
+**Twitch chat (viewer messages during the clip):**
+{chat_context}"""
 
-Note sur le chat : ce streamer a une petite communauté. Le chat mélange des viewers classiques et des amis proches du streamer qui font parfois des private jokes. Utilise le chat comme indicateur de réaction (emotes, exclamations, questions) mais ne te fie pas aveuglément aux messages — distingue les réactions spontanées des conversations entre potes."""
+    game_narrative = f", referencing {vod_game} gameplay" if vod_game else ""
 
-    signals_text = ""
-    if signals:
-        signals_text = (
-            f"\n**Signaux détectés:** volume={signals.rms:.0%}, activité chat={signals.chat_speed:.0%}, "
-            f"flux spectral={signals.spectral_flux:.0%}, variation pitch={signals.pitch_variance:.0%}"
-        )
-
-    prompt = f"""Tu es un expert en contenu viral pour Twitch/YouTube. Analyse cet extrait de stream.
+    return f"""You are an expert at identifying viral Twitch/YouTube clip moments. Analyze this stream clip using BOTH the visual frames AND the transcript/chat context provided.
 
 {identity_card}
 **Timestamp:** {timestamp_display}
-**Score heuristique:** {score:.0%}{signals_text}
-**Debit:** {speech_rate:.1f} mots/s
+**Heuristic score:** {score:.0%}{signals_text}
+**Speech rate:** {speech_rate:.1f} words/s
 
-**Transcription :**
-{transcript if transcript else "(silence / pas de parole)"}
-{moments_text}{chat_section}
+**Transcript:**
+{transcript if transcript else "(silence / no speech)"}
+{chat_section}
 
-Hiérarchie des sources : en cas de contradiction entre les sources, la transcription (ce que dit le streamer) prime sur les visuels pour déterminer l'émotion et la catégorie. Les visuels servent à comprendre le contexte gameplay.
+## Visual analysis instructions
 
-Retourne un JSON:
-- "clip_name": nom COURT du clip (2-4 mots max), style nom de fichier lisible. Pas de ponctuation speciale, juste des mots. Exemples : "Rage Quit Epique", "Triple Kill Clutch", "Fou Rire Fail". En français.
-- "category": parmi "fun", "rage", "clutch", "skill", "fail", "emotional", "reaction", "storytelling", "awkward", "hype"
-- "virality_score": 0 à 1 (sois exigeant : 0.8+ = gold, 0.5+ = bon, <0.3 = bof). Les réactions intenses du streamer sont virales, qu'elles soient positives ou négatives.
-- "summary": UNE SEULE phrase punch de 10-15 mots max, style titre de clip YouTube/TikTok. Doit donner envie de cliquer. En français.
-- "is_clipable": true si compréhensible seul
-- "narrative": récit fluide du clip (3-5 phrases), ce qui se passe seconde par seconde en combinant audio + visuels + réactions chat{", en mentionnant le gameplay de " + vod_game if vod_game else ""}. En français.
+Each image is a frame captured from the clip at the exact timestamp shown. Analyze them carefully:
 
-JSON uniquement, pas de markdown."""
+**Streamer face & body language:**
+- Facial expressions: shock, laughter, frustration, disbelief, joy, fear, focus
+- Body language: leaning forward (tension), leaning back (surprise/relief), hands on head, facepalm
+- Mouth open = screaming/shock, eyes wide = surprise, looking away = embarrassment
+- The streamer's reaction is often MORE important than the gameplay for virality
 
-    try:
-        response = client.chat.completions.create(
-            model=LLM_MODEL,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.4,
-            max_completion_tokens=1500,
-            response_format={"type": "json_object"},
+**Game HUD & visual context:**
+- Health bars (low HP = clutch moment), kill feeds, damage numbers
+- Victory/defeat screens, achievements, rare loot drops
+- Score, ranking, critical timer, kill streaks
+- Screen effects (red screen = near death, special FX = big play)
+- Number of enemies on screen, encirclement situations
+
+**Source hierarchy:** when transcript and visuals contradict each other, the transcript (what the streamer actually says) takes priority for determining emotion and category. Visuals provide gameplay context.
+
+## Output
+
+Return a single JSON object:
+- "clip_name": SHORT clip name (2-4 words max), readable file-name style. No special punctuation, just words. Examples: "Rage Quit Epique", "Triple Kill Clutch", "Fou Rire Fail". In French.
+- "category": one of "fun", "rage", "clutch", "skill", "fail", "emotional", "reaction", "storytelling", "awkward", "hype"
+- "virality_score": 0 to 1 (be demanding: 0.8+ = gold, 0.5+ = good, <0.3 = meh). Intense streamer reactions are viral whether positive or negative.
+- "summary": ONE single punch line of 10-15 words max, YouTube/TikTok clip title style. Must make people want to click. In French.
+- "is_clipable": true if the clip is understandable on its own without extra context
+- "key_moments": array of 3-6 key moments, each with:
+  - "time": float, MUST be one of the exact frame timestamps shown on the images
+  - "label": short title (5-8 words), in French{game_narrative}
+  - "description": 1 sentence describing what happens visually (include HUD info if relevant)
+- "narrative": fluid story of the clip (3-5 sentences), second-by-second combining audio + visuals + chat reactions{game_narrative}. In French.
+
+JSON only, no markdown."""
+
+
+def _call_unified_llm(
+    frames: list[dict],
+    prompt: str,
+) -> tuple[LlmAnalysis, str]:
+    """Call the LLM with frames + prompt and parse the response.
+
+    Returns (LlmAnalysis, clip_name).
+    """
+    # Build multimodal content: prompt text + frames
+    content_parts: list[dict] = [{"type": "text", "text": prompt}]
+
+    for frame in frames:
+        data_url = _encode_frame(frame["path"])
+        if not data_url:
+            continue
+        content_parts.append({
+            "type": "text",
+            "text": f"[{frame['time']:.1f}s]",
+        })
+        content_parts.append({
+            "type": "image_url",
+            "image_url": {"url": data_url, "detail": "low"},
+        })
+
+    client = get_openai_client()
+
+    response = client.chat.completions.create(
+        model=LLM_MODEL,
+        messages=[{"role": "user", "content": content_parts}],
+        temperature=0.4,
+        max_completion_tokens=2000,
+        response_format={"type": "json_object"},
+    )
+
+    content = response.choices[0].message.content or ""
+    finish = response.choices[0].finish_reason
+    content = content.strip()
+    logger.debug(f"LLM raw ({finish}, {len(content)} chars): {content[:200]}")
+
+    data = json.loads(content)
+    clip_name = data.get("clip_name", "")
+
+    # Parse key moments
+    raw_moments = data.get("key_moments", [])
+    frame_times = [f["time"] for f in frames]
+    key_moments = []
+    for m in raw_moments:
+        if isinstance(m, dict) and "time" in m and "label" in m:
+            t = float(m["time"])
+            if frame_times:
+                t = min(frame_times, key=lambda ft: abs(ft - t))
+            key_moments.append(KeyMoment(
+                time=t,
+                label=str(m["label"]),
+                description=str(m.get("description", "")),
+            ))
+
+    llm = LlmAnalysis(
+        transcript="",  # filled by caller
+        speech_rate=0.0,
+        category=data.get("category", ""),
+        virality_score=float(data.get("virality_score", 0)),
+        summary=data.get("summary", ""),
+        is_clipable=bool(data.get("is_clipable", True)),
+        narrative=data.get("narrative", ""),
+        key_moments=key_moments,
+    )
+
+    return llm, clip_name
+
+
+# ─── Pre-clipping candidate analysis ─────────────────────────────────────────
+
+def analyze_candidates(
+    job_id: str,
+    hot_points: list[HotPoint],
+    audio_path: str,
+    vod_url: str,
+    vod_duration: float,
+    vod_meta: dict,
+    chat_messages: list[dict] | None = None,
+    keep_n: int = KEEP_TOP_N,
+) -> list[HotPoint]:
+    """Analyze all candidates with full context (frames + transcript + chat).
+
+    This replaces the old triage + LLM analysis two-step process.
+    Frames are extracted directly from the VOD URL (no clip download needed).
+
+    Returns the re-ranked list of hot points (top keep_n).
+    """
+    total = len(hot_points)
+    logger.info(f"═══ Analyzing {total} candidates (keeping top {keep_n}) ═══")
+    pipeline_t0 = _time.time()
+
+    # ── Step 1: Get direct VOD URL for frame extraction ──
+    logger.info(f"[1/4] Getting direct VOD URL...")
+    update_job(job_id, progress=f"Récupération URL vidéo...")
+    direct_url = get_vod_direct_url(vod_url)
+
+    # ── Step 2: Whisper transcription (parallel) ──
+    logger.info(f"[2/4] Transcribing {total} candidates...")
+    update_job(job_id, progress=f"Transcription de {total} segments audio...")
+    candidates = [(i, hp) for i, hp in enumerate(hot_points)]
+    transcripts = _transcribe_candidates(audio_path, candidates, vod_duration, job_id)
+
+    # ── Step 3: Extract frames from VOD URL (parallel) ──
+    logger.info(f"[3/4] Extracting {NUM_FRAMES} frames for {total} candidates from VOD...")
+    update_job(job_id, progress=f"Extraction de {total * NUM_FRAMES} frames depuis la VOD...")
+
+    frames_t0 = _time.time()
+    all_frames: dict[int, list[dict]] = {}
+
+    def _extract_frames_one(idx: int, hp: HotPoint) -> tuple[int, list[dict]]:
+        start = max(0, hp.timestamp_seconds - CLIP_HALF_DURATION)
+        end = min(vod_duration, hp.timestamp_seconds + CLIP_HALF_DURATION)
+        frames = extract_frames_from_url(
+            direct_url, job_id, idx, [start, end], NUM_FRAMES,
+        )
+        return idx, frames
+
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        futures = {
+            executor.submit(_extract_frames_one, idx, hp): idx
+            for idx, hp in candidates
+        }
+        done = 0
+        for future in as_completed(futures):
+            done += 1
+            try:
+                idx, frames = future.result()
+                all_frames[idx] = frames
+            except Exception as e:
+                idx = futures[future]
+                logger.error(f"Frame extraction failed for candidate {idx}: {e}")
+                all_frames[idx] = []
+
+            if done % 10 == 0 or done == total:
+                update_job(job_id, progress=f"Extraction frames : {done}/{total}...")
+
+    frames_elapsed = _time.time() - frames_t0
+    total_frames = sum(len(f) for f in all_frames.values())
+    logger.info(f"Frame extraction complete: {total_frames} frames in {frames_elapsed:.1f}s")
+
+    # ── Step 4: Unified LLM analysis (parallel) ──
+    logger.info(f"[4/4] Running unified LLM analysis on {total} candidates...")
+    update_job(job_id, progress=f"Analyse IA de {total} candidats...")
+
+    llm_t0 = _time.time()
+
+    def _analyze_one(idx: int, hp: HotPoint) -> None:
+        t0 = _time.time()
+        transcript, speech_rate = transcripts.get(idx, ("", 0.0))
+        frames = all_frames.get(idx, [])
+
+        # Chat context
+        chat_context = ""
+        if chat_messages:
+            clip_start = max(0, hp.timestamp_seconds - CLIP_HALF_DURATION)
+            clip_end = hp.timestamp_seconds + CLIP_HALF_DURATION
+            chat_context = _extract_chat_for_clip(chat_messages, clip_start, clip_end)
+
+        prompt = _build_unified_prompt(
+            transcript=transcript,
+            speech_rate=speech_rate,
+            score=hp.score,
+            timestamp_display=hp.timestamp_display,
+            vod_meta=vod_meta,
+            chat_context=chat_context,
+            chat_mood=hp.chat_mood,
+            signals=hp.signals,
         )
 
-        content = response.choices[0].message.content or ""
-        finish = response.choices[0].finish_reason
-        content = content.strip()
-        logger.debug(f"Synthesis raw ({finish}, {len(content)} chars): {content[:200]}")
+        try:
+            llm, clip_name = _call_unified_llm(frames, prompt)
+            llm.transcript = transcript
+            llm.speech_rate = round(speech_rate, 2)
 
-        data = json.loads(content)
+            hp.llm = llm
+            if clip_name:
+                hp.clip_name = clip_name
+            hp.final_score = round(
+                HEURISTIC_WEIGHT * hp.score + LLM_WEIGHT * llm.virality_score, 3
+            )
 
-        clip_name = data.get("clip_name", "")
+            elapsed = _time.time() - t0
+            logger.info(
+                f"  Candidate {idx} ({hp.timestamp_display}): "
+                f"{llm.category} | viral={llm.virality_score:.0%} | "
+                f"final={hp.final_score:.0%} | {len(frames)} frames | "
+                f"{elapsed:.1f}s"
+            )
 
-        return LlmAnalysis(
-            transcript=transcript,
-            speech_rate=round(speech_rate, 2),
-            category=data.get("category", ""),
-            virality_score=float(data.get("virality_score", 0)),
-            summary=data.get("summary", ""),
-            is_clipable=bool(data.get("is_clipable", True)),
-            narrative=data.get("narrative", ""),
-            key_moments=[KeyMoment(**m) for m in key_moments] if key_moments else [],
-        ), clip_name
+        except Exception as e:
+            logger.error(f"LLM analysis failed for candidate {idx} ({hp.timestamp_display}): {e}")
+            hp.llm = LlmAnalysis(transcript=transcript, speech_rate=round(speech_rate, 2))
+            hp.final_score = round(HEURISTIC_WEIGHT * hp.score, 3)
 
-    except Exception as e:
-        logger.error(f"Synthesis failed: {e}")
-        return LlmAnalysis(
-            transcript=transcript,
-            speech_rate=round(speech_rate, 2),
-            key_moments=[KeyMoment(**m) for m in key_moments] if key_moments else [],
-        ), ""
+    with ThreadPoolExecutor(max_workers=MAX_LLM_WORKERS) as executor:
+        futures = {
+            executor.submit(_analyze_one, idx, hp): idx
+            for idx, hp in candidates
+        }
+        done = 0
+        for future in as_completed(futures):
+            done += 1
+            idx = futures[future]
+            try:
+                future.result()
+            except Exception as e:
+                logger.error(f"Unexpected error for candidate {idx}: {e}")
 
+            if done % 5 == 0 or done == total:
+                update_job(
+                    job_id,
+                    progress=f"Analyse IA : {done}/{total} candidats...",
+                )
+
+    llm_elapsed = _time.time() - llm_t0
+    logger.info(f"LLM analysis complete: {total} candidates in {llm_elapsed:.1f}s")
+
+    # ── Re-rank and keep top N ──
+    hot_points.sort(
+        key=lambda hp: hp.final_score if hp.final_score is not None else -1,
+        reverse=True,
+    )
+
+    kept = hot_points[:keep_n]
+    dropped = hot_points[keep_n:]
+
+    logger.info(f"═══ Re-ranking results ═══")
+    for i, hp in enumerate(kept):
+        cat = hp.llm.category if hp.llm else "?"
+        viral = hp.llm.virality_score if hp.llm else 0
+        logger.info(
+            f"  KEEP #{i+1}: {hp.timestamp_display} | "
+            f"heuristic={hp.score:.0%} viral={viral:.0%} "
+            f"final={hp.final_score:.0%} | {cat} | {hp.clip_name}"
+        )
+    for hp in dropped:
+        viral = hp.llm.virality_score if hp.llm else 0
+        logger.info(
+            f"  DROP: {hp.timestamp_display} | "
+            f"heuristic={hp.score:.0%} viral={viral:.0%} "
+            f"final={hp.final_score:.0%}"
+        )
+
+    pipeline_elapsed = _time.time() - pipeline_t0
+    logger.info(
+        f"═══ Candidate analysis complete: {len(kept)} kept / {len(dropped)} dropped "
+        f"in {pipeline_elapsed:.1f}s ═══"
+    )
+
+    save_hot_points(job_id, kept)
+    return kept
+
+
+# ─── Post-clipping single clip analysis (for resume/retry) ───────────────────
 
 def analyze_single_clip(
     job_id: str,
@@ -244,53 +596,49 @@ def analyze_single_clip(
     hp: HotPoint,
     vod_meta: dict,
     chat_messages: list[dict] | None = None,
-    pre_transcript: tuple[str, float] | None = None,
 ) -> None:
-    """Full analysis pipeline for a single clip.
+    """Full analysis pipeline for a single local clip: Whisper + frames + unified LLM.
 
-    If pre_transcript is provided (from triage), skips Whisper transcription.
+    Used when resuming from CLIPPING or LLM_ANALYSIS checkpoint.
     """
+    from app.services.db import (
+        publish_clip_ready,
+        rename_clip_files,
+        slugify_clip_name,
+        update_hot_point_clip,
+    )
+
     clip_path = os.path.join(CLIPS_DIR, job_id, hp.clip_filename)
-    vod_title = vod_meta.get("title", "")
-    vod_game = vod_meta.get("game", "")
 
-    # Step 1: Whisper transcription (skip if pre-computed from triage)
-    segment_times: list[float] = []
-    if pre_transcript:
-        transcript, speech_rate = pre_transcript
-        logger.info(f"  [1/4] Whisper skipped (reusing triage transcript)")
+    # Step 1: Whisper transcription
+    logger.info(f"  [1/3] Whisper transcription...")
+    audio_path = clip_path.replace(".mp4", "_audio.mp3")
+    if _extract_audio_from_clip(clip_path, audio_path):
+        transcript, speech_rate = _transcribe_audio(audio_path)
+        if os.path.isfile(audio_path):
+            os.remove(audio_path)
     else:
-        logger.info(f"  [1/4] Whisper transcription...")
-        transcript, speech_rate, segment_times = transcribe_clip(clip_path)
+        transcript, speech_rate = "", 0.0
 
-    # Step 2: Extract frames (denser for better timestamp precision)
-    logger.info(f"  [2/4] Frame extraction...")
-    frames = extract_frames(clip_path, job_id, clip_index, segment_times)
+    # Step 2: Extract frames from local clip
+    logger.info(f"  [2/3] Frame extraction...")
+    frames = extract_frames(clip_path, job_id, clip_index)
 
-    # Step 3: Vision analysis
-    key_moments: list[dict] = []
-    if frames:
-        logger.info(f"  [3/4] Vision analysis ({len(frames)} frames)...")
-        key_moments = analyze_clip_frames(frames, transcript, vod_title, vod_game)
-    else:
-        logger.info(f"  [3/4] Vision skipped (no frames)")
-
-    # Extract chat messages for this clip's time window
+    # Chat context
     chat_context = ""
     if chat_messages:
-        from app.services.clipper import CLIP_HALF_DURATION
         clip_start = max(0, hp.timestamp_seconds - CLIP_HALF_DURATION)
         clip_end = hp.timestamp_seconds + CLIP_HALF_DURATION
         chat_context = _extract_chat_for_clip(chat_messages, clip_start, clip_end)
         if chat_context:
             logger.info(f"  Chat context: {chat_context.count(chr(10)) + 1} messages")
 
-    # Step 4: Final synthesis
-    logger.info(f"  [4/4] Synthesis...")
-    llm, clip_name = synthesize_analysis(
+    # Step 3: Unified LLM analysis
+    logger.info(f"  [3/3] Unified LLM analysis ({len(frames)} frames)...")
+
+    prompt = _build_unified_prompt(
         transcript=transcript,
         speech_rate=speech_rate,
-        key_moments=key_moments,
         score=hp.score,
         timestamp_display=hp.timestamp_display,
         vod_meta=vod_meta,
@@ -299,6 +647,15 @@ def analyze_single_clip(
         signals=hp.signals,
     )
 
+    try:
+        llm, clip_name = _call_unified_llm(frames, prompt)
+        llm.transcript = transcript
+        llm.speech_rate = round(speech_rate, 2)
+    except Exception as e:
+        logger.error(f"Unified analysis failed: {e}")
+        llm = LlmAnalysis(transcript=transcript, speech_rate=round(speech_rate, 2))
+        clip_name = ""
+
     hp.llm = llm
     if clip_name:
         hp.clip_name = clip_name
@@ -306,7 +663,7 @@ def analyze_single_clip(
         HEURISTIC_WEIGHT * hp.score + LLM_WEIGHT * llm.virality_score, 3
     )
 
-    # Rename clip file from clip_XX.mp4 to slug of generated name
+    # Rename clip file
     if clip_name and hp.clip_filename:
         new_filename = slugify_clip_name(clip_name)
         old_filename = hp.clip_filename
@@ -325,29 +682,17 @@ def analyze_single_clip(
         f"final={hp.final_score:.0%} | {len(llm.key_moments)} moments"
     )
 
-    # Publish immediately so frontend can show this clip without waiting for others
     publish_clip_ready(job_id, clip_index, hp)
-
-
-MAX_LLM_WORKERS = 3  # Parallel clip analyses (API-bound, not CPU-bound)
 
 
 def analyze_hot_points(
     job_id: str,
     hot_points: list[HotPoint],
     vod_meta: dict,
-    max_analyze: int = 20,
+    max_analyze: int = 25,
     chat_messages: list[dict] | None = None,
-    transcripts: dict[int, tuple[str, float]] | None = None,
 ) -> None:
-    """Run full analysis on hot points with clips in parallel, then re-rank.
-
-    If transcripts dict is provided (from triage), reuses them to skip Whisper.
-    Keys are hot_point indices matching to_analyze ordering.
-    """
-    from concurrent.futures import ThreadPoolExecutor, as_completed
-
-    # Collect clips to analyze
+    """Run full analysis on already-clipped hot points (resume path)."""
     to_analyze: list[tuple[int, HotPoint]] = []
     for i, hp in enumerate(hot_points):
         if not hp.clip_filename:
@@ -360,17 +705,13 @@ def analyze_hot_points(
             break
 
     total = len(to_analyze)
-    logger.info(f"Analyzing {total} clips with {MAX_LLM_WORKERS} parallel workers")
-    if transcripts:
-        logger.info(f"  ({len(transcripts)} pre-computed transcripts from triage)")
+    logger.info(f"Analyzing {total} clipped files with {MAX_LLM_WORKERS} parallel workers")
 
     def _analyze_one(item: tuple[int, HotPoint]) -> None:
         idx, hp = item
-        pre_transcript = transcripts.get(idx) if transcripts else None
         analyze_single_clip(
             job_id, idx + 1, hp, vod_meta,
             chat_messages=chat_messages,
-            pre_transcript=pre_transcript,
         )
 
     with ThreadPoolExecutor(max_workers=MAX_LLM_WORKERS) as executor:
@@ -390,12 +731,10 @@ def analyze_hot_points(
             except Exception as e:
                 logger.error(f"Analysis failed for clip at {hp.timestamp_display}: {e}")
 
-    # Re-sort by final_score
     hot_points.sort(
         key=lambda hp: hp.final_score if hp.final_score is not None else -1,
         reverse=True,
     )
 
-    # Persist re-ranked hot points
     save_hot_points(job_id, hot_points)
     logger.info(f"Analysis complete: {total} clips analyzed, re-ranked")

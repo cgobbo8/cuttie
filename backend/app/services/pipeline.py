@@ -14,9 +14,8 @@ from app.services.chat_analyzer import analyze_chat
 from app.services.clipper import CLIPS_DIR, extract_group, plan_downloads
 from app.services.db import get_job, save_hot_points, update_hot_point_clip, update_job
 from app.services.downloader import extract_metadata, download_audio, download_chat
-from app.services.llm_analyzer import analyze_hot_points, analyze_single_clip
+from app.services.llm_analyzer import analyze_candidates, analyze_hot_points, analyze_single_clip
 from app.services.scorer import compute_scores
-from app.services.triage import run_triage
 
 logger = logging.getLogger(__name__)
 
@@ -74,12 +73,11 @@ class StepTimer:
 # Steps that can be resumed from (in order)
 RESUMABLE_FROM = {
     "CLIPPING",
-    "TRANSCRIBING",
     "LLM_ANALYSIS",
 }
 
 
-def _run_clipping_and_analysis(
+def _run_clipping_only(
     job_id: str,
     url: str,
     hot_points: list,
@@ -87,15 +85,16 @@ def _run_clipping_and_analysis(
     vod_meta: dict,
     audio_features: list[dict] | None = None,
     chat_messages: list[dict] | None = None,
-    triage_transcripts: dict[int, tuple[str, float]] | None = None,
     timer: "StepTimer | None" = None,
 ) -> None:
-    """Pipeline: batch-download clips and analyze with LLM concurrently.
+    """Download and compress clips for already-analyzed hot points.
 
-    Groups nearby clips to reduce yt-dlp calls (batch download), and starts
-    LLM analysis on each clip as soon as it's downloaded — overlapping network
-    I/O (clip downloads) with API I/O (LLM calls).
+    LLM analysis is already done at this point — this step only downloads video,
+    compresses clips, renames them to LLM-generated names, and uploads to S3.
     """
+    from app.services.db import publish_clip_ready, rename_clip_files, slugify_clip_name
+    from app.services.s3_storage import rename_object
+
     clip_dir = os.path.join(CLIPS_DIR, job_id)
     os.makedirs(clip_dir, exist_ok=True)
 
@@ -110,24 +109,20 @@ def _run_clipping_and_analysis(
     total_clips = sum(len(g["clips"]) for g in groups)
 
     DL_WORKERS = 5
-    LLM_WORKERS = 3
 
-    update_job(job_id, status="CLIPPING", progress=f"Extraction clips (0/{total_clips})...", step_timings=timer.timings if timer else None)
+    update_job(
+        job_id, status="CLIPPING",
+        progress=f"Extraction clips (0/{total_clips})...",
+        step_timings=timer.timings if timer else None,
+    )
 
-    with ThreadPoolExecutor(max_workers=DL_WORKERS) as dl_pool, \
-         ThreadPoolExecutor(max_workers=LLM_WORKERS) as llm_pool:
-
-        # Submit all group downloads in parallel
+    with ThreadPoolExecutor(max_workers=DL_WORKERS) as dl_pool:
         dl_futures = {
             dl_pool.submit(extract_group, url, group, clip_dir, job_id): group
             for group in groups
         }
 
-        # As groups complete, attach filenames and submit LLM analysis.
-        # analyze_single_clip publishes each clip via Redis as soon as it finishes.
-        llm_futures: dict = {}
         done_dl = 0
-
         for future in as_completed(dl_futures):
             try:
                 clip_results = future.result()
@@ -138,14 +133,28 @@ def _run_clipping_and_analysis(
                         hp.clip_filename = filename
                         update_hot_point_clip(job_id, rank, filename)
 
-                        pre = triage_transcripts.get(idx) if triage_transcripts else None
-                        af = llm_pool.submit(
-                            analyze_single_clip, job_id, rank, hp, vod_meta,
-                            chat_messages=chat_messages, pre_transcript=pre,
-                        )
-                        llm_futures[af] = (idx, hp)
+                        # Rename to LLM-generated name if available
+                        if hp.clip_name:
+                            new_filename = slugify_clip_name(hp.clip_name)
+                            old_filename = filename
+                            try:
+                                rename_object(
+                                    f"clips/{job_id}/{old_filename}",
+                                    f"clips/{job_id}/{new_filename}",
+                                )
+                                rename_clip_files(job_id, old_filename, new_filename)
+                                update_hot_point_clip(job_id, rank, new_filename)
+                                hp.clip_filename = new_filename
+                                logger.info(f"Clip {rank}: renamed {old_filename} → {new_filename}")
+                            except Exception as e:
+                                logger.warning(f"Clip {rank}: rename failed: {e}")
+
+                        # Publish clip ready for frontend
+                        publish_clip_ready(job_id, rank, hp)
                     else:
-                        logger.warning(f"Clip {rank} ({hp.timestamp_display}) extraction failed — skipping")
+                        logger.warning(
+                            f"Clip {rank} ({hp.timestamp_display}) extraction failed — skipping"
+                        )
 
                     update_job(
                         job_id,
@@ -161,31 +170,42 @@ def _run_clipping_and_analysis(
                 for idx in sibling_indices[1:]:
                     hot_points[idx].clip_filename = primary.clip_filename
 
-        # All downloads done — wait for remaining LLM analyses
-        if timer:
-            timer.start("LLM_ANALYSIS")
-        total_llm = len(llm_futures)
-        update_job(job_id, status="LLM_ANALYSIS", progress="Analyse IA des clips...", step_timings=timer.timings if timer else None)
-        done_llm = 0
-
-        for future in as_completed(llm_futures):
-            idx, hp = llm_futures[future]
-            done_llm += 1
-            try:
-                future.result()
-                logger.info(f"Analysis {done_llm}/{total_llm}: {hp.timestamp_display}")
-            except Exception as e:
-                logger.error(f"Analysis failed for {hp.timestamp_display}: {e}")
-            update_job(
-                job_id,
-                progress=f"Analyse IA : {done_llm}/{total_llm} clips ({hp.timestamp_display})",
-            )
-
-    # Remove hot points that failed extraction — no point keeping them
+    # Remove hot points that failed extraction
     failed = [hp for hp in hot_points if not hp.clip_filename]
     if failed:
         logger.warning(f"{len(failed)} clips failed extraction and were removed")
-    hot_points = [hp for hp in hot_points if hp.clip_filename]
+    hot_points[:] = [hp for hp in hot_points if hp.clip_filename]
+
+    # Deduplicate hot points sharing the same clip file (keep best final_score)
+    seen_files: dict[str, int] = {}
+    dedup_indices: set[int] = set()
+    for i, hp in enumerate(hot_points):
+        if hp.clip_filename in seen_files:
+            prev_i = seen_files[hp.clip_filename]
+            prev_hp = hot_points[prev_i]
+            prev_score = prev_hp.final_score if prev_hp.final_score is not None else -1
+            cur_score = hp.final_score if hp.final_score is not None else -1
+            if cur_score > prev_score:
+                dedup_indices.add(prev_i)
+                seen_files[hp.clip_filename] = i
+                logger.info(
+                    f"Dedup: keeping {hp.timestamp_display} ({cur_score:.0%}) "
+                    f"over {prev_hp.timestamp_display} ({prev_score:.0%}) "
+                    f"for {hp.clip_filename}"
+                )
+            else:
+                dedup_indices.add(i)
+                logger.info(
+                    f"Dedup: keeping {prev_hp.timestamp_display} ({prev_score:.0%}) "
+                    f"over {hp.timestamp_display} ({cur_score:.0%}) "
+                    f"for {hp.clip_filename}"
+                )
+        else:
+            seen_files[hp.clip_filename] = i
+
+    if dedup_indices:
+        logger.info(f"Deduplicated {len(dedup_indices)} hot points sharing clip files")
+        hot_points[:] = [hp for i, hp in enumerate(hot_points) if i not in dedup_indices]
 
     # Re-sort by final_score and persist
     hot_points.sort(
@@ -194,7 +214,7 @@ def _run_clipping_and_analysis(
     )
     save_hot_points(job_id, hot_points)
 
-    logger.info(f"Clipping + analysis complete: {len(hot_points)} clips, {done_llm} analyzed")
+    logger.info(f"Clipping complete: {len(hot_points)} clips downloaded")
 
 
 def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> None:
@@ -214,21 +234,22 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
         streamer = job.streamer if job else ""
         view_count = job.view_count if job else 0
         stream_date = job.stream_date if job else ""
-        # Restore existing timings if resuming
         step_timings_restore = job.step_timings if job else None
 
         chat_messages: list[dict] = []
         audio_path: str | None = None
         audio_features: list[dict] = []
-        triage_transcripts: dict[int, tuple[str, float]] = {}
 
-        # Steps 1-6: Download + Analysis + Triage (skip if resuming from later step)
-        if not resume_from or resume_from in ("DOWNLOADING_AUDIO", "DOWNLOADING_CHAT", "ANALYZING_AUDIO", "ANALYZING_CHAT", "SCORING", "TRIAGE"):
+        # Steps 1-6: Download + Analysis + LLM Scoring (skip if resuming from later step)
+        if not resume_from or resume_from in (
+            "DOWNLOADING_AUDIO", "DOWNLOADING_CHAT",
+            "ANALYZING_AUDIO", "ANALYZING_CHAT",
+            "SCORING", "ANALYZING_CLIPS",
+        ):
             # 1 & 2. Extract metadata first (fast, ~2s), then download audio + chat in parallel
             timer.start("DOWNLOADING_AUDIO")
             update_job(job_id, status="DOWNLOADING_AUDIO", progress="Fetching VOD metadata...", step_timings=timer.timings)
 
-            # Fast metadata extraction (no download) — publishes streamer/game immediately
             metadata = extract_metadata(url)
             duration = metadata.get("duration", 0)
             vod_title = metadata.get("title", "")
@@ -289,7 +310,7 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
 
             check_cancelled(job_id)
 
-            # 5. Score and find peaks — get top 50 candidates for triage
+            # 5. Score and find peaks — get top 50 candidates
             timer.start("SCORING")
             logger.info(f"[{job_id[:8]}] Computing scores...")
             update_job(job_id, status="SCORING", progress="Computing scores and finding hot points...", step_timings=timer.timings)
@@ -300,12 +321,12 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
             )
             logger.info(f"[{job_id[:8]}] Scoring done: {len(hot_points)} hot points")
 
-            # 6. Save initial hot points to DB
+            # Save initial hot points to DB
             update_job(job_id, hot_points=hot_points)
 
             check_cancelled(job_id)
 
-            # 7. LLM triage: transcribe 50 candidates, LLM scores, keep top 20
+            # 6. Unified LLM analysis: frames from VOD + Whisper + LLM → score & re-rank → top 20
             vod_meta = {
                 "title": vod_title or "",
                 "game": vod_game or "",
@@ -314,16 +335,25 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
                 "stream_date": stream_date or "",
                 "duration": duration,
             }
-            timer.start("TRIAGE")
-            logger.info(f"[{job_id[:8]}] Triage: transcribing + LLM scoring {len(hot_points)} candidates...")
-            update_job(job_id, status="TRIAGE", progress="Sélection des meilleurs moments...", step_timings=timer.timings)
-            hot_points, triage_transcripts = run_triage(
-                job_id, audio_path, hot_points, duration,
-                chat_messages, vod_meta,
-                candidates_n=50, keep_n=20,
+            timer.start("ANALYZING_CLIPS")
+            logger.info(f"[{job_id[:8]}] Analyzing {len(hot_points)} candidates (frames + Whisper + LLM)...")
+            update_job(
+                job_id, status="ANALYZING_CLIPS",
+                progress=f"Analyse IA de {len(hot_points)} candidats...",
+                step_timings=timer.timings,
+            )
+            hot_points = analyze_candidates(
+                job_id=job_id,
+                hot_points=hot_points,
+                audio_path=audio_path,
+                vod_url=url,
+                vod_duration=duration,
+                vod_meta=vod_meta,
+                chat_messages=chat_messages,
+                keep_n=20,
             )
 
-        # Steps 8+9: Clipping + LLM Analysis (pipelined — download & analyze concurrently)
+        # Step 7: Clipping — download video only for top 20
         vod_meta = {
             "title": vod_title or "",
             "game": vod_game or "",
@@ -339,26 +369,25 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
             if hot_points is None:
                 raise RuntimeError("No hot points available for clipping")
             timer.start("CLIPPING")
-            logger.info(f"[{job_id[:8]}] Clipping + LLM analysis for {len(hot_points)} hot points...")
+            logger.info(f"[{job_id[:8]}] Clipping top {len(hot_points)} hot points...")
             update_job(job_id, status="CLIPPING", progress="Extraction des clips...", step_timings=timer.timings)
 
-            _run_clipping_and_analysis(
+            _run_clipping_only(
                 job_id, url, hot_points, duration, vod_meta,
                 audio_features=audio_features,
                 chat_messages=chat_messages,
-                triage_transcripts=triage_transcripts,
                 timer=timer,
             )
-        elif resume_from in ("TRANSCRIBING", "LLM_ANALYSIS"):
+        elif resume_from == "LLM_ANALYSIS":
+            # Legacy resume: re-analyze already-clipped files
             timer.start("LLM_ANALYSIS")
-            update_job(job_id, status="LLM_ANALYSIS", progress="Analyse IA des clips (vision + synthese)...", error=None, step_timings=timer.timings)
+            update_job(job_id, status="LLM_ANALYSIS", progress="Analyse IA des clips...", error=None, step_timings=timer.timings)
             if hot_points is None:
                 raise RuntimeError("No hot points available for analysis")
             _reattach_clips(job_id, hot_points)
             analyze_hot_points(
                 job_id, hot_points, vod_meta,
                 chat_messages=chat_messages,
-                transcripts=triage_transcripts,
             )
 
         # Done — finalize timings and re-publish full enriched hot_points

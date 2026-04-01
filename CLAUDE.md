@@ -138,7 +138,7 @@ cuttie/
             └── i18n/index.ts                  # i18next (fr/en/es)
 ```
 
-## Pipeline (8 etapes)
+## Pipeline (7 etapes)
 
 ```
 1. DOWNLOADING_AUDIO   -> yt-dlp : audio 11025Hz mono WAV
@@ -146,13 +146,17 @@ cuttie/
 3. ANALYZING_AUDIO     -> librosa : features par fenetres de 5s (hop 2.5s)
 4. ANALYZING_CHAT      -> Sentiment, emotes, burst detection
 5. SCORING             -> Score composite pondere + peak detection -> top 50
-6. TRIAGE              -> Whisper segments + LLM light scoring -> top 20
+6. ANALYZING_CLIPS     -> Pour chaque candidat (sans download video) :
+                          - Whisper transcription (segment audio depuis WAV)
+                          - 6 frames extraites par ffmpeg seek sur URL VOD
+                          - 1 appel LLM unifie (frames + transcript + chat)
+                          -> Re-rank par final_score, garde top 20
 7. CLIPPING            -> yt-dlp video + FFmpeg extraction (bornes dynamiques RMS)
-                          + LLM_ANALYSIS pipeline (frames + vision + synthese narrative)
+                          uniquement pour les 20 candidats gardes
 8. DONE
 ```
 
-Checkpoints resumables : CLIPPING, TRANSCRIBING, LLM_ANALYSIS.
+Checkpoints resumables : CLIPPING, LLM_ANALYSIS.
 
 ## Scoring
 
@@ -160,7 +164,7 @@ Checkpoints resumables : CLIPPING, TRANSCRIBING, LLM_ANALYSIS.
 - RMS 18%, chat_speed 18%, spectral_flux 12%, onset 10%, pitch_var 10%
 - chat_burst 10%, emote_density 8%, caps_ratio 7%, centroid 5%, zcr 2%
 
-**Score final** : `0.3 * heuristique + 0.7 * LLM virality`
+**Score final** : `0.4 * heuristique + 0.6 * LLM virality`
 
 ## Authentification
 

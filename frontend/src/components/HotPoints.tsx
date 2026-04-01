@@ -825,7 +825,7 @@ export default function HotPoints({
           {isStreaming ? (
             <span className="flex items-center gap-1.5">
               <Flame className="w-3.5 h-3.5 text-zinc-400" />
-              {t("hotPoints.clipsReady", { count: hotPoints.length })}
+              {t("hotPoints.clipsReady", { count: clipsWithFiles.length })}
             </span>
           ) : (
             t("hotPoints.hotPointsDetected", { count: hotPoints.length })

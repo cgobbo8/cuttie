@@ -107,9 +107,8 @@
     "ANALYZING_AUDIO": "Analyzing audio",
     "ANALYZING_CHAT": "Analyzing chat",
     "SCORING": "Computing scores",
-    "TRIAGE": "LLM pre-analysis",
+    "ANALYZING_CLIPS": "AI candidate analysis",
     "CLIPPING": "Extracting clips",
-    "TRANSCRIBING": "Transcribing",
     "LLM_ANALYSIS": "AI analysis",
     "DONE": "Done!",
     "ERROR": "Error"
@@ -145,15 +144,14 @@
     "clipsReady_other": "{{count}} clips ready",
     "hotPointsDetected": "{{count}} hot points detected",
     "viralityScore": "Virality score:",
-    "viralPotential": "Viral potential:",
     "hideDetails": "Hide details",
     "showDetails": "Show details",
     "narrative": "Narrative",
     "transcript": "Transcript",
     "scoreBreakdown": "Score breakdown",
     "finalScore": "Final score",
-    "heuristic": "Heuristic (x0.3)",
-    "llmVirality": "LLM virality (x0.7)",
+    "heuristic": "Heuristic (x0.4)",
+    "llmVirality": "LLM virality (x0.6)",
     "signals": "Signals",
     "keyMoments": "Key moments",
     "edit": "Edit",
@@ -163,7 +161,12 @@
     "msg": "msg",
     "clipOf": "Clip {{index}} of {{total}}",
     "autoClips": "Auto clips",
-    "manualClips": "Imported clips"
+    "manualClips": "Imported clips",
+    "deleteClip": "Delete",
+    "deleteClipTitle": "Delete this clip",
+    "deleteClipMessage": "The clip, its associated files, and its exports will be permanently deleted. This action cannot be undone.",
+    "deletingClip": "Deleting...",
+    "clipDeleted": "Clip deleted"
   },
 
   "signals": {

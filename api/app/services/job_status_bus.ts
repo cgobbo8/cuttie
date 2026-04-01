@@ -1,17 +1,16 @@
 /**
- * JobStatusBus — bridges Redis pub/sub to in-process EventEmitter.
+ * JobStatusBus — bridges Redis pub/sub from Python workers to AdonisJS Transmit SSE.
  *
  * Python workers publish updates on `cuttie:job_status:<job_id>`.
- * This service subscribes with a wildcard pattern and re-emits events
- * so SSE handlers (and anything else) can listen without needing their
- * own Redis subscriber connection.
+ * This service subscribes with a wildcard pattern, persists updates to DB,
+ * and broadcasts via @adonisjs/transmit so frontend clients get real-time updates.
  */
 
-import EventEmitter from 'node:events'
 import env from '#start/env'
 import Job from '#models/job'
 import Creator from '#models/creator'
 import { Redis } from 'ioredis'
+import transmit from '@adonisjs/transmit/services/main'
 
 export interface HotPointData {
   clip_filename: string
@@ -44,7 +43,7 @@ export interface JobStatusUpdate {
   step_timings?: Record<string, { start: number; duration_seconds: number | null }> | null
 }
 
-class JobStatusBus extends EventEmitter {
+class JobStatusBus {
   private subscriber: Redis | null = null
 
   start() {
@@ -78,7 +77,8 @@ class JobStatusBus extends EventEmitter {
 
       try {
         const update: JobStatusUpdate = JSON.parse(message)
-        this.emit(jobId, update)
+        transmit.broadcast(`jobs/${jobId}`, update)
+
         // Persist update to DB
         this.persistUpdate(update).catch(() => {})
       } catch (err) {

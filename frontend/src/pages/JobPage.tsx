@@ -1,15 +1,16 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate, Link } from "react-router";
 import {
   getJobStatus,
   retryJob,
-  subscribeJobSSE,
+  deleteClip,
   type JobResponse,
   type JobStatusType,
   type HotPoint,
   type StepTiming,
-  type SSEEvent,
+  mapSSEHotPoint,
 } from "../lib/api";
+import { useTransmitChannel } from "../lib/TransmitContext";
 import JobStatus from "../components/JobStatus";
 import HotPoints from "../components/HotPoints";
 import { ArrowLeft, RotateCcw, Loader2, X, PackageCheck, Upload } from "lucide-react";
@@ -18,6 +19,7 @@ import { useToast } from "../components/Toast";
 import { useCreatorWorkspace } from "../lib/CreatorWorkspaceContext";
 import BatchExportModal from "../components/BatchExportModal";
 import ImportClipModal from "../components/ImportClipModal";
+import ConfirmModal from "../components/ConfirmModal";
 
 export default function JobPage() {
   const { t } = useTranslation();
@@ -53,8 +55,7 @@ export default function JobPage() {
   const [showBatchModal, setShowBatchModal] = useState(false);
   const [quickExportClip, setQuickExportClip] = useState<string | null>(null);
   const [showImportModal, setShowImportModal] = useState(false);
-
-  const sseCleanupRef = useRef<(() => void) | null>(null);
+  const [clipToDelete, setClipToDelete] = useState<string | null>(null);
 
   const applyJobData = useCallback((job: JobResponse) => {
     setStatus(job.status);
@@ -76,92 +77,73 @@ export default function JobPage() {
     }
   }, [selectByStreamer]);
 
-  const parseClipsTotal = useCallback((prog: string) => {
-    const match = prog.match(/(\d+)\/(\d+)/);
-    if (match) return parseInt(match[2], 10);
-    return null;
-  }, []);
+  // SSE via Transmit — single tunnel at app level, subscribe to job channel
+  useTransmitChannel(jobId ? `jobs/${jobId}` : null, (raw: unknown) => {
+    const data = raw as Record<string, any>;
 
-  const handleSSEEvent = useCallback((event: SSEEvent) => {
-    if ("type" in event && event.type === "clip_ready") {
+    if (data.type === "clip_ready" && data.hot_point) {
+      const hp = mapSSEHotPoint(data.hot_point);
       setClips((prev) => {
-        // Match by clip_filename OR by clip_name (for placeholders that don't have a filename yet)
         const existing = prev.findIndex(
           (c) =>
-            (c.clip_filename && c.clip_filename === event.hot_point.clip_filename) ||
-            (!c.clip_filename && c.clip_name && c.clip_name === event.hot_point.clip_name),
+            (c.clip_filename && c.clip_filename === hp.clip_filename) ||
+            (!c.clip_filename && c.clip_name && c.clip_name === hp.clip_name),
         );
         if (existing >= 0) {
           const next = [...prev];
-          next[existing] = event.hot_point;
+          next[existing] = hp;
           return next;
         }
-        return [event.hot_point, ...prev];
+        return [hp, ...prev];
       });
-      const clipKey = event.hot_point.clip_filename || `rank-${event.rank}`;
-      setAnimatedClips((prev) => new Set(prev).add(clipKey));
+      if (hp.clip_filename) {
+        setAnimatedClips((prev) => new Set(prev).add(hp.clip_filename!));
+      }
       return;
     }
 
-    const update = event as Exclude<SSEEvent, { type: "clip_ready" }>;
-    if (update.status) setStatus(update.status);
-    if (update.progress) {
-      setProgress(update.progress);
-      const total = parseClipsTotal(update.progress);
-      if (total) setClipsTotal(total);
+    // Status update
+    if (data.status) setStatus(data.status);
+    if (data.progress) {
+      setProgress(data.progress);
+      const match = data.progress.match(/(\d+)\/(\d+)/);
+      if (match) setClipsTotal(parseInt(match[2], 10));
     }
-    if (update.step_timings) setStepTimings(update.step_timings);
-    if (update.vod_title) setVodTitle(update.vod_title);
-    if (update.vod_game) setVodGame(update.vod_game);
-    if (update.vod_duration_seconds) setVodDuration(update.vod_duration_seconds);
-    if (update.streamer) {
-      setStreamer(update.streamer);
-      selectByStreamer(update.streamer);
+    if (data.step_timings) setStepTimings(data.step_timings);
+    if (data.vod_title) setVodTitle(data.vod_title);
+    if (data.vod_game) setVodGame(data.vod_game);
+    if (data.vod_duration_seconds) setVodDuration(data.vod_duration_seconds);
+    if (data.streamer) {
+      setStreamer(data.streamer);
+      selectByStreamer(data.streamer);
     }
-    if (update.view_count) setViewCount(update.view_count);
-    if (update.stream_date) setStreamDate(update.stream_date);
-    if (update.error) setError(update.error);
+    if (data.view_count) setViewCount(data.view_count);
+    if (data.stream_date) setStreamDate(data.stream_date);
+    if (data.error) setError(data.error);
 
-    if (update.status === "DONE" && update.hot_points?.length) {
+    if (data.status === "DONE" && data.hot_points?.length) {
       setIsFinalSort(true);
-      // Only replace clips if we're transitioning TO done (not on initial SSE state for already-done jobs)
       setClips((prev) => {
-        // If clips are already loaded and include real files, don't overwrite (avoids killing placeholders)
         if (prev.length > 0 && prev.some((c) => c.clip_filename)) return prev;
-        return update.hot_points!;
+        return data.hot_points.map(mapSSEHotPoint);
       });
     }
-  }, [parseClipsTotal, selectByStreamer]);
+  });
 
   useEffect(() => {
     if (!jobId) return;
     let cancelled = false;
-
     getJobStatus(jobId)
       .then((job) => {
         if (cancelled) return;
         applyJobData(job);
         setLoading(false);
-        // Always connect SSE — even for DONE jobs, clip imports can emit clip_ready events
-        const cleanup = subscribeJobSSE(jobId, handleSSEEvent);
-        sseCleanupRef.current = cleanup;
       })
       .catch(() => {
         if (!cancelled) navigate("/");
       });
-
-    return () => {
-      cancelled = true;
-      sseCleanupRef.current?.();
-    };
-  }, [jobId, navigate, applyJobData, handleSSEEvent]);
-
-  useEffect(() => {
-    if (status === "DONE" || status === "ERROR") {
-      sseCleanupRef.current?.();
-      sseCleanupRef.current = null;
-    }
-  }, [status]);
+    return () => { cancelled = true; };
+  }, [jobId, navigate, applyJobData]);
 
   const handleRetry = useCallback(async () => {
     if (!jobId) return;
@@ -173,12 +155,10 @@ export default function JobPage() {
       setError(null);
       setIsFinalSort(false);
       setAnimatedClips(new Set());
-      const cleanup = subscribeJobSSE(jobId, handleSSEEvent);
-      sseCleanupRef.current = cleanup;
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : t("job.retryFailed"));
     }
-  }, [jobId, handleSSEEvent, t]);
+  }, [jobId, t]);
 
   const clipsWithFilesForSelection = clips.filter((c) => c.clip_filename);
 
@@ -214,6 +194,35 @@ export default function JobPage() {
     setSelectionMode(false);
     setSelectedClips(new Set());
   }, []);
+
+  const handleConfirmDeleteClip = useCallback(() => {
+    if (!jobId || !clipToDelete) return;
+    const filename = clipToDelete;
+
+    // Optimistic: remove from UI + close modal immediately
+    let removedClip: HotPoint | undefined;
+    let removedIndex = -1;
+    setClips((prev) => {
+      removedIndex = prev.findIndex((c) => c.clip_filename === filename);
+      if (removedIndex >= 0) removedClip = prev[removedIndex];
+      return prev.filter((c) => c.clip_filename !== filename);
+    });
+    setClipToDelete(null);
+
+    // Fire API in background, toast on success, rollback on failure
+    deleteClip(jobId, filename).then(() => {
+      toast.success(t("hotPoints.clipDeleted"));
+    }).catch((e: unknown) => {
+      if (removedClip) {
+        setClips((prev) => {
+          const next = [...prev];
+          next.splice(removedIndex, 0, removedClip!);
+          return next;
+        });
+      }
+      toast.error(e instanceof Error ? e.message : t("common.error"));
+    });
+  }, [jobId, clipToDelete, t]);
 
   if (loading) {
     return (
@@ -322,6 +331,7 @@ export default function JobPage() {
           selectedClips={selectedClips}
           onToggleClip={handleToggleClip}
           onQuickExport={(filename) => setQuickExportClip(filename)}
+          onDeleteClip={(filename) => setClipToDelete(filename)}
         />
       )}
 
@@ -378,6 +388,15 @@ export default function JobPage() {
           onDone={() => { setQuickExportClip(null); }}
         />
       )}
+
+      {/* Delete clip confirmation */}
+      <ConfirmModal
+        open={!!clipToDelete}
+        title={t("hotPoints.deleteClipTitle")}
+        message={t("hotPoints.deleteClipMessage")}
+        onConfirm={handleConfirmDeleteClip}
+        onCancel={() => setClipToDelete(null)}
+      />
 
       {/* Import clip modal */}
       <ImportClipModal

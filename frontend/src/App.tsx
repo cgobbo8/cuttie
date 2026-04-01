@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router";
 import { AuthProvider, useAuth } from "./lib/AuthContext";
 import { CreatorWorkspaceProvider } from "./lib/CreatorWorkspaceContext";
+import { TransmitProvider } from "./lib/TransmitContext";
 import { TooltipProvider } from "./components/ui/Tooltip";
 import { ToastProvider } from "./components/Toast";
 import Layout from "./components/Layout";
@@ -14,6 +15,7 @@ import LoginPage from "./pages/LoginPage";
 import ProfilePage from "./pages/ProfilePage";
 import GamesPage from "./pages/GamesPage";
 import CreatorsPage from "./pages/CreatorsPage";
+import WorkersPage from "./pages/WorkersPage";
 import type { ReactNode } from "react";
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
@@ -47,6 +49,7 @@ function AppRoutes() {
         <Route path="games" element={<GamesPage />} />
         <Route path="creators" element={<CreatorsPage />} />
         <Route path="exports" element={<ExportsPage />} />
+        <Route path="workers" element={<WorkersPage />} />
         <Route path="profile" element={<ProfilePage />} />
         <Route path=":jobId" element={<JobPage />} />
       </Route>
@@ -74,15 +77,17 @@ function AppRoutes() {
 export default function App() {
   return (
     <AuthProvider>
-      <TooltipProvider>
-        <ToastProvider>
-          <BrowserRouter>
-            <CreatorWorkspaceProvider>
-              <AppRoutes />
-            </CreatorWorkspaceProvider>
-          </BrowserRouter>
-        </ToastProvider>
-      </TooltipProvider>
+      <TransmitProvider>
+        <TooltipProvider>
+          <ToastProvider>
+            <BrowserRouter>
+              <CreatorWorkspaceProvider>
+                <AppRoutes />
+              </CreatorWorkspaceProvider>
+            </BrowserRouter>
+          </ToastProvider>
+        </TooltipProvider>
+      </TransmitProvider>
     </AuthProvider>
   );
 }

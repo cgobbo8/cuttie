@@ -8,9 +8,13 @@
 */
 
 import router from '@adonisjs/core/services/router'
+import transmit from '@adonisjs/transmit/services/main'
 import { middleware } from '#start/kernel'
 import { rateLimit } from '#middleware/rate_limit_middleware'
 import { Permissions } from '#services/permissions'
+
+// Register Transmit SSE routes (/__transmit/events, subscribe, unsubscribe)
+transmit.registerRoutes()
 
 router.get('/', () => {
   return { status: 'ok' }
@@ -49,7 +53,7 @@ router
         router.get('/jobs/:id', [() => import('#controllers/jobs_controller'), 'show'])
         router.post('/jobs/:id/retry', [() => import('#controllers/jobs_controller'), 'retry'])
         router.delete('/jobs/:id', [() => import('#controllers/jobs_controller'), 'destroy'])
-        router.get('/jobs/:id/sse', [() => import('#controllers/jobs_controller'), 'stream'])
+        router.delete('/jobs/:id/clips/:clipFilename', [() => import('#controllers/jobs_controller'), 'destroyClip'])
         router.patch('/jobs/:id/clips/:clipFilename/name', [() => import('#controllers/jobs_controller'), 'renameClip'])
         router.post('/jobs/:jobId/batch-render', [() => import('#controllers/renders_controller'), 'batchStore'])
 
@@ -71,6 +75,12 @@ router
         router.patch('/themes/:id', [() => import('#controllers/themes_controller'), 'update'])
         router.delete('/themes/:id', [() => import('#controllers/themes_controller'), 'destroy'])
         router.post('/themes/:id/default', [() => import('#controllers/themes_controller'), 'setDefault'])
+
+        // Workers
+        router.get('/workers', [() => import('#controllers/workers_controller'), 'index'])
+        router.post('/workers/flush', [() => import('#controllers/workers_controller'), 'flush'])
+        router.post('/workers/cancel/:id', [() => import('#controllers/workers_controller'), 'cancel'])
+        router.post('/workers/cancel-render/:id', [() => import('#controllers/workers_controller'), 'cancelRender'])
 
         // Renders
         router.post('/clips/:jobId/:filename/render', [() => import('#controllers/renders_controller'), 'store'])

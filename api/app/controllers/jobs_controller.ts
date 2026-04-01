@@ -5,7 +5,7 @@ import path from 'node:path'
 import Job from '#models/job'
 import db from '@adonisjs/lucid/services/db'
 import redis from '@adonisjs/redis/services/main'
-import jobStatusBus, { type JobStatusUpdate } from '#services/job_status_bus'
+import jobStatusBus from '#services/job_status_bus'
 import { listObjects, deleteObject } from '#services/s3'
 import { createJobValidator } from '#validators/user'
 
@@ -257,6 +257,54 @@ export default class JobsController {
     return { success: true }
   }
 
+  // DELETE /api/jobs/:id/clips/:clipFilename
+  async destroyClip({ params, response, auth }: HttpContext) {
+    const user = auth.getUserOrFail()
+    const job = await Job.find(params.id)
+    if (!job || job.userId !== user.id) return response.notFound({ error: 'job not found' })
+
+    const clipFilename = params.clipFilename
+    const hotPoints: any[] = job.hotPoints ?? []
+    const hpIndex = hotPoints.findIndex((h: Record<string, unknown>) => h.clip_filename === clipFilename)
+    if (hpIndex === -1) return response.notFound({ error: 'clip not found in hot_points' })
+
+    // 1. Remove from hotPoints array
+    hotPoints.splice(hpIndex, 1)
+    job.hotPoints = hotPoints
+    await job.save()
+
+    // 2. Delete related renders from DB + S3
+    const renders = await db.from('renders').where('job_id', job.id).where('clip_filename', clipFilename)
+    for (const render of renders) {
+      if (render.output_filename) {
+        try {
+          await deleteObject(`renders/${job.id}/${render.output_filename}`)
+        } catch {}
+      }
+      await db.from('renders').where('id', render.id).delete()
+    }
+
+    // 3. Delete clip from S3
+    try {
+      await deleteObject(`clips/${job.id}/${clipFilename}`)
+    } catch {}
+
+    // 4. Delete local files (clip + associated JSON files)
+    const localDir = path.join(CLIPS_BASE, job.id)
+    const clipBase = path.basename(clipFilename, path.extname(clipFilename))
+    const suffixes = ['.mp4', '_meta.json', '_probe.json', '_words.json']
+    for (const suffix of suffixes) {
+      const filePath = path.join(localDir, clipBase + suffix)
+      try {
+        if (existsSync(filePath)) {
+          rmSync(filePath)
+        }
+      } catch {}
+    }
+
+    return { success: true }
+  }
+
   // PATCH /api/jobs/:id/clips/:clipFilename/name
   async renameClip({ params, request, response, auth }: HttpContext) {
     const user = auth.getUserOrFail()
@@ -278,48 +326,4 @@ export default class JobsController {
     return { clip_name: clipName }
   }
 
-  // GET /api/jobs/:id/sse  — Server-Sent Events for real-time status
-  async stream({ params, response, auth }: HttpContext) {
-    const user = auth.getUserOrFail()
-    const job = await Job.find(params.id)
-    if (!job || job.userId !== user.id) return response.notFound({ error: 'job not found' })
-
-    const res = response.response
-    res.setHeader('Content-Type', 'text/event-stream')
-    res.setHeader('Cache-Control', 'no-cache')
-    res.setHeader('Connection', 'keep-alive')
-    res.setHeader('X-Accel-Buffering', 'no') // disable nginx buffering
-    res.flushHeaders()
-
-    const send = (data: object) => {
-      if (!res.writableEnded) {
-        res.write(`data: ${JSON.stringify(data)}\n\n`)
-      }
-    }
-
-    // Send current state immediately
-    send(job.serialize())
-
-    // Keep connection open even for terminal jobs — clip imports can still emit clip_ready events.
-    // The client decides when to disconnect.
-
-    const onUpdate = (update: JobStatusUpdate) => {
-      send(update)
-    }
-
-    jobStatusBus.on(params.id, onUpdate)
-
-    // Heartbeat every 25s to keep the connection alive through proxies
-    const heartbeat = setInterval(() => {
-      if (res.writableEnded) return cleanup()
-      res.write(': ping\n\n')
-    }, 25_000)
-
-    const cleanup = () => {
-      clearInterval(heartbeat)
-      jobStatusBus.off(params.id, onUpdate)
-    }
-
-    res.on('close', cleanup)
-  }
 }

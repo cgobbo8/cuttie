@@ -454,59 +454,13 @@ export interface SSEStatusUpdate {
 
 export type SSEEvent = SSEClipReady | SSEStatusUpdate;
 
-function mapSSEHotPoint(raw: ServerHotPoint): HotPoint {
+export function mapSSEHotPoint(raw: ServerHotPoint): HotPoint {
   return { ...raw, clip_name: raw.clip_name ?? "", clip_source: (raw as any).clip_source ?? "auto" } as HotPoint;
 }
 
-export function subscribeJobSSE(
-  jobId: string,
-  onEvent: (event: SSEEvent) => void,
-  onError?: () => void,
-): () => void {
-  const es = new EventSource(`${BASE}/jobs/${jobId}/sse`);
-
-  es.onmessage = (e) => {
-    try {
-      const data = JSON.parse(e.data);
-
-      if (data.type === "clip_ready") {
-        onEvent({
-          type: "clip_ready",
-          job_id: data.job_id,
-          rank: data.rank,
-          hot_point: mapSSEHotPoint(data.hot_point),
-        });
-        return;
-      }
-
-      const update: SSEStatusUpdate = {
-        status: data.status,
-        progress: data.progress,
-        error: data.error,
-        step_timings: data.step_timings ?? data.stepTimings,
-        vod_title: data.vod_title ?? data.vodTitle,
-        vod_game: data.vod_game ?? data.vodGame,
-        vod_duration_seconds: data.vod_duration_seconds ?? data.vodDurationSeconds,
-        streamer: data.streamer,
-        view_count: data.view_count ?? data.viewCount,
-        stream_date: data.stream_date ?? data.streamDate,
-      };
-      if (data.hot_points) {
-        update.hot_points = data.hot_points.map(mapSSEHotPoint);
-      } else if (data.hotPoints) {
-        update.hot_points = data.hotPoints.map(mapSSEHotPoint);
-      }
-      onEvent(update);
-    } catch {
-      // ignore parse errors
-    }
-  };
-
-  es.onerror = () => {
-    onError?.();
-  };
-
-  return () => es.close();
+export async function deleteClip(jobId: string, clipFilename: string): Promise<void> {
+  const res = await fetch(`${BASE}/jobs/${jobId}/clips/${clipFilename}`, { method: "DELETE" });
+  if (!res.ok) throw new Error("Failed to delete clip");
 }
 
 export async function renameClip(jobId: string, clipFilename: string, clipName: string): Promise<{ clip_name: string }> {

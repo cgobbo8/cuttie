@@ -9,6 +9,7 @@ import {
   Pencil,
   Download,
   Upload,
+  Trash2,
   Clock,
   Flame,
   Sparkles,
@@ -36,6 +37,7 @@ interface Props {
   selectedClips?: Set<string>;
   onToggleClip?: (filename: string) => void;
   onQuickExport?: (clipFilename: string) => void;
+  onDeleteClip?: (clipFilename: string) => void;
 }
 
 interface SignalInfo {
@@ -323,6 +325,7 @@ function ClipCard({
   onToggle,
   onOpenLightbox,
   onQuickExport,
+  onDeleteClip,
 }: {
   point: HotPoint;
   index: number;
@@ -334,6 +337,7 @@ function ClipCard({
   onToggle?: () => void;
   onOpenLightbox?: () => void;
   onQuickExport?: () => void;
+  onDeleteClip?: () => void;
 }) {
   const { t } = useTranslation();
   const [showSkeleton, setShowSkeleton] = useState(isNew === true);
@@ -426,6 +430,12 @@ function ClipCard({
             <Download className="w-3.5 h-3.5" />
             {t("hotPoints.rawClip")}
           </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); onDeleteClip?.(); }}
+            className="inline-flex items-center justify-center w-9 h-9 text-red-400 bg-red-500/[0.06] hover:bg-red-500/[0.12] border border-red-500/[0.12] rounded-lg transition-colors"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
         </div>
       )}
 
@@ -482,14 +492,6 @@ function ClipCard({
                 {Math.round(displayScore * 100)}%
               </span>
             </span>
-            {point.llm && point.llm.virality_score > 0 && (
-              <span>
-                {t("hotPoints.viralPotential")}{" "}
-                <span className="text-zinc-300">
-                  {Math.round(point.llm.virality_score * 100)}%
-                </span>
-              </span>
-            )}
           </div>
 
           {/* Key moments (inline) */}
@@ -645,6 +647,7 @@ function ClipsList({
   selectedClips,
   onToggleClip,
   onQuickExport,
+  onDeleteClip,
   onOpenLightbox,
   t,
 }: {
@@ -658,6 +661,7 @@ function ClipsList({
   selectedClips?: Set<string>;
   onToggleClip?: (filename: string) => void;
   onQuickExport?: (clipFilename: string) => void;
+  onDeleteClip?: (clipFilename: string) => void;
   onOpenLightbox: (idx: number) => void;
   t: (key: string, opts?: Record<string, unknown>) => string;
 }) {
@@ -669,9 +673,13 @@ function ClipsList({
   const [manualCollapsed, setManualCollapsed] = useState(false);
 
   const renderClip = (point: HotPoint, i: number) => {
-    // Placeholder clips (no filename yet) → skeleton
     if (!point.clip_filename) {
-      return <SkeletonCard key={`pending-${point.clip_name || i}`} />;
+      // Import placeholder (has clip_name but no file yet) → skeleton
+      if (point.clip_name) {
+        return <SkeletonCard key={`pending-${point.clip_name}`} />;
+      }
+      // Failed extraction (no filename, no name) → hide
+      return null;
     }
     const clipKey = point.clip_filename;
     const lightboxIdx = clipsWithFiles.findIndex((c) => c.clip_filename === point.clip_filename);
@@ -688,6 +696,7 @@ function ClipsList({
         onToggle={() => onToggleClip?.(point.clip_filename!)}
         onOpenLightbox={lightboxIdx >= 0 ? () => onOpenLightbox(lightboxIdx) : undefined}
         onQuickExport={() => onQuickExport?.(point.clip_filename!)}
+        onDeleteClip={() => onDeleteClip?.(point.clip_filename!)}
       />
     );
   };
@@ -762,6 +771,7 @@ export default function HotPoints({
   selectedClips,
   onToggleClip,
   onQuickExport,
+  onDeleteClip,
 }: Props) {
   const { t } = useTranslation();
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
@@ -836,6 +846,7 @@ export default function HotPoints({
         selectedClips={selectedClips}
         onToggleClip={onToggleClip}
         onQuickExport={onQuickExport}
+        onDeleteClip={onDeleteClip}
         onOpenLightbox={setLightboxIndex}
         t={t}
       />

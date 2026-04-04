@@ -163,6 +163,7 @@
     "msg": "msg",
     "clipOf": "Clip {{index}} de {{total}}",
     "autoClips": "Clips automáticos",
+    "detectedClips": "Clips detectados",
     "manualClips": "Clips importados",
     "deleteClip": "Eliminar",
     "deleteClipTitle": "Eliminar este clip",

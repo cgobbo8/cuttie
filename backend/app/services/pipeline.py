@@ -1,4 +1,4 @@
-"""Pipeline orchestrator — runs the full analysis in a background thread."""
+"""Pipeline orchestrator — runs the full 6-step analysis in a background thread."""
 
 import json
 import logging
@@ -7,11 +7,11 @@ import shutil
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from app.models.schemas import StepTiming
+from app.models.schemas import HotPoint, StepTiming
 from app.services.audio_analyzer import analyze_audio
 from app.services.audio_classifier import classify_audio
 from app.services.chat_analyzer import analyze_chat
-from app.services.clipper import CLIPS_DIR, extract_group, plan_downloads
+from app.services.clipper import CLIPS_DIR, extract_group, plan_downloads, plan_downloads_detected
 from app.services.db import get_job, save_hot_points, update_hot_point_clip, update_job
 from app.services.downloader import extract_metadata, download_audio, download_chat
 from app.services.llm_analyzer import analyze_candidates, analyze_hot_points, analyze_single_clip
@@ -86,11 +86,14 @@ def _run_clipping_only(
     audio_features: list[dict] | None = None,
     chat_messages: list[dict] | None = None,
     timer: "StepTimer | None" = None,
+    detected_bounds: bool = False,
 ) -> None:
     """Download and compress clips for already-analyzed hot points.
 
     LLM analysis is already done at this point — this step only downloads video,
     compresses clips, renames them to LLM-generated names, and uploads to S3.
+
+    If detected_bounds=True, use fixed -2min/+5s bounds for "clip" keyword detections.
     """
     from app.services.db import publish_clip_ready, rename_clip_files, slugify_clip_name
     from app.services.s3_storage import rename_object
@@ -105,16 +108,26 @@ def _run_clipping_only(
             with open(chat_path, "w", encoding="utf-8") as f:
                 json.dump(chat_messages, f, ensure_ascii=False)
 
-    groups, shared_clips = plan_downloads(hot_points, vod_duration, audio_features)
+    if detected_bounds:
+        groups, shared_clips = plan_downloads_detected(hot_points, vod_duration)
+    else:
+        groups, shared_clips = plan_downloads(hot_points, vod_duration, audio_features)
     total_clips = sum(len(g["clips"]) for g in groups)
 
     DL_WORKERS = 5
 
-    update_job(
-        job_id, status="CLIPPING",
-        progress=f"Extraction clips (0/{total_clips})...",
-        step_timings=timer.timings if timer else None,
-    )
+    if detected_bounds:
+        update_job(
+            job_id, status="CLIPPING",
+            progress=f"Extraction de {total_clips} clips détectés...",
+            step_timings=timer.timings if timer else None,
+        )
+    else:
+        update_job(
+            job_id, status="CLIPPING",
+            progress=f"Extraction clips (0/{total_clips})...",
+            step_timings=timer.timings if timer else None,
+        )
 
     with ThreadPoolExecutor(max_workers=DL_WORKERS) as dl_pool:
         dl_futures = {
@@ -158,7 +171,11 @@ def _run_clipping_only(
 
                     update_job(
                         job_id,
-                        progress=f"Extraction clips ({done_dl}/{total_clips})...",
+                        progress=(
+                            f"Extraction clips détectés..."
+                            if detected_bounds
+                            else f"Extraction clips ({done_dl}/{total_clips})..."
+                        ),
                     )
             except Exception as e:
                 logger.error(f"Group extraction error: {e}")
@@ -207,12 +224,13 @@ def _run_clipping_only(
         logger.info(f"Deduplicated {len(dedup_indices)} hot points sharing clip files")
         hot_points[:] = [hp for i, hp in enumerate(hot_points) if i not in dedup_indices]
 
-    # Re-sort by final_score and persist
+    # Re-sort by final_score and persist (skip for detected — merged later)
     hot_points.sort(
         key=lambda hp: hp.final_score if hp.final_score is not None else -1,
         reverse=True,
     )
-    save_hot_points(job_id, hot_points)
+    if not detected_bounds:
+        save_hot_points(job_id, hot_points)
 
     logger.info(f"Clipping complete: {len(hot_points)} clips downloaded")
 
@@ -239,6 +257,7 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
         chat_messages: list[dict] = []
         audio_path: str | None = None
         audio_features: list[dict] = []
+        detected_hot_points: list[HotPoint] = []
 
         # Steps 1-6: Download + Analysis + LLM Scoring (skip if resuming from later step)
         if not resume_from or resume_from in (
@@ -316,7 +335,7 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
             update_job(job_id, status="SCORING", progress="Computing scores and finding hot points...", step_timings=timer.timings)
             hot_points = compute_scores(
                 audio_features, chat_features,
-                total_duration=duration, top_n=50,
+                total_duration=duration, top_n=100,
                 classification_features=classification_features,
             )
             logger.info(f"[{job_id[:8]}] Scoring done: {len(hot_points)} hot points")
@@ -342,7 +361,7 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
                 progress=f"Analyse IA de {len(hot_points)} candidats...",
                 step_timings=timer.timings,
             )
-            hot_points = analyze_candidates(
+            hot_points, detected_hot_points = analyze_candidates(
                 job_id=job_id,
                 hot_points=hot_points,
                 audio_path=audio_path,
@@ -378,6 +397,21 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
                 chat_messages=chat_messages,
                 timer=timer,
             )
+
+            # Clip detected "clip" moments with fixed bounds (-2min / +5s)
+            if detected_hot_points:
+                logger.info(
+                    f"[{job_id[:8]}] Clipping {len(detected_hot_points)} detected 'clip' moments..."
+                )
+                update_job(job_id, progress=f"Extraction de {len(detected_hot_points)} clips détectés...")
+                _run_clipping_only(
+                    job_id, url, detected_hot_points, duration, vod_meta,
+                    audio_features=None,  # No RMS segmentation — use fixed bounds
+                    chat_messages=chat_messages,
+                    timer=timer,
+                    detected_bounds=True,
+                )
+
         elif resume_from == "LLM_ANALYSIS":
             # Legacy resume: re-analyze already-clipped files
             timer.start("LLM_ANALYSIS")
@@ -390,19 +424,35 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
                 chat_messages=chat_messages,
             )
 
-        # Done — finalize timings and re-publish full enriched hot_points
-        logger.info(f"[{job_id[:8]}] Pipeline complete!")
+        # Done — merge normal + detected hot points, finalize
         timer.finish()
-        final_job = get_job(job_id)
+
+        # hot_points already saved in DB by _run_clipping_only (normal clips)
+        # detected_hot_points NOT saved yet — merge and save all together
+        all_hot_points = list(hot_points) if hot_points else []
+        if detected_hot_points:
+            # Only keep detected clips that were successfully clipped
+            clipped_detected = [hp for hp in detected_hot_points if hp.clip_filename]
+            failed_detected = len(detected_hot_points) - len(clipped_detected)
+            if failed_detected:
+                logger.warning(f"[{job_id[:8]}] {failed_detected} detected clip(s) failed extraction")
+            all_hot_points.extend(clipped_detected)
+            logger.info(
+                f"[{job_id[:8]}] Merged: {len(all_hot_points)} total hot points "
+                f"({len(all_hot_points) - len(clipped_detected)} auto + "
+                f"{len(clipped_detected)} detected)"
+            )
+
         update_job(
             job_id,
             status="DONE",
             progress="Analysis complete!",
             error=None,
             vod_title=vod_title or "",
-            hot_points=final_job.hot_points if final_job and final_job.hot_points else [],
+            hot_points=all_hot_points,
             step_timings=timer.timings,
         )
+        logger.info(f"[{job_id[:8]}] Pipeline fully complete!")
 
     except JobCancelled:
         logger.info(f"Pipeline cancelled for {job_id}")

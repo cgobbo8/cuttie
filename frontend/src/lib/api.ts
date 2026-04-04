@@ -81,7 +81,7 @@ export interface HotPoint {
   clip_filename: string | null;
   vertical_filename: string | null;
   clip_name: string;
-  clip_source: "auto" | "manual";
+  clip_source: "auto" | "manual" | "detected";
   llm: LlmAnalysis | null;
   chat_mood: string | null;
   chat_message_count: number | null;

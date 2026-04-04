@@ -59,7 +59,7 @@ class HotPoint(BaseModel):
     clip_filename: str | None = None
     vertical_filename: str | None = None
     clip_name: str = ""  # short display name, LLM-generated then user-editable
-    clip_source: str = "auto"  # "auto" (pipeline-generated) or "manual" (user-imported)
+    clip_source: str = "auto"  # "auto" (pipeline-generated), "manual" (user-imported), or "detected" (keyword detection)
     llm: LlmAnalysis | None = None
 
 

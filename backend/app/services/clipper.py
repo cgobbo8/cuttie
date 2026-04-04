@@ -88,6 +88,84 @@ PRE_PEAK_WINDOW = 25
 POST_PEAK_WINDOW = 20
 CLIP_HALF_DURATION = 30
 
+# --- Detected clip bounds ---
+DETECTED_PRE_PEAK = 120   # 2 minutes before "clip" keyword
+DETECTED_POST_PEAK = 5    # 5 seconds after
+DETECTED_MERGE_WINDOW = 0  # Only merge clips that actually overlap (start <= prev end)
+
+
+def plan_downloads_detected(
+    hot_points: list[HotPoint],
+    vod_duration: float,
+) -> tuple[list[dict], dict[int, list[int]]]:
+    """Plan downloads for detected "clip" moments with fixed bounds (-2min / +5s).
+
+    Merges overlapping clips (e.g. streamer says "clip" twice in 1 minute).
+
+    Returns same format as plan_downloads: (groups, shared_clips).
+    """
+    if not hot_points:
+        return [], {}
+
+    # Sort by timestamp
+    sorted_hps = sorted(enumerate(hot_points), key=lambda x: x[1].timestamp_seconds)
+
+    # Merge nearby detections into single clips
+    merged: list[dict] = []  # {start, end, hp_indices}
+    for orig_idx, hp in sorted_hps:
+        clip_start = max(0, hp.timestamp_seconds - DETECTED_PRE_PEAK)
+        clip_end = min(vod_duration, hp.timestamp_seconds + DETECTED_POST_PEAK)
+
+        if merged and clip_start <= merged[-1]["end"] + DETECTED_MERGE_WINDOW:
+            # Extend existing clip to cover this detection
+            merged[-1]["end"] = max(merged[-1]["end"], clip_end)
+            merged[-1]["hp_indices"].append(orig_idx)
+        else:
+            merged.append({
+                "start": clip_start,
+                "end": clip_end,
+                "hp_indices": [orig_idx],
+            })
+
+    logger.info(
+        f"Detected clips: {len(sorted_hps)} detections → {len(merged)} clips after merge"
+    )
+
+    # Build groups (same format as plan_downloads)
+    groups: list[dict] = []
+    shared_clips: dict[int, list[int]] = {}
+
+    for clip_idx, m in enumerate(merged):
+        # Offset rank by 100 to avoid collision with normal clip filenames (clip_01..clip_20)
+        rank = 100 + clip_idx + 1
+
+        clips_in_group = []
+        for hp_idx in m["hp_indices"]:
+            clips_in_group.append({
+                "rank": rank,
+                "index": hp_idx,
+                "hp": hot_points[hp_idx],
+                "start": m["start"],
+                "end": m["end"],
+            })
+
+        if len(m["hp_indices"]) > 1:
+            shared_clips[rank] = m["hp_indices"]
+
+        groups.append({
+            "start": m["start"],
+            "end": m["end"],
+            "clips": clips_in_group,
+        })
+
+        dur = m["end"] - m["start"]
+        logger.info(
+            f"  Detected clip: {_fmt_time(m['start'])}-{_fmt_time(m['end'])} "
+            f"({dur:.0f}s, {len(m['hp_indices'])} detection(s))"
+        )
+
+    return groups, shared_clips
+
 
 def _build_rms_lookup(audio_features: list[dict] | None) -> tuple[np.ndarray, np.ndarray, float, float]:
     """Build RMS arrays and compute baseline/threshold from audio features.

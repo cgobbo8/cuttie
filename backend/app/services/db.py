@@ -131,6 +131,7 @@ def init_db() -> None:
         ("jobs", "vod_game_id", "TEXT"),
         ("jobs", "vod_game_thumbnail", "TEXT"),
         ("jobs", "streamer_thumbnail", "TEXT"),
+        ("hot_points", "clip_source", "TEXT"),
     ]
 
     # Allowlists derived from the migration tuples above — update both lists
@@ -140,6 +141,7 @@ def init_db() -> None:
         "llm_json", "final_score", "chat_mood", "vertical_filename",
         "vod_game", "streamer", "view_count", "stream_date", "step_timings",
         "clip_name", "vod_game_id", "vod_game_thumbnail", "streamer_thumbnail",
+        "clip_source",
     }
     VALID_COL_TYPES = {"TEXT", "REAL", "INTEGER", "BLOB", "NUMERIC"}
 
@@ -216,8 +218,8 @@ def save_hot_points(job_id: str, hot_points: list[HotPoint]) -> None:
         signals_json = json.dumps(hp.signals.model_dump())
         llm_json = json.dumps(hp.llm.model_dump()) if hp.llm else None
         conn.execute(
-            "INSERT INTO hot_points (job_id, rank, timestamp_seconds, timestamp_display, score, signals_json, clip_filename, vertical_filename, llm_json, final_score, chat_mood, clip_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (job_id, i + 1, hp.timestamp_seconds, hp.timestamp_display, hp.score, signals_json, hp.clip_filename, hp.vertical_filename, llm_json, hp.final_score, hp.chat_mood, hp.clip_name or None),
+            "INSERT INTO hot_points (job_id, rank, timestamp_seconds, timestamp_display, score, signals_json, clip_filename, vertical_filename, llm_json, final_score, chat_mood, clip_name, clip_source) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (job_id, i + 1, hp.timestamp_seconds, hp.timestamp_display, hp.score, signals_json, hp.clip_filename, hp.vertical_filename, llm_json, hp.final_score, hp.chat_mood, hp.clip_name or None, hp.clip_source),
         )
     conn.commit()
     conn.close()
@@ -319,6 +321,7 @@ def get_job(job_id: str) -> JobResponse | None:
                     clip_filename=hp["clip_filename"],
                     vertical_filename=hp["vertical_filename"] if "vertical_filename" in hp.keys() else None,
                     clip_name=(hp["clip_name"] or "") if "clip_name" in hp.keys() else "",
+                    clip_source=(hp["clip_source"] or "auto") if "clip_source" in hp.keys() else "auto",
                     llm=llm,
                     chat_mood=hp["chat_mood"] or "",
                 )

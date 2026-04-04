@@ -669,11 +669,14 @@ function ClipsList({
   onOpenLightbox: (idx: number) => void;
   t: (key: string, opts?: Record<string, unknown>) => string;
 }) {
-  const autoClips = hotPoints.filter((hp) => hp.clip_source !== "manual");
+  const autoClips = hotPoints.filter((hp) => hp.clip_source === "auto" || !hp.clip_source);
+  const detectedClips = hotPoints.filter((hp) => hp.clip_source === "detected");
   const manualClips = hotPoints.filter((hp) => hp.clip_source === "manual");
-  const hasBoth = autoClips.length > 0 && manualClips.length > 0;
+  const groupCount = (autoClips.length > 0 ? 1 : 0) + (detectedClips.length > 0 ? 1 : 0) + (manualClips.length > 0 ? 1 : 0);
+  const hasMultipleGroups = groupCount > 1;
 
   const [autoCollapsed, setAutoCollapsed] = useState(false);
+  const [detectedCollapsed, setDetectedCollapsed] = useState(false);
   const [manualCollapsed, setManualCollapsed] = useState(false);
 
   const renderClip = (point: HotPoint, i: number) => {
@@ -704,7 +707,7 @@ function ClipsList({
     );
   };
 
-  if (!hasBoth) {
+  if (!hasMultipleGroups) {
     // No grouping needed — flat list
     return (
       <div className={`space-y-3 ${isFinalSort ? "" : ""}`}>
@@ -713,46 +716,71 @@ function ClipsList({
     );
   }
 
-  // Both types present — show collapsible groups
+  // Multiple types present — show collapsible groups
   return (
     <div className="space-y-6">
       {/* Auto clips */}
-      <div>
-        <button
-          onClick={() => setAutoCollapsed(!autoCollapsed)}
-          className="flex items-center gap-2 mb-3 group"
-        >
-          <ChevronDown className={`w-4 h-4 text-zinc-500 transition-transform ${autoCollapsed ? "-rotate-90" : ""}`} />
-          <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider group-hover:text-zinc-300 transition-colors">
-            {t("hotPoints.autoClips")}
-          </span>
-          <span className="text-[10px] text-zinc-600 tabular-nums">{autoClips.length}</span>
-        </button>
-        {!autoCollapsed && (
-          <div className="space-y-3">
-            {autoClips.map((point) => renderClip(point, hotPoints.indexOf(point)))}
-          </div>
-        )}
-      </div>
+      {autoClips.length > 0 && (
+        <div>
+          <button
+            onClick={() => setAutoCollapsed(!autoCollapsed)}
+            className="flex items-center gap-2 mb-3 group"
+          >
+            <ChevronDown className={`w-4 h-4 text-zinc-500 transition-transform ${autoCollapsed ? "-rotate-90" : ""}`} />
+            <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider group-hover:text-zinc-300 transition-colors">
+              {t("hotPoints.autoClips")}
+            </span>
+            <span className="text-[10px] text-zinc-600 tabular-nums">{autoClips.length}</span>
+          </button>
+          {!autoCollapsed && (
+            <div className="space-y-3">
+              {autoClips.map((point) => renderClip(point, hotPoints.indexOf(point)))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Detected clips (keyword detection) */}
+      {detectedClips.length > 0 && (
+        <div>
+          <button
+            onClick={() => setDetectedCollapsed(!detectedCollapsed)}
+            className="flex items-center gap-2 mb-3 group"
+          >
+            <ChevronDown className={`w-4 h-4 text-zinc-500 transition-transform ${detectedCollapsed ? "-rotate-90" : ""}`} />
+            <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider group-hover:text-zinc-300 transition-colors">
+              {t("hotPoints.detectedClips")}
+            </span>
+            <span className="text-[10px] text-zinc-600 tabular-nums">{detectedClips.length}</span>
+          </button>
+          {!detectedCollapsed && (
+            <div className="space-y-3">
+              {detectedClips.map((point) => renderClip(point, hotPoints.indexOf(point)))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Manual clips */}
-      <div>
-        <button
-          onClick={() => setManualCollapsed(!manualCollapsed)}
-          className="flex items-center gap-2 mb-3 group"
-        >
-          <ChevronDown className={`w-4 h-4 text-zinc-500 transition-transform ${manualCollapsed ? "-rotate-90" : ""}`} />
-          <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider group-hover:text-zinc-300 transition-colors">
-            {t("hotPoints.manualClips")}
-          </span>
-          <span className="text-[10px] text-zinc-600 tabular-nums">{manualClips.length}</span>
-        </button>
-        {!manualCollapsed && (
-          <div className="space-y-3">
-            {manualClips.map((point) => renderClip(point, hotPoints.indexOf(point)))}
-          </div>
-        )}
-      </div>
+      {manualClips.length > 0 && (
+        <div>
+          <button
+            onClick={() => setManualCollapsed(!manualCollapsed)}
+            className="flex items-center gap-2 mb-3 group"
+          >
+            <ChevronDown className={`w-4 h-4 text-zinc-500 transition-transform ${manualCollapsed ? "-rotate-90" : ""}`} />
+            <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider group-hover:text-zinc-300 transition-colors">
+              {t("hotPoints.manualClips")}
+            </span>
+            <span className="text-[10px] text-zinc-600 tabular-nums">{manualClips.length}</span>
+          </button>
+          {!manualCollapsed && (
+            <div className="space-y-3">
+              {manualClips.map((point) => renderClip(point, hotPoints.indexOf(point)))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

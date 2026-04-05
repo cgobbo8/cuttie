@@ -339,13 +339,27 @@ You have the RAW AUDIO attached to this message. LISTEN to it carefully. This is
 
 The Whisper transcript above is a rough approximation. Use the actual audio as your ground truth for what is said and how it is said. If the transcript seems wrong (misheard words, wrong language), trust YOUR ears over the transcript.
 
-## Important context
+## Speaker dynamics
 
-**Multiple speakers:** On Twitch streams, multiple people are often talking simultaneously — the streamer plus friends on Discord, IRL guests, etc. Listen for different voices, conversational patterns (questions/answers, topic switches).
+Listen carefully to the voices in the audio and identify the conversation dynamics:
+
+**Solo streamer:** One person talking — commentating gameplay, reacting to events, reading chat, telling a story. Virality depends entirely on the intensity and authenticity of their solo performance (genuine rage, uncontrollable laughter, shocked reaction).
+
+**Group conversation (Discord, IRL, co-stream):** Multiple distinct voices interacting. Pay close attention to:
+- **Roasts & banter:** Someone getting clowned on by friends — the victim's reaction matters as much as the joke. Collective laughter = strong viral signal.
+- **Shared reactions:** Everyone screaming or laughing at the same event = amplified virality. A group losing their minds together is more viral than one person reacting alone.
+- **Debates & arguments:** Heated disagreements, friendly or not — the tension and back-and-forth make great clips.
+- **Storytelling with audience:** Someone telling a story while others react (gasps, "nooo", laughter) — the listeners' reactions validate the story's impact.
+- **Awkward moments:** Uncomfortable silences, someone saying something they shouldn't have, others trying not to laugh.
+- **Hype building:** Friends hyping each other up before or during a clutch play.
+
+The NUMBER of people reacting matters: 3 people laughing uncontrollably > 1 person chuckling. A group collectively losing composure is almost always viral.
+
+## Important context
 
 **Off-topic conversations:** Streamers frequently talk about completely unrelated topics while playing. If the conversation has NO connection to what's happening on screen, it's likely idle chat, NOT a memorable moment. However, off-topic talk CAN be viral if it's genuinely funny, shocking, or entertaining. Mundane chatter = NOT viral regardless of volume.
 
-**Visual-audio alignment:** If the game screen shows a menu or idle moment while people chat about unrelated topics, this is a strong signal of a LOW-value clip.
+**Visual-audio alignment:** If the game screen shows a menu or idle moment while people chat about unrelated topics, this is a strong signal of a LOW-value clip — UNLESS the conversation itself is the content (funny story, roast, argument).
 
 ## How to use the visual frames
 

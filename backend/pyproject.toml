@@ -23,6 +23,7 @@ dependencies = [
     "boto3>=1.36.0",
     "modal>=1.4.0",
     "opencv-python-headless>=4.13.0.92",
+    "ultralytics>=8.4.33",
 ]
 
 [dependency-groups]

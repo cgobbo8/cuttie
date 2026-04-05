@@ -231,6 +231,7 @@ def _download_chat_chunk(
     messages: list[dict] = []
     content_offset = start_offset
     empty_streak = 0
+    seen: set[tuple[float, str, str]] = set()  # (timestamp, author, text) for dedup within chunk
     max_requests = 500  # safety limit per chunk
 
     for _ in range(max_requests):
@@ -259,22 +260,32 @@ def _download_chat_chunk(
             empty_streak += 1
             jump = min(60 * (2 ** (empty_streak - 1)), 600)
             content_offset += jump
+            # Don't jump past our chunk boundary
+            if content_offset >= end_offset:
+                break
             continue
 
         empty_streak = 0
         last_ts = content_offset
+        past_boundary = False
         for edge in edges:
             node = edge.get("node", {})
             ts = node.get("contentOffsetSeconds")
             if ts is None:
                 continue
-            # Stop collecting if we've passed our chunk boundary
             if ts >= end_offset:
+                past_boundary = True
                 break
             author = (node.get("commenter") or {}).get("displayName", "")
             text = "".join(f.get("text", "") for f in node.get("message", {}).get("fragments", []))
-            messages.append({"timestamp": float(ts), "text": text, "author": author})
+            key = (float(ts), author, text)
+            if key not in seen:
+                seen.add(key)
+                messages.append({"timestamp": float(ts), "text": text, "author": author})
             last_ts = max(last_ts, ts)
+
+        if past_boundary:
+            break
 
         content_offset = last_ts + 1
 
@@ -341,12 +352,12 @@ def download_chat(url: str) -> list[dict]:
             if done % 4 == 0 or done == len(chunks):
                 logger.info("Chat download: %d/%d chunks done (%d messages)", done, len(chunks), len(all_messages))
 
-    # Sort and deduplicate (chunk boundaries may overlap)
+    # Sort and deduplicate (chunk boundaries may have marginal overlap)
     all_messages.sort(key=lambda m: m["timestamp"])
-    seen: set[tuple[float, str]] = set()
+    seen: set[tuple[float, str, str]] = set()
     messages: list[dict] = []
     for m in all_messages:
-        key = (m["timestamp"], m["author"])
+        key = (m["timestamp"], m["author"], m["text"])
         if key not in seen:
             seen.add(key)
             messages.append(m)

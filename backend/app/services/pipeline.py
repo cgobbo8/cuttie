@@ -78,6 +78,71 @@ RESUMABLE_FROM = {
 }
 
 
+def _save_words_for_clips(
+    job_id: str,
+    hot_points: list[HotPoint],
+    candidate_words: dict[int, list[dict]],
+) -> None:
+    """Save word-level subtitle JSON for each clipped hot point.
+
+    Words timestamps are relative to the transcription window (±30s around peak).
+    We offset them to be relative to the actual clip start (from _meta.json).
+    """
+    from app.services.clipper import CLIP_HALF_DURATION
+
+    clip_dir = os.path.join(CLIPS_DIR, job_id)
+    saved = 0
+
+    for idx, hp in enumerate(hot_points):
+        if not hp.clip_filename or idx not in candidate_words:
+            continue
+
+        words = candidate_words[idx]
+        if not words:
+            continue
+
+        # Read clip's actual VOD boundaries from meta
+        base = os.path.splitext(hp.clip_filename)[0]
+        meta_path = os.path.join(clip_dir, f"{base}_meta.json")
+        if not os.path.isfile(meta_path):
+            continue
+
+        try:
+            with open(meta_path) as f:
+                meta = json.load(f)
+            clip_vod_start = meta["vod_start"]
+        except Exception:
+            continue
+
+        # Words are relative to the transcription window start
+        # (hp.timestamp_seconds - CLIP_HALF_DURATION)
+        whisper_window_start = max(0, hp.timestamp_seconds - CLIP_HALF_DURATION)
+
+        # Offset words to be relative to clip start
+        offset = whisper_window_start - clip_vod_start
+        clip_duration = meta.get("vod_end", 0) - clip_vod_start
+
+        clipped_words = []
+        for w in words:
+            start = round(w["start"] + offset, 3)
+            end = round(w["end"] + offset, 3)
+            if end <= 0 or start >= clip_duration:
+                continue  # word falls outside clip
+            clipped_words.append({
+                "word": w["word"],
+                "start": max(0, start),
+                "end": min(clip_duration, end),
+            })
+
+        if clipped_words:
+            words_path = os.path.join(clip_dir, f"{base}_words.json")
+            with open(words_path, "w", encoding="utf-8") as f:
+                json.dump(clipped_words, f, ensure_ascii=False)
+            saved += 1
+
+    logger.info(f"[{job_id[:8]}] Saved _words.json for {saved} clips")
+
+
 def _run_clipping_only(
     job_id: str,
     url: str,
@@ -260,6 +325,7 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
         audio_path: str | None = None
         audio_features: list[dict] = []
         detected_hot_points: list[HotPoint] = []
+        candidate_words: dict[int, list[dict]] = {}
 
         # Steps 1-6: Download + Analysis + LLM Scoring (skip if resuming from later step)
         if not resume_from or resume_from in (
@@ -363,7 +429,7 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
                 progress=f"Analyse IA de {len(hot_points)} candidats...",
                 step_timings=timer.timings,
             )
-            hot_points, detected_hot_points = analyze_candidates(
+            hot_points, detected_hot_points, candidate_words = analyze_candidates(
                 job_id=job_id,
                 hot_points=hot_points,
                 audio_path=audio_path,
@@ -438,6 +504,10 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
                 job_id, hot_points, vod_meta,
                 chat_messages=chat_messages,
             )
+
+        # Save word-level subtitles for each clipped hot point
+        if candidate_words:
+            _save_words_for_clips(job_id, hot_points, candidate_words)
 
         # Done — merge normal + detected hot points, finalize
         timer.finish()

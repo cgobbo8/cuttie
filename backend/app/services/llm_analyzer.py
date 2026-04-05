@@ -98,11 +98,14 @@ def _extract_audio_from_clip(clip_path: str, output_path: str) -> bool:
         return False
 
 
-def _transcribe_audio(audio_path: str) -> tuple[str, float, list[tuple[float, float, str]]]:
+def _transcribe_audio(
+    audio_path: str,
+) -> tuple[str, float, list[tuple[float, float, str]], list[dict]]:
     """Transcribe an audio file using Whisper API via Groq.
 
-    Returns (transcript_text, speech_rate, segments) where segments is
-    a list of (start_seconds, end_seconds, text) tuples from Whisper.
+    Returns (transcript_text, speech_rate, segments, words) where:
+    - segments: list of (start, end, text) tuples
+    - words: list of {"word": str, "start": float, "end": float}
     """
     client = get_groq_client()
     try:
@@ -111,6 +114,7 @@ def _transcribe_audio(audio_path: str) -> tuple[str, float, list[tuple[float, fl
                 model=WHISPER_MODEL,
                 file=f,
                 response_format="verbose_json",
+                timestamp_granularities=["word", "segment"],
             )
 
         text = result.text or ""
@@ -122,12 +126,19 @@ def _transcribe_audio(audio_path: str) -> tuple[str, float, list[tuple[float, fl
             duration = max(s.end for s in result.segments)
             segments = [(s.start, s.end, s.text) for s in result.segments]
 
+        words: list[dict] = []
+        if hasattr(result, "words") and result.words:
+            for w in result.words:
+                words.append({"word": w.word, "start": w.start, "end": w.end})
+            if not duration and words:
+                duration = words[-1]["end"]
+
         speech_rate = word_count / duration if duration > 0 else 0.0
-        return text, speech_rate, segments
+        return text, speech_rate, segments, words
 
     except Exception as e:
         logger.error(f"Whisper transcription failed: {e}")
-        return "", 0.0, []
+        return "", 0.0, [], []
 
 
 def _transcribe_candidates(
@@ -135,15 +146,16 @@ def _transcribe_candidates(
     candidates: list[tuple[int, HotPoint]],
     vod_duration: float,
     job_id: str,
-) -> dict[int, tuple[str, float, float, list[tuple[float, float, str]]]]:
+) -> dict[int, tuple[str, float, float, list[tuple[float, float, str]], list[dict]]]:
     """Transcribe audio segments for all candidates in parallel.
 
     Extracts clip audio from the full WAV and transcribes via Whisper.
 
     Returns dict: candidate_index -> (transcript_text, speech_rate,
-                                       clip_start_abs, raw_segments).
+                                       clip_start_abs, raw_segments, words).
     clip_start_abs is the absolute VOD timestamp where the clip begins.
     raw_segments are Whisper (start, end, text) tuples relative to clip_start_abs.
+    words are word-level timestamps for subtitle generation.
     """
     triage_dir = os.path.join("triage_audio", job_id)
     os.makedirs(triage_dir, exist_ok=True)
@@ -152,19 +164,19 @@ def _transcribe_candidates(
     logger.info(f"Transcribing {total} candidates with {MAX_WHISPER_WORKERS} workers...")
     t0 = _time.time()
 
-    transcripts: dict[int, tuple[str, float, float, list[tuple[float, float, str]]]] = {}
+    transcripts: dict[int, tuple[str, float, float, list[tuple[float, float, str]], list[dict]]] = {}
 
-    def _do_one(idx: int, hp: HotPoint) -> tuple[int, str, float, float, list]:
+    def _do_one(idx: int, hp: HotPoint) -> tuple[int, str, float, float, list, list[dict]]:
         clip_start = max(0, hp.timestamp_seconds - CLIP_HALF_DURATION)
         clip_end = min(vod_duration, hp.timestamp_seconds + CLIP_HALF_DURATION)
 
         seg_path = os.path.join(triage_dir, f"seg_{idx:03d}.mp3")
 
         if _extract_audio_from_wav(wav_path, clip_start, clip_end, seg_path):
-            text, speech_rate, segments = _transcribe_audio(seg_path)
+            text, speech_rate, segments, words = _transcribe_audio(seg_path)
             # Keep MP3 for LLM audio analysis — cleaned up after analyze_candidates
-            return idx, text, speech_rate, clip_start, segments
-        return idx, "", 0.0, 0.0, []
+            return idx, text, speech_rate, clip_start, segments, words
+        return idx, "", 0.0, 0.0, [], []
 
     with ThreadPoolExecutor(max_workers=MAX_WHISPER_WORKERS) as executor:
         futures = {
@@ -175,15 +187,15 @@ def _transcribe_candidates(
         for future in as_completed(futures):
             done += 1
             try:
-                idx, text, speech_rate, clip_start, segments = future.result()
-                transcripts[idx] = (text, speech_rate, clip_start, segments)
+                idx, text, speech_rate, clip_start, segments, words = future.result()
+                transcripts[idx] = (text, speech_rate, clip_start, segments, words)
                 if done % 10 == 0 or done == total:
                     logger.info(f"Whisper progress: {done}/{total}")
                     update_job(job_id, progress=f"Transcription : {done} sur {total} segments...")
             except Exception as e:
                 idx = futures[future]
                 logger.error(f"Whisper failed for candidate {idx}: {e}")
-                transcripts[idx] = ("", 0.0, 0.0, [])
+                transcripts[idx] = ("", 0.0, 0.0, [], [])
 
     elapsed = _time.time() - t0
     non_empty = sum(1 for t in transcripts.values() if t[0])
@@ -194,6 +206,52 @@ def _transcribe_candidates(
 
 
 # ─── Frame encoding ──────────────────────────────────────────────────────────
+
+def _realign_words(corrected_text: str, whisper_words: list[dict]) -> list[dict]:
+    """Realign LLM-corrected transcript to Whisper word-level timestamps.
+
+    Uses proportional character-position mapping: each corrected word is mapped
+    to the original Whisper words based on its relative position in the text.
+    """
+    corrected_words = corrected_text.split()
+    if not corrected_words or not whisper_words:
+        return whisper_words
+
+    # Build char→word index mapping for original text
+    raw_text = " ".join(w["word"].strip() for w in whisper_words)
+    orig_chars: list[int] = []
+    for i, w in enumerate(whisper_words):
+        word = w["word"].strip()
+        for _ in word:
+            orig_chars.append(i)
+        if i < len(whisper_words) - 1:
+            orig_chars.append(i)  # space
+
+    if not orig_chars:
+        return whisper_words
+
+    corrected_full = " ".join(corrected_words)
+    result = []
+    char_pos = 0
+    for cw in corrected_words:
+        start_ratio = char_pos / max(len(corrected_full), 1)
+        end_ratio = (char_pos + len(cw)) / max(len(corrected_full), 1)
+
+        orig_start_idx = min(int(start_ratio * len(orig_chars)), len(orig_chars) - 1)
+        orig_end_idx = min(int(end_ratio * len(orig_chars)), len(orig_chars) - 1)
+
+        first_word_idx = orig_chars[max(0, orig_start_idx)]
+        last_word_idx = orig_chars[max(0, orig_end_idx)]
+
+        result.append({
+            "word": cw,
+            "start": whisper_words[first_word_idx]["start"],
+            "end": whisper_words[last_word_idx]["end"],
+        })
+        char_pos += len(cw) + 1
+
+    return result
+
 
 def _encode_frame(path: str) -> str | None:
     """Encode a frame as base64 data URL for the API."""
@@ -578,12 +636,13 @@ def analyze_candidates(
     vod_meta: dict,
     chat_messages: list[dict] | None = None,
     keep_n: int = KEEP_TOP_N,
-) -> tuple[list[HotPoint], list[HotPoint]]:
+) -> tuple[list[HotPoint], list[HotPoint], dict[int, list[dict]]]:
     """Analyze all candidates with Whisper, detect "clip" keywords, then LLM-rank the rest.
 
-    Returns (normal_hot_points, detected_hot_points):
+    Returns (normal_hot_points, detected_hot_points, candidate_words):
     - normal: top keep_n after full LLM analysis
     - detected: candidates where Whisper found "clip" keyword (clip_source="detected")
+    - candidate_words: {candidate_idx -> word-level timestamps} for subtitle generation
     """
     total = len(hot_points)
     logger.info(f"═══ Analyzing {total} candidates (keeping top {keep_n}) ═══")
@@ -609,8 +668,8 @@ def analyze_candidates(
     normal_indices: list[int] = []
 
     for idx, hp in candidates:
-        transcript, speech_rate, clip_start_abs, segments = transcripts.get(
-            idx, ("", 0.0, 0.0, [])
+        transcript, speech_rate, clip_start_abs, segments, _words = transcripts.get(
+            idx, ("", 0.0, 0.0, [], [])
         )
         if _has_clip_keyword(transcript):
             detected_indices.append(idx)
@@ -679,10 +738,11 @@ def analyze_candidates(
     update_job(job_id, progress=f"Analyse IA de {llm_total} candidats...")
 
     llm_t0 = _time.time()
+    candidate_words: dict[int, list[dict]] = {}  # idx -> word-level timestamps for subtitles
 
     def _analyze_one(idx: int, hp: HotPoint) -> None:
         t0 = _time.time()
-        transcript, speech_rate, _, _ = transcripts.get(idx, ("", 0.0, 0.0, []))
+        transcript, speech_rate, _, _, whisper_words = transcripts.get(idx, ("", 0.0, 0.0, [], []))
         frames = all_frames.get(idx, [])
 
         # Audio segment path (kept from Whisper step)
@@ -712,6 +772,12 @@ def analyze_candidates(
             llm, clip_name, corrected = _call_unified_llm(frames, prompt, audio_path)
             llm.transcript = corrected if corrected else transcript
             llm.speech_rate = round(speech_rate, 2)
+
+            # Build subtitle words: realign corrected transcript to Whisper timestamps
+            if corrected and whisper_words:
+                candidate_words[idx] = _realign_words(corrected, whisper_words)
+            elif whisper_words:
+                candidate_words[idx] = whisper_words
 
             hp.llm = llm
             if clip_name:
@@ -801,7 +867,7 @@ def analyze_candidates(
     )
 
     save_hot_points(job_id, kept)
-    return kept, detected_hps
+    return kept, detected_hps, candidate_words
 
 
 # ─── Post-clipping single clip analysis (for resume/retry) ───────────────────

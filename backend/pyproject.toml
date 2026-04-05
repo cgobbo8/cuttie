@@ -22,6 +22,7 @@ dependencies = [
     "redis>=7.4.0",
     "boto3>=1.36.0",
     "modal>=1.4.0",
+    "opencv-python-headless>=4.13.0.92",
 ]
 
 [dependency-groups]

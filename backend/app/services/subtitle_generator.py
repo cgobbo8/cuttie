@@ -112,10 +112,8 @@ def transcribe_with_words(clip_path: str) -> tuple[str, float, list[dict]]:
                 })
 
         if words:
-            # 1. Snap timestamps that fall in silence to next speech onset
+            # Snap timestamps that fall in silence to next speech onset
             words = _fix_timestamps_with_vad(words, audio_path)
-            # 2. Fix French accents, apostrophes, word boundaries
-            words = _rewrite_words_with_llm(words)
             text = " ".join(w["word"] for w in words)
 
         duration = words[-1]["end"] if words else 0.0

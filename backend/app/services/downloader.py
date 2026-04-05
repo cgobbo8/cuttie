@@ -197,32 +197,21 @@ def _fetch_streamer_thumbnail(login: str) -> str:
         return ""
 
 
-def download_chat(url: str) -> list[dict]:
-    """Download chat messages from a Twitch VOD using the GQL API directly.
+CHAT_WORKERS = 8  # parallel GQL workers for chat download
+CHAT_CHUNK_SECONDS = 1800  # 30-minute chunks
 
-    chat-downloader lib has a broken persisted query hash, so we hit the
-    Twitch GQL endpoint ourselves with a raw query.
-    """
-    import re
+
+def _download_chat_chunk(
+    video_id: str,
+    start_offset: int,
+    end_offset: int,
+    chunk_idx: int,
+) -> list[dict]:
+    """Download chat messages for a single time chunk of the VOD."""
     import requests
 
-    match = re.search(r"videos/(\d+)", url)
-    if not match:
-        return []
-
-    video_id = match.group(1)
     gql_url = "https://gql.twitch.tv/gql"
     headers = {"Client-ID": TWITCH_CLIENT_ID}
-
-    # First, get VOD duration to know when to stop
-    duration_query = """query { video(id: "%s") { lengthSeconds } }""" % video_id
-    vod_duration = 0
-    try:
-        dr = requests.post(gql_url, json={"query": duration_query}, headers=headers, timeout=10)
-        vod_duration = dr.json().get("data", {}).get("video", {}).get("lengthSeconds", 0) or 0
-    except Exception as e:
-        logger.warning("Failed to fetch VOD duration for %s: %s", video_id, e)
-        vod_duration = 36000  # fallback 10h
 
     query = """query VideoCommentsByOffsetOrCursor($videoID: ID!, $cursor: Cursor, $contentOffsetSeconds: Int) {
         video(id: $videoID) {
@@ -240,67 +229,127 @@ def download_chat(url: str) -> list[dict]:
     }"""
 
     messages: list[dict] = []
-    content_offset = 0
-    empty_streak = 0  # consecutive empty responses
-    seen_ts: set[tuple[float, str]] = set()  # dedup (offset pagination overlaps)
-    max_requests = 2000  # safety limit
-    last_log_count = 0
+    content_offset = start_offset
+    empty_streak = 0
+    max_requests = 500  # safety limit per chunk
 
-    logger.info("Chat download: starting for VOD %s (%ds)", video_id, vod_duration)
-    try:
-        for req_num in range(max_requests):
-            payload = {
-                "operationName": "VideoCommentsByOffsetOrCursor",
-                "query": query,
-                "variables": {"videoID": video_id, "contentOffsetSeconds": content_offset},
-            }
+    for _ in range(max_requests):
+        if content_offset >= end_offset:
+            break
+
+        payload = {
+            "operationName": "VideoCommentsByOffsetOrCursor",
+            "query": query,
+            "variables": {"videoID": video_id, "contentOffsetSeconds": content_offset},
+        }
+        try:
             resp = requests.post(gql_url, json=payload, headers=headers, timeout=15)
             data = resp.json()
+        except Exception as e:
+            logger.warning("Chat chunk %d request failed at offset %ds: %s", chunk_idx, content_offset, e)
+            break
 
-            video = data.get("data", {}).get("video")
-            if not video:
-                break
+        video = data.get("data", {}).get("video")
+        if not video:
+            break
 
-            comments = video.get("comments")
-            edges = (comments or {}).get("edges") or []
+        edges = (video.get("comments") or {}).get("edges") or []
 
-            if not edges:
-                # No messages at this offset — jump forward and try again
-                empty_streak += 1
-                # Exponential jump: 60s, 120s, 240s, capped at 600s
-                jump = min(60 * (2 ** (empty_streak - 1)), 600)
-                content_offset += jump
-                if content_offset >= vod_duration:
-                    break
+        if not edges:
+            empty_streak += 1
+            jump = min(60 * (2 ** (empty_streak - 1)), 600)
+            content_offset += jump
+            continue
+
+        empty_streak = 0
+        last_ts = content_offset
+        for edge in edges:
+            node = edge.get("node", {})
+            ts = node.get("contentOffsetSeconds")
+            if ts is None:
                 continue
+            # Stop collecting if we've passed our chunk boundary
+            if ts >= end_offset:
+                break
+            author = (node.get("commenter") or {}).get("displayName", "")
+            text = "".join(f.get("text", "") for f in node.get("message", {}).get("fragments", []))
+            messages.append({"timestamp": float(ts), "text": text, "author": author})
+            last_ts = max(last_ts, ts)
 
-            empty_streak = 0
-            last_ts = content_offset
-            for edge in edges:
-                node = edge.get("node", {})
-                ts = node.get("contentOffsetSeconds")
-                if ts is None:
-                    continue
-                author = (node.get("commenter") or {}).get("displayName", "")
-                key = (float(ts), author)
-                if key in seen_ts:
-                    continue
-                seen_ts.add(key)
-                text = "".join(f.get("text", "") for f in node.get("message", {}).get("fragments", []))
-                messages.append({"timestamp": float(ts), "text": text, "author": author})
-                last_ts = max(last_ts, ts)
+        content_offset = last_ts + 1
 
-            # Always offset-based (cursor pagination fails with integrity check)
-            content_offset = last_ts + 1
+    return messages
 
-            # Log progress every 5000 messages
-            if len(messages) - last_log_count >= 5000:
-                pct = int(content_offset / max(vod_duration, 1) * 100)
-                logger.info("Chat download: %d messages so far (%d%% of VOD)", len(messages), pct)
-                last_log_count = len(messages)
 
+def download_chat(url: str) -> list[dict]:
+    """Download chat messages from a Twitch VOD using the GQL API directly.
+
+    Splits the VOD into time chunks and downloads them in parallel for speed.
+    """
+    import re
+    import requests
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    match = re.search(r"videos/(\d+)", url)
+    if not match:
+        return []
+
+    video_id = match.group(1)
+    gql_url = "https://gql.twitch.tv/gql"
+    headers = {"Client-ID": TWITCH_CLIENT_ID}
+
+    # Get VOD duration
+    duration_query = """query { video(id: "%s") { lengthSeconds } }""" % video_id
+    vod_duration = 0
+    try:
+        dr = requests.post(gql_url, json={"query": duration_query}, headers=headers, timeout=10)
+        vod_duration = dr.json().get("data", {}).get("video", {}).get("lengthSeconds", 0) or 0
     except Exception as e:
-        logger.error("Chat download failed after %d messages at offset %ds: %s", len(messages), content_offset, e)
+        logger.warning("Failed to fetch VOD duration for %s: %s", video_id, e)
+        vod_duration = 36000  # fallback 10h
+
+    # Split VOD into chunks
+    chunks: list[tuple[int, int]] = []
+    offset = 0
+    while offset < vod_duration:
+        chunk_end = min(offset + CHAT_CHUNK_SECONDS, vod_duration)
+        chunks.append((offset, chunk_end))
+        offset = chunk_end
+
+    logger.info(
+        "Chat download: starting for VOD %s (%ds) — %d chunks, %d workers",
+        video_id, vod_duration, len(chunks), CHAT_WORKERS,
+    )
+
+    # Download all chunks in parallel
+    all_messages: list[dict] = []
+    with ThreadPoolExecutor(max_workers=CHAT_WORKERS) as pool:
+        futures = {
+            pool.submit(_download_chat_chunk, video_id, start, end, i): i
+            for i, (start, end) in enumerate(chunks)
+        }
+        done = 0
+        for future in as_completed(futures):
+            done += 1
+            chunk_idx = futures[future]
+            try:
+                chunk_msgs = future.result()
+                all_messages.extend(chunk_msgs)
+            except Exception as e:
+                logger.error("Chat chunk %d failed: %s", chunk_idx, e)
+
+            if done % 4 == 0 or done == len(chunks):
+                logger.info("Chat download: %d/%d chunks done (%d messages)", done, len(chunks), len(all_messages))
+
+    # Sort and deduplicate (chunk boundaries may overlap)
+    all_messages.sort(key=lambda m: m["timestamp"])
+    seen: set[tuple[float, str]] = set()
+    messages: list[dict] = []
+    for m in all_messages:
+        key = (m["timestamp"], m["author"])
+        if key not in seen:
+            seen.add(key)
+            messages.append(m)
 
     logger.info(f"Chat download: {len(messages)} messages over {vod_duration}s VOD")
     return messages

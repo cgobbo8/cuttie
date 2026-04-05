@@ -500,31 +500,6 @@ def _find_clip_keyword_timestamp(
     return best_time
 
 
-def _generate_clip_title(transcript: str) -> str:
-    """Generate a short title for a detected clip from its transcript."""
-    try:
-        client = get_openrouter_client()
-        response = client.chat.completions.create(
-            model=LLM_MODEL,
-            messages=[
-                {
-                    "role": "user",
-                    "content": (
-                        "Here is a transcript from a Twitch stream moment where the streamer said 'clip'. "
-                        "Generate a short catchy title (max 6 words, in the stream's language). "
-                        "Just the title, nothing else.\n\n"
-                        f"Transcript: {transcript[:500]}"
-                    ),
-                }
-            ],
-            max_tokens=30,
-        )
-        title = (response.choices[0].message.content or "").strip().strip('"\'')
-        return title if title else "Clip moment"
-    except Exception as e:
-        logger.warning(f"Failed to generate clip title: {e}")
-        return "Clip moment"
-
 
 def _build_detected_clip(
     hp: HotPoint, clip_transcript: str, speech_rate: float,
@@ -544,7 +519,6 @@ def _build_detected_clip(
         hp.timestamp_display = f"{h}:{m:02d}:{s:02d}"
 
     summary = clip_transcript[:200] if clip_transcript else ""
-    title = _generate_clip_title(clip_transcript)
 
     hp.clip_source = "detected"
     hp.llm = LlmAnalysis(
@@ -553,7 +527,7 @@ def _build_detected_clip(
         transcript=clip_transcript,
         speech_rate=round(speech_rate, 2),
     )
-    hp.clip_name = f"[CLIP] {title}"
+    hp.clip_name = f"[CLIP] {hp.timestamp_display}"
     hp.final_score = None  # No LLM scoring — detected by keyword
     return hp
 

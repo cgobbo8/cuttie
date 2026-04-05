@@ -590,6 +590,9 @@ def analyze_candidates(
     logger.info(f"═══ Analyzing {total} candidates (keeping top {keep_n}) ═══")
     pipeline_t0 = _time.time()
 
+    # Triage audio directory — shared with _transcribe_candidates for MP3 segments
+    triage_dir = os.path.join("triage_audio", job_id)
+
     # ── Step 1: Get direct VOD URL for frame extraction ──
     logger.info(f"[1/5] Getting direct VOD URL...")
     update_job(job_id, progress=f"Récupération URL vidéo...")
@@ -769,17 +772,19 @@ def analyze_candidates(
     for i, hp in enumerate(kept):
         cat = hp.llm.category if hp.llm else "?"
         viral = hp.llm.virality_score if hp.llm else 0
+        final = hp.final_score if hp.final_score is not None else 0
         logger.info(
             f"  KEEP #{i+1}: {hp.timestamp_display} | "
             f"heuristic={hp.score:.0%} viral={viral:.0%} "
-            f"final={hp.final_score:.0%} | {cat} | {hp.clip_name}"
+            f"final={final:.0%} | {cat} | {hp.clip_name}"
         )
     for hp in dropped:
         viral = hp.llm.virality_score if hp.llm else 0
+        final = hp.final_score if hp.final_score is not None else 0
         logger.info(
             f"  DROP: {hp.timestamp_display} | "
             f"heuristic={hp.score:.0%} viral={viral:.0%} "
-            f"final={hp.final_score:.0%}"
+            f"final={final:.0%}"
         )
     if detected_hps:
         logger.info(f"═══ Detected clips ═══")

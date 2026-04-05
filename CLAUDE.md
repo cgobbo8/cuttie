@@ -9,7 +9,7 @@ Outil d'extraction automatique des moments forts de VODs Twitch. URL in -> clips
 - **Frontend** : React 19, TypeScript 5.9, Tailwind CSS 4, Vite 8, React Router 7
 - **Editor** : Remotion 4 (player + renderer), canvas editor custom
 - **ML/Audio** : librosa (11025 Hz), PANNs CNN14 (AudioSet)
-- **LLM** : Groq — Whisper large-v3-turbo (transcription), OpenRouter — Mistral Small (vision + analyse + scoring + correction sous-titres)
+- **LLM** : Groq — Whisper large-v3-turbo (transcription), OpenRouter — Gemini 3 Flash Preview (audio + vision + analyse + scoring + correction transcription)
 - **Video** : FFmpeg, OpenCV, yt-dlp
 - **Storage** : S3/Minio (clips, assets, renders)
 - **Tests** : Vitest (frontend + backend unit/functional)

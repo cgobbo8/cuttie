@@ -62,5 +62,5 @@ def get_gemini_client() -> OpenAI:
 # Whisper transcription via Groq
 WHISPER_MODEL = os.getenv("WHISPER_MODEL", "whisper-large-v3-turbo")
 
-# Vision + narrative synthesis via OpenRouter (Mistral Small 4)
-LLM_MODEL = os.getenv("LLM_MODEL", "mistralai/mistral-small-2603")
+# Vision + audio + narrative synthesis via OpenRouter (Gemini 3 Flash Preview)
+LLM_MODEL = os.getenv("LLM_MODEL", "google/gemini-3-flash-preview")

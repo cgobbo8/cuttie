@@ -17,6 +17,7 @@ import json
 import logging
 import os
 import re
+import shutil
 import subprocess
 import time as _time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -144,8 +145,6 @@ def _transcribe_candidates(
     clip_start_abs is the absolute VOD timestamp where the clip begins.
     raw_segments are Whisper (start, end, text) tuples relative to clip_start_abs.
     """
-    import shutil
-
     triage_dir = os.path.join("triage_audio", job_id)
     os.makedirs(triage_dir, exist_ok=True)
 

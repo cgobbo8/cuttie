@@ -93,13 +93,13 @@ async function convertGifToWebm(
     if (loop) {
       // Loop enough times to fill the clip duration
       execSync(
-        `ffmpeg -y -ignore_loop 0 -i "${gifPath}" -t ${clipDuration} -c:v libvpx-vp9 -pix_fmt yuva420p -auto-alt-ref 0 -b:v 2M -an "${webmPath}"`,
+        `ffmpeg -y -ignore_loop 0 -i "${gifPath}" -t ${clipDuration} -c:v libvpx-vp9 -pix_fmt yuva420p -auto-alt-ref 0 -b:v 1M -cpu-used 4 -deadline realtime -an "${webmPath}"`,
         { timeout: 30000, stdio: 'pipe' },
       )
     } else {
       // Play once, then freeze last frame for the rest of the clip
       execSync(
-        `ffmpeg -y -i "${gifPath}" -c:v libvpx-vp9 -pix_fmt yuva420p -auto-alt-ref 0 -b:v 2M -an -vf "tpad=stop_mode=clone:stop_duration=${Math.ceil(clipDuration)}" "${webmPath}"`,
+        `ffmpeg -y -i "${gifPath}" -c:v libvpx-vp9 -pix_fmt yuva420p -auto-alt-ref 0 -b:v 1M -cpu-used 4 -deadline realtime -an -vf "tpad=stop_mode=clone:stop_duration=${Math.ceil(clipDuration)}" "${webmPath}"`,
         { timeout: 30000, stdio: 'pipe' },
       )
     }
@@ -266,13 +266,15 @@ export async function renderClip(opts: RenderOptions): Promise<{ sizeMb: number 
     composition: { ...composition, durationInFrames: fullDurationInFrames, fps, width: outputWidth, height: outputHeight },
     serveUrl,
     codec: 'h264',
+    crf: 18,
+    jpegQuality: 80,
     outputLocation: outputPath,
     inputProps: { layers: finalLayers },
     frameRange: (startFrame > 0 || endFrame < fullDurationInFrames)
       ? [startFrame, endFrame - 1] as [number, number]
       : null,
     onProgress: ({ progress }) => onProgress(Math.round(progress * 100)),
-    timeoutInMilliseconds: 5 * 60 * 1000, // 5 min max
+    timeoutInMilliseconds: 10 * 60 * 1000, // 10 min max
   })
 
   const sizeMb = statSync(outputPath).size / 1024 / 1024

@@ -41,7 +41,6 @@ MAX_LLM_WORKERS = 5  # Parallel LLM calls (API-bound)
 MAX_WHISPER_WORKERS = 5  # Parallel Whisper calls
 KEEP_TOP_N = 20  # How many candidates to keep after LLM scoring
 KEEP_NORMAL_FOR_LLM = 50  # Top N non-clip candidates that get full LLM analysis (from 100 scored)
-TRANSCRIPT_CONTEXT_PADDING = 60  # seconds of extra audio before/after clip for transcript context
 
 # Keywords that indicate the streamer wants a clip
 CLIP_KEYWORDS = [
@@ -130,84 +129,20 @@ def _transcribe_audio(audio_path: str) -> tuple[str, float, list[tuple[float, fl
         return "", 0.0, []
 
 
-def _format_transcript_with_context(
-    segments: list[tuple[float, float, str]],
-    clip_offset_start: float,
-    clip_offset_end: float,
-) -> tuple[str, str, float]:
-    """Split Whisper segments into before/clip/after context zones.
-
-    Args:
-        segments: list of (start, end, text) from Whisper.
-        clip_offset_start: start of clip content within the extracted audio.
-        clip_offset_end: end of clip content within the extracted audio.
-
-    Returns:
-        (formatted_transcript_for_llm, clip_only_text, clip_speech_rate)
-    """
-    before_parts: list[str] = []
-    clip_parts: list[str] = []
-    after_parts: list[str] = []
-
-    clip_word_count = 0
-    clip_duration = 0.0
-
-    for start, end, text in segments:
-        text = text.strip()
-        if not text:
-            continue
-
-        # Classify segment by where its midpoint falls
-        midpoint = (start + end) / 2
-        if midpoint < clip_offset_start:
-            before_parts.append(text)
-        elif midpoint >= clip_offset_end:
-            after_parts.append(text)
-        else:
-            clip_parts.append(text)
-            clip_word_count += len(text.split())
-            clip_duration += end - start
-
-    clip_speech_rate = clip_word_count / clip_duration if clip_duration > 0 else 0.0
-
-    # Format with context markers
-    sections: list[str] = []
-
-    if before_parts:
-        sections.append(
-            f"[CONTEXT BEFORE — conversation ~60s before the clip]\n"
-            + " ".join(before_parts)
-        )
-
-    clip_text = " ".join(clip_parts) if clip_parts else "(silence / no speech)"
-    sections.append(f"[CLIP CONTENT — the segment being analyzed]\n{clip_text}")
-
-    if after_parts:
-        sections.append(
-            f"[CONTEXT AFTER — conversation ~60s after the clip]\n"
-            + " ".join(after_parts)
-        )
-
-    formatted = "\n\n".join(sections)
-    clip_only = " ".join(clip_parts)
-    return formatted, clip_only, clip_speech_rate
-
-
 def _transcribe_candidates(
     wav_path: str,
     candidates: list[tuple[int, HotPoint]],
     vod_duration: float,
     job_id: str,
-) -> dict[int, tuple[str, str, float, float, list[tuple[float, float, str]]]]:
+) -> dict[int, tuple[str, float, float, list[tuple[float, float, str]]]]:
     """Transcribe audio segments for all candidates in parallel.
 
-    Extracts a wider audio window (clip ± TRANSCRIPT_CONTEXT_PADDING) from the
-    full WAV, transcribes via Whisper, then splits into before/clip/after zones.
+    Extracts clip audio from the full WAV and transcribes via Whisper.
 
-    Returns dict: candidate_index -> (formatted_transcript, clip_only_text, speech_rate,
-                                       extract_start_abs, raw_segments).
-    extract_start_abs is the absolute VOD timestamp where the extracted audio begins.
-    raw_segments are Whisper (start, end, text) tuples relative to extract_start_abs.
+    Returns dict: candidate_index -> (transcript_text, speech_rate,
+                                       clip_start_abs, raw_segments).
+    clip_start_abs is the absolute VOD timestamp where the clip begins.
+    raw_segments are Whisper (start, end, text) tuples relative to clip_start_abs.
     """
     import shutil
 
@@ -218,31 +153,20 @@ def _transcribe_candidates(
     logger.info(f"Transcribing {total} candidates with {MAX_WHISPER_WORKERS} workers...")
     t0 = _time.time()
 
-    transcripts: dict[int, tuple[str, str, float, float, list[tuple[float, float, str]]]] = {}
+    transcripts: dict[int, tuple[str, float, float, list[tuple[float, float, str]]]] = {}
 
-    def _do_one(idx: int, hp: HotPoint) -> tuple[int, str, str, float, float, list]:
+    def _do_one(idx: int, hp: HotPoint) -> tuple[int, str, float, float, list]:
         clip_start = max(0, hp.timestamp_seconds - CLIP_HALF_DURATION)
         clip_end = min(vod_duration, hp.timestamp_seconds + CLIP_HALF_DURATION)
 
-        # Extract wider audio for transcript context
-        extract_start = max(0, clip_start - TRANSCRIPT_CONTEXT_PADDING)
-        extract_end = min(vod_duration, clip_end + TRANSCRIPT_CONTEXT_PADDING)
-
         seg_path = os.path.join(triage_dir, f"seg_{idx:03d}.mp3")
 
-        if _extract_audio_from_wav(wav_path, extract_start, extract_end, seg_path):
-            _, _, segments = _transcribe_audio(seg_path)
+        if _extract_audio_from_wav(wav_path, clip_start, clip_end, seg_path):
+            text, speech_rate, segments = _transcribe_audio(seg_path)
             if os.path.isfile(seg_path):
                 os.remove(seg_path)
-
-            # Split transcript into context zones
-            clip_offset_start = clip_start - extract_start
-            clip_offset_end = clip_end - extract_start
-            formatted, clip_text, speech_rate = _format_transcript_with_context(
-                segments, clip_offset_start, clip_offset_end,
-            )
-            return idx, formatted, clip_text, speech_rate, extract_start, segments
-        return idx, "", "", 0.0, 0.0, []
+            return idx, text, speech_rate, clip_start, segments
+        return idx, "", 0.0, 0.0, []
 
     with ThreadPoolExecutor(max_workers=MAX_WHISPER_WORKERS) as executor:
         futures = {
@@ -253,18 +177,18 @@ def _transcribe_candidates(
         for future in as_completed(futures):
             done += 1
             try:
-                idx, formatted, clip_text, speech_rate, extract_start, segments = future.result()
-                transcripts[idx] = (formatted, clip_text, speech_rate, extract_start, segments)
+                idx, text, speech_rate, clip_start, segments = future.result()
+                transcripts[idx] = (text, speech_rate, clip_start, segments)
                 if done % 10 == 0 or done == total:
                     logger.info(f"Whisper progress: {done}/{total}")
                     update_job(job_id, progress=f"Transcription : {done} sur {total} segments...")
             except Exception as e:
                 idx = futures[future]
                 logger.error(f"Whisper failed for candidate {idx}: {e}")
-                transcripts[idx] = ("", "", 0.0, 0.0, [])
+                transcripts[idx] = ("", 0.0, 0.0, [])
 
     elapsed = _time.time() - t0
-    non_empty = sum(1 for t in transcripts.values() if t[1])
+    non_empty = sum(1 for t in transcripts.values() if t[0])
     logger.info(f"Transcription complete: {non_empty}/{total} with speech in {elapsed:.1f}s")
 
     # Cleanup temp dir
@@ -404,13 +328,11 @@ def _build_unified_prompt(
 **Heuristic score:** {score:.0%}{signals_text}
 **Speech rate:** {speech_rate:.1f} words/s
 
-**Transcript (with extended context):**
+**Transcript:**
 {transcript if transcript else "(silence / no speech)"}
 {chat_section}
 
 ## Important context
-
-**Extended transcript:** The transcript may include [CONTEXT BEFORE] and [CONTEXT AFTER] sections showing what was said ~60 seconds before and after the clip. This context is NOT part of the clip — it helps you understand the ongoing conversation and what led to this moment. Only the [CLIP CONTENT] section will be in the final clip. Use context to understand the situation, but score and describe only what happens during the clip content.
 
 **Multiple speakers:** The transcript is generated by Whisper and does NOT distinguish between speakers. On Twitch streams, multiple people are often talking simultaneously — the streamer plus friends on Discord, IRL guests, etc. You cannot assume everything said is from the streamer. Look for conversational patterns (questions/answers, topic switches) that indicate multiple speakers.
 
@@ -559,31 +481,22 @@ def _has_clip_keyword(transcript: str) -> bool:
 
 def _find_clip_keyword_timestamp(
     segments: list[tuple[float, float, str]],
-    extract_start_abs: float,
-    clip_offset_start: float | None = None,
-    clip_offset_end: float | None = None,
+    clip_start_abs: float,
 ) -> float | None:
     """Find the absolute VOD timestamp where a clip keyword is said.
 
-    Only searches within the clip window (clip_offset_start..clip_offset_end relative
-    to extracted audio). Searches for the LAST occurrence (streamers typically say
-    "clip" after the interesting moment).
+    Searches for the LAST occurrence (streamers typically say "clip" after the
+    interesting moment).
 
     Returns absolute timestamp in seconds, or None if not found.
     """
     best_time: float | None = None
     for seg_start, seg_end, text in segments:
-        midpoint = (seg_start + seg_end) / 2
-        # Skip segments outside clip window if bounds are provided
-        if clip_offset_start is not None and midpoint < clip_offset_start:
-            continue
-        if clip_offset_end is not None and midpoint > clip_offset_end:
-            continue
         text_lower = text.lower()
         for kw in CLIP_KEYWORDS:
             if re.search(r'\b' + re.escape(kw) + r'\b', text_lower):
-                abs_time = extract_start_abs + midpoint
-                best_time = abs_time  # Keep last match (closest to end)
+                midpoint = (seg_start + seg_end) / 2
+                best_time = clip_start_abs + midpoint  # Keep last match
     return best_time
 
 
@@ -684,25 +597,14 @@ def analyze_candidates(
     normal_indices: list[int] = []
 
     for idx, hp in candidates:
-        formatted, clip_text, speech_rate, extract_start, segments = transcripts.get(
-            idx, ("", "", 0.0, 0.0, [])
+        transcript, speech_rate, clip_start_abs, segments = transcripts.get(
+            idx, ("", 0.0, 0.0, [])
         )
-        # Only check clip_text (±30s around hotpoint), NOT the full transcript
-        # Full transcript includes ±90s context — too wide, causes false positives
-        if _has_clip_keyword(clip_text):
+        if _has_clip_keyword(transcript):
             detected_indices.append(idx)
-            # Find exact timestamp of "clip" within the clip window only
-            clip_start = max(0, hp.timestamp_seconds - CLIP_HALF_DURATION)
-            clip_end = min(vod_duration, hp.timestamp_seconds + CLIP_HALF_DURATION)
-            clip_offset_start = clip_start - extract_start
-            clip_offset_end = clip_end - extract_start
-            clip_ts = _find_clip_keyword_timestamp(
-                segments, extract_start,
-                clip_offset_start=clip_offset_start,
-                clip_offset_end=clip_offset_end,
-            )
-            hot_points[idx] = _build_detected_clip(hp, clip_text, speech_rate, clip_keyword_timestamp=clip_ts)
-            logger.info(f"  CLIP DETECTED at {hot_points[idx].timestamp_display}: \"{clip_text[:80]}\"")
+            clip_ts = _find_clip_keyword_timestamp(segments, clip_start_abs)
+            hot_points[idx] = _build_detected_clip(hp, transcript, speech_rate, clip_keyword_timestamp=clip_ts)
+            logger.info(f"  CLIP DETECTED at {hot_points[idx].timestamp_display}: \"{transcript[:80]}\"")
         else:
             normal_indices.append(idx)
 
@@ -768,7 +670,7 @@ def analyze_candidates(
 
     def _analyze_one(idx: int, hp: HotPoint) -> None:
         t0 = _time.time()
-        formatted_transcript, clip_transcript, speech_rate, _, _ = transcripts.get(idx, ("", "", 0.0, 0.0, []))
+        transcript, speech_rate, _, _ = transcripts.get(idx, ("", 0.0, 0.0, []))
         frames = all_frames.get(idx, [])
 
         # Chat context
@@ -779,7 +681,7 @@ def analyze_candidates(
             chat_context = _extract_chat_for_clip(chat_messages, clip_start, clip_end)
 
         prompt = _build_unified_prompt(
-            transcript=formatted_transcript,
+            transcript=transcript,
             speech_rate=speech_rate,
             score=hp.score,
             timestamp_display=hp.timestamp_display,
@@ -791,7 +693,7 @@ def analyze_candidates(
 
         try:
             llm, clip_name = _call_unified_llm(frames, prompt)
-            llm.transcript = clip_transcript
+            llm.transcript = transcript
             llm.speech_rate = round(speech_rate, 2)
 
             hp.llm = llm

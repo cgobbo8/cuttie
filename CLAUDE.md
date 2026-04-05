@@ -9,7 +9,7 @@ Outil d'extraction automatique des moments forts de VODs Twitch. URL in -> clips
 - **Frontend** : React 19, TypeScript 5.9, Tailwind CSS 4, Vite 8, React Router 7
 - **Editor** : Remotion 4 (player + renderer), canvas editor custom
 - **ML/Audio** : librosa (11025 Hz), PANNs CNN14 (AudioSet)
-- **LLM** : Groq — Whisper large-v3-turbo (transcription), Gemini Flash (vision, analyse, correction sous-titres)
+- **LLM** : Groq — Whisper large-v3-turbo (transcription), OpenRouter — Mistral Small (vision + analyse + scoring + correction sous-titres)
 - **Video** : FFmpeg, OpenCV, yt-dlp
 - **Storage** : S3/Minio (clips, assets, renders)
 - **Tests** : Vitest (frontend + backend unit/functional)
@@ -88,18 +88,18 @@ cuttie/
 │   │   ├── routers/analyze.py                 # Endpoints clips, renders, assets
 │   │   ├── models/schemas.py                  # Pydantic v2
 │   │   └── services/
-│   │       ├── pipeline.py                    # Orchestrateur (8 etapes)
+│   │       ├── pipeline.py                    # Orchestrateur (6 etapes)
 │   │       ├── downloader.py                  # yt-dlp : audio WAV + chat Twitch GQL
 │   │       ├── audio_analyzer.py              # librosa : RMS, flux, pitch, centroid, ZCR, onset
 │   │       ├── audio_classifier.py            # PANNs CNN14 : events audio
 │   │       ├── chat_analyzer.py               # Sentiment chat : vitesse, burst, emotes, mood
 │   │       ├── scorer.py                      # Score composite + peak detection (scipy)
-│   │       ├── triage.py                      # Whisper + LLM light scoring : 50 -> 20
+│   │       ├── llm_analyzer.py                # Whisper + frames + LLM unifie (scoring + analyse)
 │   │       ├── clipper.py                     # Extraction clips video
 │   │       ├── frame_extractor.py             # Extraction frames pour vision
-│   │       ├── vision_analyzer.py             # GPT-4.5 vision
-│   │       ├── llm_analyzer.py                # Synthese narrative + scoring
+│   │       ├── subtitle_generator.py          # Whisper word-level + LLM correction sous-titres
 │   │       ├── s3_storage.py                  # Upload S3/Minio
+│   │       ├── openai_client.py               # Clients multi-provider (Groq, OpenRouter)
 │   │       └── db.py                          # SQLite persistence (WAL)
 │   ├── assets/fonts/LuckiestGuy-Regular.ttf
 │   └── pyproject.toml
@@ -138,22 +138,21 @@ cuttie/
             └── i18n/index.ts                  # i18next (fr/en/es)
 ```
 
-## Pipeline (7 etapes)
+## Pipeline (6 etapes)
 
 ```
-1. DOWNLOADING_AUDIO   -> yt-dlp : audio 11025Hz mono WAV
-2. DOWNLOADING_CHAT    -> Twitch GQL : messages chat
-3. ANALYZING_AUDIO     -> librosa : features par fenetres de 5s (hop 2.5s)
-4. ANALYZING_CHAT      -> Sentiment, emotes, burst detection
-5. SCORING             -> Score composite pondere + peak detection -> top 50
-6. ANALYZING_CLIPS     -> Pour chaque candidat (sans download video) :
-                          - Whisper transcription (segment audio depuis WAV)
-                          - 6 frames extraites par ffmpeg seek sur URL VOD
-                          - 1 appel LLM unifie (frames + transcript + chat)
+1. DOWNLOADING_AUDIO   -> Metadata + audio 11025Hz mono WAV + chat Twitch GQL (en parallele)
+2. ANALYZING_AUDIO     -> librosa features (5s/2.5s hop) + PANNs CNN14 classification (en parallele)
+3. ANALYZING_CHAT      -> Sentiment, emotes, burst detection
+4. SCORING             -> Score composite pondere + peak detection -> top 50
+5. ANALYZING_CLIPS     -> Pour chaque candidat (sans download video) :
+                          - Whisper transcription (segment audio depuis WAV complet)
+                          - 6 frames extraites par ffmpeg seek sur URL VOD directe
+                          - 1 appel LLM unifie (frames + transcript + chat + signals)
                           -> Re-rank par final_score, garde top 20
-7. CLIPPING            -> yt-dlp video + FFmpeg extraction (bornes dynamiques RMS)
+6. CLIPPING            -> yt-dlp video + FFmpeg extraction (bornes dynamiques RMS)
                           uniquement pour les 20 candidats gardes
-8. DONE
+-> DONE
 ```
 
 Checkpoints resumables : CLIPPING, LLM_ANALYSIS.

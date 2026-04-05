@@ -12,6 +12,7 @@ from app.services.audio_analyzer import analyze_audio
 from app.services.audio_classifier import classify_audio
 from app.services.chat_analyzer import analyze_chat
 from app.services.clipper import CLIPS_DIR, extract_group, plan_downloads, plan_downloads_detected
+from app.services.frame_extractor import get_vod_direct_url
 from app.services.db import get_job, save_hot_points, update_hot_point_clip, update_job
 from app.services.downloader import extract_metadata, download_audio, download_chat
 from app.services.llm_analyzer import analyze_candidates, analyze_hot_points, analyze_single_clip
@@ -87,6 +88,7 @@ def _run_clipping_only(
     chat_messages: list[dict] | None = None,
     timer: "StepTimer | None" = None,
     detected_bounds: bool = False,
+    direct_url: str | None = None,
 ) -> None:
     """Download and compress clips for already-analyzed hot points.
 
@@ -131,7 +133,7 @@ def _run_clipping_only(
 
     with ThreadPoolExecutor(max_workers=DL_WORKERS) as dl_pool:
         dl_futures = {
-            dl_pool.submit(extract_group, url, group, clip_dir, job_id): group
+            dl_pool.submit(extract_group, url, group, clip_dir, job_id, direct_url): group
             for group in groups
         }
 
@@ -388,14 +390,26 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
             if hot_points is None:
                 raise RuntimeError("No hot points available for clipping")
             timer.start("CLIPPING")
-            logger.info(f"[{job_id[:8]}] Clipping top {len(hot_points)} hot points...")
-            update_job(job_id, status="CLIPPING", progress="Extraction des clips...", step_timings=timer.timings)
+
+            n_normal = len(hot_points)
+            n_detected = len(detected_hot_points) if detected_hot_points else 0
+            logger.info(f"[{job_id[:8]}] Clipping {n_normal} + {n_detected} detected hot points...")
+            update_job(job_id, status="CLIPPING", progress="Récupération URL vidéo...", step_timings=timer.timings)
+
+            # Get direct M3U8 URL once for stream copy (no re-encoding)
+            try:
+                direct_url = get_vod_direct_url(url)
+                logger.info(f"[{job_id[:8]}] Stream copy enabled via direct URL")
+            except Exception as e:
+                logger.warning(f"[{job_id[:8]}] Could not get direct URL, falling back to yt-dlp: {e}")
+                direct_url = None
 
             _run_clipping_only(
                 job_id, url, hot_points, duration, vod_meta,
                 audio_features=audio_features,
                 chat_messages=chat_messages,
                 timer=timer,
+                direct_url=direct_url,
             )
 
             # Clip detected "clip" moments with fixed bounds (-2min / +5s)
@@ -410,6 +424,7 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
                     chat_messages=chat_messages,
                     timer=timer,
                     detected_bounds=True,
+                    direct_url=direct_url,
                 )
 
         elif resume_from == "LLM_ANALYSIS":

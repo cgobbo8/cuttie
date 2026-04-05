@@ -26,21 +26,14 @@ def _write_probe_and_upload(clip_dir: str, job_id: str, filename: str, filepath:
         result = subprocess.run(
             [
                 "ffprobe", "-v", "quiet", "-print_format", "json",
-                "-show_streams", "-select_streams", "v:0", filepath,
-            ],
-            capture_output=True, text=True, timeout=15,
-        )
-        stream = json.loads(result.stdout).get("streams", [{}])[0]
-
-        # Get duration from format section (more reliable)
-        dur_result = subprocess.run(
-            [
-                "ffprobe", "-v", "quiet", "-print_format", "json",
+                "-show_streams", "-select_streams", "v:0",
                 "-show_format", filepath,
             ],
             capture_output=True, text=True, timeout=15,
         )
-        fmt = json.loads(dur_result.stdout).get("format", {})
+        data = json.loads(result.stdout)
+        stream = data.get("streams", [{}])[0]
+        fmt = data.get("format", {})
 
         probe_data = {
             "width": stream.get("width", 1920),
@@ -550,34 +543,72 @@ def plan_downloads(
     return groups, shared_clips
 
 
+def _streamcopy_clip(
+    direct_url: str,
+    start: float,
+    duration: float,
+    output_path: str,
+) -> bool:
+    """Extract a clip via FFmpeg stream copy from an M3U8/direct URL.
+
+    No re-encoding — copies H.264+AAC as-is. ~10x faster than libx264.
+    """
+    try:
+        subprocess.run(
+            [
+                "ffmpeg", "-y",
+                "-ss", str(start),
+                "-i", direct_url,
+                "-t", str(duration),
+                "-c", "copy",
+                "-movflags", "+faststart",
+                output_path,
+            ],
+            check=True, timeout=120, capture_output=True, text=True,
+        )
+        return os.path.isfile(output_path)
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
+        logger.warning(f"Stream copy failed: {e}")
+        return False
+
+
 def extract_group(
     url: str,
     group: dict,
     clip_dir: str,
     job_id: str = "",
+    direct_url: str | None = None,
 ) -> list[tuple[int, int, str | None]]:
     """Download and extract clips for a download group.
 
-    Single-clip groups: direct yt-dlp download + compress.
-    Multi-clip groups: one yt-dlp call for the merged range, then FFmpeg split.
+    If direct_url is provided, uses FFmpeg stream copy (fast, no re-encode).
+    Otherwise falls back to yt-dlp download + libx264 compression (legacy).
 
     Returns: [(rank, index, filename | None), ...]
     """
     clips = group["clips"]
     results: list[tuple[int, int, str | None]] = []
 
-    if len(clips) == 1:
-        c = clips[0]
+    for c in clips:
         rank, idx = c["rank"], c["index"]
         start, end = c["start"], c["end"]
-        raw_file = os.path.join(clip_dir, f"raw_{rank:02d}.mp4")
+        duration = end - start
         filename = f"clip_{rank:02d}.mp4"
         filepath = os.path.join(clip_dir, filename)
 
-        logger.info(f"Clip {rank}: {_fmt_time(start)}-{_fmt_time(end)} ({end-start:.0f}s)")
+        logger.info(f"Clip {rank}: {_fmt_time(start)}-{_fmt_time(end)} ({duration:.0f}s)")
 
         MAX_RETRIES = 2
+        success = False
+
         for attempt in range(1, MAX_RETRIES + 1):
+            # Try stream copy first if we have a direct URL
+            if direct_url and _streamcopy_clip(direct_url, start, duration, filepath):
+                success = True
+                break
+
+            # Fallback: yt-dlp download + compress
+            raw_file = os.path.join(clip_dir, f"raw_{rank:02d}.mp4")
             try:
                 subprocess.run(
                     [
@@ -591,106 +622,30 @@ def extract_group(
                 )
 
                 if os.path.isfile(raw_file) and _compress_clip(raw_file, filepath):
-                    size_mb = os.path.getsize(filepath) / (1024 * 1024)
-                    logger.info(f"Clip {rank}: {filepath} ({size_mb:.1f}MB)")
-                    meta_path = os.path.join(clip_dir, f"clip_{rank:02d}_meta.json")
-                    with open(meta_path, "w") as mf:
-                        json.dump({"vod_start": start, "vod_end": end}, mf)
-                    _write_probe_and_upload(clip_dir, job_id, filename, filepath)
-                    results.append((rank, idx, filename))
+                    success = True
                     break
                 else:
-                    logger.warning(f"Clip {rank}: raw file missing or compression failed (attempt {attempt}/{MAX_RETRIES})")
-                    if attempt == MAX_RETRIES:
-                        results.append((rank, idx, None))
+                    logger.warning(
+                        f"Clip {rank}: raw file missing or compression failed "
+                        f"(attempt {attempt}/{MAX_RETRIES})"
+                    )
 
             except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
-                logger.error(f"Clip {rank} failed (attempt {attempt}/{MAX_RETRIES}): {e}")
-                if os.path.isfile(raw_file):
-                    os.remove(raw_file)
-                if attempt == MAX_RETRIES:
-                    results.append((rank, idx, None))
+                logger.error(f"Clip {rank} fallback failed (attempt {attempt}/{MAX_RETRIES}): {e}")
 
             finally:
                 if os.path.isfile(raw_file):
                     os.remove(raw_file)
 
-    else:
-        # Multi-clip group: download merged range, then split + compress each
-        g_start, g_end = group["start"], group["end"]
-        group_file = os.path.join(clip_dir, f"group_{clips[0]['rank']:02d}.mp4")
-
-        logger.info(
-            f"Batch {len(clips)} clips: {_fmt_time(g_start)}-{_fmt_time(g_end)} "
-            f"({g_end-g_start:.0f}s)"
-        )
-
-        try:
-            subprocess.run(
-                [
-                    "yt-dlp",
-                    "--download-sections", f"*{_fmt_time(g_start)}-{_fmt_time(g_end)}",
-                    "--force-keyframes-at-cuts", "-f", "best",
-                    "--concurrent-fragments", "5",
-                    "-o", group_file, "--no-warnings", url,
-                ],
-                check=True, timeout=600, capture_output=True, text=True,
-            )
-
-            if not os.path.isfile(group_file):
-                for c in clips:
-                    results.append((c["rank"], c["index"], None))
-                return results
-
-            # Split each clip from the group file
-            for c in clips:
-                rank, idx = c["rank"], c["index"]
-                local_start = c["start"] - g_start
-                duration = c["end"] - c["start"]
-                filename = f"clip_{rank:02d}.mp4"
-                filepath = os.path.join(clip_dir, filename)
-
-                try:
-                    subprocess.run(
-                        [
-                            "ffmpeg", "-y",
-                            "-ss", str(local_start),
-                            "-i", group_file,
-                            "-t", str(duration),
-                            "-c:v", "libx264", "-preset", "fast",
-                            "-crf", "18",
-                            "-c:a", "aac", "-b:a", "128k",
-                            "-movflags", "+faststart",
-                            filepath,
-                        ],
-                        check=True, timeout=240, capture_output=True, text=True,
-                    )
-
-                    if os.path.isfile(filepath):
-                        size_mb = os.path.getsize(filepath) / (1024 * 1024)
-                        logger.info(f"Clip {rank} split: {filepath} ({size_mb:.1f}MB)")
-                        # Save VOD timing metadata for editor chat layer
-                        meta_path = os.path.join(clip_dir, f"clip_{rank:02d}_meta.json")
-                        with open(meta_path, "w") as mf:
-                            json.dump({"vod_start": c["start"], "vod_end": c["end"]}, mf)
-                        _write_probe_and_upload(clip_dir, job_id, filename, filepath)
-                        results.append((rank, idx, filename))
-                    else:
-                        results.append((rank, idx, None))
-
-                except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
-                    logger.error(f"Clip {rank} split failed: {e}")
-                    if os.path.isfile(filepath):
-                        os.remove(filepath)
-                    results.append((rank, idx, None))
-
-        except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
-            logger.error(f"Group download failed: {e}")
-            for c in clips:
-                results.append((c["rank"], c["index"], None))
-
-        finally:
-            if os.path.isfile(group_file):
-                os.remove(group_file)
+        if success:
+            size_mb = os.path.getsize(filepath) / (1024 * 1024)
+            logger.info(f"Clip {rank}: {filepath} ({size_mb:.1f}MB)")
+            meta_path = os.path.join(clip_dir, f"clip_{rank:02d}_meta.json")
+            with open(meta_path, "w") as mf:
+                json.dump({"vod_start": start, "vod_end": end}, mf)
+            _write_probe_and_upload(clip_dir, job_id, filename, filepath)
+            results.append((rank, idx, filename))
+        else:
+            results.append((rank, idx, None))
 
     return results

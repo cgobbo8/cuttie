@@ -17,6 +17,7 @@ import json
 import logging
 import os
 import re
+import difflib
 import shutil
 import subprocess
 import time as _time
@@ -210,45 +211,76 @@ def _transcribe_candidates(
 def _realign_words(corrected_text: str, whisper_words: list[dict]) -> list[dict]:
     """Realign LLM-corrected transcript to Whisper word-level timestamps.
 
-    Uses proportional character-position mapping: each corrected word is mapped
-    to the original Whisper words based on its relative position in the text.
+    Uses difflib.SequenceMatcher to find real correspondences between corrected
+    words and original Whisper words, then assigns timestamps from matched
+    originals.  Unmatched corrected words inherit timing from their neighbours.
     """
     corrected_words = corrected_text.split()
     if not corrected_words or not whisper_words:
         return whisper_words
 
-    # Build char→word index mapping for original text
-    raw_text = " ".join(w["word"].strip() for w in whisper_words)
-    orig_chars: list[int] = []
-    for i, w in enumerate(whisper_words):
-        word = w["word"].strip()
-        for _ in word:
-            orig_chars.append(i)
-        if i < len(whisper_words) - 1:
-            orig_chars.append(i)  # space
+    orig_words_lower = [w["word"].strip().lower() for w in whisper_words]
+    corr_words_lower = [w.lower() for w in corrected_words]
 
-    if not orig_chars:
-        return whisper_words
+    # Sequence alignment between original and corrected word lists
+    sm = difflib.SequenceMatcher(None, orig_words_lower, corr_words_lower, autojunk=False)
 
-    corrected_full = " ".join(corrected_words)
-    result = []
-    char_pos = 0
-    for cw in corrected_words:
-        start_ratio = char_pos / max(len(corrected_full), 1)
-        end_ratio = (char_pos + len(cw)) / max(len(corrected_full), 1)
+    # Map each corrected-word index to the original-word index it matches
+    corr_to_orig: dict[int, int] = {}
+    for orig_i, corr_i, size in sm.get_matching_blocks():
+        for k in range(size):
+            corr_to_orig[corr_i + k] = orig_i + k
 
-        orig_start_idx = min(int(start_ratio * len(orig_chars)), len(orig_chars) - 1)
-        orig_end_idx = min(int(end_ratio * len(orig_chars)), len(orig_chars) - 1)
+    # Build result with timestamps from matched words
+    result: list[dict] = []
+    for ci, cw in enumerate(corrected_words):
+        if ci in corr_to_orig:
+            oi = corr_to_orig[ci]
+            result.append({
+                "word": cw,
+                "start": whisper_words[oi]["start"],
+                "end": whisper_words[oi]["end"],
+            })
+        else:
+            # Placeholder — will be filled by interpolation below
+            result.append({"word": cw, "start": None, "end": None})
 
-        first_word_idx = orig_chars[max(0, orig_start_idx)]
-        last_word_idx = orig_chars[max(0, orig_end_idx)]
+    # Interpolate timestamps for unmatched words from nearest matched neighbours
+    for ci in range(len(result)):
+        if result[ci]["start"] is not None:
+            continue
 
-        result.append({
-            "word": cw,
-            "start": whisper_words[first_word_idx]["start"],
-            "end": whisper_words[last_word_idx]["end"],
-        })
-        char_pos += len(cw) + 1
+        # Find nearest matched word before and after
+        prev_end = None
+        for p in range(ci - 1, -1, -1):
+            if result[p]["end"] is not None:
+                prev_end = result[p]["end"]
+                break
+        next_start = None
+        for n in range(ci + 1, len(result)):
+            if result[n]["start"] is not None:
+                next_start = result[n]["start"]
+                break
+
+        if prev_end is not None and next_start is not None:
+            result[ci]["start"] = prev_end
+            result[ci]["end"] = next_start
+        elif prev_end is not None:
+            result[ci]["start"] = prev_end
+            result[ci]["end"] = prev_end + 0.2
+        elif next_start is not None:
+            result[ci]["start"] = max(0, next_start - 0.2)
+            result[ci]["end"] = next_start
+        else:
+            # No matched neighbours at all — fall back to Whisper words
+            return whisper_words
+
+    # Ensure monotonicity
+    for ci in range(1, len(result)):
+        if result[ci]["start"] < result[ci - 1]["start"]:
+            result[ci]["start"] = result[ci - 1]["start"]
+        if result[ci]["end"] < result[ci]["start"]:
+            result[ci]["end"] = result[ci]["start"] + 0.05
 
     return result
 

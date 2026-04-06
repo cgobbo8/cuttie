@@ -221,45 +221,63 @@ def _rewrite_words_with_llm(words: list[dict]) -> list[dict]:
         logger.warning(f"LLM subtitle rewriting failed, using raw: {e}")
         return words
 
-    # Re-align corrected words to original timestamps via character-position mapping
+    # Re-align corrected words to original timestamps via sequence matching
     corrected_words = corrected.split()
     if not corrected_words:
         return words
 
-    # Build character→word index mapping for original text
-    orig_chars = []  # for each char position in raw_text, which word index
-    for i, w in enumerate(words):
-        word = w["word"].strip()
-        for _ in word:
-            orig_chars.append(i)
-        if i < len(words) - 1:
-            orig_chars.append(i)  # space
+    import difflib
 
-    # Build character ranges for corrected words
+    orig_words_lower = [w["word"].strip().lower() for w in words]
+    corr_words_lower = [cw.lower() for cw in corrected_words]
+
+    sm = difflib.SequenceMatcher(None, orig_words_lower, corr_words_lower, autojunk=False)
+
+    corr_to_orig: dict[int, int] = {}
+    for orig_i, corr_i, size in sm.get_matching_blocks():
+        for k in range(size):
+            corr_to_orig[corr_i + k] = orig_i + k
+
     result = []
-    char_pos = 0
-    for cw in corrected_words:
-        # Find this word's character range in the original text
-        # Use proportional mapping based on character position
-        start_ratio = char_pos / max(len(corrected), 1)
-        end_ratio = (char_pos + len(cw)) / max(len(corrected), 1)
+    for ci, cw in enumerate(corrected_words):
+        if ci in corr_to_orig:
+            oi = corr_to_orig[ci]
+            result.append({"word": cw, "start": words[oi]["start"], "end": words[oi]["end"]})
+        else:
+            result.append({"word": cw, "start": None, "end": None})
 
-        orig_start_idx = int(start_ratio * len(orig_chars))
-        orig_end_idx = int(end_ratio * len(orig_chars)) - 1
+    # Interpolate timestamps for unmatched words from nearest matched neighbours
+    for ci in range(len(result)):
+        if result[ci]["start"] is not None:
+            continue
+        prev_end = None
+        for p in range(ci - 1, -1, -1):
+            if result[p]["end"] is not None:
+                prev_end = result[p]["end"]
+                break
+        next_start = None
+        for n in range(ci + 1, len(result)):
+            if result[n]["start"] is not None:
+                next_start = result[n]["start"]
+                break
+        if prev_end is not None and next_start is not None:
+            result[ci]["start"] = prev_end
+            result[ci]["end"] = next_start
+        elif prev_end is not None:
+            result[ci]["start"] = prev_end
+            result[ci]["end"] = prev_end + 0.2
+        elif next_start is not None:
+            result[ci]["start"] = max(0, next_start - 0.2)
+            result[ci]["end"] = next_start
+        else:
+            return words  # no matches at all — keep original
 
-        orig_start_idx = max(0, min(orig_start_idx, len(orig_chars) - 1))
-        orig_end_idx = max(0, min(orig_end_idx, len(orig_chars) - 1))
-
-        first_word_idx = orig_chars[orig_start_idx]
-        last_word_idx = orig_chars[orig_end_idx]
-
-        result.append({
-            "word": cw,
-            "start": words[first_word_idx]["start"],
-            "end": words[last_word_idx]["end"],
-        })
-
-        char_pos += len(cw) + 1  # +1 for space
+    # Ensure monotonicity
+    for ci in range(1, len(result)):
+        if result[ci]["start"] < result[ci - 1]["start"]:
+            result[ci]["start"] = result[ci - 1]["start"]
+        if result[ci]["end"] < result[ci]["start"]:
+            result[ci]["end"] = result[ci]["start"] + 0.05
 
     logger.info(f"Subtitle rewrite: {len(words)} words -> {len(result)} words")
     return result

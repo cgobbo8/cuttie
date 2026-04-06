@@ -4,6 +4,7 @@ import { Loader2 } from "lucide-react";
 import type { Layer, SubtitleWord, ChatMessage } from "../../lib/editorTypes";
 import { BOX_SHADOW_PRESETS } from "../../lib/editorTypes";
 import { evaluateAnimations, resolveKeyframes } from "../../lib/animations";
+import { getWidgetDef } from "../editor/widgets/registry";
 import TransformHandles from "../editor/TransformHandles";
 
 const CANVAS_W = 1080;
@@ -483,6 +484,19 @@ export default function NativePreviewViewport({
                   </span>
                 </div>
               );
+            }
+
+            // ── Widget ──
+            if (layer.type === "widget" && layer.widget) {
+              const def = getWidgetDef(layer.widget.widgetId);
+              if (def) {
+                const WidgetComponent = def.Component;
+                return (
+                  <div key={layer.id} style={baseStyle}>
+                    <WidgetComponent props={layer.widget.props} width={kfW} height={kfH} currentTime={animTime} />
+                  </div>
+                );
+              }
             }
 
             return null;

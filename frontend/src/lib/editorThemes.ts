@@ -1,4 +1,4 @@
-import type { LayerType, LayerTransform, LayerStyle, LayerAnimation, KeyframeSnapshot, SubtitleData, ShapeData, AssetData, ChatData, TextData } from "./editorTypes";
+import type { LayerType, LayerTransform, LayerStyle, LayerAnimation, KeyframeSnapshot, SubtitleData, ShapeData, AssetData, ChatData, TextData, WidgetData } from "./editorTypes";
 import { DEFAULT_STYLE, DEFAULT_SUBTITLE_CONFIG } from "./editorTypes";
 import { listThemes, createTheme, updateTheme, deleteTheme, toggleThemeDefault, type ThemeResponse } from "./api";
 
@@ -19,6 +19,7 @@ export interface ThemeLayerTemplate {
   shape?: ShapeData;
   asset?: AssetData;
   text?: Omit<TextData, "content">;
+  widget?: WidgetData;
   animations?: LayerAnimation[];
   keyframes?: KeyframeSnapshot[];
 }

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { AssetData, ChatData, Layer, LayerAnimation, LayerType, ShapeData, SubtitleData, TextData, VideoLayerData, KeyframeSnapshot, EasingPreset } from "../../lib/editorTypes";
+import type { AssetData, ChatData, Layer, LayerAnimation, LayerType, ShapeData, SubtitleData, TextData, VideoLayerData, WidgetData, KeyframeSnapshot, EasingPreset } from "../../lib/editorTypes";
 type AssetPatch = Partial<Omit<AssetData, "src">>;
 import { DEFAULT_STYLE } from "../../lib/editorTypes";
 import { KF_TOLERANCE } from "../../lib/animations";
@@ -155,6 +155,7 @@ export function useEditorState(clipKey: string) {
     shape?: ShapeData;
     chat?: ChatData;
     text?: TextData;
+    widget?: WidgetData;
   }) => {
     pushHistory();
     const id = uid();
@@ -172,6 +173,7 @@ export function useEditorState(clipKey: string) {
       shape: opts.shape,
       chat: opts.chat,
       text: opts.text,
+      widget: opts.widget,
     };
     setLayers((prev) => [...prev, layer]);
     setSelectedId(id);
@@ -320,6 +322,15 @@ export function useEditorState(clipKey: string) {
     setLayers((prev) =>
       prev.map((l) =>
         l.id === id && l.text ? { ...l, text: { ...l.text, ...patch } } : l,
+      ),
+    );
+  }, []);
+
+  /** Live widget props update (no history push). */
+  const updateWidget = useCallback((id: string, propsPatch: Record<string, unknown>) => {
+    setLayers((prev) =>
+      prev.map((l) =>
+        l.id === id && l.widget ? { ...l, widget: { ...l.widget, props: { ...l.widget.props, ...propsPatch } } } : l,
       ),
     );
   }, []);
@@ -527,6 +538,7 @@ export function useEditorState(clipKey: string) {
     updateChat,
     updateAsset,
     updateText,
+    updateWidget,
     addAnimation,
     updateAnimation,
     removeAnimation,

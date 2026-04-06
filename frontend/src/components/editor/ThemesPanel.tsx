@@ -30,6 +30,7 @@ function layersToTemplates(layers: Layer[]): ThemeLayerTemplate[] {
     }
     if (l.shape) tpl.shape = { ...l.shape };
     if (l.asset) tpl.asset = { ...l.asset };
+    if (l.widget) tpl.widget = { ...l.widget, props: { ...l.widget.props } };
     if (l.text) {
       const { content: _c, ...rest } = l.text;
       tpl.text = rest;
@@ -149,6 +150,7 @@ export default function ThemesPanel({ layers, onApplyTheme }: Props) {
                         l.type === "facecam" ? "#3b82f6" :
                         l.type === "subtitles" ? "#f59e0b" :
                         l.type === "shape" ? "#10b981" :
+                        l.type === "widget" ? "#ec4899" :
                         "#6b7280",
                     }}
                   />

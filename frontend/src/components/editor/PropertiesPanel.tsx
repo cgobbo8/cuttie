@@ -1,9 +1,12 @@
+import { useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { Crop, Diamond } from "lucide-react";
+import { Crop, Diamond, ImagePlus, X } from "lucide-react";
 import { HintBadge } from "../ui/Tooltip";
 import type { Layer, LayerStyle, ShapeData, SubtitleData, ChatData, TextData, AssetData } from "../../lib/editorTypes";
 import { SUBTITLE_FONTS, TEXT_FONTS, BOX_SHADOW_PRESETS } from "../../lib/editorTypes";
 import { hasKeyframeAt } from "../../lib/animations";
+import { uploadAsset, assetUrl } from "../../lib/api";
+import { getWidgetDef } from "./widgets/registry";
 
 const CANVAS_W = 1080;
 const CANVAS_H = 1920;
@@ -16,6 +19,7 @@ interface Props {
   onChatChange: (id: string, patch: Partial<ChatData>) => void;
   onAssetChange?: (id: string, patch: Partial<AssetData>) => void;
   onTextChange?: (id: string, patch: Partial<TextData>) => void;
+  onWidgetChange?: (id: string, propsPatch: Record<string, unknown>) => void;
   onTransformChange: (id: string, patch: Partial<Layer["transform"]>) => void;
   onCommit: () => void;
   onStartCrop?: (id: string) => void;
@@ -96,9 +100,71 @@ function Slider({
   );
 }
 
-export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange, onShapeChange, onChatChange, onAssetChange, onTextChange, onTransformChange, onCommit, onStartCrop, currentTime = 0, onToggleKeyframe }: Props) {
+function ImagePropEditor({ label, value, onChange }: { label: string; value: string; onChange: (url: string) => void }) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const hasImage = value.length > 0;
+
+  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+    try {
+      const result = await uploadAsset(file);
+      onChange(assetUrl(result.filename));
+    } catch {
+      // Fallback to data URL if upload fails
+      const reader = new FileReader();
+      reader.onload = () => onChange(reader.result as string);
+      reader.readAsDataURL(file);
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <span className="text-[10px] text-zinc-400 uppercase tracking-wider font-medium">
+        {label}
+      </span>
+      {hasImage ? (
+        <div className="flex items-center gap-2">
+          <img
+            src={value}
+            alt=""
+            className="w-10 h-10 rounded-md object-cover border border-white/[0.1] shrink-0"
+          />
+          <div className="flex gap-1 flex-1 min-w-0">
+            <button
+              onClick={() => fileRef.current?.click()}
+              className="flex-1 text-[10px] px-2 py-1.5 rounded-md bg-white/[0.06] hover:bg-white/[0.1] text-zinc-300 hover:text-zinc-100 transition-colors font-medium flex items-center justify-center gap-1"
+            >
+              <ImagePlus className="w-3 h-3" />
+              Changer
+            </button>
+            <button
+              onClick={() => onChange("")}
+              className="text-[10px] px-1.5 py-1.5 rounded-md bg-white/[0.04] hover:bg-red-500/20 text-zinc-500 hover:text-red-400 transition-colors"
+              title="Supprimer"
+            >
+              <X className="w-3 h-3" />
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          onClick={() => fileRef.current?.click()}
+          className="w-full text-[10px] px-2 py-2.5 rounded-md bg-white/[0.06] hover:bg-white/[0.1] text-zinc-400 hover:text-zinc-200 transition-colors font-medium flex items-center justify-center gap-1.5 border border-dashed border-white/[0.08]"
+        >
+          <ImagePlus className="w-3.5 h-3.5" />
+          Importer une image
+        </button>
+      )}
+      <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
+    </div>
+  );
+}
+
+export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange, onShapeChange, onChatChange, onAssetChange, onTextChange, onWidgetChange, onTransformChange, onCommit, onStartCrop, currentTime = 0, onToggleKeyframe }: Props) {
   const { t } = useTranslation();
-  const { style, transform, subtitle, shape, chat, text, asset } = layer;
+  const { style, transform, subtitle, shape, chat, text, asset, widget } = layer;
 
   const centerX = () => {
     onCommit();
@@ -741,6 +807,106 @@ export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange
             />
           </>
         )}
+
+        {/* ─── Widget-specific properties ─── */}
+        {widget && onWidgetChange && (() => {
+          const def = getWidgetDef(widget.widgetId);
+          if (!def) return null;
+          return (
+            <>
+              <div className="h-px bg-white/[0.06]" />
+
+              <div className="flex flex-col gap-1 mb-1">
+                <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-medium">
+                  Widget
+                </span>
+                <span className="text-[10px] text-zinc-600">{def.name}</span>
+              </div>
+
+              {def.propDefs.map((propDef) => {
+                const value = (widget.props[propDef.key] as string) ?? propDef.default;
+
+                if (propDef.type === "text") {
+                  return (
+                    <div key={propDef.key} className="flex flex-col gap-1.5">
+                      <span className="text-[10px] text-zinc-400 uppercase tracking-wider font-medium">
+                        {propDef.label}
+                      </span>
+                      <input
+                        type="text"
+                        value={value}
+                        onChange={(e) => onWidgetChange(layer.id, { [propDef.key]: e.target.value })}
+                        onFocus={onCommit}
+                        className="w-full text-xs bg-white/[0.06] text-zinc-300 rounded-md px-2.5 py-1.5 border border-white/[0.06] outline-none focus:border-white/[0.2] placeholder-zinc-600"
+                        placeholder={propDef.default}
+                      />
+                    </div>
+                  );
+                }
+
+                if (propDef.type === "color") {
+                  return (
+                    <div key={propDef.key} className="flex flex-col gap-1.5">
+                      <span className="text-[10px] text-zinc-400 uppercase tracking-wider font-medium">
+                        {propDef.label}
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="color"
+                          value={value}
+                          onChange={(e) => onWidgetChange(layer.id, { [propDef.key]: e.target.value })}
+                          onFocus={onCommit}
+                          className="w-7 h-7 bg-transparent border border-white/[0.1] rounded-md cursor-pointer shrink-0"
+                        />
+                        <span className="text-[10px] text-zinc-500 font-mono">{value}</span>
+                      </div>
+                    </div>
+                  );
+                }
+
+                if (propDef.type === "select" && propDef.options) {
+                  return (
+                    <div key={propDef.key} className="flex flex-col gap-1.5">
+                      <span className="text-[10px] text-zinc-400 uppercase tracking-wider font-medium">
+                        {propDef.label}
+                      </span>
+                      <select
+                        value={value}
+                        onChange={(e) => {
+                          onCommit();
+                          onWidgetChange(layer.id, { [propDef.key]: e.target.value });
+                        }}
+                        className="w-full text-xs bg-white/[0.06] text-zinc-300 rounded-md px-2 py-1.5 border border-white/[0.06] outline-none focus:border-white/[0.2] cursor-pointer"
+                      >
+                        {propDef.options.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  );
+                }
+
+                if (propDef.type === "image") {
+                  return (
+                    <ImagePropEditor
+                      key={propDef.key}
+                      label={propDef.label}
+                      value={value}
+                      onChange={(url) => {
+                        onCommit();
+                        onWidgetChange(layer.id, { [propDef.key]: url });
+                      }}
+                    />
+                  );
+                }
+
+                return null;
+              })}
+            </>
+          );
+        })()}
       </div>
     </div>
   );

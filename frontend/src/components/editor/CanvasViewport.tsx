@@ -8,6 +8,7 @@ import AssetLayer from "./AssetLayer";
 import ShapeLayer from "./ShapeLayer";
 import TextLayer from "./TextLayer";
 import TransformHandles from "./TransformHandles";
+import { getWidgetDef } from "./widgets/registry";
 
 const CANVAS_W = 1080;
 const CANVAS_H = 1920;
@@ -158,6 +159,12 @@ export default function CanvasViewport({
                 {layer.text && (
                   <TextLayer layer={layer} />
                 )}
+                {layer.widget && (() => {
+                  const def = getWidgetDef(layer.widget!.widgetId);
+                  if (!def) return null;
+                  const WidgetComponent = def.Component;
+                  return <WidgetComponent props={layer.widget!.props} width={kfW} height={kfH} currentTime={currentTime} />;
+                })()}
               </div>
 
               {/* Handles stay outside the styled wrapper — never blurred */}

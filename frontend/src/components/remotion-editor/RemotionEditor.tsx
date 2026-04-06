@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ArrowLeft, Undo2, Redo2, Loader2, Download, Plus, Video, User, MessageSquare, MessagesSquare, ImagePlus, FolderOpen, Square, Circle, SlidersHorizontal, LayoutTemplate, Sparkles, X, Check, Pencil, Type, Flame, FileText, Layers, Bot } from "lucide-react";
+import { ArrowLeft, Undo2, Redo2, Loader2, Download, Plus, Video, User, MessageSquare, MessagesSquare, ImagePlus, FolderOpen, Square, Circle, SlidersHorizontal, LayoutTemplate, Sparkles, X, Check, Pencil, Type, Flame, FileText, Layers, Bot, Puzzle } from "lucide-react";
 import { clipUrl, getEditEnvironment, startRender, renameClip, uploadAsset, listAssets, assetUrl, type EditEnvironment, type HotPoint, type AssetInfo, type TranscriptWord } from "../../lib/api";
 import type { Layer, SubtitleData } from "../../lib/editorTypes";
 import { DEFAULT_SUBTITLE_CONFIG } from "../../lib/editorTypes";
@@ -17,6 +17,8 @@ import HotPointsPanel from "../editor/HotPointsPanel";
 import TranscriptionPanel from "../editor/TranscriptionPanel";
 import CropEditor from "../editor/CropEditor";
 import AiPanel from "../editor/AiPanel";
+import WidgetLibraryPanel from "../editor/WidgetLibraryPanel";
+import { buildDefaultProps, type WidgetDefinition } from "../editor/widgets/registry";
 import { useAccess } from "../../lib/useAccess";
 import { Permissions } from "../../lib/permissions";
 
@@ -26,7 +28,7 @@ interface Props {
   onClose: () => void;
 }
 
-type RightTab = "properties" | "animations" | "themes" | "ai";
+type RightTab = "properties" | "animations" | "themes" | "widgets" | "ai";
 type LeftTab = "layers" | "hotpoints" | "transcription";
 
 let _nextApplyId = 0;
@@ -42,7 +44,7 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
     layers, setLayers, selectedId, setSelectedId, selected,
     setCurrentTime,
     addLayer,
-    updateTransform, commitTransform, updateStyle, updateSubtitle, updateShape, updateChat, updateAsset, updateText,
+    updateTransform, commitTransform, updateStyle, updateSubtitle, updateShape, updateChat, updateAsset, updateText, updateWidget,
     addAnimation, updateAnimation, removeAnimation,
     addKeyframe, toggleKeyframe, removeKeyframe, updateKeyframeEasing,
     reorderLayers, duplicateLayer, removeLayer, renameLayer, toggleVisibility, toggleLock,
@@ -412,6 +414,18 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
     });
   }, [addLayer]);
 
+  const handleAddWidget = useCallback((def: WidgetDefinition) => {
+    addLayer({
+      type: "widget",
+      name: def.name,
+      transform: { ...def.defaultTransform },
+      widget: {
+        widgetId: def.id,
+        props: buildDefaultProps(def),
+      },
+    });
+  }, [addLayer]);
+
   /* ── Theme application ──────────────────────────────────── */
 
   const handleApplyTheme = useCallback(async (templates: ThemeLayerTemplate[]) => {
@@ -464,6 +478,8 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
         };
       } else if (tpl.type === "asset" && tpl.asset) {
         base.asset = { ...tpl.asset };
+      } else if (tpl.type === "widget" && tpl.widget) {
+        base.widget = { ...tpl.widget, props: { ...tpl.widget.props } };
       }
 
       if (tpl.animations && tpl.animations.length > 0) {
@@ -809,6 +825,7 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
                   onChatChange={updateChat}
                   onAssetChange={updateAsset}
                   onTextChange={updateText}
+                  onWidgetChange={updateWidget}
                   onTransformChange={updateTransform}
                   onCommit={commitTransform}
                   onStartCrop={setCropEditingId}
@@ -844,6 +861,9 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
             )}
             {rightTab === "themes" && (
               <ThemesPanel layers={layers} onApplyTheme={handleApplyTheme} />
+            )}
+            {rightTab === "widgets" && (
+              <WidgetLibraryPanel onAddWidget={handleAddWidget} />
             )}
             {rightTab === "ai" && canUseAi && (
               <AiPanel
@@ -889,6 +909,13 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
               title={t("editor.themes")}
             >
               <LayoutTemplate className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setRightTab("widgets")}
+              className={`w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${rightTab === "widgets" ? "bg-white/[0.08] text-zinc-200" : "text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.05]"}`}
+              title="Widgets"
+            >
+              <Puzzle className="w-4 h-4" />
             </button>
             {canUseAi && (
               <>

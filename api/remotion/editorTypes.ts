@@ -1,7 +1,7 @@
 /* ── Layer types ─────────────────────────────────────────── */
 
 /** Category of the layer — decoupled from its name. */
-export type LayerType = "gameplay" | "facecam" | "subtitles" | "asset" | "shape" | "chat" | "text";
+export type LayerType = "gameplay" | "facecam" | "subtitles" | "asset" | "shape" | "chat" | "text" | "widget";
 
 export interface LayerTransform {
   x: number;      // px in canvas space (1080×1920)
@@ -108,6 +108,11 @@ export interface TextData {
   lineHeight: number;     // multiplier (1.0 = tight, 1.5 = normal)
 }
 
+export interface WidgetData {
+  widgetId: string;                   // references widget registry (e.g. "twitch-subscribe")
+  props: Record<string, unknown>;     // serializable custom props
+}
+
 export const TEXT_FONTS = [
   { value: "Inter", label: "Inter" },
   { value: "Luckiest Guy", label: "Luckiest Guy" },
@@ -175,6 +180,7 @@ export interface Layer {
   shape?: ShapeData;
   chat?: ChatData;
   text?: TextData;
+  widget?: WidgetData;
   animations?: LayerAnimation[];
   keyframes?: KeyframeSnapshot[];
 }

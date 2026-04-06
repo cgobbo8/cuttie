@@ -8,6 +8,7 @@ import ChatLayer from "./layers/ChatLayer";
 import ShapeLayer from "./layers/ShapeLayer";
 import AssetLayer from "./layers/AssetLayer";
 import TextLayer from "./layers/TextLayer";
+import WidgetLayer from "./layers/WidgetLayer";
 
 export interface CuttieCompositionProps {
   layers: Layer[];
@@ -22,6 +23,7 @@ function LayerContent({ layer }: { layer: Layer }) {
     case "shape":     return <ShapeLayer layer={layer} />;
     case "asset":     return <AssetLayer layer={layer} />;
     case "text":      return <TextLayer layer={layer} />;
+    case "widget":    return <WidgetLayer layer={layer} />;
     default:          return null;
   }
 }

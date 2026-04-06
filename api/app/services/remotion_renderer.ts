@@ -4,7 +4,7 @@
  */
 
 import { bundle } from '@remotion/bundler'
-import { renderMedia, selectComposition } from '@remotion/renderer'
+import { renderMedia, selectComposition, openBrowser } from '@remotion/renderer'
 import { existsSync, readFileSync, readdirSync, statSync, mkdtempSync, unlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { execSync } from 'node:child_process'
@@ -17,6 +17,36 @@ let bundleUrl: string | null = null
 let bundleTimestamp = 0
 const REMOTION_DIR = path.resolve('./remotion')
 const CLIPS_BASE = path.resolve('../backend/clips')
+
+// Shared browser instance — reused across renders, auto-closes after idle
+let browserInstance: Awaited<ReturnType<typeof openBrowser>> | null = null
+let browserCloseTimer: ReturnType<typeof setTimeout> | null = null
+const BROWSER_IDLE_TIMEOUT = 30_000 // 30s after last render
+
+async function ensureBrowser() {
+  if (browserCloseTimer) {
+    clearTimeout(browserCloseTimer)
+    browserCloseTimer = null
+  }
+  if (!browserInstance) {
+    console.log('[Remotion] Opening shared browser...')
+    browserInstance = await openBrowser('chrome')
+    console.log('[Remotion] Browser ready')
+  }
+  return browserInstance
+}
+
+function scheduleBrowserClose() {
+  if (browserCloseTimer) clearTimeout(browserCloseTimer)
+  browserCloseTimer = setTimeout(async () => {
+    if (browserInstance) {
+      console.log('[Remotion] Closing idle browser...')
+      try { await browserInstance.close({ silent: true }) } catch {}
+      browserInstance = null
+    }
+    browserCloseTimer = null
+  }, BROWSER_IDLE_TIMEOUT)
+}
 
 function latestMtime(dir: string): number {
   let latest = 0
@@ -254,28 +284,37 @@ export async function renderClip(opts: RenderOptions): Promise<{ sizeMb: number 
       })
     : enrichedLayers
 
-  const serveUrl = await getBundle()
+  const [serveUrl, browser] = await Promise.all([getBundle(), ensureBrowser()])
 
   const composition = await selectComposition({
     serveUrl,
     id: 'CuttieVideo',
     inputProps: { layers: finalLayers },
+    puppeteerInstance: browser,
   })
 
   await renderMedia({
     composition: { ...composition, durationInFrames: fullDurationInFrames, fps, width: outputWidth, height: outputHeight },
     serveUrl,
     codec: 'h264',
-    crf: 18,
+    videoBitrate: '5M',
+    x264Preset: 'veryfast',
+    hardwareAcceleration: 'if-possible',
+    audioCodec: 'aac',
     jpegQuality: 80,
+    offthreadVideoCacheSizeInBytes: 2 * 1024 * 1024 * 1024, // 2 GB
     outputLocation: outputPath,
     inputProps: { layers: finalLayers },
+    puppeteerInstance: browser,
     frameRange: (startFrame > 0 || endFrame < fullDurationInFrames)
       ? [startFrame, endFrame - 1] as [number, number]
       : null,
     onProgress: ({ progress }) => onProgress(Math.round(progress * 100)),
     timeoutInMilliseconds: 10 * 60 * 1000, // 10 min max
   })
+
+  // Schedule browser close — will be cancelled if another render starts
+  scheduleBrowserClose()
 
   const sizeMb = statSync(outputPath).size / 1024 / 1024
   return { sizeMb }

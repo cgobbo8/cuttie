@@ -5,7 +5,7 @@
 
 type RenderTask = () => Promise<void>
 
-const MAX_CONCURRENT = 2
+const MAX_CONCURRENT = 1
 const queue: RenderTask[] = []
 let running = 0
 

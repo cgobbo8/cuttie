@@ -118,7 +118,7 @@ export async function resolveEditEnv(
 
   // Words (per-clip)
   const wordsPath = path.join(CLIPS_BASE, jobId, `${base}_words.json`)
-  let words: { word: string; start: number; end: number }[] = []
+  let words: { word: string; start: number; end: number; speaker?: string }[] = []
   if (existsSync(wordsPath)) {
     try { words = JSON.parse(readFileSync(wordsPath, 'utf-8')) } catch {}
   }

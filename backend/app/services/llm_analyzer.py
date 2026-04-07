@@ -926,10 +926,17 @@ def analyze_candidates(
 
     def _run_diarization():
         from app.services.speaker_diarizer import extract_voiceprint, diarize_candidates
+        import numpy as np
 
         # Extract streamer voiceprint from VOD start (one-time)
         voiceprint = extract_voiceprint(audio_path)
         streamer_name = vod_meta.get("streamer", "Streamer")
+
+        # Persist voiceprint for lazy re-transcription in transcribe_clip.py
+        if voiceprint is not None:
+            vp_dir = os.path.join(CLIPS_DIR, job_id)
+            os.makedirs(vp_dir, exist_ok=True)
+            np.save(os.path.join(vp_dir, "_voiceprint.npy"), voiceprint)
 
         # Collect Whisper words for the top 50 candidates
         whisper_words_for_diarize: dict[int, list[dict]] = {}

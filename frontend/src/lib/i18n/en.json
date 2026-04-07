@@ -298,6 +298,7 @@
     "font": "Font",
     "size": "Size",
     "uppercase": "Uppercase",
+    "speakerColors": "Speaker colors",
     "color": "Color",
     "auto": "Auto",
     "custom": "Custom",

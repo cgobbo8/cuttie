@@ -31,6 +31,7 @@ export interface SubtitleWord {
   word: string;
   start: number;
   end: number;
+  speaker?: string;
 }
 
 export interface SubtitleData {
@@ -41,7 +42,18 @@ export interface SubtitleData {
   customColor: string;    // hex (#RRGGBB)
   autoColor: string;      // hex — dominant color from backend
   uppercase: boolean;
+  showSpeaker: boolean;   // per-speaker colored subtitles
 }
+
+/** Distinct colors assigned to speakers when showSpeaker is enabled. */
+export const SPEAKER_COLORS: string[] = [
+  "#E879F9", // fuchsia-400
+  "#38BDF8", // sky-400
+  "#34D399", // emerald-400
+  "#FB923C", // orange-400
+  "#F472B6", // pink-400
+  "#A78BFA", // violet-400
+];
 
 /** Default subtitle settings — used as fallback when theme has a subtitle layer but no config. */
 export const DEFAULT_SUBTITLE_CONFIG: Omit<SubtitleData, "words" | "autoColor"> = {
@@ -50,6 +62,7 @@ export const DEFAULT_SUBTITLE_CONFIG: Omit<SubtitleData, "words" | "autoColor"> 
   colorMode: "auto",
   customColor: "#6464C8",
   uppercase: true,
+  showSpeaker: false,
 };
 
 export const SUBTITLE_FONTS = [

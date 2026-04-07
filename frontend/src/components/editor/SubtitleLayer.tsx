@@ -1,18 +1,20 @@
 import { useMemo } from "react";
 import type { Layer, SubtitleWord } from "../../lib/editorTypes";
+import { SPEAKER_COLORS } from "../../lib/editorTypes";
 
 interface Props {
   layer: Layer;
   currentTime: number;
 }
 
-function chunkWords(words: SubtitleWord[], maxWords = 4, maxDuration = 3.0): SubtitleWord[][] {
+function chunkWords(words: SubtitleWord[], maxWords = 4, maxDuration = 3.0, splitOnSpeaker = false): SubtitleWord[][] {
   const chunks: SubtitleWord[][] = [];
   let current: SubtitleWord[] = [];
   for (const w of words) {
     if (current.length > 0) {
       const dur = w.end - current[0].start;
-      if (current.length >= maxWords || dur > maxDuration) {
+      const speakerChanged = splitOnSpeaker && w.speaker !== current[current.length - 1].speaker;
+      if (current.length >= maxWords || dur > maxDuration || speakerChanged) {
         chunks.push(current);
         current = [];
       }
@@ -23,31 +25,45 @@ function chunkWords(words: SubtitleWord[], maxWords = 4, maxDuration = 3.0): Sub
   return chunks;
 }
 
-function hexToRgb(hex: string): [number, number, number] {
+function tintWhite(hex: string, strength = 0.15): string {
   const r = parseInt(hex.slice(1, 3), 16);
   const g = parseInt(hex.slice(3, 5), 16);
   const b = parseInt(hex.slice(5, 7), 16);
-  return [r, g, b];
-}
-
-function tintWhite(hex: string, strength = 0.15): string {
-  const [r, g, b] = hexToRgb(hex);
   const tr = Math.round(255 * (1 - strength) + r * strength);
   const tg = Math.round(255 * (1 - strength) + g * strength);
   const tb = Math.round(255 * (1 - strength) + b * strength);
   return `rgb(${tr},${tg},${tb})`;
 }
 
+function buildSpeakerColorMap(words: SubtitleWord[]): Map<string, string> {
+  const map = new Map<string, string>();
+  let idx = 0;
+  for (const w of words) {
+    if (w.speaker && !map.has(w.speaker)) {
+      map.set(w.speaker, SPEAKER_COLORS[idx % SPEAKER_COLORS.length]);
+      idx++;
+    }
+  }
+  return map;
+}
+
 export default function SubtitleLayer({ layer, currentTime }: Props) {
   const { subtitle, transform } = layer;
   if (!subtitle) return null;
 
-  const chunks = useMemo(() => chunkWords(subtitle.words), [subtitle.words]);
+  const showSpeaker = subtitle.showSpeaker ?? false;
+  const chunks = useMemo(
+    () => chunkWords(subtitle.words, 4, 3.0, showSpeaker),
+    [subtitle.words, showSpeaker],
+  );
+  const speakerColors = useMemo(
+    () => showSpeaker ? buildSpeakerColorMap(subtitle.words) : null,
+    [subtitle.words, showSpeaker],
+  );
 
   const baseColor = subtitle.colorMode === "auto" ? subtitle.autoColor : subtitle.customColor;
   const highlightColor = tintWhite(baseColor);
 
-  // Find active chunk (or show placeholder if no words)
   const activeChunk = chunks.find(
     (chunk) => currentTime >= chunk[0].start - 0.05 && currentTime <= chunk[chunk.length - 1].end + 0.05,
   );
@@ -89,11 +105,18 @@ export default function SubtitleLayer({ layer, currentTime }: Props) {
             .filter((word) => word.start <= currentTime + 0.2)
             .map((word, i, visible) => {
               const isFilled = currentTime >= word.start;
+              let color: string;
+              if (showSpeaker && speakerColors && word.speaker) {
+                const spkColor = speakerColors.get(word.speaker) ?? baseColor;
+                color = isFilled ? tintWhite(spkColor) : spkColor;
+              } else {
+                color = isFilled ? highlightColor : baseColor;
+              }
               return (
                 <span
                   key={`${word.start}-${i}`}
                   style={{
-                    color: isFilled ? highlightColor : baseColor,
+                    color,
                     transition: "color 0.08s",
                   }}
                 >

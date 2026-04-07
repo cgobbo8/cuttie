@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { Loader2 } from "lucide-react";
 import type { Layer, SubtitleWord, ChatMessage } from "../../lib/editorTypes";
-import { BOX_SHADOW_PRESETS } from "../../lib/editorTypes";
+import { BOX_SHADOW_PRESETS, SPEAKER_COLORS } from "../../lib/editorTypes";
 import { evaluateAnimations, resolveKeyframes } from "../../lib/animations";
 import { getWidgetDef } from "../editor/widgets/registry";
 import TransformHandles from "../editor/TransformHandles";
@@ -12,13 +12,14 @@ const CANVAS_H = 1920;
 
 // ── Subtitle helpers ──────────────────────────────────────────────────────
 
-function chunkWords(words: SubtitleWord[], maxWords = 4, maxDuration = 3.0): SubtitleWord[][] {
+function chunkWords(words: SubtitleWord[], maxWords = 4, maxDuration = 3.0, splitOnSpeaker = false): SubtitleWord[][] {
   const chunks: SubtitleWord[][] = [];
   let current: SubtitleWord[] = [];
   for (const w of words) {
     if (current.length > 0) {
       const dur = w.end - current[0].start;
-      if (current.length >= maxWords || dur > maxDuration) {
+      const speakerChanged = splitOnSpeaker && w.speaker !== current[current.length - 1].speaker;
+      if (current.length >= maxWords || dur > maxDuration || speakerChanged) {
         chunks.push(current);
         current = [];
       }
@@ -27,6 +28,18 @@ function chunkWords(words: SubtitleWord[], maxWords = 4, maxDuration = 3.0): Sub
   }
   if (current.length > 0) chunks.push(current);
   return chunks;
+}
+
+function buildSpeakerColorMap(words: SubtitleWord[]): Map<string, string> {
+  const map = new Map<string, string>();
+  let idx = 0;
+  for (const w of words) {
+    if (w.speaker && !map.has(w.speaker)) {
+      map.set(w.speaker, SPEAKER_COLORS[idx % SPEAKER_COLORS.length]);
+      idx++;
+    }
+  }
+  return map;
 }
 
 function tintWhite(hex: string, strength = 0.15): string {
@@ -342,9 +355,11 @@ export default function NativePreviewViewport({
             // ── Subtitles ──
             if (layer.type === "subtitles" && layer.subtitle) {
               const { subtitle } = layer;
-              const chunks = chunkWords(subtitle.words);
+              const showSpk = subtitle.showSpeaker ?? false;
+              const chunks = chunkWords(subtitle.words, 4, 3.0, showSpk);
               const baseColor = subtitle.colorMode === "auto" ? subtitle.autoColor : subtitle.customColor;
               const highlightColor = tintWhite(baseColor);
+              const spkColors = showSpk ? buildSpeakerColorMap(subtitle.words) : null;
               const activeChunk = chunks.find(
                 (c) => animTime >= c[0].start - 0.05 && animTime <= c[c.length - 1].end + 0.05,
               );
@@ -372,15 +387,25 @@ export default function NativePreviewViewport({
                         {subtitle.uppercase ? t("editor.subtitles").toUpperCase() : t("editor.subtitles")}
                       </span>
                     ) : (
-                      activeChunk!.map((word, i) => (
-                        <span
-                          key={`${word.start}-${i}`}
-                          style={{ color: animTime >= word.start ? highlightColor : baseColor }}
-                        >
-                          {subtitle.uppercase ? word.word.toUpperCase() : word.word}
-                          {i < activeChunk!.length - 1 ? " " : ""}
-                        </span>
-                      ))
+                      activeChunk!.map((word, i) => {
+                        const isFilled = animTime >= word.start;
+                        let color: string;
+                        if (showSpk && spkColors && word.speaker) {
+                          const sc = spkColors.get(word.speaker) ?? baseColor;
+                          color = isFilled ? tintWhite(sc) : sc;
+                        } else {
+                          color = isFilled ? highlightColor : baseColor;
+                        }
+                        return (
+                          <span
+                            key={`${word.start}-${i}`}
+                            style={{ color }}
+                          >
+                            {subtitle.uppercase ? word.word.toUpperCase() : word.word}
+                            {i < activeChunk!.length - 1 ? " " : ""}
+                          </span>
+                        );
+                      })
                     )}
                   </p>
                 </div>

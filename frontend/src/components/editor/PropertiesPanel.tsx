@@ -423,6 +423,28 @@ export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange
               </button>
             </div>
 
+            {/* Speaker colors toggle */}
+            {subtitle.words.some((w) => w.speaker) && (
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] text-zinc-400 uppercase tracking-wider font-medium">
+                  {t("editor.speakerColors")}
+                </span>
+                <button
+                  onClick={() => {
+                    onCommit();
+                    onSubtitleChange(layer.id, { showSpeaker: !subtitle.showSpeaker });
+                  }}
+                  className={`text-[10px] px-2.5 py-1 rounded-md font-medium transition-colors ${
+                    subtitle.showSpeaker
+                      ? "bg-purple-500/20 text-purple-300"
+                      : "bg-white/[0.04] text-zinc-500"
+                  }`}
+                >
+                  {subtitle.showSpeaker ? "ON" : "OFF"}
+                </button>
+              </div>
+            )}
+
             <div className="h-px bg-white/[0.06]" />
 
             {/* Color mode */}

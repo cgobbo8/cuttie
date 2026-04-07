@@ -1,18 +1,20 @@
 import { useMemo } from "react";
 import { useCurrentFrame, useVideoConfig } from "remotion";
 import type { Layer, SubtitleWord } from "../../../lib/editorTypes";
+import { SPEAKER_COLORS } from "../../../lib/editorTypes";
 
 interface Props {
   layer: Layer;
 }
 
-function chunkWords(words: SubtitleWord[], maxWords = 4, maxDuration = 3.0): SubtitleWord[][] {
+function chunkWords(words: SubtitleWord[], maxWords = 4, maxDuration = 3.0, splitOnSpeaker = false): SubtitleWord[][] {
   const chunks: SubtitleWord[][] = [];
   let current: SubtitleWord[] = [];
   for (const w of words) {
     if (current.length > 0) {
       const dur = w.end - current[0].start;
-      if (current.length >= maxWords || dur > maxDuration) {
+      const speakerChanged = splitOnSpeaker && w.speaker !== current[current.length - 1].speaker;
+      if (current.length >= maxWords || dur > maxDuration || speakerChanged) {
         chunks.push(current);
         current = [];
       }
@@ -33,6 +35,18 @@ function tintWhite(hex: string, strength = 0.15): string {
   return `rgb(${tr},${tg},${tb})`;
 }
 
+function buildSpeakerColorMap(words: SubtitleWord[]): Map<string, string> {
+  const map = new Map<string, string>();
+  let idx = 0;
+  for (const w of words) {
+    if (w.speaker && !map.has(w.speaker)) {
+      map.set(w.speaker, SPEAKER_COLORS[idx % SPEAKER_COLORS.length]);
+      idx++;
+    }
+  }
+  return map;
+}
+
 export default function SubtitleLayer({ layer }: Props) {
   const { subtitle, transform } = layer;
   const frame = useCurrentFrame();
@@ -41,7 +55,15 @@ export default function SubtitleLayer({ layer }: Props) {
 
   if (!subtitle) return null;
 
-  const chunks = useMemo(() => chunkWords(subtitle.words), [subtitle.words]);
+  const showSpeaker = subtitle.showSpeaker ?? false;
+  const chunks = useMemo(
+    () => chunkWords(subtitle.words, 4, 3.0, showSpeaker),
+    [subtitle.words, showSpeaker],
+  );
+  const speakerColors = useMemo(
+    () => showSpeaker ? buildSpeakerColorMap(subtitle.words) : null,
+    [subtitle.words, showSpeaker],
+  );
 
   const baseColor = subtitle.colorMode === "auto" ? subtitle.autoColor : subtitle.customColor;
   const highlightColor = tintWhite(baseColor);
@@ -87,10 +109,17 @@ export default function SubtitleLayer({ layer }: Props) {
             .filter((word) => word.start <= currentTime + 0.2)
             .map((word, i, visible) => {
               const isFilled = currentTime >= word.start;
+              let color: string;
+              if (showSpeaker && speakerColors && word.speaker) {
+                const spkColor = speakerColors.get(word.speaker) ?? baseColor;
+                color = isFilled ? tintWhite(spkColor) : spkColor;
+              } else {
+                color = isFilled ? highlightColor : baseColor;
+              }
               return (
                 <span
                   key={`${word.start}-${i}`}
-                  style={{ color: isFilled ? highlightColor : baseColor }}
+                  style={{ color }}
                 >
                   {subtitle.uppercase ? word.word.toUpperCase() : word.word}
                   {i < visible.length - 1 ? " " : ""}

@@ -1,14 +1,16 @@
 import React, { useMemo } from "react";
 import { useCurrentFrame, useVideoConfig } from "remotion";
 import type { Layer, SubtitleWord } from "../editorTypes";
+import { SPEAKER_COLORS } from "../editorTypes";
 
-function chunkWords(words: SubtitleWord[], maxWords = 4, maxDuration = 3.0): SubtitleWord[][] {
+function chunkWords(words: SubtitleWord[], maxWords = 4, maxDuration = 3.0, splitOnSpeaker = false): SubtitleWord[][] {
   const chunks: SubtitleWord[][] = [];
   let current: SubtitleWord[] = [];
   for (const w of words) {
     if (current.length > 0) {
       const dur = w.end - current[0].start;
-      if (current.length >= maxWords || dur > maxDuration) {
+      const speakerChanged = splitOnSpeaker && w.speaker !== current[current.length - 1].speaker;
+      if (current.length >= maxWords || dur > maxDuration || speakerChanged) {
         chunks.push(current);
         current = [];
       }
@@ -19,19 +21,26 @@ function chunkWords(words: SubtitleWord[], maxWords = 4, maxDuration = 3.0): Sub
   return chunks;
 }
 
-function hexToRgb(hex: string): [number, number, number] {
+function tintWhite(hex: string, strength = 0.15): string {
   const r = parseInt(hex.slice(1, 3), 16);
   const g = parseInt(hex.slice(3, 5), 16);
   const b = parseInt(hex.slice(5, 7), 16);
-  return [r, g, b];
-}
-
-function tintWhite(hex: string, strength = 0.15): string {
-  const [r, g, b] = hexToRgb(hex);
   const tr = Math.round(255 * (1 - strength) + r * strength);
   const tg = Math.round(255 * (1 - strength) + g * strength);
   const tb = Math.round(255 * (1 - strength) + b * strength);
   return `rgb(${tr},${tg},${tb})`;
+}
+
+function buildSpeakerColorMap(words: SubtitleWord[]): Map<string, string> {
+  const map = new Map<string, string>();
+  let idx = 0;
+  for (const w of words) {
+    if (w.speaker && !map.has(w.speaker)) {
+      map.set(w.speaker, SPEAKER_COLORS[idx % SPEAKER_COLORS.length]);
+      idx++;
+    }
+  }
+  return map;
 }
 
 interface Props {
@@ -44,7 +53,15 @@ export default function SubtitleLayer({ layer }: Props) {
   const { fps } = useVideoConfig();
   const currentTime = frame / fps;
 
-  const chunks = useMemo(() => (subtitle ? chunkWords(subtitle.words) : []), [subtitle]);
+  const showSpeaker = subtitle?.showSpeaker ?? false;
+  const chunks = useMemo(
+    () => (subtitle ? chunkWords(subtitle.words, 4, 3.0, showSpeaker) : []),
+    [subtitle, showSpeaker],
+  );
+  const speakerColors = useMemo(
+    () => showSpeaker && subtitle ? buildSpeakerColorMap(subtitle.words) : null,
+    [subtitle, showSpeaker],
+  );
 
   if (!subtitle) return null;
 
@@ -88,10 +105,17 @@ export default function SubtitleLayer({ layer }: Props) {
             .filter((word) => word.start <= currentTime + 0.2)
             .map((word, i, visible) => {
               const isFilled = currentTime >= word.start;
+              let color: string;
+              if (showSpeaker && speakerColors && word.speaker) {
+                const spkColor = speakerColors.get(word.speaker) ?? baseColor;
+                color = isFilled ? tintWhite(spkColor) : spkColor;
+              } else {
+                color = isFilled ? highlightColor : baseColor;
+              }
               return (
                 <span
                   key={`${word.start}-${i}`}
-                  style={{ color: isFilled ? highlightColor : baseColor }}
+                  style={{ color }}
                 >
                   {subtitle.uppercase ? word.word.toUpperCase() : word.word}
                   {i < visible.length - 1 ? " " : ""}

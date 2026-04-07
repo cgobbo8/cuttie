@@ -34,6 +34,7 @@ export interface SubtitleWord {
   word: string;
   start: number;
   end: number;
+  speaker?: string;
 }
 
 export interface SubtitleData {
@@ -44,7 +45,12 @@ export interface SubtitleData {
   customColor: string;    // hex (#RRGGBB)
   autoColor: string;      // hex — dominant color from backend
   uppercase: boolean;
+  showSpeaker: boolean;
 }
+
+export const SPEAKER_COLORS: string[] = [
+  "#E879F9", "#38BDF8", "#34D399", "#FB923C", "#F472B6", "#A78BFA",
+];
 
 export const SUBTITLE_FONTS = [
   { value: "Luckiest Guy", label: "Luckiest Guy" },

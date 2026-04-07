@@ -503,6 +503,7 @@ export interface TranscriptWord {
   word: string;
   start: number;
   end: number;
+  speaker?: string;
 }
 
 export async function getClipWords(jobId: string, filename: string): Promise<TranscriptWord[]> {

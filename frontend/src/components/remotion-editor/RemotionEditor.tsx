@@ -309,6 +309,7 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
         customColor: "#6464C8",
         autoColor,
         uppercase: true,
+        showSpeaker: (env.words ?? []).some((w) => w.speaker),
       },
     });
   }, [addLayer, fetchEditEnv]);

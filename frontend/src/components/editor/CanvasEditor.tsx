@@ -148,6 +148,7 @@ export default function CanvasEditor({
         customColor: "#6464C8",
         autoColor,
         uppercase: true,
+        showSpeaker: false,
       },
     });
   }, [addLayer, fetchEditEnv]);

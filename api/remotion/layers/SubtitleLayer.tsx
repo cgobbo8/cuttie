@@ -31,12 +31,15 @@ function tintWhite(hex: string, strength = 0.15): string {
   return `rgb(${tr},${tg},${tb})`;
 }
 
-function buildFallbackMap(words: SubtitleWord[]): Map<string, SpeakerStyle> {
+function buildFallbackMap(words: SubtitleWord[], baseColor: string): Map<string, SpeakerStyle> {
   const map = new Map<string, SpeakerStyle>();
   let idx = 0;
   for (const w of words) {
     if (w.speaker && !map.has(w.speaker)) {
-      map.set(w.speaker, { color: SPEAKER_COLORS[idx % SPEAKER_COLORS.length], textColor: "#FFFFFF" });
+      map.set(w.speaker, {
+        color: idx === 0 ? baseColor : SPEAKER_COLORS[(idx - 1) % SPEAKER_COLORS.length],
+        textColor: "#FFFFFF",
+      });
       idx++;
     }
   }
@@ -68,14 +71,14 @@ export default function SubtitleLayer({ layer }: Props) {
     () => (subtitle ? chunkWords(subtitle.words, 4, 3.0, showSpeaker) : []),
     [subtitle, showSpeaker],
   );
-  const fallback = useMemo(
-    () => showSpeaker && subtitle ? buildFallbackMap(subtitle.words) : new Map(),
-    [subtitle, showSpeaker],
-  );
-
   if (!subtitle) return null;
 
   const baseColor = subtitle.colorMode === "auto" ? subtitle.autoColor : subtitle.customColor;
+
+  const fallback = useMemo(
+    () => showSpeaker ? buildFallbackMap(subtitle.words, baseColor) : new Map(),
+    [subtitle.words, showSpeaker, baseColor],
+  );
   const highlightColor = tintWhite(baseColor);
 
   const activeChunk = chunks.find(

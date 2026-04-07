@@ -426,7 +426,8 @@ export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange
             {/* Speaker colors section */}
             {subtitle.words.some((w) => w.speaker) && (() => {
               const speakers = [...new Set(subtitle.words.filter((w) => w.speaker).map((w) => w.speaker!))];
-              const styles = subtitle.speakerStyles ?? buildDefaultSpeakerStyles(subtitle.words);
+              const baseColor = subtitle.colorMode === "auto" ? subtitle.autoColor : subtitle.customColor;
+              const styles = subtitle.speakerStyles ?? buildDefaultSpeakerStyles(subtitle.words, baseColor);
               return (
                 <>
                   <div className="h-px bg-white/[0.06]" />
@@ -443,7 +444,9 @@ export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange
                         const enabling = !subtitle.showSpeaker;
                         onSubtitleChange(layer.id, {
                           showSpeaker: enabling,
-                          ...(enabling && !subtitle.speakerStyles ? { speakerStyles: styles } : {}),
+                          ...(enabling && !subtitle.speakerStyles
+                            ? { speakerStyles: buildDefaultSpeakerStyles(subtitle.words, baseColor) }
+                            : {}),
                         });
                       }}
                       className={`text-[10px] px-2.5 py-1 rounded-md font-medium transition-colors ${

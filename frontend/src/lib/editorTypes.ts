@@ -61,14 +61,21 @@ export const SPEAKER_COLORS: string[] = [
   "#A78BFA", // violet-400
 ];
 
-/** Build default speaker styles from words — assigns colors from SPEAKER_COLORS palette. */
-export function buildDefaultSpeakerStyles(words: SubtitleWord[]): Record<string, SpeakerStyle> {
+/**
+ * Build default speaker styles from words.
+ * Speaker 1 (streamer) gets the existing subtitle base color.
+ * Speaker 2+ get distinct colors from SPEAKER_COLORS palette.
+ */
+export function buildDefaultSpeakerStyles(
+  words: SubtitleWord[],
+  baseColor: string = "#6464C8",
+): Record<string, SpeakerStyle> {
   const styles: Record<string, SpeakerStyle> = {};
   let idx = 0;
   for (const w of words) {
     if (w.speaker && !(w.speaker in styles)) {
       styles[w.speaker] = {
-        color: SPEAKER_COLORS[idx % SPEAKER_COLORS.length],
+        color: idx === 0 ? baseColor : SPEAKER_COLORS[(idx - 1) % SPEAKER_COLORS.length],
         textColor: "#FFFFFF",
       };
       idx++;

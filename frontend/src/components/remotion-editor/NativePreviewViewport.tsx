@@ -30,12 +30,15 @@ function chunkWords(words: SubtitleWord[], maxWords = 4, maxDuration = 3.0, spli
   return chunks;
 }
 
-function buildFallbackMap(words: SubtitleWord[]): Map<string, SpeakerStyle> {
+function buildFallbackMap(words: SubtitleWord[], baseColor: string): Map<string, SpeakerStyle> {
   const map = new Map<string, SpeakerStyle>();
   let idx = 0;
   for (const w of words) {
     if (w.speaker && !map.has(w.speaker)) {
-      map.set(w.speaker, { color: SPEAKER_COLORS[idx % SPEAKER_COLORS.length], textColor: "#FFFFFF" });
+      map.set(w.speaker, {
+        color: idx === 0 ? baseColor : SPEAKER_COLORS[(idx - 1) % SPEAKER_COLORS.length],
+        textColor: "#FFFFFF",
+      });
       idx++;
     }
   }
@@ -369,7 +372,7 @@ export default function NativePreviewViewport({
               const chunks = chunkWords(subtitle.words, 4, 3.0, showSpk);
               const baseColor = subtitle.colorMode === "auto" ? subtitle.autoColor : subtitle.customColor;
               const highlightColor = tintWhite(baseColor);
-              const spkFallback = showSpk ? buildFallbackMap(subtitle.words) : new Map<string, SpeakerStyle>();
+              const spkFallback = showSpk ? buildFallbackMap(subtitle.words, baseColor) : new Map<string, SpeakerStyle>();
               const activeChunk = chunks.find(
                 (c) => animTime >= c[0].start - 0.05 && animTime <= c[c.length - 1].end + 0.05,
               );

@@ -95,6 +95,7 @@ cuttie/
 │   │       ├── chat_analyzer.py               # Sentiment chat : vitesse, burst, emotes, mood
 │   │       ├── scorer.py                      # Score composite + peak detection (scipy)
 │   │       ├── llm_analyzer.py                # Whisper + frames + LLM unifie (scoring + analyse)
+│   │       ├── speaker_diarizer.py            # pyannote diarization + ECAPA-TDNN voiceprint
 │   │       ├── clipper.py                     # Extraction clips video
 │   │       ├── frame_extractor.py             # Extraction frames pour vision
 │   │       ├── subtitle_generator.py          # Whisper word-level + LLM correction sous-titres
@@ -154,8 +155,11 @@ cuttie/
                              - Produit content_score par segment (heat map)
                              - Sauvegarde vod_context en base
                           d. Re-rank blende (50% heuristique + 50% content_score) -> top 50
-                          e. 6 frames par candidat via ffmpeg seek sur URL VOD directe
-                          f. 1 appel LLM multimodal par candidat (audio + frames + transcript + chat + vod_context)
+                          e. En parallele :
+                             - 6 frames par candidat via ffmpeg seek sur URL VOD directe
+                             - Speaker diarization (pyannote community-1 MPS) + voiceprint ECAPA-TDNN
+                               → transcript avec labels speakers ([Streamer]: ..., [SPEAKER_01]: ...)
+                          f. 1 appel LLM multimodal par candidat (audio + frames + speaker transcript + chat + vod_context)
                           -> Re-rank par final_score, garde top 20
 6. CLIPPING            -> yt-dlp video + FFmpeg extraction (bornes dynamiques RMS)
                           uniquement pour les 20 candidats gardes

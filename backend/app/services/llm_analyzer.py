@@ -361,7 +361,7 @@ def _build_unified_prompt(
 **Heuristic score:** {score:.0%}{signals_text}
 **Speech rate:** {speech_rate:.1f} words/s
 
-**Whisper transcript (may contain errors):**
+**Transcript (speaker-labeled when multiple speakers detected):**
 {transcript if transcript else "(silence / no speech)"}
 {chat_section}
 {vod_context_section}
@@ -375,7 +375,7 @@ You have the RAW AUDIO attached to this message. LISTEN to it carefully. This is
 - Volume dynamics, sudden spikes, silences
 - Whether people are genuinely excited or just talking loudly
 
-The Whisper transcript above is a rough approximation. Use the actual audio as your ground truth for what is said and how it is said. If the transcript seems wrong (misheard words, wrong language), trust YOUR ears over the transcript.
+The transcript above may include speaker labels (e.g. "[0.0s] Falkarst: ...", "[2.1s] SPEAKER_01: ..."). The streamer is labeled by name, other speakers are SPEAKER_XX. Use these labels to understand WHO says WHAT — this is critical for analyzing conversation dynamics (who roasts whom, who reacts, who initiates). Speaker attribution may contain errors; use the actual audio as ground truth.
 
 ## Speaker dynamics
 
@@ -886,12 +886,14 @@ def analyze_candidates(
 
     llm_total = len(normal_for_llm)
 
-    # ── Step 4: Extract frames from VOD URL for normal candidates (parallel) ──
-    logger.info(f"[4/7] Extracting {NUM_FRAMES} frames for {llm_total} candidates from VOD...")
-    update_job(job_id, progress=f"Extraction de {llm_total * NUM_FRAMES} frames depuis la VOD...")
+    # ── Step 4: Extract frames + diarize in parallel ──
+    # Frames use network I/O, diarization uses local GPU — truly parallel.
+    logger.info(f"[4/7] Extracting frames + diarizing {llm_total} candidates...")
+    update_job(job_id, progress=f"Extraction frames + diarization ({llm_total} candidats)...")
 
-    frames_t0 = _time.time()
+    step4_t0 = _time.time()
     all_frames: dict[int, list[dict]] = {}
+    speaker_transcripts: dict[int, str] = {}
 
     def _extract_frames_one(idx: int, hp: HotPoint) -> tuple[int, list[dict]]:
         if hp.clip_start is not None and hp.clip_end is not None:
@@ -904,28 +906,67 @@ def analyze_candidates(
         )
         return idx, frames
 
-    with ThreadPoolExecutor(max_workers=10) as executor:
-        futures = {
-            executor.submit(_extract_frames_one, idx, hot_points[idx]): idx
-            for idx in normal_for_llm
-        }
-        done = 0
-        for future in as_completed(futures):
-            done += 1
-            try:
-                idx, frames = future.result()
-                all_frames[idx] = frames
-            except Exception as e:
-                idx = futures[future]
-                logger.error(f"Frame extraction failed for candidate {idx}: {e}")
-                all_frames[idx] = []
+    def _run_frames():
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            futures = {
+                executor.submit(_extract_frames_one, idx, hot_points[idx]): idx
+                for idx in normal_for_llm
+            }
+            done = 0
+            for future in as_completed(futures):
+                done += 1
+                try:
+                    idx, frames = future.result()
+                    all_frames[idx] = frames
+                except Exception as e:
+                    idx = futures[future]
+                    logger.error(f"Frame extraction failed for candidate {idx}: {e}")
+                    all_frames[idx] = []
 
-            if done % 10 == 0 or done == llm_total:
-                update_job(job_id, progress=f"Extraction frames : {done} sur {llm_total}...")
+    def _run_diarization():
+        from app.services.speaker_diarizer import extract_voiceprint, diarize_candidates
 
-    frames_elapsed = _time.time() - frames_t0
-    total_frames = sum(len(f) for f in all_frames.values())
-    logger.info(f"Frame extraction complete: {total_frames} frames in {frames_elapsed:.1f}s")
+        # Extract streamer voiceprint from VOD start (one-time)
+        voiceprint = extract_voiceprint(audio_path)
+        streamer_name = vod_meta.get("streamer", "Streamer")
+
+        # Collect Whisper words for the top 50 candidates
+        whisper_words_for_diarize: dict[int, list[dict]] = {}
+        for idx in normal_for_llm:
+            _, _, _, _, words = transcripts.get(idx, ("", 0.0, 0.0, [], []))
+            if words:
+                whisper_words_for_diarize[idx] = words
+
+        # Diarize all candidates
+        llm_candidates = [(idx, hot_points[idx]) for idx in normal_for_llm]
+        nonlocal speaker_transcripts
+        speaker_transcripts = diarize_candidates(
+            wav_path=audio_path,
+            candidates=llm_candidates,
+            voiceprint=voiceprint,
+            streamer_name=streamer_name,
+            vod_duration=vod_duration,
+            job_id=job_id,
+            whisper_words=whisper_words_for_diarize,
+        )
+
+    # Run both in parallel using threads
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        frame_future = pool.submit(_run_frames)
+        diarize_future = pool.submit(_run_diarization)
+
+        # Wait for both, log progress
+        frame_future.result()
+        total_frames = sum(len(f) for f in all_frames.values())
+
+        diarize_future.result()
+        diarized_count = sum(1 for t in speaker_transcripts.values() if "\n" in t)
+
+    step4_elapsed = _time.time() - step4_t0
+    logger.info(
+        f"Step 4 complete in {step4_elapsed:.1f}s: {total_frames} frames, "
+        f"{diarized_count}/{llm_total} multi-speaker transcripts"
+    )
 
     # ── Step 5: Unified LLM analysis for normal candidates (parallel) ──
     logger.info(f"[5/7] Running unified LLM analysis on {llm_total} candidates...")
@@ -938,6 +979,13 @@ def analyze_candidates(
         t0 = _time.time()
         transcript, speech_rate, _, _, whisper_words = transcripts.get(idx, ("", 0.0, 0.0, [], []))
         frames = all_frames.get(idx, [])
+
+        # Use speaker-labeled transcript if available, fall back to plain
+        speaker_transcript = speaker_transcripts.get(idx, "")
+        if speaker_transcript:
+            display_transcript = speaker_transcript
+        else:
+            display_transcript = transcript
 
         # Audio segment path (kept from Whisper step)
         audio_path = os.path.join(triage_dir, f"seg_{idx:03d}.mp3")
@@ -955,7 +1003,7 @@ def analyze_candidates(
             chat_context = _extract_chat_for_clip(chat_messages, clip_start, clip_end)
 
         prompt = _build_unified_prompt(
-            transcript=transcript,
+            transcript=display_transcript,
             speech_rate=speech_rate,
             score=hp.score,
             timestamp_display=hp.timestamp_display,

@@ -24,6 +24,8 @@ dependencies = [
     "modal>=1.4.0",
     "opencv-python-headless>=4.13.0.92",
     "ultralytics>=8.4.33",
+    "pyannote-audio>=4.0.4",
+    "speechbrain>=1.1.0",
 ]
 
 [dependency-groups]

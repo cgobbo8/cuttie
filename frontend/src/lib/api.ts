@@ -105,6 +105,26 @@ export interface StepTiming {
   duration_seconds: number | null;
 }
 
+export interface VodPhase {
+  start: string;
+  end: string;
+  description: string;
+}
+
+export interface VodProtagonist {
+  name: string;
+  role: string;
+}
+
+export interface VodContext {
+  summary: string;
+  phases: VodPhase[];
+  protagonists: VodProtagonist[];
+  recurring_themes: string[];
+  language: string;
+  mood_arc: string;
+}
+
 export interface JobResponse {
   job_id: string;
   url: string | null;
@@ -120,6 +140,7 @@ export interface JobResponse {
   view_count: number | null;
   stream_date: string | null;
   step_timings: Record<string, StepTiming> | null;
+  vod_context: VodContext | null;
 }
 
 export interface JobSummary {
@@ -168,6 +189,7 @@ interface ServerJobResponse {
   viewCount?: number | null;
   streamDate?: string | null;
   stepTimings?: Record<string, StepTiming> | null;
+  vodContext?: VodContext | null;
 }
 
 interface ServerHotPoint {
@@ -211,6 +233,7 @@ function mapJobResponse(raw: ServerJobResponse): JobResponse {
     view_count: raw.viewCount ?? null,
     stream_date: raw.streamDate ?? null,
     step_timings: raw.stepTimings ?? null,
+    vod_context: raw.vodContext ?? null,
   };
 }
 

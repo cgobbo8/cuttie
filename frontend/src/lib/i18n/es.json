@@ -121,7 +121,10 @@
     "retry": "Reintentar",
     "back": "Volver",
     "retryFailed": "Error al reintentar",
-    "renamed": "Proyecto renombrado"
+    "renamed": "Proyecto renombrado",
+    "vodContext": "Contexto de la VOD",
+    "vodPhases": "Fases del stream",
+    "vodProtagonists": "Protagonistas"
   },
 
   "newProject": {

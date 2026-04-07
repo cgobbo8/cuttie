@@ -9,12 +9,13 @@ import {
   type JobStatusType,
   type HotPoint,
   type StepTiming,
+  type VodContext,
   mapSSEHotPoint,
 } from "../lib/api";
 import { useTransmitChannel } from "../lib/TransmitContext";
 import JobStatus from "../components/JobStatus";
 import HotPoints from "../components/HotPoints";
-import { ArrowLeft, RotateCcw, Loader2, X, PackageCheck, Upload } from "lucide-react";
+import { ArrowLeft, RotateCcw, Loader2, X, PackageCheck, Upload, ChevronDown, BookOpen, Users, Sparkles } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useToast } from "../components/Toast";
 import { useCreatorWorkspace } from "../lib/CreatorWorkspaceContext";
@@ -44,6 +45,8 @@ export default function JobPage() {
   const [viewCount, setViewCount] = useState(0);
   const [streamDate, setStreamDate] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [vodContext, setVodContext] = useState<VodContext | null>(null);
+  const [vodContextOpen, setVodContextOpen] = useState(false);
 
   // Clips: accumulate as they arrive
   const [clips, setClips] = useState<HotPoint[]>([]);
@@ -75,6 +78,7 @@ export default function JobPage() {
     if (job.view_count) setViewCount(job.view_count);
     if (job.stream_date) setStreamDate(job.stream_date);
     if (job.error) setError(job.error);
+    if (job.vod_context) setVodContext(job.vod_context);
     if (job.hot_points?.length) {
       setClips(job.hot_points);
     }
@@ -123,6 +127,7 @@ export default function JobPage() {
     if (data.view_count) setViewCount(data.view_count);
     if (data.stream_date) setStreamDate(data.stream_date);
     if (data.error) setError(data.error);
+    if (data.vod_context) setVodContext(data.vod_context);
 
     if (data.status === "DONE" && data.hot_points?.length) {
       setIsFinalSort(true);
@@ -323,6 +328,83 @@ export default function JobPage() {
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* VOD Context */}
+      {vodContext?.summary && (
+        <div className="mb-6">
+          <button
+            onClick={() => setVodContextOpen(!vodContextOpen)}
+            className="w-full surface-static rounded-xl p-4 flex items-center gap-3 hover:bg-white/[0.04] transition-colors"
+          >
+            <div className="w-8 h-8 rounded-lg bg-purple-500/10 flex items-center justify-center shrink-0">
+              <BookOpen className="w-4 h-4 text-purple-400" />
+            </div>
+            <div className="flex-1 text-left min-w-0">
+              <p className="text-sm font-medium text-zinc-200">{t("job.vodContext")}</p>
+              <p className="text-xs text-zinc-500 truncate">{vodContext.mood_arc || vodContext.summary}</p>
+            </div>
+            <ChevronDown className={`w-4 h-4 text-zinc-500 transition-transform ${vodContextOpen ? "rotate-180" : ""}`} />
+          </button>
+
+          {vodContextOpen && (
+            <div className="surface-static rounded-xl rounded-t-none border-t border-white/[0.06] p-5 space-y-4 animate-fade-in">
+              <p className="text-sm text-zinc-300 leading-relaxed">{vodContext.summary}</p>
+
+              {vodContext.mood_arc && (
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                  <span className="text-xs text-zinc-400">{vodContext.mood_arc}</span>
+                </div>
+              )}
+
+              {vodContext.phases.length > 0 && (
+                <div>
+                  <p className="text-xs font-medium text-zinc-400 uppercase tracking-wider mb-2">{t("job.vodPhases")}</p>
+                  <div className="space-y-1.5">
+                    {vodContext.phases.map((phase, i) => (
+                      <div key={i} className="flex gap-3 text-xs">
+                        <span className="text-zinc-500 font-mono shrink-0">{phase.start} → {phase.end}</span>
+                        <span className="text-zinc-300">{phase.description}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {vodContext.protagonists.length > 0 && (
+                <div>
+                  <p className="text-xs font-medium text-zinc-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                    <Users className="w-3 h-3" />
+                    {t("job.vodProtagonists")}
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {vodContext.protagonists.map((p, i) => (
+                      <span
+                        key={i}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs bg-white/[0.05] border border-white/[0.08] rounded-full"
+                        title={p.role}
+                      >
+                        <span className="text-zinc-200 font-medium">{p.name}</span>
+                        <span className="text-zinc-500">{p.role}</span>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {vodContext.recurring_themes.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {vodContext.recurring_themes.map((theme, i) => (
+                    <span key={i} className="px-2 py-0.5 text-xs text-zinc-400 bg-white/[0.04] rounded-md">
+                      {theme}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 

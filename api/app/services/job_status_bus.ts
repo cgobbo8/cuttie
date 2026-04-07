@@ -41,6 +41,7 @@ export interface JobStatusUpdate {
   view_count?: number | null
   stream_date?: string | null
   step_timings?: Record<string, { start: number; duration_seconds: number | null }> | null
+  vod_context?: any | null
 }
 
 class JobStatusBus {
@@ -121,6 +122,7 @@ class JobStatusBus {
     if (update.view_count !== undefined) job.viewCount = update.view_count ?? null
     if (update.stream_date !== undefined) job.streamDate = update.stream_date ?? null
     if (update.step_timings !== undefined) job.stepTimings = update.step_timings ?? null
+    if (update.vod_context !== undefined) job.vodContext = update.vod_context ?? null
 
     // Upsert creator when streamer info arrives
     if (update.streamer && job.userId) {

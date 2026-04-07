@@ -22,7 +22,7 @@ import subprocess
 import time as _time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from app.models.schemas import HotPoint, KeyMoment, LlmAnalysis
+from app.models.schemas import HotPoint, KeyMoment, LlmAnalysis, VodContext
 from app.services.clipper import CLIP_HALF_DURATION
 from app.services.db import save_hot_points, update_job
 from app.services.frame_extractor import (
@@ -262,6 +262,7 @@ def _build_unified_prompt(
     chat_context: str = "",
     chat_mood: str = "",
     signals: "SignalBreakdown | None" = None,
+    vod_context: "VodContext | None" = None,
 ) -> str:
     """Build the unified analysis prompt (English, vision + synthesis in one)."""
     vod_title = vod_meta.get("title", "")
@@ -333,6 +334,26 @@ def _build_unified_prompt(
 
     game_narrative = f", referencing {vod_game} gameplay" if vod_game else ""
 
+    # VOD context section (from context gathering step)
+    vod_context_section = ""
+    if vod_context and vod_context.summary:
+        ctx_lines = [f"\n## VOD Context (full stream overview)\n{vod_context.summary}"]
+        # Find the current phase for this timestamp
+        if vod_context.phases:
+            ctx_lines.append(f"\n**Stream phases:**")
+            for phase in vod_context.phases:
+                ctx_lines.append(f"- {phase.start} → {phase.end}: {phase.description}")
+        if vod_context.protagonists:
+            ctx_lines.append(f"\n**Known characters:**")
+            for p in vod_context.protagonists:
+                ctx_lines.append(f"- **{p.name}**: {p.role}")
+        if vod_context.recurring_themes:
+            ctx_lines.append(f"\n**Recurring themes:** {', '.join(vod_context.recurring_themes)}")
+        if vod_context.mood_arc:
+            ctx_lines.append(f"**Mood arc:** {vod_context.mood_arc}")
+        ctx_lines.append("\nUse this context to understand WHERE this clip falls in the overall stream narrative. Clips that are part of an escalating arc or reference earlier events are MORE viral.")
+        vod_context_section = "\n".join(ctx_lines)
+
     return f"""You are an expert at identifying viral Twitch/YouTube clip moments. Your job is to evaluate whether this clip would make a compelling standalone short video.
 
 {identity_card}
@@ -343,6 +364,7 @@ def _build_unified_prompt(
 **Whisper transcript (may contain errors):**
 {transcript if transcript else "(silence / no speech)"}
 {chat_section}
+{vod_context_section}
 
 ## Audio analysis
 
@@ -581,6 +603,171 @@ def _build_detected_clip(
     return hp
 
 
+# ─── VOD context gathering + heat map ────────────────────────────────────────
+
+
+def _build_context_prompt(
+    transcripts: dict[int, tuple[str, float, float, list, list[dict]]],
+    hot_points: list[HotPoint],
+    vod_meta: dict,
+) -> str:
+    """Build the prompt for VOD context gathering + segment content scoring."""
+    vod_title = vod_meta.get("title", "")
+    vod_game = vod_meta.get("game", "")
+    streamer = vod_meta.get("streamer", "")
+    stream_date = vod_meta.get("stream_date", "")
+    duration = vod_meta.get("duration", 0)
+
+    duration_h = int(duration // 3600)
+    duration_m = int((duration % 3600) // 60)
+
+    # Build chronological transcript list
+    segments_text = []
+    sorted_indices = sorted(transcripts.keys(), key=lambda i: hot_points[i].timestamp_seconds)
+    for idx in sorted_indices:
+        hp = hot_points[idx]
+        transcript, speech_rate, _, _, _ = transcripts[idx]
+        if not transcript.strip():
+            segments_text.append(
+                f"[Segment {idx} @ {hp.timestamp_display}] (silence / no speech)"
+            )
+        else:
+            segments_text.append(
+                f"[Segment {idx} @ {hp.timestamp_display}] {transcript.strip()}"
+            )
+
+    all_segments = "\n\n".join(segments_text)
+
+    return f"""You are analyzing a full Twitch VOD to understand its narrative arc and identify the most interesting moments.
+
+**Stream:** {vod_title}
+**Streamer:** {streamer}
+**Game:** {vod_game}
+**Date:** {stream_date}
+**Duration:** {duration_h}h{duration_m:02d}
+
+Below are {len(transcripts)} audio transcriptions from highlighted moments throughout the stream, in chronological order. Each segment is ~30-60 seconds of audio transcribed by Whisper (may contain errors, especially on proper nouns and gaming jargon).
+
+{all_segments}
+
+## Your task
+
+Analyze ALL segments to produce:
+
+### 1. VOD Context
+Build a comprehensive understanding of this stream:
+- **summary**: 2-4 sentences describing what this stream is about, what happens, the overall vibe
+- **phases**: divide the stream into distinct phases/chapters (game changes, mood shifts, major events). Each phase has start/end timestamps and a description.
+- **protagonists**: identify recurring people (the streamer, duo partners, Discord friends, opponents). For each, give their name (as heard in audio) and their role.
+- **recurring_themes**: running jokes, repeated references, ongoing situations
+- **language**: primary language of the stream (fr, en, es, etc.)
+- **mood_arc**: one-line description of the emotional journey (e.g. "Chill → Hype → Tilt → Rage → Reset")
+
+### 2. Content Scoring
+For EACH segment, rate how interesting/viral the CONTENT sounds based purely on the transcript:
+- 0.0-0.2: Boring (routine commentary, idle chat, nothing notable)
+- 0.2-0.4: Mildly interesting (some activity but not remarkable)
+- 0.4-0.6: Interesting (clear reaction, funny moment, notable event)
+- 0.6-0.8: Very interesting (strong reaction, hilarious moment, clutch play narration)
+- 0.8-1.0: Exceptional (explosive reaction, legendary moment, uncontrollable laughter/rage)
+
+Consider: emotional intensity in the words, humor, storytelling, group dynamics, references to gameplay events, build-up and payoff. Silence segments = 0.0.
+
+Segments that reference earlier events in the stream (callbacks) or are part of an escalating arc (progressive tilt, running joke payoff) should get a BONUS because they have narrative momentum.
+
+## Output format
+
+Return a single JSON object:
+```json
+{{
+  "vod_context": {{
+    "summary": "...",
+    "phases": [{{"start": "H:MM:SS", "end": "H:MM:SS", "description": "..."}}],
+    "protagonists": [{{"name": "...", "role": "..."}}],
+    "recurring_themes": ["..."],
+    "language": "fr",
+    "mood_arc": "..."
+  }},
+  "segment_scores": [
+    {{"index": 0, "content_score": 0.3}},
+    {{"index": 1, "content_score": 0.1}},
+    ...
+  ]
+}}
+```
+
+IMPORTANT: segment_scores MUST contain an entry for EVERY segment index listed above. JSON only, no markdown."""
+
+
+def gather_vod_context(
+    job_id: str,
+    transcripts: dict[int, tuple[str, float, float, list, list[dict]]],
+    hot_points: list[HotPoint],
+    vod_meta: dict,
+) -> tuple[VodContext, dict[int, float]]:
+    """Call LLM to gather VOD-wide context and per-segment content scores.
+
+    Returns (vod_context, content_scores) where content_scores maps
+    candidate index to a 0-1 content interest score.
+    """
+    t0 = _time.time()
+    prompt = _build_context_prompt(transcripts, hot_points, vod_meta)
+
+    client = get_openrouter_client()
+    is_openrouter = "openrouter" in (client.base_url.host or "")
+
+    kwargs: dict = dict(
+        model=LLM_MODEL,
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.3,
+        max_completion_tokens=4000,
+    )
+    if not is_openrouter:
+        kwargs["response_format"] = {"type": "json_object"}
+
+    response = client.chat.completions.create(**kwargs)
+
+    content = response.choices[0].message.content or ""
+    content = content.strip()
+    if content.startswith("```"):
+        content = content.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
+
+    data = json.loads(content)
+
+    # Parse VOD context
+    raw_ctx = data.get("vod_context", {})
+    vod_context = VodContext(
+        summary=raw_ctx.get("summary", ""),
+        phases=[
+            {"start": p.get("start", ""), "end": p.get("end", ""), "description": p.get("description", "")}
+            for p in raw_ctx.get("phases", [])
+        ],
+        protagonists=[
+            {"name": p.get("name", ""), "role": p.get("role", "")}
+            for p in raw_ctx.get("protagonists", [])
+        ],
+        recurring_themes=raw_ctx.get("recurring_themes", []),
+        language=raw_ctx.get("language", ""),
+        mood_arc=raw_ctx.get("mood_arc", ""),
+    )
+
+    # Parse content scores
+    content_scores: dict[int, float] = {}
+    for entry in data.get("segment_scores", []):
+        idx = int(entry.get("index", -1))
+        score = float(entry.get("content_score", 0.0))
+        content_scores[idx] = max(0.0, min(1.0, score))
+
+    elapsed = _time.time() - t0
+    logger.info(
+        f"[{job_id[:8]}] VOD context gathered in {elapsed:.1f}s: "
+        f"{len(vod_context.phases)} phases, {len(vod_context.protagonists)} protagonists, "
+        f"{len(content_scores)} segment scores"
+    )
+
+    return vod_context, content_scores
+
+
 # ─── Pre-clipping candidate analysis ─────────────────────────────────────────
 
 def analyze_candidates(
@@ -592,13 +779,14 @@ def analyze_candidates(
     vod_meta: dict,
     chat_messages: list[dict] | None = None,
     keep_n: int = KEEP_TOP_N,
-) -> tuple[list[HotPoint], list[HotPoint], dict[int, list[dict]]]:
-    """Analyze all candidates with Whisper, detect "clip" keywords, then LLM-rank the rest.
+) -> tuple[list[HotPoint], list[HotPoint], dict[int, list[dict]], VodContext | None]:
+    """Analyze all candidates with Whisper, gather VOD context, then LLM-rank.
 
-    Returns (normal_hot_points, detected_hot_points, candidate_words):
+    Returns (normal_hot_points, detected_hot_points, candidate_words, vod_context):
     - normal: top keep_n after full LLM analysis
     - detected: candidates where Whisper found "clip" keyword (clip_source="detected")
     - candidate_words: {candidate_idx -> word-level timestamps} for subtitle generation
+    - vod_context: VOD-wide narrative context (or None if gathering failed)
     """
     total = len(hot_points)
     logger.info(f"═══ Analyzing {total} candidates (keeping top {keep_n}) ═══")
@@ -608,18 +796,18 @@ def analyze_candidates(
     triage_dir = os.path.join("triage_audio", job_id)
 
     # ── Step 1: Get direct VOD URL for frame extraction ──
-    logger.info(f"[1/5] Getting direct VOD URL...")
+    logger.info(f"[1/7] Getting direct VOD URL...")
     update_job(job_id, progress=f"Récupération URL vidéo...")
     direct_url = get_vod_direct_url(vod_url)
 
     # ── Step 2: Whisper transcription for ALL candidates (parallel) ──
-    logger.info(f"[2/5] Transcribing {total} candidates...")
+    logger.info(f"[2/7] Transcribing {total} candidates...")
     update_job(job_id, progress=f"Transcription de {total} segments audio...")
     candidates = [(i, hp) for i, hp in enumerate(hot_points)]
     transcripts = _transcribe_candidates(audio_path, candidates, vod_duration, job_id)
 
     # ── Step 3: Detect "clip" keyword in transcripts ──
-    logger.info(f"[3/5] Scanning transcripts for 'clip' keywords...")
+    logger.info(f"[3/7] Scanning transcripts for 'clip' keywords...")
     detected_indices: list[int] = []
     normal_indices: list[int] = []
 
@@ -641,18 +829,65 @@ def analyze_candidates(
         f"{len(normal_indices)} normal candidates"
     )
 
-    # ── Step 3b: Keep only top KEEP_NORMAL_FOR_LLM normal candidates by heuristic score ──
-    normal_candidates_sorted = sorted(normal_indices, key=lambda i: hot_points[i].score, reverse=True)
+    # ── Step 3b: VOD context gathering + content scoring ──
+    vod_context: VodContext | None = None
+    content_scores: dict[int, float] = {}
+    normal_transcripts = {i: transcripts[i] for i in normal_indices if i in transcripts}
+    if normal_transcripts:
+        logger.info(f"[3b/7] Gathering VOD context from {len(normal_transcripts)} transcripts...")
+        update_job(job_id, progress=f"Analyse du contexte de la VOD ({len(normal_transcripts)} segments)...")
+        try:
+            vod_context, content_scores = gather_vod_context(
+                job_id, normal_transcripts, hot_points, vod_meta,
+            )
+            # Save vod_context to DB immediately
+            update_job(job_id, vod_context=vod_context)
+        except Exception as e:
+            logger.error(f"[{job_id[:8]}] VOD context gathering failed: {e}")
+
+    # ── Step 3c: Blended re-ranking (heuristic + content score) → top KEEP_NORMAL_FOR_LLM ──
+    CONTENT_WEIGHT = 0.5
+    HEURISTIC_FILTER_WEIGHT = 0.5
+
+    def _blended_pre_score(idx: int) -> float:
+        heuristic = hot_points[idx].score
+        content = content_scores.get(idx, 0.0)
+        blended = HEURISTIC_FILTER_WEIGHT * heuristic + CONTENT_WEIGHT * content
+        # Bonus: rescue content gems (high content, low heuristic)
+        if content > 0.8 and heuristic < 0.3:
+            blended += 0.15
+        # Malus: demote false positives (high heuristic, very low content)
+        elif content < 0.1 and heuristic > 0.5:
+            blended -= 0.1
+        return blended
+
+    normal_candidates_sorted = sorted(normal_indices, key=_blended_pre_score, reverse=True)
     normal_for_llm = normal_candidates_sorted[:KEEP_NORMAL_FOR_LLM]
     dropped_early = normal_candidates_sorted[KEEP_NORMAL_FOR_LLM:]
 
     if dropped_early:
         logger.info(f"Dropping {len(dropped_early)} lowest-scoring normal candidates before LLM")
 
+    # Log the blended re-ranking for debugging
+    if content_scores:
+        rescued = sum(
+            1 for i in normal_for_llm
+            if hot_points[i].score < 0.3 and content_scores.get(i, 0) > 0.6
+        )
+        demoted = sum(
+            1 for i in dropped_early
+            if hot_points[i].score > 0.5 and content_scores.get(i, 0) < 0.1
+        )
+        if rescued or demoted:
+            logger.info(
+                f"[{job_id[:8]}] Blended re-ranking: {rescued} content gems rescued, "
+                f"{demoted} false positives demoted"
+            )
+
     llm_total = len(normal_for_llm)
 
     # ── Step 4: Extract frames from VOD URL for normal candidates (parallel) ──
-    logger.info(f"[4/5] Extracting {NUM_FRAMES} frames for {llm_total} candidates from VOD...")
+    logger.info(f"[4/7] Extracting {NUM_FRAMES} frames for {llm_total} candidates from VOD...")
     update_job(job_id, progress=f"Extraction de {llm_total * NUM_FRAMES} frames depuis la VOD...")
 
     frames_t0 = _time.time()
@@ -693,7 +928,7 @@ def analyze_candidates(
     logger.info(f"Frame extraction complete: {total_frames} frames in {frames_elapsed:.1f}s")
 
     # ── Step 5: Unified LLM analysis for normal candidates (parallel) ──
-    logger.info(f"[5/5] Running unified LLM analysis on {llm_total} candidates...")
+    logger.info(f"[5/7] Running unified LLM analysis on {llm_total} candidates...")
     update_job(job_id, progress=f"Analyse IA de {llm_total} candidats...")
 
     llm_t0 = _time.time()
@@ -728,6 +963,7 @@ def analyze_candidates(
             chat_context=chat_context,
             chat_mood=hp.chat_mood,
             signals=hp.signals,
+            vod_context=vod_context,
         )
 
         try:
@@ -839,7 +1075,7 @@ def analyze_candidates(
     )
 
     save_hot_points(job_id, kept)
-    return kept, detected_hps, kept_words
+    return kept, detected_hps, kept_words, vod_context
 
 
 # ─── Post-clipping single clip analysis (for resume/retry) ───────────────────

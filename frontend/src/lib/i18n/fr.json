@@ -121,7 +121,10 @@
     "retry": "Reprendre",
     "back": "Retour",
     "retryFailed": "Échec de la reprise",
-    "renamed": "Projet renommé"
+    "renamed": "Projet renommé",
+    "vodContext": "Contexte de la VOD",
+    "vodPhases": "Phases du stream",
+    "vodProtagonists": "Protagonistes"
   },
 
   "newProject": {

@@ -401,13 +401,13 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
 
             check_cancelled(job_id)
 
-            # 5. Score and find peaks — get top 50 candidates
+            # 5. Score and find peaks — get top 200 candidates
             timer.start("SCORING")
             logger.info(f"[{job_id[:8]}] Computing scores...")
             update_job(job_id, status="SCORING", progress="Computing scores and finding hot points...", step_timings=timer.timings)
             hot_points = compute_scores(
                 audio_features, chat_features,
-                total_duration=duration, top_n=100,
+                total_duration=duration, top_n=200,
                 classification_features=classification_features,
             )
             logger.info(f"[{job_id[:8]}] Scoring done: {len(hot_points)} hot points")
@@ -421,7 +421,7 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
             logger.info(f"[{job_id[:8]}] Computing clip boundaries from RMS...")
             compute_clip_bounds(hot_points, duration, audio_features, audio_path)
 
-            # 6. Unified LLM analysis: frames from VOD + Whisper + LLM → score & re-rank → top 20
+            # 6. VOD context gathering + unified LLM analysis → re-rank → top 20
             vod_meta = {
                 "title": vod_title or "",
                 "game": vod_game or "",
@@ -437,7 +437,7 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
                 progress=f"Analyse IA de {len(hot_points)} candidats...",
                 step_timings=timer.timings,
             )
-            hot_points, detected_hot_points, candidate_words = analyze_candidates(
+            hot_points, detected_hot_points, candidate_words, _vod_context = analyze_candidates(
                 job_id=job_id,
                 hot_points=hot_points,
                 audio_path=audio_path,

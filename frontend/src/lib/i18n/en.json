@@ -121,7 +121,10 @@
     "retry": "Retry",
     "back": "Back",
     "retryFailed": "Retry failed",
-    "renamed": "Project renamed"
+    "renamed": "Project renamed",
+    "vodContext": "VOD Context",
+    "vodPhases": "Stream phases",
+    "vodProtagonists": "Protagonists"
   },
 
   "newProject": {

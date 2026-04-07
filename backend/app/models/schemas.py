@@ -70,6 +70,26 @@ class StepTiming(BaseModel):
     duration_seconds: float | None = None  # None while step is in progress
 
 
+class VodPhase(BaseModel):
+    start: str  # display timestamp "H:MM:SS"
+    end: str
+    description: str
+
+
+class VodProtagonist(BaseModel):
+    name: str
+    role: str  # brief description of who they are
+
+
+class VodContext(BaseModel):
+    summary: str = ""
+    phases: list[VodPhase] = []
+    protagonists: list[VodProtagonist] = []
+    recurring_themes: list[str] = []
+    language: str = ""
+    mood_arc: str = ""
+
+
 class JobResponse(BaseModel):
     job_id: str
     status: JobStatus
@@ -83,3 +103,4 @@ class JobResponse(BaseModel):
     view_count: int | None = None
     stream_date: str | None = None
     step_timings: dict[str, StepTiming] | None = None
+    vod_context: VodContext | None = None

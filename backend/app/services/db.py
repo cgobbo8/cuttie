@@ -9,7 +9,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-from app.models.schemas import HotPoint, JobResponse, JobStatus, LlmAnalysis, SignalBreakdown, StepTiming
+from app.models.schemas import HotPoint, JobResponse, JobStatus, LlmAnalysis, SignalBreakdown, StepTiming, VodContext
 
 logger = logging.getLogger(__name__)
 
@@ -132,6 +132,7 @@ def init_db() -> None:
         ("jobs", "vod_game_thumbnail", "TEXT"),
         ("jobs", "streamer_thumbnail", "TEXT"),
         ("hot_points", "clip_source", "TEXT"),
+        ("jobs", "vod_context", "TEXT"),
     ]
 
     # Allowlists derived from the migration tuples above — update both lists
@@ -141,7 +142,7 @@ def init_db() -> None:
         "llm_json", "final_score", "chat_mood", "vertical_filename",
         "vod_game", "streamer", "view_count", "stream_date", "step_timings",
         "clip_name", "vod_game_id", "vod_game_thumbnail", "streamer_thumbnail",
-        "clip_source",
+        "clip_source", "vod_context",
     }
     VALID_COL_TYPES = {"TEXT", "REAL", "INTEGER", "BLOB", "NUMERIC"}
 
@@ -180,11 +181,18 @@ def update_job(job_id: str, **kwargs) -> None:
     # Handle complex fields separately (not simple SQL columns)
     hot_points = kwargs.pop("hot_points", None)
     step_timings = kwargs.pop("step_timings", None)
+    vod_context = kwargs.pop("vod_context", None)
 
     # Serialize step_timings to JSON for storage
     if step_timings is not None:
         kwargs["step_timings"] = json.dumps(
             {k: v.model_dump() if hasattr(v, "model_dump") else v for k, v in step_timings.items()}
+        )
+
+    # Serialize vod_context to JSON for storage
+    if vod_context is not None:
+        kwargs["vod_context"] = json.dumps(
+            vod_context.model_dump() if hasattr(vod_context, "model_dump") else vod_context
         )
 
     if kwargs:
@@ -206,6 +214,10 @@ def update_job(job_id: str, **kwargs) -> None:
         publish_payload["step_timings"] = {
             k: v.model_dump() if hasattr(v, "model_dump") else v for k, v in step_timings.items()
         }
+    if vod_context is not None:
+        publish_payload["vod_context"] = (
+            vod_context.model_dump() if hasattr(vod_context, "model_dump") else vod_context
+        )
     if hot_points is not None:
         publish_payload["hot_points"] = [hp.model_dump() for hp in hot_points]
     _publish_status(job_id, publish_payload)
@@ -337,6 +349,14 @@ def get_job(job_id: str) -> JobResponse | None:
         except Exception as e:
             logger.warning("Failed to parse step_timings for job %s: %s", row["job_id"], e)
 
+    raw_vod_context = row["vod_context"] if "vod_context" in keys else None
+    vod_context = None
+    if raw_vod_context:
+        try:
+            vod_context = VodContext(**json.loads(raw_vod_context))
+        except Exception as e:
+            logger.warning("Failed to parse vod_context for job %s: %s", row["job_id"], e)
+
     return JobResponse(
         job_id=row["job_id"],
         status=JobStatus(row["status"]),
@@ -350,6 +370,7 @@ def get_job(job_id: str) -> JobResponse | None:
         view_count=row["view_count"] if "view_count" in keys else None,
         stream_date=row["stream_date"] if "stream_date" in keys else None,
         step_timings=step_timings,
+        vod_context=vod_context,
     )
 
 

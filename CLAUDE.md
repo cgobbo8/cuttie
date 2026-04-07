@@ -144,11 +144,18 @@ cuttie/
 1. DOWNLOADING_AUDIO   -> Metadata + audio 11025Hz mono WAV + chat Twitch GQL (en parallele)
 2. ANALYZING_AUDIO     -> librosa features (5s/2.5s hop) + PANNs CNN14 classification (en parallele)
 3. ANALYZING_CHAT      -> Sentiment, emotes, burst detection
-4. SCORING             -> Score composite pondere + peak detection -> top 50
+4. SCORING             -> Score composite pondere + peak detection -> top 200
 5. ANALYZING_CLIPS     -> Pour chaque candidat (sans download video) :
-                          - Whisper transcription (segment audio depuis WAV complet)
-                          - 6 frames extraites par ffmpeg seek sur URL VOD directe
-                          - 1 appel LLM unifie (frames + transcript + chat + signals)
+                          a. Whisper transcription (200 segments audio depuis WAV)
+                          b. Clip keyword detection ("clip", "clippe", etc.)
+                          c. VOD context gathering (1 appel LLM text-only) :
+                             - Lit les 200 transcripts chronologiquement
+                             - Produit contexte VOD (narrative, phases, protagonistes, themes)
+                             - Produit content_score par segment (heat map)
+                             - Sauvegarde vod_context en base
+                          d. Re-rank blende (50% heuristique + 50% content_score) -> top 50
+                          e. 6 frames par candidat via ffmpeg seek sur URL VOD directe
+                          f. 1 appel LLM multimodal par candidat (audio + frames + transcript + chat + vod_context)
                           -> Re-rank par final_score, garde top 20
 6. CLIPPING            -> yt-dlp video + FFmpeg extraction (bornes dynamiques RMS)
                           uniquement pour les 20 candidats gardes
@@ -162,6 +169,8 @@ Checkpoints resumables : CLIPPING, LLM_ANALYSIS.
 **Score heuristique** (normalisation baseline-relative, median/P95) :
 - RMS 18%, chat_speed 18%, spectral_flux 12%, onset 10%, pitch_var 10%
 - chat_burst 10%, emote_density 8%, caps_ratio 7%, centroid 5%, zcr 2%
+
+**Pre-filtre** : `0.5 * heuristique + 0.5 * content_score_LLM` (+ bonus/malus content gems/false positives)
 
 **Score final** : `0.2 * heuristique + 0.8 * LLM virality`
 

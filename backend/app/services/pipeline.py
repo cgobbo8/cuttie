@@ -131,11 +131,14 @@ def _save_words_for_clips(
             end = round(w["end"] + offset, 3)
             if end <= 0 or start >= clip_duration:
                 continue  # word falls outside clip
-            clipped_words.append({
+            entry = {
                 "word": w["word"],
                 "start": max(0, start),
                 "end": min(clip_duration, end),
-            })
+            }
+            if "speaker" in w and w["speaker"]:
+                entry["speaker"] = w["speaker"]
+            clipped_words.append(entry)
 
         if clipped_words:
             words_path = os.path.join(clip_dir, f"{base}_words.json")

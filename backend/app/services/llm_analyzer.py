@@ -894,6 +894,7 @@ def analyze_candidates(
     step4_t0 = _time.time()
     all_frames: dict[int, list[dict]] = {}
     speaker_transcripts: dict[int, str] = {}
+    speaker_labeled_words: dict[int, list[dict]] = {}
 
     def _extract_frames_one(idx: int, hp: HotPoint) -> tuple[int, list[dict]]:
         if hp.clip_start is not None and hp.clip_end is not None:
@@ -939,8 +940,8 @@ def analyze_candidates(
 
         # Diarize all candidates
         llm_candidates = [(idx, hot_points[idx]) for idx in normal_for_llm]
-        nonlocal speaker_transcripts
-        speaker_transcripts = diarize_candidates(
+        nonlocal speaker_transcripts, speaker_labeled_words
+        speaker_transcripts, speaker_labeled_words = diarize_candidates(
             wav_path=audio_path,
             candidates=llm_candidates,
             voiceprint=voiceprint,
@@ -1019,7 +1020,10 @@ def analyze_candidates(
             llm.transcript = transcript
             llm.speech_rate = round(speech_rate, 2)
 
-            if whisper_words:
+            # Use speaker-labeled words if available, fall back to plain Whisper
+            if idx in speaker_labeled_words:
+                candidate_words[idx] = speaker_labeled_words[idx]
+            elif whisper_words:
                 candidate_words[idx] = whisper_words
 
             hp.llm = llm

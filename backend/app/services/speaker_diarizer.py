@@ -406,7 +406,7 @@ def diarize_candidates(
     vod_duration: float,
     job_id: str,
     whisper_words: dict[int, list[dict]],
-) -> dict[int, str]:
+) -> tuple[dict[int, str], dict[int, list[dict]]]:
     """Diarize and produce speaker-labeled transcripts for a batch of candidates.
 
     Args:
@@ -419,7 +419,9 @@ def diarize_candidates(
         whisper_words: {candidate_idx: [{"word", "start", "end"}]} from Whisper
 
     Returns:
-        {candidate_idx: speaker_labeled_transcript_string}
+        (transcripts, labeled_words) where:
+        - transcripts: {idx: formatted_transcript_string} for LLM prompts
+        - labeled_words: {idx: [{"word", "start", "end", "speaker"}]} for subtitles
     """
     from app.services.clipper import CLIP_HALF_DURATION
 
@@ -434,12 +436,13 @@ def diarize_candidates(
     _get_pipeline()
     _get_classifier()
 
-    results: dict[int, str] = {}
+    transcripts: dict[int, str] = {}
+    all_labeled_words: dict[int, list[dict]] = {}
     # Use a lock for pyannote since MPS/CUDA calls aren't fully thread-safe
     import threading
     _diarize_lock = threading.Lock()
 
-    def _process_one(idx: int, hp) -> tuple[int, str]:
+    def _process_one(idx: int, hp) -> tuple[int, str, list[dict]]:
         # Determine segment bounds
         if hp.clip_start is not None and hp.clip_end is not None:
             start, end = hp.clip_start, hp.clip_end
@@ -451,10 +454,12 @@ def diarize_candidates(
         with _diarize_lock:
             segments = diarize_segment(wav_path, start, end, work_dir, idx)
 
+        words = whisper_words.get(idx, [])
+
         if not segments:
-            # No diarization — return plain transcript
-            words = whisper_words.get(idx, [])
-            return idx, " ".join(w["word"] for w in words) if words else ""
+            # No diarization — return plain transcript, no speaker labels
+            plain = " ".join(w["word"] for w in words) if words else ""
+            return idx, plain, words
 
         # Identify speakers
         speaker_names = identify_speakers(
@@ -463,19 +468,17 @@ def diarize_candidates(
         )
 
         # Assign speakers to Whisper words
-        words = whisper_words.get(idx, [])
         if words:
             labeled = assign_speakers_to_words(words, segments, speaker_names)
             transcript = format_labeled_transcript(labeled)
+            return idx, transcript, labeled
         else:
             # No Whisper words — just report speaker segments
             lines = []
             for seg in segments:
                 name = speaker_names.get(seg["speaker"], seg["speaker"])
                 lines.append(f"[{seg['start']:.1f}s-{seg['end']:.1f}s] {name}: (speech)")
-            transcript = "\n".join(lines)
-
-        return idx, transcript
+            return idx, "\n".join(lines), []
 
     # Process sequentially (GPU lock makes parallelism pointless for diarization)
     # But identification + word assignment can overlap with next diarization
@@ -488,14 +491,15 @@ def diarize_candidates(
         for future in as_completed(futures):
             done += 1
             try:
-                idx, transcript = future.result()
-                results[idx] = transcript
+                idx, transcript, labeled = future.result()
+                transcripts[idx] = transcript
+                if labeled:
+                    all_labeled_words[idx] = labeled
             except Exception as e:
                 idx = futures[future]
                 logger.error(f"Diarization failed for candidate {idx}: {e}")
-                # Fallback to plain transcript
                 words = whisper_words.get(idx, [])
-                results[idx] = " ".join(w["word"] for w in words) if words else ""
+                transcripts[idx] = " ".join(w["word"] for w in words) if words else ""
 
             if done % 10 == 0 or done == total:
                 logger.info(f"[{job_id[:8]}] Diarization: {done}/{total}")
@@ -508,9 +512,9 @@ def diarize_candidates(
         pass
 
     elapsed = time.time() - t0
-    non_empty = sum(1 for t in results.values() if t)
+    non_empty = sum(1 for t in transcripts.values() if t)
     logger.info(
         f"[{job_id[:8]}] Diarization complete: {non_empty}/{total} "
         f"with speech in {elapsed:.1f}s"
     )
-    return results
+    return transcripts, all_labeled_words

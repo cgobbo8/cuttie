@@ -302,6 +302,7 @@ export default function PlaybackBar({
   const [showWaveform, setShowWaveform] = useState(true);
   const [showChat, setShowChat] = useState(true);
   const [showSubtitles, setShowSubtitles] = useState(true);
+  const [hiddenSpeakers, setHiddenSpeakers] = useState<Set<string>>(new Set());
 
   const pct = (t: number) => (duration > 0 ? (t / duration) * 100 : 0);
 
@@ -415,14 +416,12 @@ export default function PlaybackBar({
 
           {/* Subtitle word markers — colored per speaker */}
           {showSubtitles && subtitleWords && subtitleWords.length > 0 && (() => {
-            // Build speaker → color map
             const hasSpeakers = subtitleWords.some((w) => w.speaker);
             const speakerColorMap = new Map<string, string>();
             if (hasSpeakers) {
               let idx = 0;
               for (const w of subtitleWords) {
                 if (w.speaker && !speakerColorMap.has(w.speaker)) {
-                  // Speaker 1 = emerald (default), others = palette
                   speakerColorMap.set(
                     w.speaker,
                     idx === 0
@@ -433,9 +432,10 @@ export default function PlaybackBar({
                 }
               }
             }
+            const visible = subtitleWords.filter((w) => !w.speaker || !hiddenSpeakers.has(w.speaker));
             return (
               <div className="absolute bottom-0 left-0 right-0 h-1.5 pointer-events-none">
-                {subtitleWords.map((w, i) => (
+                {visible.map((w, i) => (
                   <div
                     key={i}
                     className="absolute top-0 h-full rounded-sm"
@@ -566,28 +566,34 @@ export default function PlaybackBar({
               const speakers = [...new Set(subtitleWords.filter((w) => w.speaker).map((w) => w.speaker!))];
               const hasSpeakers = speakers.length > 1;
               return hasSpeakers ? (
-                // Per-speaker legend chips
                 <>
                   {speakers.map((spk, i) => {
-                    const dotColor = i === 0
-                      ? "bg-emerald-400"
-                      : "";
-                    const dotStyle = i === 0
-                      ? undefined
-                      : { backgroundColor: SPEAKER_COLORS[(i - 1) % SPEAKER_COLORS.length] };
+                    const isVisible = showSubtitles && !hiddenSpeakers.has(spk);
+                    const chipColor = i === 0
+                      ? "rgba(52, 211, 153, 1)"
+                      : SPEAKER_COLORS[(i - 1) % SPEAKER_COLORS.length];
                     return (
                       <button
                         key={spk}
-                        onClick={() => setShowSubtitles((v) => !v)}
+                        onClick={() => {
+                          setHiddenSpeakers((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(spk)) { next.delete(spk); } else { next.add(spk); }
+                            // If all hidden, turn off global; if any visible, ensure global on
+                            if (next.size >= speakers.length) { setShowSubtitles(false); next.clear(); }
+                            else { setShowSubtitles(true); }
+                            return next;
+                          });
+                        }}
                         className={`flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded-full border transition-colors ${
-                          showSubtitles
-                            ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+                          isVisible
+                            ? "border-white/[0.12] bg-white/[0.06] text-zinc-200"
                             : "border-white/[0.06] bg-transparent text-zinc-600"
                         }`}
                       >
                         <span
-                          className={`inline-block w-1.5 h-1.5 rounded-full ${showSubtitles ? dotColor : "bg-zinc-700"}`}
-                          style={showSubtitles ? dotStyle : undefined}
+                          className="inline-block w-1.5 h-1.5 rounded-full"
+                          style={{ backgroundColor: isVisible ? chipColor : "rgb(63 63 70)" }}
                         />
                         {spk}
                       </button>

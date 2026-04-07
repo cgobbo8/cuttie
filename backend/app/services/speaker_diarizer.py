@@ -199,15 +199,20 @@ def diarize_segment(
 ) -> list[dict]:
     """Diarize a pre-extracted WAV file.
 
+    Uses non-exclusive diarization (speaker_diarization) which allows
+    overlapping speech — detects more speakers than exclusive mode.
+    Word assignment handles overlaps via temporal majority.
+
     Returns list of {"speaker": str, "start": float, "end": float} where
     timestamps are relative to the segment start.
     """
     try:
         pipeline = _get_pipeline()
         output = pipeline(seg_wav)
-        annotation = getattr(output, "exclusive_speaker_diarization", None)
+        # Non-exclusive: keeps overlapping speech, detects more speakers
+        annotation = getattr(output, "speaker_diarization", None)
         if annotation is None:
-            annotation = getattr(output, "speaker_diarization", output)
+            annotation = output
 
         segments = []
         for turn, _, speaker in annotation.itertracks(yield_label=True):

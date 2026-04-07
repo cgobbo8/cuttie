@@ -40,10 +40,8 @@ function buildFallbackMap(words: SubtitleWord[], baseColor: string): Map<string,
   let idx = 0;
   for (const w of words) {
     if (w.speaker && !map.has(w.speaker)) {
-      map.set(w.speaker, {
-        color: idx === 0 ? baseColor : SPEAKER_COLORS[(idx - 1) % SPEAKER_COLORS.length],
-        textColor: "#FFFFFF",
-      });
+      const bg = idx === 0 ? baseColor : SPEAKER_COLORS[(idx - 1) % SPEAKER_COLORS.length];
+      map.set(w.speaker, { color: "#FFFFFF", bgColor: bg });
       idx++;
     }
   }
@@ -69,33 +67,23 @@ export default function SubtitleLayer({ layer }: Props) {
   if (!subtitle) return null;
 
   const showSpeaker = subtitle.showSpeaker ?? false;
+  const baseColor = subtitle.colorMode === "auto" ? subtitle.autoColor : subtitle.customColor;
+  const highlightColor = tintWhite(baseColor);
+
   const chunks = useMemo(
     () => chunkWords(subtitle.words, 4, 3.0, showSpeaker),
     [subtitle.words, showSpeaker],
   );
-  const baseColor = subtitle.colorMode === "auto" ? subtitle.autoColor : subtitle.customColor;
-
   const fallback = useMemo(
     () => showSpeaker ? buildFallbackMap(subtitle.words, baseColor) : new Map(),
     [subtitle.words, showSpeaker, baseColor],
   );
-  const highlightColor = tintWhite(baseColor);
 
   const activeChunk = chunks.find(
     (chunk) => currentTime >= chunk[0].start - 0.05 && currentTime <= chunk[chunk.length - 1].end + 0.05,
   );
 
   const showPlaceholder = subtitle.words.length === 0 || !activeChunk;
-
-  // Speaker style for the active chunk (all words in a chunk share the same speaker)
-  const chunkSpeaker = showSpeaker && activeChunk?.[0]?.speaker
-    ? getSpeakerStyle(activeChunk[0].speaker, subtitle.speakerStyles, fallback)
-    : null;
-
-  const fontSize = subtitle.fontSize;
-  const padH = Math.round(fontSize * 0.2);
-  const padV = Math.round(fontSize * 0.08);
-  const radius = Math.round(fontSize * 0.15);
 
   return (
     <div
@@ -112,27 +100,19 @@ export default function SubtitleLayer({ layer }: Props) {
       <p
         style={{
           fontFamily: `"${subtitle.fontFamily}", sans-serif`,
-          fontSize,
+          fontSize: subtitle.fontSize,
           fontWeight: 700,
           textTransform: subtitle.uppercase ? "uppercase" : "none",
-          WebkitTextStroke: chunkSpeaker ? undefined : `${Math.max(2, fontSize / 25)}px black`,
+          WebkitTextStroke: `${Math.max(2, subtitle.fontSize / 25)}px black`,
           paintOrder: "stroke fill",
           lineHeight: 1.2,
           margin: 0,
-          textShadow: chunkSpeaker ? undefined : "2px 3px 5px rgba(0,0,0,0.6)",
+          textShadow: "2px 3px 5px rgba(0,0,0,0.6)",
           wordBreak: "break-word",
-          ...(chunkSpeaker ? {
-            backgroundColor: chunkSpeaker.color,
-            color: chunkSpeaker.textColor,
-            padding: `${padV}px ${padH}px`,
-            borderRadius: radius,
-            boxDecorationBreak: "clone" as const,
-            WebkitBoxDecorationBreak: "clone" as const,
-          } : {}),
         }}
       >
         {showPlaceholder ? (
-          <span style={{ color: chunkSpeaker ? chunkSpeaker.textColor : highlightColor, opacity: 0.5 }}>
+          <span style={{ color: highlightColor, opacity: 0.5 }}>
             {subtitle.uppercase ? "SOUS-TITRES" : "Sous-titres"}
           </span>
         ) : (
@@ -140,9 +120,13 @@ export default function SubtitleLayer({ layer }: Props) {
             .filter((word) => word.start <= currentTime + 0.2)
             .map((word, i, visible) => {
               const isFilled = currentTime >= word.start;
-              const color = chunkSpeaker
-                ? (isFilled ? chunkSpeaker.textColor : chunkSpeaker.textColor + "99")
-                : (isFilled ? highlightColor : baseColor);
+              let color: string;
+              const spk = showSpeaker ? getSpeakerStyle(word.speaker, subtitle.speakerStyles, fallback) : null;
+              if (spk) {
+                color = isFilled ? spk.color : spk.bgColor;
+              } else {
+                color = isFilled ? highlightColor : baseColor;
+              }
               return (
                 <span key={`${word.start}-${i}`} style={{ color }}>
                   {subtitle.uppercase ? word.word.toUpperCase() : word.word}

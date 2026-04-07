@@ -35,8 +35,8 @@ export interface SubtitleWord {
 }
 
 export interface SpeakerStyle {
-  color: string;      // hex — the speaker's identity color (used as background pill)
-  textColor: string;  // hex — text on top of the pill (default white)
+  color: string;      // hex — spoken words color (front/highlight)
+  bgColor: string;    // hex — unspoken words color (back/dimmed)
 }
 
 export interface SubtitleData {
@@ -74,9 +74,10 @@ export function buildDefaultSpeakerStyles(
   let idx = 0;
   for (const w of words) {
     if (w.speaker && !(w.speaker in styles)) {
+      const bg = idx === 0 ? baseColor : SPEAKER_COLORS[(idx - 1) % SPEAKER_COLORS.length];
       styles[w.speaker] = {
-        color: idx === 0 ? baseColor : SPEAKER_COLORS[(idx - 1) % SPEAKER_COLORS.length],
-        textColor: "#FFFFFF",
+        color: "#FFFFFF",
+        bgColor: bg,
       };
       idx++;
     }

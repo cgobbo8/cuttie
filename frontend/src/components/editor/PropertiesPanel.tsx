@@ -463,27 +463,27 @@ export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange
                   {subtitle.showSpeaker && (
                     <div className="flex flex-col gap-2.5 pl-1">
                       {speakers.map((spk) => {
-                        const s = styles[spk] ?? { color: SPEAKER_COLORS[0], textColor: "#FFFFFF" };
+                        const s = styles[spk] ?? { color: "#FFFFFF", bgColor: SPEAKER_COLORS[0] };
                         return (
                           <div key={spk} className="flex items-center gap-2">
-                            {/* Color preview dot */}
+                            {/* Color preview dot (bgColor = the speaker's identity) */}
                             <div
                               className="w-3 h-3 rounded-full shrink-0 border border-white/[0.1]"
-                              style={{ backgroundColor: s.color }}
+                              style={{ backgroundColor: s.bgColor }}
                             />
                             {/* Speaker name */}
                             <span className="text-[10px] text-zinc-300 truncate flex-1 min-w-0" title={spk}>
                               {spk}
                             </span>
 
-                            {/* Background (pill) color */}
+                            {/* BG = unspoken words color (the "background" karaoke color) */}
                             <div className="flex items-center gap-1 shrink-0" title={t("editor.speakerBg")}>
                               <span className="text-[9px] text-zinc-500">BG</span>
                               <input
                                 type="color"
-                                value={s.color}
+                                value={s.bgColor}
                                 onChange={(e) => {
-                                  const updated = { ...styles, [spk]: { ...s, color: e.target.value } };
+                                  const updated = { ...styles, [spk]: { ...s, bgColor: e.target.value } };
                                   onSubtitleChange(layer.id, { speakerStyles: updated });
                                 }}
                                 onFocus={onCommit}
@@ -491,14 +491,14 @@ export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange
                               />
                             </div>
 
-                            {/* Text color */}
+                            {/* A = spoken words color (the "foreground" karaoke color) */}
                             <div className="flex items-center gap-1 shrink-0" title={t("editor.speakerText")}>
                               <span className="text-[9px] text-zinc-500">A</span>
                               <input
                                 type="color"
-                                value={s.textColor}
+                                value={s.color}
                                 onChange={(e) => {
-                                  const updated = { ...styles, [spk]: { ...s, textColor: e.target.value } };
+                                  const updated = { ...styles, [spk]: { ...s, color: e.target.value } };
                                   onSubtitleChange(layer.id, { speakerStyles: updated });
                                 }}
                                 onFocus={onCommit}

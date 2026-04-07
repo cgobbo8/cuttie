@@ -228,6 +228,110 @@ def diarize_segment(
         return []
 
 
+MERGE_SIMILARITY = 0.75  # cosine similarity above this → same person
+
+
+def _extract_speaker_embedding(
+    waveform: "torch.Tensor",
+    sr: int,
+    diarize_segments: list[dict],
+    speaker_id: str,
+    max_seconds: float = 15,
+) -> np.ndarray | None:
+    """Extract ECAPA-TDNN embedding for a single speaker from their segments."""
+    chunks = []
+    total = 0.0
+    for seg in diarize_segments:
+        if seg["speaker"] != speaker_id:
+            continue
+        s, e = int(seg["start"] * sr), int(seg["end"] * sr)
+        if e > waveform.shape[1]:
+            e = waveform.shape[1]
+        if e <= s:
+            continue
+        chunks.append(waveform[:, s:e])
+        total += seg["end"] - seg["start"]
+        if total >= max_seconds:
+            break
+
+    if not chunks or total < 0.5:
+        return None
+
+    audio = torch.cat(chunks, dim=1)
+    classifier = _get_classifier()
+    emb = classifier.encode_batch(audio).squeeze().cpu().numpy()
+    return emb
+
+
+def _merge_similar_speakers(
+    diarize_segments: list[dict],
+    waveform: "torch.Tensor",
+    sr: int,
+) -> list[dict]:
+    """Merge speakers with similar voice embeddings within a segment.
+
+    pyannote sometimes splits one person into multiple speaker IDs.
+    We compute ECAPA-TDNN embeddings for each speaker and merge those
+    with cosine similarity > MERGE_SIMILARITY.
+
+    Returns segments with merged speaker labels.
+    """
+    # Get unique speakers
+    speaker_ids = list({seg["speaker"] for seg in diarize_segments})
+    if len(speaker_ids) <= 1:
+        return diarize_segments
+
+    # Extract embeddings
+    embeddings: dict[str, np.ndarray] = {}
+    for spk in speaker_ids:
+        emb = _extract_speaker_embedding(waveform, sr, diarize_segments, spk)
+        if emb is not None:
+            embeddings[spk] = emb
+
+    if len(embeddings) <= 1:
+        return diarize_segments
+
+    # Build merge map: find pairs with high similarity
+    merge_to: dict[str, str] = {spk: spk for spk in speaker_ids}
+    emb_items = list(embeddings.items())
+
+    for i in range(len(emb_items)):
+        for j in range(i + 1, len(emb_items)):
+            spk_a, emb_a = emb_items[i]
+            spk_b, emb_b = emb_items[j]
+            sim = _cosine_similarity(emb_a, emb_b)
+            if sim >= MERGE_SIMILARITY:
+                # Merge the smaller speaker into the larger one
+                dur_a = sum(s["end"] - s["start"] for s in diarize_segments if s["speaker"] == spk_a)
+                dur_b = sum(s["end"] - s["start"] for s in diarize_segments if s["speaker"] == spk_b)
+                if dur_a >= dur_b:
+                    merge_to[spk_b] = merge_to[spk_a]
+                else:
+                    merge_to[spk_a] = merge_to[spk_b]
+
+    # Resolve transitive merges (A→B, B→C → A→C)
+    changed = True
+    while changed:
+        changed = False
+        for spk in merge_to:
+            target = merge_to[spk]
+            if merge_to[target] != target:
+                merge_to[spk] = merge_to[target]
+                changed = True
+
+    # Check if any merges happened
+    if all(merge_to[spk] == spk for spk in speaker_ids):
+        return diarize_segments
+
+    merged_count = len(speaker_ids) - len(set(merge_to.values()))
+    logger.debug(f"Merged {merged_count} fragmented speakers: {merge_to}")
+
+    return [
+        {**seg, "speaker": merge_to.get(seg["speaker"], seg["speaker"])}
+        for seg in diarize_segments
+    ]
+
+
 def identify_speakers(
     waveform: "torch.Tensor",
     sr: int,
@@ -235,18 +339,28 @@ def identify_speakers(
     voiceprint: np.ndarray | None,
     streamer_name: str = "Streamer",
 ) -> dict[str, str]:
-    """Identify which diarized speaker is the streamer.
+    """Merge fragmented speakers, then identify the streamer.
+
+    1. Merge speakers with similar ECAPA-TDNN embeddings (fixes pyannote
+       splitting one person into multiple IDs)
+    2. Match against voiceprint to label the streamer
 
     Args:
         waveform: Pre-loaded audio tensor (1, samples) at given sr
         sr: Sample rate (should be 16000)
-        diarize_segments: Output from diarize_segment
+        diarize_segments: Output from diarize_segment (MODIFIED in-place with merged labels)
         voiceprint: Streamer embedding (or None for dominant-speaker heuristic)
         streamer_name: Display name for the streamer
 
     Returns {speaker_id: display_name} mapping.
     """
-    # Gather unique speakers and their total durations
+    # Step 1: Merge fragmented speakers
+    merged = _merge_similar_speakers(diarize_segments, waveform, sr)
+    # Update segments in-place so callers see merged labels
+    diarize_segments.clear()
+    diarize_segments.extend(merged)
+
+    # Gather unique speakers and durations (post-merge)
     speaker_durations: dict[str, float] = {}
     for seg in diarize_segments:
         dur = seg["end"] - seg["start"]
@@ -258,7 +372,7 @@ def identify_speakers(
     speakers = sorted(speaker_durations.keys(), key=lambda s: -speaker_durations[s])
     names: dict[str, str] = {}
 
-    # Single speaker → always the streamer, skip voiceprint
+    # Single speaker → always the streamer
     if len(speakers) == 1:
         names[speakers[0]] = streamer_name
         return names
@@ -270,32 +384,17 @@ def identify_speakers(
             names[spk] = spk
         return names
 
-    # Multi-speaker: match against voiceprint via ECAPA-TDNN
+    # Step 2: Match against voiceprint
     try:
-        classifier = _get_classifier()
         best_sim = -1.0
         best_spk = None
 
         for spk in speakers:
-            chunks = []
-            total = 0.0
-            for seg in diarize_segments:
-                if seg["speaker"] != spk:
-                    continue
-                s, e = int(seg["start"] * sr), int(seg["end"] * sr)
-                if e > waveform.shape[1]:
-                    e = waveform.shape[1]
-                chunks.append(waveform[:, s:e])
-                total += seg["end"] - seg["start"]
-                if total >= 15:
-                    break
-
-            if not chunks or total < 1:
+            emb = _extract_speaker_embedding(waveform, sr, diarize_segments, spk)
+            if emb is None:
                 names[spk] = spk
                 continue
 
-            audio = torch.cat(chunks, dim=1)
-            emb = classifier.encode_batch(audio).squeeze().cpu().numpy()
             sim = _cosine_similarity(voiceprint, emb)
 
             if sim > best_sim:

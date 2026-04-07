@@ -11,7 +11,7 @@ from app.models.schemas import HotPoint, StepTiming
 from app.services.audio_analyzer import analyze_audio
 from app.services.audio_classifier import classify_audio
 from app.services.chat_analyzer import analyze_chat
-from app.services.clipper import CLIPS_DIR, extract_group, plan_downloads, plan_downloads_detected
+from app.services.clipper import CLIPS_DIR, compute_clip_bounds, extract_group, plan_downloads, plan_downloads_detected
 from app.services.frame_extractor import get_vod_direct_url
 from app.services.db import get_job, save_hot_points, update_hot_point_clip, update_job
 from app.services.downloader import extract_metadata, download_audio, download_chat
@@ -85,8 +85,10 @@ def _save_words_for_clips(
 ) -> None:
     """Save word-level subtitle JSON for each clipped hot point.
 
-    Words timestamps are relative to the transcription window (±30s around peak).
-    We offset them to be relative to the actual clip start (from _meta.json).
+    When clip bounds are pre-computed, Whisper timestamps are already relative
+    to the clip window.  We just need to offset by the small delta between
+    the Whisper window (hp.clip_start) and the actual extracted clip (meta vod_start),
+    which can differ slightly due to deduplication or silence snapping.
     """
     from app.services.clipper import CLIP_HALF_DURATION
 
@@ -114,11 +116,12 @@ def _save_words_for_clips(
         except Exception:
             continue
 
-        # Words are relative to the transcription window start
-        # (hp.timestamp_seconds - CLIP_HALF_DURATION)
-        whisper_window_start = max(0, hp.timestamp_seconds - CLIP_HALF_DURATION)
+        # Whisper window start: pre-computed bounds or legacy ±30s
+        if hp.clip_start is not None:
+            whisper_window_start = hp.clip_start
+        else:
+            whisper_window_start = max(0, hp.timestamp_seconds - CLIP_HALF_DURATION)
 
-        # Offset words to be relative to clip start
         offset = whisper_window_start - clip_vod_start
         clip_duration = meta.get("vod_end", 0) - clip_vod_start
 
@@ -154,6 +157,7 @@ def _run_clipping_only(
     timer: "StepTimer | None" = None,
     detected_bounds: bool = False,
     direct_url: str | None = None,
+    audio_path: str | None = None,
 ) -> None:
     """Download and compress clips for already-analyzed hot points.
 
@@ -178,7 +182,7 @@ def _run_clipping_only(
     if detected_bounds:
         groups, shared_clips = plan_downloads_detected(hot_points, vod_duration)
     else:
-        groups, shared_clips = plan_downloads(hot_points, vod_duration, audio_features)
+        groups, shared_clips = plan_downloads(hot_points, vod_duration, audio_features, audio_path)
     total_clips = sum(len(g["clips"]) for g in groups)
 
     DL_WORKERS = 5
@@ -413,6 +417,10 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
 
             check_cancelled(job_id)
 
+            # 5b. Pre-compute clip boundaries from RMS so LLM sees the real clip content
+            logger.info(f"[{job_id[:8]}] Computing clip boundaries from RMS...")
+            compute_clip_bounds(hot_points, duration, audio_features, audio_path)
+
             # 6. Unified LLM analysis: frames from VOD + Whisper + LLM → score & re-rank → top 20
             vod_meta = {
                 "title": vod_title or "",
@@ -476,6 +484,7 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
                 chat_messages=chat_messages,
                 timer=timer,
                 direct_url=direct_url,
+                audio_path=audio_path,
             )
 
             # Clip detected "clip" moments with fixed bounds (-2min / +5s)

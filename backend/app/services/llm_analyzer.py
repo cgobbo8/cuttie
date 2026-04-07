@@ -17,7 +17,6 @@ import json
 import logging
 import os
 import re
-import difflib
 import shutil
 import subprocess
 import time as _time
@@ -168,8 +167,12 @@ def _transcribe_candidates(
     transcripts: dict[int, tuple[str, float, float, list[tuple[float, float, str]], list[dict]]] = {}
 
     def _do_one(idx: int, hp: HotPoint) -> tuple[int, str, float, float, list, list[dict]]:
-        clip_start = max(0, hp.timestamp_seconds - CLIP_HALF_DURATION)
-        clip_end = min(vod_duration, hp.timestamp_seconds + CLIP_HALF_DURATION)
+        # Use pre-computed RMS bounds if available, else ±30s fallback
+        if hp.clip_start is not None and hp.clip_end is not None:
+            clip_start, clip_end = hp.clip_start, hp.clip_end
+        else:
+            clip_start = max(0, hp.timestamp_seconds - CLIP_HALF_DURATION)
+            clip_end = min(vod_duration, hp.timestamp_seconds + CLIP_HALF_DURATION)
 
         seg_path = os.path.join(triage_dir, f"seg_{idx:03d}.mp3")
 
@@ -207,82 +210,6 @@ def _transcribe_candidates(
 
 
 # ─── Frame encoding ──────────────────────────────────────────────────────────
-
-def _realign_words(corrected_text: str, whisper_words: list[dict]) -> list[dict]:
-    """Realign LLM-corrected transcript to Whisper word-level timestamps.
-
-    Uses difflib.SequenceMatcher to find real correspondences between corrected
-    words and original Whisper words, then assigns timestamps from matched
-    originals.  Unmatched corrected words inherit timing from their neighbours.
-    """
-    corrected_words = corrected_text.split()
-    if not corrected_words or not whisper_words:
-        return whisper_words
-
-    orig_words_lower = [w["word"].strip().lower() for w in whisper_words]
-    corr_words_lower = [w.lower() for w in corrected_words]
-
-    # Sequence alignment between original and corrected word lists
-    sm = difflib.SequenceMatcher(None, orig_words_lower, corr_words_lower, autojunk=False)
-
-    # Map each corrected-word index to the original-word index it matches
-    corr_to_orig: dict[int, int] = {}
-    for orig_i, corr_i, size in sm.get_matching_blocks():
-        for k in range(size):
-            corr_to_orig[corr_i + k] = orig_i + k
-
-    # Build result with timestamps from matched words
-    result: list[dict] = []
-    for ci, cw in enumerate(corrected_words):
-        if ci in corr_to_orig:
-            oi = corr_to_orig[ci]
-            result.append({
-                "word": cw,
-                "start": whisper_words[oi]["start"],
-                "end": whisper_words[oi]["end"],
-            })
-        else:
-            # Placeholder — will be filled by interpolation below
-            result.append({"word": cw, "start": None, "end": None})
-
-    # Interpolate timestamps for unmatched words from nearest matched neighbours
-    for ci in range(len(result)):
-        if result[ci]["start"] is not None:
-            continue
-
-        # Find nearest matched word before and after
-        prev_end = None
-        for p in range(ci - 1, -1, -1):
-            if result[p]["end"] is not None:
-                prev_end = result[p]["end"]
-                break
-        next_start = None
-        for n in range(ci + 1, len(result)):
-            if result[n]["start"] is not None:
-                next_start = result[n]["start"]
-                break
-
-        if prev_end is not None and next_start is not None:
-            result[ci]["start"] = prev_end
-            result[ci]["end"] = next_start
-        elif prev_end is not None:
-            result[ci]["start"] = prev_end
-            result[ci]["end"] = prev_end + 0.2
-        elif next_start is not None:
-            result[ci]["start"] = max(0, next_start - 0.2)
-            result[ci]["end"] = next_start
-        else:
-            # No matched neighbours at all — fall back to Whisper words
-            return whisper_words
-
-    # Ensure monotonicity
-    for ci in range(1, len(result)):
-        if result[ci]["start"] < result[ci - 1]["start"]:
-            result[ci]["start"] = result[ci - 1]["start"]
-        if result[ci]["end"] < result[ci]["start"]:
-            result[ci]["end"] = result[ci]["start"] + 0.05
-
-    return result
 
 
 def _encode_frame(path: str) -> str | None:
@@ -478,7 +405,6 @@ Return a single JSON object:
 - "virality_score": 0 to 1 — follow the scoring guidelines above strictly.
 - "summary": ONE single punch line of 10-15 words max, YouTube/TikTok clip title style. Must make people want to click. In French.
 - "is_clipable": true if the clip is understandable on its own without extra context
-- "corrected_transcript": the corrected transcript based on what you actually hear in the audio. Fix misheard words, wrong names, gibberish. Keep the same language as the original speech. If the transcript is already correct, return it as-is. Do NOT translate, just fix errors.
 - "key_moments": array of 3-6 key moments, each with:
   - "time": float, MUST be one of the exact frame timestamps shown on the images
   - "label": short title (5-8 words), in French{game_narrative}
@@ -575,7 +501,7 @@ def _call_unified_llm(
             ))
 
     llm = LlmAnalysis(
-        transcript="",  # filled by caller (may be overridden by corrected_transcript)
+        transcript="",  # filled by caller
         speech_rate=0.0,
         category=data.get("category", ""),
         virality_score=float(data.get("virality_score", 0)),
@@ -585,9 +511,7 @@ def _call_unified_llm(
         key_moments=key_moments,
     )
 
-    corrected = data.get("corrected_transcript", "")
-
-    return llm, clip_name, corrected
+    return llm, clip_name
 
 
 # ─── Clip keyword detection in transcripts ────────────────────────────────────
@@ -735,8 +659,11 @@ def analyze_candidates(
     all_frames: dict[int, list[dict]] = {}
 
     def _extract_frames_one(idx: int, hp: HotPoint) -> tuple[int, list[dict]]:
-        start = max(0, hp.timestamp_seconds - CLIP_HALF_DURATION)
-        end = min(vod_duration, hp.timestamp_seconds + CLIP_HALF_DURATION)
+        if hp.clip_start is not None and hp.clip_end is not None:
+            start, end = hp.clip_start, hp.clip_end
+        else:
+            start = max(0, hp.timestamp_seconds - CLIP_HALF_DURATION)
+            end = min(vod_duration, hp.timestamp_seconds + CLIP_HALF_DURATION)
         frames = extract_frames_from_url(
             direct_url, job_id, idx, [start, end], NUM_FRAMES,
         )
@@ -782,11 +709,14 @@ def analyze_candidates(
         if not os.path.isfile(audio_path):
             audio_path = None
 
-        # Chat context
+        # Chat context — use pre-computed clip bounds
         chat_context = ""
         if chat_messages:
-            clip_start = max(0, hp.timestamp_seconds - CLIP_HALF_DURATION)
-            clip_end = hp.timestamp_seconds + CLIP_HALF_DURATION
+            if hp.clip_start is not None and hp.clip_end is not None:
+                clip_start, clip_end = hp.clip_start, hp.clip_end
+            else:
+                clip_start = max(0, hp.timestamp_seconds - CLIP_HALF_DURATION)
+                clip_end = hp.timestamp_seconds + CLIP_HALF_DURATION
             chat_context = _extract_chat_for_clip(chat_messages, clip_start, clip_end)
 
         prompt = _build_unified_prompt(
@@ -801,14 +731,11 @@ def analyze_candidates(
         )
 
         try:
-            llm, clip_name, corrected = _call_unified_llm(frames, prompt, audio_path)
-            llm.transcript = corrected if corrected else transcript
+            llm, clip_name = _call_unified_llm(frames, prompt, audio_path)
+            llm.transcript = transcript
             llm.speech_rate = round(speech_rate, 2)
 
-            # Build subtitle words: realign corrected transcript to Whisper timestamps
-            if corrected and whisper_words:
-                candidate_words[idx] = _realign_words(corrected, whisper_words)
-            elif whisper_words:
+            if whisper_words:
                 candidate_words[idx] = whisper_words
 
             hp.llm = llm
@@ -865,6 +792,19 @@ def analyze_candidates(
     kept = normal_hps[:keep_n]
     dropped = normal_hps[keep_n:]
 
+    # Remap candidate_words from original indices to kept-list indices
+    # so _save_words_for_clips matches words to the correct clip.
+    hp_to_words: dict[int, list[dict]] = {}
+    for orig_idx in normal_for_llm:
+        if orig_idx in candidate_words:
+            hp_to_words[id(hot_points[orig_idx])] = candidate_words[orig_idx]
+
+    kept_words: dict[int, list[dict]] = {}
+    for new_idx, hp in enumerate(kept):
+        words = hp_to_words.get(id(hp))
+        if words:
+            kept_words[new_idx] = words
+
     logger.info(f"═══ Re-ranking results ═══")
     for i, hp in enumerate(kept):
         cat = hp.llm.category if hp.llm else "?"
@@ -899,7 +839,7 @@ def analyze_candidates(
     )
 
     save_hot_points(job_id, kept)
-    return kept, detected_hps, candidate_words
+    return kept, detected_hps, kept_words
 
 
 # ─── Post-clipping single clip analysis (for resume/retry) ───────────────────
@@ -961,8 +901,8 @@ def analyze_single_clip(
     )
 
     try:
-        llm, clip_name, corrected = _call_unified_llm(frames, prompt, audio_path)
-        llm.transcript = corrected if corrected else transcript
+        llm, clip_name = _call_unified_llm(frames, prompt, audio_path)
+        llm.transcript = transcript
         llm.speech_rate = round(speech_rate, 2)
     except Exception as e:
         logger.error(f"Unified analysis failed: {e}")

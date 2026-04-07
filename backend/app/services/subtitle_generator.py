@@ -10,7 +10,7 @@ import subprocess
 
 import cv2
 import numpy as np
-from app.services.openai_client import get_openrouter_client, get_groq_client, LLM_MODEL, WHISPER_MODEL
+from app.services.openai_client import get_groq_client, WHISPER_MODEL
 
 logger = logging.getLogger(__name__)
 
@@ -180,107 +180,6 @@ def _tint_white(r: int, g: int, b: int, strength: float = 0.15) -> tuple[int, in
         int(255 * (1 - strength) + g * strength),
         int(255 * (1 - strength) + b * strength),
     )
-
-
-def _rewrite_words_with_llm(words: list[dict]) -> list[dict]:
-    """Fix Whisper transcription issues using a fast LLM.
-
-    Whisper often drops accents, apostrophes, and splits words incorrectly
-    in French (e.g. "Bon jour l ami" instead of "Bonjour l'ami").
-
-    Sends raw text to LLM, gets corrected text, then re-aligns word timestamps
-    using character-position mapping.
-    """
-    if not words:
-        return words
-
-    raw_text = " ".join(w["word"].strip() for w in words)
-    if not raw_text.strip():
-        return words
-
-    client = get_openrouter_client()
-    try:
-        response = client.chat.completions.create(
-            model=LLM_MODEL,
-            temperature=0,
-            messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "Tu es un correcteur de sous-titres français. "
-                        "Corrige l'orthographe, les accents, les apostrophes et les mots mal découpés. "
-                        "Ne change PAS le sens ni n'ajoute/supprime de mots. "
-                        "Retourne UNIQUEMENT le texte corrigé, rien d'autre."
-                    ),
-                },
-                {"role": "user", "content": raw_text},
-            ],
-        )
-        corrected = response.choices[0].message.content.strip()
-    except Exception as e:
-        logger.warning(f"LLM subtitle rewriting failed, using raw: {e}")
-        return words
-
-    # Re-align corrected words to original timestamps via sequence matching
-    corrected_words = corrected.split()
-    if not corrected_words:
-        return words
-
-    import difflib
-
-    orig_words_lower = [w["word"].strip().lower() for w in words]
-    corr_words_lower = [cw.lower() for cw in corrected_words]
-
-    sm = difflib.SequenceMatcher(None, orig_words_lower, corr_words_lower, autojunk=False)
-
-    corr_to_orig: dict[int, int] = {}
-    for orig_i, corr_i, size in sm.get_matching_blocks():
-        for k in range(size):
-            corr_to_orig[corr_i + k] = orig_i + k
-
-    result = []
-    for ci, cw in enumerate(corrected_words):
-        if ci in corr_to_orig:
-            oi = corr_to_orig[ci]
-            result.append({"word": cw, "start": words[oi]["start"], "end": words[oi]["end"]})
-        else:
-            result.append({"word": cw, "start": None, "end": None})
-
-    # Interpolate timestamps for unmatched words from nearest matched neighbours
-    for ci in range(len(result)):
-        if result[ci]["start"] is not None:
-            continue
-        prev_end = None
-        for p in range(ci - 1, -1, -1):
-            if result[p]["end"] is not None:
-                prev_end = result[p]["end"]
-                break
-        next_start = None
-        for n in range(ci + 1, len(result)):
-            if result[n]["start"] is not None:
-                next_start = result[n]["start"]
-                break
-        if prev_end is not None and next_start is not None:
-            result[ci]["start"] = prev_end
-            result[ci]["end"] = next_start
-        elif prev_end is not None:
-            result[ci]["start"] = prev_end
-            result[ci]["end"] = prev_end + 0.2
-        elif next_start is not None:
-            result[ci]["start"] = max(0, next_start - 0.2)
-            result[ci]["end"] = next_start
-        else:
-            return words  # no matches at all — keep original
-
-    # Ensure monotonicity
-    for ci in range(1, len(result)):
-        if result[ci]["start"] < result[ci - 1]["start"]:
-            result[ci]["start"] = result[ci - 1]["start"]
-        if result[ci]["end"] < result[ci]["start"]:
-            result[ci]["end"] = result[ci]["start"] + 0.05
-
-    logger.info(f"Subtitle rewrite: {len(words)} words -> {len(result)} words")
-    return result
 
 
 def _format_ass_time(seconds: float) -> str:

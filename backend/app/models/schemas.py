@@ -56,6 +56,8 @@ class HotPoint(BaseModel):
     final_score: float | None = None  # blended score after LLM (0.4 heuristic + 0.6 LLM)
     signals: SignalBreakdown
     chat_mood: str = ""  # pre-tag from chat sentiment: "hype", "fun", "rip", or ""
+    clip_start: float | None = None  # pre-computed VOD start (RMS bounds)
+    clip_end: float | None = None    # pre-computed VOD end (RMS bounds)
     clip_filename: str | None = None
     vertical_filename: str | None = None
     clip_name: str = ""  # short display name, LLM-generated then user-editable

@@ -51,14 +51,15 @@ export interface SubtitleData {
   speakerStyles?: Record<string, SpeakerStyle>;  // custom per-speaker colors
 }
 
-/** Distinct colors assigned to speakers when showSpeaker is enabled. */
+/** Distinct colors assigned to speakers when showSpeaker is enabled.
+ *  Chosen for maximum visual contrast between adjacent speakers. */
 export const SPEAKER_COLORS: string[] = [
-  "#E879F9", // fuchsia-400
-  "#38BDF8", // sky-400
-  "#34D399", // emerald-400
-  "#FB923C", // orange-400
-  "#F472B6", // pink-400
-  "#A78BFA", // violet-400
+  "#F97316", // orange-500
+  "#22D3EE", // cyan-400
+  "#F43F5E", // rose-500
+  "#A3E635", // lime-400
+  "#C084FC", // purple-400
+  "#FBBF24", // amber-400
 ];
 
 /** Tint white toward a color (strength 0→pure white, 1→pure color). */

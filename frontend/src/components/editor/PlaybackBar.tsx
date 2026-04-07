@@ -33,6 +33,8 @@ interface Props {
   chatTimestamps?: number[];
   /** Subtitle word intervals with optional speaker */
   subtitleWords?: { start: number; end: number; speaker?: string }[];
+  /** Per-speaker styles from subtitle layer (for matching timeline colors to editor) */
+  speakerStyles?: Record<string, { color: string; bgColor: string }>;
   /** Currently selected layer — shows lifetime bar when set */
   selectedLayer?: Layer | null;
   /** Called to update an animation on the selected layer (for lifetime bar drag) */
@@ -291,6 +293,7 @@ export default function PlaybackBar({
   onUpdateAnimation,
   onCommitAnimation,
   selectedLayerKeyframes,
+  speakerStyles,
 }: Props) {
   const { t } = useTranslation();
   const trackRef = useRef<HTMLDivElement>(null);
@@ -422,12 +425,18 @@ export default function PlaybackBar({
               let idx = 0;
               for (const w of subtitleWords) {
                 if (w.speaker && !speakerColorMap.has(w.speaker)) {
-                  speakerColorMap.set(
-                    w.speaker,
-                    idx === 0
-                      ? "rgba(52, 211, 153, 0.5)"
-                      : SPEAKER_COLORS[(idx - 1) % SPEAKER_COLORS.length] + "80",
-                  );
+                  // Use speakerStyles bgColor if available, else fallback
+                  const fromStyles = speakerStyles?.[w.speaker]?.bgColor;
+                  if (fromStyles) {
+                    speakerColorMap.set(w.speaker, fromStyles + "80");
+                  } else {
+                    speakerColorMap.set(
+                      w.speaker,
+                      idx === 0
+                        ? "rgba(52, 211, 153, 0.5)"
+                        : SPEAKER_COLORS[(idx - 1) % SPEAKER_COLORS.length] + "80",
+                    );
+                  }
                   idx++;
                 }
               }
@@ -569,9 +578,10 @@ export default function PlaybackBar({
                 <>
                   {speakers.map((spk, i) => {
                     const isVisible = showSubtitles && !hiddenSpeakers.has(spk);
-                    const chipColor = i === 0
-                      ? "rgba(52, 211, 153, 1)"
-                      : SPEAKER_COLORS[(i - 1) % SPEAKER_COLORS.length];
+                    const fromStyles = speakerStyles?.[spk]?.bgColor;
+                    const chipColor = fromStyles
+                      ? fromStyles
+                      : (i === 0 ? "rgba(52, 211, 153, 1)" : SPEAKER_COLORS[(i - 1) % SPEAKER_COLORS.length]);
                     return (
                       <button
                         key={spk}

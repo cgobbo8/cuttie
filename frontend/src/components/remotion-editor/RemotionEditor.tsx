@@ -948,6 +948,7 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
         waveform={waveform}
         chatTimestamps={chatTimestamps.length > 0 ? chatTimestamps : undefined}
         subtitleWords={subtitleWords.length > 0 ? subtitleWords : undefined}
+        speakerStyles={subtitleLayer?.subtitle?.speakerStyles}
         selectedLayer={selected}
         selectedLayerKeyframes={selected?.keyframes}
         onUpdateAnimation={updateAnimation}

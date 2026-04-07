@@ -1,6 +1,6 @@
 import React, { useMemo } from "react";
 import { useCurrentFrame, useVideoConfig } from "remotion";
-import type { Layer, SubtitleWord } from "../editorTypes";
+import type { Layer, SubtitleWord, SpeakerStyle } from "../editorTypes";
 import { SPEAKER_COLORS } from "../editorTypes";
 
 function chunkWords(words: SubtitleWord[], maxWords = 4, maxDuration = 3.0, splitOnSpeaker = false): SubtitleWord[][] {
@@ -31,7 +31,18 @@ function tintWhite(hex: string, strength = 0.15): string {
   return `rgb(${tr},${tg},${tb})`;
 }
 
-function buildSpeakerColorMap(words: SubtitleWord[]): Map<string, string> {
+function resolveSpeakerStyle(
+  speaker: string | undefined,
+  speakerStyles: Record<string, SpeakerStyle> | undefined,
+  fallbackMap: Map<string, string>,
+  baseColor: string,
+): { textColor: string; bgColor: string } {
+  if (!speaker) return { textColor: baseColor, bgColor: "" };
+  if (speakerStyles?.[speaker]) return speakerStyles[speaker];
+  return { textColor: fallbackMap.get(speaker) ?? baseColor, bgColor: "" };
+}
+
+function buildFallbackMap(words: SubtitleWord[]): Map<string, string> {
   const map = new Map<string, string>();
   let idx = 0;
   for (const w of words) {
@@ -58,8 +69,8 @@ export default function SubtitleLayer({ layer }: Props) {
     () => (subtitle ? chunkWords(subtitle.words, 4, 3.0, showSpeaker) : []),
     [subtitle, showSpeaker],
   );
-  const speakerColors = useMemo(
-    () => showSpeaker && subtitle ? buildSpeakerColorMap(subtitle.words) : null,
+  const fallbackMap = useMemo(
+    () => showSpeaker && subtitle ? buildFallbackMap(subtitle.words) : new Map(),
     [subtitle, showSpeaker],
   );
 
@@ -106,16 +117,23 @@ export default function SubtitleLayer({ layer }: Props) {
             .map((word, i, visible) => {
               const isFilled = currentTime >= word.start;
               let color: string;
-              if (showSpeaker && speakerColors && word.speaker) {
-                const spkColor = speakerColors.get(word.speaker) ?? baseColor;
-                color = isFilled ? tintWhite(spkColor) : spkColor;
+              let bgColor = "";
+              if (showSpeaker && word.speaker) {
+                const s = resolveSpeakerStyle(word.speaker, subtitle.speakerStyles, fallbackMap, baseColor);
+                color = isFilled ? tintWhite(s.textColor) : s.textColor;
+                bgColor = s.bgColor;
               } else {
                 color = isFilled ? highlightColor : baseColor;
               }
               return (
                 <span
                   key={`${word.start}-${i}`}
-                  style={{ color }}
+                  style={{
+                    color,
+                    backgroundColor: bgColor || undefined,
+                    borderRadius: bgColor ? 4 : undefined,
+                    padding: bgColor ? "0 4px" : undefined,
+                  }}
                 >
                   {subtitle.uppercase ? word.word.toUpperCase() : word.word}
                   {i < visible.length - 1 ? " " : ""}

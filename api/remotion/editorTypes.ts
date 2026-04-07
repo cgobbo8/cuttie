@@ -37,6 +37,11 @@ export interface SubtitleWord {
   speaker?: string;
 }
 
+export interface SpeakerStyle {
+  textColor: string;
+  bgColor: string;
+}
+
 export interface SubtitleData {
   words: SubtitleWord[];
   fontFamily: string;
@@ -46,6 +51,7 @@ export interface SubtitleData {
   autoColor: string;      // hex — dominant color from backend
   uppercase: boolean;
   showSpeaker: boolean;
+  speakerStyles?: Record<string, SpeakerStyle>;
 }
 
 export const SPEAKER_COLORS: string[] = [

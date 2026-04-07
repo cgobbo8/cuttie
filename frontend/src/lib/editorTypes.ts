@@ -34,6 +34,11 @@ export interface SubtitleWord {
   speaker?: string;
 }
 
+export interface SpeakerStyle {
+  textColor: string;  // hex (#RRGGBB)
+  bgColor: string;    // hex or "" for no background
+}
+
 export interface SubtitleData {
   words: SubtitleWord[];
   fontFamily: string;
@@ -43,6 +48,7 @@ export interface SubtitleData {
   autoColor: string;      // hex — dominant color from backend
   uppercase: boolean;
   showSpeaker: boolean;   // per-speaker colored subtitles
+  speakerStyles?: Record<string, SpeakerStyle>;  // custom per-speaker colors
 }
 
 /** Distinct colors assigned to speakers when showSpeaker is enabled. */
@@ -54,6 +60,22 @@ export const SPEAKER_COLORS: string[] = [
   "#F472B6", // pink-400
   "#A78BFA", // violet-400
 ];
+
+/** Build default speaker styles from words — assigns colors from SPEAKER_COLORS palette. */
+export function buildDefaultSpeakerStyles(words: SubtitleWord[]): Record<string, SpeakerStyle> {
+  const styles: Record<string, SpeakerStyle> = {};
+  let idx = 0;
+  for (const w of words) {
+    if (w.speaker && !(w.speaker in styles)) {
+      styles[w.speaker] = {
+        textColor: SPEAKER_COLORS[idx % SPEAKER_COLORS.length],
+        bgColor: "",
+      };
+      idx++;
+    }
+  }
+  return styles;
+}
 
 /** Default subtitle settings — used as fallback when theme has a subtitle layer but no config. */
 export const DEFAULT_SUBTITLE_CONFIG: Omit<SubtitleData, "words" | "autoColor"> = {

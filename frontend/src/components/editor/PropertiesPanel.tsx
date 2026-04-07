@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Crop, Diamond, ImagePlus, X } from "lucide-react";
 import { HintBadge } from "../ui/Tooltip";
 import type { Layer, LayerStyle, ShapeData, SubtitleData, ChatData, TextData, AssetData } from "../../lib/editorTypes";
-import { SUBTITLE_FONTS, TEXT_FONTS, BOX_SHADOW_PRESETS } from "../../lib/editorTypes";
+import { SUBTITLE_FONTS, TEXT_FONTS, BOX_SHADOW_PRESETS, SPEAKER_COLORS, buildDefaultSpeakerStyles } from "../../lib/editorTypes";
 import { hasKeyframeAt } from "../../lib/animations";
 import { uploadAsset, assetUrl } from "../../lib/api";
 import { getWidgetDef } from "./widgets/registry";
@@ -423,27 +423,113 @@ export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange
               </button>
             </div>
 
-            {/* Speaker colors toggle */}
-            {subtitle.words.some((w) => w.speaker) && (
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] text-zinc-400 uppercase tracking-wider font-medium">
-                  {t("editor.speakerColors")}
-                </span>
-                <button
-                  onClick={() => {
-                    onCommit();
-                    onSubtitleChange(layer.id, { showSpeaker: !subtitle.showSpeaker });
-                  }}
-                  className={`text-[10px] px-2.5 py-1 rounded-md font-medium transition-colors ${
-                    subtitle.showSpeaker
-                      ? "bg-purple-500/20 text-purple-300"
-                      : "bg-white/[0.04] text-zinc-500"
-                  }`}
-                >
-                  {subtitle.showSpeaker ? "ON" : "OFF"}
-                </button>
-              </div>
-            )}
+            {/* Speaker colors section */}
+            {subtitle.words.some((w) => w.speaker) && (() => {
+              const speakers = [...new Set(subtitle.words.filter((w) => w.speaker).map((w) => w.speaker!))];
+              const styles = subtitle.speakerStyles ?? buildDefaultSpeakerStyles(subtitle.words);
+              return (
+                <>
+                  <div className="h-px bg-white/[0.06]" />
+
+                  {/* Toggle + count */}
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] text-zinc-400 uppercase tracking-wider font-medium">
+                      {t("editor.speakerColors")}
+                      <span className="ml-1.5 text-zinc-500">({speakers.length})</span>
+                    </span>
+                    <button
+                      onClick={() => {
+                        onCommit();
+                        const enabling = !subtitle.showSpeaker;
+                        onSubtitleChange(layer.id, {
+                          showSpeaker: enabling,
+                          ...(enabling && !subtitle.speakerStyles ? { speakerStyles: styles } : {}),
+                        });
+                      }}
+                      className={`text-[10px] px-2.5 py-1 rounded-md font-medium transition-colors ${
+                        subtitle.showSpeaker
+                          ? "bg-purple-500/20 text-purple-300"
+                          : "bg-white/[0.04] text-zinc-500"
+                      }`}
+                    >
+                      {subtitle.showSpeaker ? "ON" : "OFF"}
+                    </button>
+                  </div>
+
+                  {/* Per-speaker color pickers */}
+                  {subtitle.showSpeaker && (
+                    <div className="flex flex-col gap-2 pl-1">
+                      {speakers.map((spk) => {
+                        const s = styles[spk] ?? { textColor: SPEAKER_COLORS[0], bgColor: "" };
+                        return (
+                          <div key={spk} className="flex items-center gap-2">
+                            {/* Speaker name */}
+                            <span className="text-[10px] text-zinc-300 truncate flex-1 min-w-0" title={spk}>
+                              {spk}
+                            </span>
+
+                            {/* Text color */}
+                            <div className="flex items-center gap-1 shrink-0" title={t("editor.speakerText")}>
+                              <span className="text-[9px] text-zinc-500">A</span>
+                              <input
+                                type="color"
+                                value={s.textColor}
+                                onChange={(e) => {
+                                  const updated = { ...styles, [spk]: { ...s, textColor: e.target.value } };
+                                  onSubtitleChange(layer.id, { speakerStyles: updated });
+                                }}
+                                onFocus={onCommit}
+                                className="w-5 h-5 bg-transparent border border-white/[0.1] rounded cursor-pointer"
+                              />
+                            </div>
+
+                            {/* Background color */}
+                            <div className="flex items-center gap-1 shrink-0" title={t("editor.speakerBg")}>
+                              <span className="text-[9px] text-zinc-500">BG</span>
+                              {s.bgColor ? (
+                                <div className="relative">
+                                  <input
+                                    type="color"
+                                    value={s.bgColor}
+                                    onChange={(e) => {
+                                      const updated = { ...styles, [spk]: { ...s, bgColor: e.target.value } };
+                                      onSubtitleChange(layer.id, { speakerStyles: updated });
+                                    }}
+                                    onFocus={onCommit}
+                                    className="w-5 h-5 bg-transparent border border-white/[0.1] rounded cursor-pointer"
+                                  />
+                                  <button
+                                    onClick={() => {
+                                      onCommit();
+                                      const updated = { ...styles, [spk]: { ...s, bgColor: "" } };
+                                      onSubtitleChange(layer.id, { speakerStyles: updated });
+                                    }}
+                                    className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-zinc-700 text-zinc-400 text-[7px] flex items-center justify-center hover:bg-red-500/50 hover:text-white"
+                                  >
+                                    ×
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => {
+                                    onCommit();
+                                    const updated = { ...styles, [spk]: { ...s, bgColor: s.textColor + "33" } };
+                                    onSubtitleChange(layer.id, { speakerStyles: updated });
+                                  }}
+                                  className="w-5 h-5 border border-dashed border-white/[0.1] rounded text-[9px] text-zinc-600 hover:border-white/[0.2] hover:text-zinc-400 flex items-center justify-center"
+                                >
+                                  +
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </>
+              );
+            })()}
 
             <div className="h-px bg-white/[0.06]" />
 

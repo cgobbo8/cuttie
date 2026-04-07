@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { Loader2 } from "lucide-react";
-import type { Layer, SubtitleWord, ChatMessage } from "../../lib/editorTypes";
+import type { Layer, SubtitleWord, ChatMessage, SpeakerStyle } from "../../lib/editorTypes";
 import { BOX_SHADOW_PRESETS, SPEAKER_COLORS } from "../../lib/editorTypes";
 import { evaluateAnimations, resolveKeyframes } from "../../lib/animations";
 import { getWidgetDef } from "../editor/widgets/registry";
@@ -30,7 +30,7 @@ function chunkWords(words: SubtitleWord[], maxWords = 4, maxDuration = 3.0, spli
   return chunks;
 }
 
-function buildSpeakerColorMap(words: SubtitleWord[]): Map<string, string> {
+function buildFallbackMap(words: SubtitleWord[]): Map<string, string> {
   const map = new Map<string, string>();
   let idx = 0;
   for (const w of words) {
@@ -40,6 +40,17 @@ function buildSpeakerColorMap(words: SubtitleWord[]): Map<string, string> {
     }
   }
   return map;
+}
+
+function resolveSpeakerStyle(
+  speaker: string | undefined,
+  speakerStyles: Record<string, SpeakerStyle> | undefined,
+  fallbackMap: Map<string, string>,
+  baseColor: string,
+): { textColor: string; bgColor: string } {
+  if (!speaker) return { textColor: baseColor, bgColor: "" };
+  if (speakerStyles?.[speaker]) return speakerStyles[speaker];
+  return { textColor: fallbackMap.get(speaker) ?? baseColor, bgColor: "" };
 }
 
 function tintWhite(hex: string, strength = 0.15): string {
@@ -359,7 +370,7 @@ export default function NativePreviewViewport({
               const chunks = chunkWords(subtitle.words, 4, 3.0, showSpk);
               const baseColor = subtitle.colorMode === "auto" ? subtitle.autoColor : subtitle.customColor;
               const highlightColor = tintWhite(baseColor);
-              const spkColors = showSpk ? buildSpeakerColorMap(subtitle.words) : null;
+              const fallback = showSpk ? buildFallbackMap(subtitle.words) : new Map<string, string>();
               const activeChunk = chunks.find(
                 (c) => animTime >= c[0].start - 0.05 && animTime <= c[c.length - 1].end + 0.05,
               );
@@ -390,16 +401,23 @@ export default function NativePreviewViewport({
                       activeChunk!.map((word, i) => {
                         const isFilled = animTime >= word.start;
                         let color: string;
-                        if (showSpk && spkColors && word.speaker) {
-                          const sc = spkColors.get(word.speaker) ?? baseColor;
-                          color = isFilled ? tintWhite(sc) : sc;
+                        let bgColor = "";
+                        if (showSpk && word.speaker) {
+                          const s = resolveSpeakerStyle(word.speaker, subtitle.speakerStyles, fallback, baseColor);
+                          color = isFilled ? tintWhite(s.textColor) : s.textColor;
+                          bgColor = s.bgColor;
                         } else {
                           color = isFilled ? highlightColor : baseColor;
                         }
                         return (
                           <span
                             key={`${word.start}-${i}`}
-                            style={{ color }}
+                            style={{
+                              color,
+                              backgroundColor: bgColor || undefined,
+                              borderRadius: bgColor ? 4 : undefined,
+                              padding: bgColor ? "0 4px" : undefined,
+                            }}
                           >
                             {subtitle.uppercase ? word.word.toUpperCase() : word.word}
                             {i < activeChunk!.length - 1 ? " " : ""}

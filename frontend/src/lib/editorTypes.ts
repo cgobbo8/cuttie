@@ -61,10 +61,21 @@ export const SPEAKER_COLORS: string[] = [
   "#A78BFA", // violet-400
 ];
 
+/** Tint white toward a color (strength 0→pure white, 1→pure color). */
+function tintWhite(hex: string, strength = 0.15): string {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  const tr = Math.round(255 * (1 - strength) + r * strength);
+  const tg = Math.round(255 * (1 - strength) + g * strength);
+  const tb = Math.round(255 * (1 - strength) + b * strength);
+  return `#${tr.toString(16).padStart(2, "0")}${tg.toString(16).padStart(2, "0")}${tb.toString(16).padStart(2, "0")}`;
+}
+
 /**
  * Build default speaker styles from words.
- * Speaker 1 (streamer) gets the existing subtitle base color.
- * Speaker 2+ get distinct colors from SPEAKER_COLORS palette.
+ * Speaker 1 (streamer): A=white, BG=base subtitle color (normal karaoke).
+ * Speaker 2+: BG=palette color, A=white tinted toward that color.
  */
 export function buildDefaultSpeakerStyles(
   words: SubtitleWord[],
@@ -75,14 +86,10 @@ export function buildDefaultSpeakerStyles(
   for (const w of words) {
     if (w.speaker && !(w.speaker in styles)) {
       if (idx === 0) {
-        // Speaker 1 (streamer): normal karaoke — white spoken, base color unspoken
         styles[w.speaker] = { color: "#FFFFFF", bgColor: baseColor };
       } else {
-        // Speaker 2+: identity color spoken, white unspoken
-        styles[w.speaker] = {
-          color: SPEAKER_COLORS[(idx - 1) % SPEAKER_COLORS.length],
-          bgColor: "#FFFFFF",
-        };
+        const bg = SPEAKER_COLORS[(idx - 1) % SPEAKER_COLORS.length];
+        styles[w.speaker] = { color: tintWhite(bg, 0.15), bgColor: bg };
       }
       idx++;
     }

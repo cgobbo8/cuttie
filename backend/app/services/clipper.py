@@ -668,7 +668,7 @@ def _streamcopy_clip(
     No re-encoding — copies H.264+AAC as-is. ~10x faster than libx264.
     """
     try:
-        subprocess.run(
+        result = subprocess.run(
             [
                 "ffmpeg", "-y",
                 "-ss", str(start),
@@ -681,9 +681,17 @@ def _streamcopy_clip(
             check=True, timeout=120, capture_output=True, text=True,
         )
         return os.path.isfile(output_path)
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
-        logger.warning(f"Stream copy failed: {e}")
+    except subprocess.CalledProcessError as e:
+        stderr_tail = (e.stderr or "")[-200:]
+        logger.warning(f"Stream copy failed (exit {e.returncode}): {stderr_tail}")
         return False
+    except subprocess.TimeoutExpired:
+        logger.warning(f"Stream copy timed out (>120s) for offset {start:.0f}s")
+        return False
+
+
+# Number of consecutive stream copy failures before giving up on direct URL
+STREAMCOPY_FAIL_THRESHOLD = 3
 
 
 def extract_group(
@@ -696,12 +704,15 @@ def extract_group(
     """Download and extract clips for a download group.
 
     If direct_url is provided, uses FFmpeg stream copy (fast, no re-encode).
-    Otherwise falls back to yt-dlp download + libx264 compression (legacy).
+    If stream copy fails repeatedly, refreshes the direct URL once, then
+    falls back to yt-dlp download + libx264 compression for remaining clips.
 
     Returns: [(rank, index, filename | None), ...]
     """
     clips = group["clips"]
     results: list[tuple[int, int, str | None]] = []
+    streamcopy_failures = 0
+    url_refreshed = False
 
     for c in clips:
         rank, idx = c["rank"], c["index"]
@@ -712,16 +723,37 @@ def extract_group(
 
         logger.info(f"Clip {rank}: {_fmt_time(start)}-{_fmt_time(end)} ({duration:.0f}s)")
 
-        MAX_RETRIES = 2
         success = False
 
-        for attempt in range(1, MAX_RETRIES + 1):
-            # Try stream copy first if we have a direct URL
-            if direct_url and _streamcopy_clip(direct_url, start, duration, filepath):
+        # Try stream copy if direct URL available and hasn't failed too many times
+        if direct_url and streamcopy_failures < STREAMCOPY_FAIL_THRESHOLD:
+            if _streamcopy_clip(direct_url, start, duration, filepath):
                 success = True
-                break
+                streamcopy_failures = 0  # reset on success
+            else:
+                streamcopy_failures += 1
+                # Try refreshing the direct URL once after first failures
+                if streamcopy_failures >= 2 and not url_refreshed:
+                    try:
+                        from app.services.frame_extractor import get_vod_direct_url
+                        direct_url = get_vod_direct_url(url)
+                        url_refreshed = True
+                        logger.info(f"Refreshed direct URL after {streamcopy_failures} failures")
+                        # Retry with fresh URL
+                        if _streamcopy_clip(direct_url, start, duration, filepath):
+                            success = True
+                            streamcopy_failures = 0
+                    except Exception as e:
+                        logger.warning(f"Failed to refresh direct URL: {e}")
 
-            # Fallback: yt-dlp download + compress
+                if streamcopy_failures >= STREAMCOPY_FAIL_THRESHOLD:
+                    logger.warning(
+                        f"Stream copy failed {STREAMCOPY_FAIL_THRESHOLD}x in a row — "
+                        f"switching to yt-dlp for remaining clips"
+                    )
+
+        # Fallback: yt-dlp download + compress
+        if not success:
             raw_file = os.path.join(clip_dir, f"raw_{rank:02d}.mp4")
             try:
                 subprocess.run(
@@ -737,15 +769,11 @@ def extract_group(
 
                 if os.path.isfile(raw_file) and _compress_clip(raw_file, filepath):
                     success = True
-                    break
                 else:
-                    logger.warning(
-                        f"Clip {rank}: raw file missing or compression failed "
-                        f"(attempt {attempt}/{MAX_RETRIES})"
-                    )
+                    logger.warning(f"Clip {rank}: raw file missing or compression failed")
 
             except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
-                logger.error(f"Clip {rank} fallback failed (attempt {attempt}/{MAX_RETRIES}): {e}")
+                logger.error(f"Clip {rank} yt-dlp failed: {e}")
 
             finally:
                 if os.path.isfile(raw_file):

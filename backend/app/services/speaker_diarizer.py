@@ -195,18 +195,14 @@ def _cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
 
 
 def diarize_segment(
-    wav_path: str, start: float, end: float, work_dir: str, idx: int,
+    seg_wav: str,
 ) -> list[dict]:
-    """Diarize a single audio segment from the full VOD WAV.
+    """Diarize a pre-extracted WAV file.
 
     Returns list of {"speaker": str, "start": float, "end": float} where
-    timestamps are relative to the segment start (not VOD absolute).
+    timestamps are relative to the segment start.
     """
-    seg_wav = os.path.join(work_dir, f"diarize_{idx:03d}.wav")
     try:
-        if not _extract_wav_segment(wav_path, start, end, seg_wav):
-            return []
-
         pipeline = _get_pipeline()
         output = pipeline(seg_wav)
         annotation = getattr(output, "exclusive_speaker_diarization", None)
@@ -223,28 +219,28 @@ def diarize_segment(
         return segments
 
     except Exception as e:
-        logger.warning(f"Diarization failed for segment {idx}: {e}")
+        logger.warning(f"Diarization failed for {seg_wav}: {e}")
         return []
-    finally:
-        if os.path.isfile(seg_wav):
-            os.remove(seg_wav)
 
 
 def identify_speakers(
-    wav_path: str, start: float, end: float,
+    waveform: "torch.Tensor",
+    sr: int,
     diarize_segments: list[dict],
     voiceprint: np.ndarray | None,
     streamer_name: str = "Streamer",
-    work_dir: str = "",
-    idx: int = 0,
 ) -> dict[str, str]:
     """Identify which diarized speaker is the streamer.
 
-    Returns {speaker_id: display_name} mapping.
-    Falls back to "dominant speaker = streamer" if voiceprint is None.
-    """
-    import torchaudio
+    Args:
+        waveform: Pre-loaded audio tensor (1, samples) at given sr
+        sr: Sample rate (should be 16000)
+        diarize_segments: Output from diarize_segment
+        voiceprint: Streamer embedding (or None for dominant-speaker heuristic)
+        streamer_name: Display name for the streamer
 
+    Returns {speaker_id: display_name} mapping.
+    """
     # Gather unique speakers and their total durations
     speaker_durations: dict[str, float] = {}
     for seg in diarize_segments:
@@ -257,28 +253,20 @@ def identify_speakers(
     speakers = sorted(speaker_durations.keys(), key=lambda s: -speaker_durations[s])
     names: dict[str, str] = {}
 
-    # If no voiceprint, use dominant speaker heuristic
+    # Single speaker → always the streamer, skip voiceprint
+    if len(speakers) == 1:
+        names[speakers[0]] = streamer_name
+        return names
+
+    # No voiceprint → dominant speaker heuristic
     if voiceprint is None:
         names[speakers[0]] = streamer_name
         for spk in speakers[1:]:
             names[spk] = spk
         return names
 
-    # Extract embeddings and match against voiceprint
-    seg_wav = os.path.join(work_dir, f"diarize_id_{idx:03d}.wav")
+    # Multi-speaker: match against voiceprint via ECAPA-TDNN
     try:
-        if not _extract_wav_segment(wav_path, start, end, seg_wav):
-            # Fallback to dominant
-            names[speakers[0]] = streamer_name
-            for spk in speakers[1:]:
-                names[spk] = spk
-            return names
-
-        waveform, sr = torchaudio.load(seg_wav)
-        if sr != 16000:
-            waveform = torchaudio.functional.resample(waveform, sr, 16000)
-            sr = 16000
-
         classifier = _get_classifier()
         best_sim = -1.0
         best_spk = None
@@ -322,14 +310,11 @@ def identify_speakers(
         return names
 
     except Exception as e:
-        logger.warning(f"Speaker identification failed for segment {idx}: {e}")
+        logger.warning(f"Speaker identification failed: {e}")
         names[speakers[0]] = streamer_name
         for spk in speakers[1:]:
             names[spk] = spk
         return names
-    finally:
-        if os.path.isfile(seg_wav):
-            os.remove(seg_wav)
 
 
 # ─── Whisper word assignment ────────────────────────────────────────────────
@@ -436,11 +421,13 @@ def diarize_candidates(
     _get_pipeline()
     _get_classifier()
 
+    import torchaudio
+    import threading
+
     transcripts: dict[int, str] = {}
     all_labeled_words: dict[int, list[dict]] = {}
-    # Use a lock for pyannote since MPS/CUDA calls aren't fully thread-safe
-    import threading
-    _diarize_lock = threading.Lock()
+    # Lock ONLY for pyannote GPU calls — identification runs on CPU without lock
+    _gpu_lock = threading.Lock()
 
     def _process_one(idx: int, hp) -> tuple[int, str, list[dict]]:
         # Determine segment bounds
@@ -450,38 +437,55 @@ def diarize_candidates(
             start = max(0, hp.timestamp_seconds - CLIP_HALF_DURATION)
             end = min(vod_duration, hp.timestamp_seconds + CLIP_HALF_DURATION)
 
-        # Diarize (serialized on GPU to avoid contention)
-        with _diarize_lock:
-            segments = diarize_segment(wav_path, start, end, work_dir, idx)
-
         words = whisper_words.get(idx, [])
+        seg_wav = os.path.join(work_dir, f"diarize_{idx:03d}.wav")
 
-        if not segments:
-            # No diarization — return plain transcript, no speaker labels
+        try:
+            # 1. Extract WAV once (reused for both diarization + identification)
+            if not _extract_wav_segment(wav_path, start, end, seg_wav):
+                plain = " ".join(w["word"] for w in words) if words else ""
+                return idx, plain, words
+
+            # 2. Diarize — GPU, needs lock
+            with _gpu_lock:
+                segments = diarize_segment(seg_wav)
+
+            if not segments:
+                plain = " ".join(w["word"] for w in words) if words else ""
+                return idx, plain, words
+
+            # 3. Identify speakers — CPU only, no lock needed
+            #    Load the WAV for embedding extraction (reuse the same file)
+            waveform, sr = torchaudio.load(seg_wav)
+            if sr != 16000:
+                waveform = torchaudio.functional.resample(waveform, sr, 16000)
+                sr = 16000
+
+            speaker_names = identify_speakers(
+                waveform, sr, segments, voiceprint, streamer_name,
+            )
+
+            # 4. Assign speakers to Whisper words
+            if words:
+                labeled = assign_speakers_to_words(words, segments, speaker_names)
+                transcript = format_labeled_transcript(labeled)
+                return idx, transcript, labeled
+            else:
+                lines = []
+                for seg in segments:
+                    name = speaker_names.get(seg["speaker"], seg["speaker"])
+                    lines.append(f"[{seg['start']:.1f}s-{seg['end']:.1f}s] {name}: (speech)")
+                return idx, "\n".join(lines), []
+
+        except Exception as e:
+            logger.warning(f"Diarization failed for candidate {idx}: {e}")
             plain = " ".join(w["word"] for w in words) if words else ""
             return idx, plain, words
+        finally:
+            if os.path.isfile(seg_wav):
+                os.remove(seg_wav)
 
-        # Identify speakers
-        speaker_names = identify_speakers(
-            wav_path, start, end, segments, voiceprint,
-            streamer_name, work_dir, idx,
-        )
-
-        # Assign speakers to Whisper words
-        if words:
-            labeled = assign_speakers_to_words(words, segments, speaker_names)
-            transcript = format_labeled_transcript(labeled)
-            return idx, transcript, labeled
-        else:
-            # No Whisper words — just report speaker segments
-            lines = []
-            for seg in segments:
-                name = speaker_names.get(seg["speaker"], seg["speaker"])
-                lines.append(f"[{seg['start']:.1f}s-{seg['end']:.1f}s] {name}: (speech)")
-            return idx, "\n".join(lines), []
-
-    # Process sequentially (GPU lock makes parallelism pointless for diarization)
-    # But identification + word assignment can overlap with next diarization
+    # Parallel: while one thread runs identification (CPU), another can diarize (GPU)
     with ThreadPoolExecutor(max_workers=DIARIZE_WORKERS) as executor:
         futures = {
             executor.submit(_process_one, idx, hp): idx

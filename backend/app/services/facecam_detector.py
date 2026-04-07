@@ -137,18 +137,52 @@ def _cluster_detections(
     return clusters
 
 
-def _pick_best_cluster(clusters: list[list[Detection]]) -> list[Detection]:
+def _pick_best_cluster(
+    clusters: list[list[Detection]], total_clips: int,
+) -> list[Detection] | None:
     """Pick the cluster most likely to be the facecam.
 
-    Priority: most distinct clips > most detections > smaller average size.
+    A real facecam is:
+    - Present in MOST clips (it's a static overlay)
+    - Consistent in size (doesn't grow/shrink between clips)
+    - Relatively small (facecam, not the whole frame)
+
+    Returns None if no cluster passes validation.
     """
+    # Minimum: must appear in at least half the clips (and at least 2)
+    min_clips = max(2, (total_clips + 1) // 2)
+
     def score(cluster: list[Detection]) -> tuple:
         n_clips = len(set(d[0] for d in cluster))
         n_dets = len(cluster)
         avg_area = np.mean([d[3] * d[4] for d in cluster])
         return (n_clips, n_dets, -avg_area)
 
-    return max(clusters, key=score)
+    def is_size_stable(cluster: list[Detection]) -> bool:
+        """Reject clusters where bbox size varies too much (game characters move, webcam doesn't)."""
+        widths = [d[3] for d in cluster]
+        heights = [d[4] for d in cluster]
+        if len(widths) < 2:
+            return True
+        w_std = np.std(widths) / (np.mean(widths) + 1)
+        h_std = np.std(heights) / (np.mean(heights) + 1)
+        # Real facecam size varies <20%, game characters vary much more
+        return w_std < 0.25 and h_std < 0.25
+
+    # Filter: enough clips + stable size
+    valid = [
+        c for c in clusters
+        if len(set(d[0] for d in c)) >= min_clips and is_size_stable(c)
+    ]
+
+    if not valid:
+        logger.info(
+            f"No cluster passed validation (need {min_clips}/{total_clips} clips + stable size). "
+            f"Clusters: {[(len(set(d[0] for d in c)), len(c)) for c in clusters]}"
+        )
+        return None
+
+    return max(valid, key=score)
 
 
 def detect_facecam(clip_path: str, extra_clips: list[str] | None = None) -> dict | None:
@@ -183,7 +217,10 @@ def detect_facecam(clip_path: str, extra_clips: list[str] | None = None) -> dict
             f"{len(cluster)} dets, {n_clips}/{len(all_clips)} clips"
         )
 
-    best = _pick_best_cluster(clusters)
+    best = _pick_best_cluster(clusters, len(all_clips))
+    if best is None:
+        logger.info("No consistent facecam detected (likely no webcam overlay)")
+        return None
     n_clips = len(set(d[0] for d in best))
 
     # Use person bbox (the webcam overlay area), not the face bbox

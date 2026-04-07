@@ -36,8 +36,11 @@ function buildFallbackMap(words: SubtitleWord[], baseColor: string): Map<string,
   let idx = 0;
   for (const w of words) {
     if (w.speaker && !map.has(w.speaker)) {
-      const bg = idx === 0 ? baseColor : SPEAKER_COLORS[(idx - 1) % SPEAKER_COLORS.length];
-      map.set(w.speaker, { color: "#FFFFFF", bgColor: bg });
+      if (idx === 0) {
+        map.set(w.speaker, { color: "#FFFFFF", bgColor: baseColor });
+      } else {
+        map.set(w.speaker, { color: SPEAKER_COLORS[(idx - 1) % SPEAKER_COLORS.length], bgColor: "#FFFFFF" });
+      }
       idx++;
     }
   }

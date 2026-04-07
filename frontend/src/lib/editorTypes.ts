@@ -74,11 +74,16 @@ export function buildDefaultSpeakerStyles(
   let idx = 0;
   for (const w of words) {
     if (w.speaker && !(w.speaker in styles)) {
-      const bg = idx === 0 ? baseColor : SPEAKER_COLORS[(idx - 1) % SPEAKER_COLORS.length];
-      styles[w.speaker] = {
-        color: "#FFFFFF",
-        bgColor: bg,
-      };
+      if (idx === 0) {
+        // Speaker 1 (streamer): normal karaoke — white spoken, base color unspoken
+        styles[w.speaker] = { color: "#FFFFFF", bgColor: baseColor };
+      } else {
+        // Speaker 2+: identity color spoken, white unspoken
+        styles[w.speaker] = {
+          color: SPEAKER_COLORS[(idx - 1) % SPEAKER_COLORS.length],
+          bgColor: "#FFFFFF",
+        };
+      }
       idx++;
     }
   }

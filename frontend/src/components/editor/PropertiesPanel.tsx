@@ -466,10 +466,10 @@ export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange
                         const s = styles[spk] ?? { color: "#FFFFFF", bgColor: SPEAKER_COLORS[0] };
                         return (
                           <div key={spk} className="flex items-center gap-2">
-                            {/* Color preview dot (bgColor = the speaker's identity) */}
+                            {/* Color preview dot (A color = the speaker's identity) */}
                             <div
                               className="w-3 h-3 rounded-full shrink-0 border border-white/[0.1]"
-                              style={{ backgroundColor: s.bgColor }}
+                              style={{ backgroundColor: s.color }}
                             />
                             {/* Speaker name */}
                             <span className="text-[10px] text-zinc-300 truncate flex-1 min-w-0" title={spk}>

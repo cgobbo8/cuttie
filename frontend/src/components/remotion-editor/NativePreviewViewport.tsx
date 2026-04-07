@@ -30,27 +30,26 @@ function chunkWords(words: SubtitleWord[], maxWords = 4, maxDuration = 3.0, spli
   return chunks;
 }
 
-function buildFallbackMap(words: SubtitleWord[]): Map<string, string> {
-  const map = new Map<string, string>();
+function buildFallbackMap(words: SubtitleWord[]): Map<string, SpeakerStyle> {
+  const map = new Map<string, SpeakerStyle>();
   let idx = 0;
   for (const w of words) {
     if (w.speaker && !map.has(w.speaker)) {
-      map.set(w.speaker, SPEAKER_COLORS[idx % SPEAKER_COLORS.length]);
+      map.set(w.speaker, { color: SPEAKER_COLORS[idx % SPEAKER_COLORS.length], textColor: "#FFFFFF" });
       idx++;
     }
   }
   return map;
 }
 
-function resolveSpeakerStyle(
+function getSpeakerStyle(
   speaker: string | undefined,
   speakerStyles: Record<string, SpeakerStyle> | undefined,
-  fallbackMap: Map<string, string>,
-  baseColor: string,
-): { textColor: string; bgColor: string } {
-  if (!speaker) return { textColor: baseColor, bgColor: "" };
+  fallback: Map<string, SpeakerStyle>,
+): SpeakerStyle | null {
+  if (!speaker) return null;
   if (speakerStyles?.[speaker]) return speakerStyles[speaker];
-  return { textColor: fallbackMap.get(speaker) ?? baseColor, bgColor: "" };
+  return fallback.get(speaker) ?? null;
 }
 
 function tintWhite(hex: string, strength = 0.15): string {
@@ -370,11 +369,15 @@ export default function NativePreviewViewport({
               const chunks = chunkWords(subtitle.words, 4, 3.0, showSpk);
               const baseColor = subtitle.colorMode === "auto" ? subtitle.autoColor : subtitle.customColor;
               const highlightColor = tintWhite(baseColor);
-              const fallback = showSpk ? buildFallbackMap(subtitle.words) : new Map<string, string>();
+              const spkFallback = showSpk ? buildFallbackMap(subtitle.words) : new Map<string, SpeakerStyle>();
               const activeChunk = chunks.find(
                 (c) => animTime >= c[0].start - 0.05 && animTime <= c[c.length - 1].end + 0.05,
               );
               const showPlaceholder = subtitle.words.length === 0 || !activeChunk;
+              const chunkSpk = showSpk && activeChunk?.[0]?.speaker
+                ? getSpeakerStyle(activeChunk[0].speaker, subtitle.speakerStyles, spkFallback)
+                : null;
+              const fs = subtitle.fontSize;
               return (
                 <div key={layer.id} style={{
                   ...baseStyle,
@@ -383,42 +386,34 @@ export default function NativePreviewViewport({
                 }}>
                   <p style={{
                     fontFamily: `"${subtitle.fontFamily}", sans-serif`,
-                    fontSize: subtitle.fontSize,
+                    fontSize: fs,
                     fontWeight: 700,
                     textTransform: subtitle.uppercase ? "uppercase" : "none",
-                    WebkitTextStroke: `${Math.max(2, subtitle.fontSize / 25)}px black`,
+                    WebkitTextStroke: chunkSpk ? undefined : `${Math.max(2, fs / 25)}px black`,
                     paintOrder: "stroke fill",
                     lineHeight: 1.2,
                     margin: 0,
-                    textShadow: "2px 3px 5px rgba(0,0,0,0.6)",
+                    textShadow: chunkSpk ? undefined : "2px 3px 5px rgba(0,0,0,0.6)",
                     wordBreak: "break-word",
+                    ...(chunkSpk ? {
+                      backgroundColor: chunkSpk.color,
+                      color: chunkSpk.textColor,
+                      padding: `${Math.round(fs * 0.08)}px ${Math.round(fs * 0.2)}px`,
+                      borderRadius: Math.round(fs * 0.15),
+                    } : {}),
                   }}>
                     {showPlaceholder ? (
-                      <span style={{ color: highlightColor, opacity: 0.5 }}>
+                      <span style={{ color: chunkSpk ? chunkSpk.textColor : highlightColor, opacity: 0.5 }}>
                         {subtitle.uppercase ? t("editor.subtitles").toUpperCase() : t("editor.subtitles")}
                       </span>
                     ) : (
                       activeChunk!.map((word, i) => {
                         const isFilled = animTime >= word.start;
-                        let color: string;
-                        let bgColor = "";
-                        if (showSpk && word.speaker) {
-                          const s = resolveSpeakerStyle(word.speaker, subtitle.speakerStyles, fallback, baseColor);
-                          color = isFilled ? tintWhite(s.textColor) : s.textColor;
-                          bgColor = s.bgColor;
-                        } else {
-                          color = isFilled ? highlightColor : baseColor;
-                        }
+                        const color = chunkSpk
+                          ? (isFilled ? chunkSpk.textColor : chunkSpk.textColor + "99")
+                          : (isFilled ? highlightColor : baseColor);
                         return (
-                          <span
-                            key={`${word.start}-${i}`}
-                            style={{
-                              color,
-                              backgroundColor: bgColor || undefined,
-                              borderRadius: bgColor ? 4 : undefined,
-                              padding: bgColor ? "0 4px" : undefined,
-                            }}
-                          >
+                          <span key={`${word.start}-${i}`} style={{ color }}>
                             {subtitle.uppercase ? word.word.toUpperCase() : word.word}
                             {i < activeChunk!.length - 1 ? " " : ""}
                           </span>

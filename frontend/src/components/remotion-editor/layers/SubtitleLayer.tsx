@@ -35,27 +35,26 @@ function tintWhite(hex: string, strength = 0.15): string {
   return `rgb(${tr},${tg},${tb})`;
 }
 
-function resolveSpeakerStyle(
-  speaker: string | undefined,
-  speakerStyles: Record<string, SpeakerStyle> | undefined,
-  fallbackMap: Map<string, string>,
-  baseColor: string,
-): { textColor: string; bgColor: string } {
-  if (!speaker) return { textColor: baseColor, bgColor: "" };
-  if (speakerStyles?.[speaker]) return speakerStyles[speaker];
-  return { textColor: fallbackMap.get(speaker) ?? baseColor, bgColor: "" };
-}
-
-function buildFallbackMap(words: SubtitleWord[]): Map<string, string> {
-  const map = new Map<string, string>();
+function buildFallbackMap(words: SubtitleWord[]): Map<string, SpeakerStyle> {
+  const map = new Map<string, SpeakerStyle>();
   let idx = 0;
   for (const w of words) {
     if (w.speaker && !map.has(w.speaker)) {
-      map.set(w.speaker, SPEAKER_COLORS[idx % SPEAKER_COLORS.length]);
+      map.set(w.speaker, { color: SPEAKER_COLORS[idx % SPEAKER_COLORS.length], textColor: "#FFFFFF" });
       idx++;
     }
   }
   return map;
+}
+
+function getSpeakerStyle(
+  speaker: string | undefined,
+  speakerStyles: Record<string, SpeakerStyle> | undefined,
+  fallback: Map<string, SpeakerStyle>,
+): SpeakerStyle | null {
+  if (!speaker) return null;
+  if (speakerStyles?.[speaker]) return speakerStyles[speaker];
+  return fallback.get(speaker) ?? null;
 }
 
 export default function SubtitleLayer({ layer }: Props) {
@@ -71,7 +70,7 @@ export default function SubtitleLayer({ layer }: Props) {
     () => chunkWords(subtitle.words, 4, 3.0, showSpeaker),
     [subtitle.words, showSpeaker],
   );
-  const fallbackMap = useMemo(
+  const fallback = useMemo(
     () => showSpeaker ? buildFallbackMap(subtitle.words) : new Map(),
     [subtitle.words, showSpeaker],
   );
@@ -84,6 +83,16 @@ export default function SubtitleLayer({ layer }: Props) {
   );
 
   const showPlaceholder = subtitle.words.length === 0 || !activeChunk;
+
+  // Speaker style for the active chunk (all words in a chunk share the same speaker)
+  const chunkSpeaker = showSpeaker && activeChunk?.[0]?.speaker
+    ? getSpeakerStyle(activeChunk[0].speaker, subtitle.speakerStyles, fallback)
+    : null;
+
+  const fontSize = subtitle.fontSize;
+  const padH = Math.round(fontSize * 0.2);
+  const padV = Math.round(fontSize * 0.08);
+  const radius = Math.round(fontSize * 0.15);
 
   return (
     <div
@@ -100,19 +109,27 @@ export default function SubtitleLayer({ layer }: Props) {
       <p
         style={{
           fontFamily: `"${subtitle.fontFamily}", sans-serif`,
-          fontSize: subtitle.fontSize,
+          fontSize,
           fontWeight: 700,
           textTransform: subtitle.uppercase ? "uppercase" : "none",
-          WebkitTextStroke: `${Math.max(2, subtitle.fontSize / 25)}px black`,
+          WebkitTextStroke: chunkSpeaker ? undefined : `${Math.max(2, fontSize / 25)}px black`,
           paintOrder: "stroke fill",
           lineHeight: 1.2,
           margin: 0,
-          textShadow: "2px 3px 5px rgba(0,0,0,0.6)",
+          textShadow: chunkSpeaker ? undefined : "2px 3px 5px rgba(0,0,0,0.6)",
           wordBreak: "break-word",
+          ...(chunkSpeaker ? {
+            backgroundColor: chunkSpeaker.color,
+            color: chunkSpeaker.textColor,
+            padding: `${padV}px ${padH}px`,
+            borderRadius: radius,
+            boxDecorationBreak: "clone" as const,
+            WebkitBoxDecorationBreak: "clone" as const,
+          } : {}),
         }}
       >
         {showPlaceholder ? (
-          <span style={{ color: highlightColor, opacity: 0.5 }}>
+          <span style={{ color: chunkSpeaker ? chunkSpeaker.textColor : highlightColor, opacity: 0.5 }}>
             {subtitle.uppercase ? "SOUS-TITRES" : "Sous-titres"}
           </span>
         ) : (
@@ -120,25 +137,11 @@ export default function SubtitleLayer({ layer }: Props) {
             .filter((word) => word.start <= currentTime + 0.2)
             .map((word, i, visible) => {
               const isFilled = currentTime >= word.start;
-              let color: string;
-              let bgColor = "";
-              if (showSpeaker && word.speaker) {
-                const s = resolveSpeakerStyle(word.speaker, subtitle.speakerStyles, fallbackMap, baseColor);
-                color = isFilled ? tintWhite(s.textColor) : s.textColor;
-                bgColor = s.bgColor;
-              } else {
-                color = isFilled ? highlightColor : baseColor;
-              }
+              const color = chunkSpeaker
+                ? (isFilled ? chunkSpeaker.textColor : chunkSpeaker.textColor + "99")
+                : (isFilled ? highlightColor : baseColor);
               return (
-                <span
-                  key={`${word.start}-${i}`}
-                  style={{
-                    color,
-                    backgroundColor: bgColor || undefined,
-                    borderRadius: bgColor ? 4 : undefined,
-                    padding: bgColor ? "0 4px" : undefined,
-                  }}
-                >
+                <span key={`${word.start}-${i}`} style={{ color }}>
                   {subtitle.uppercase ? word.word.toUpperCase() : word.word}
                   {i < visible.length - 1 ? " " : ""}
                 </span>

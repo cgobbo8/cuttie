@@ -35,8 +35,8 @@ export interface SubtitleWord {
 }
 
 export interface SpeakerStyle {
-  textColor: string;  // hex (#RRGGBB)
-  bgColor: string;    // hex or "" for no background
+  color: string;      // hex — the speaker's identity color (used as background pill)
+  textColor: string;  // hex — text on top of the pill (default white)
 }
 
 export interface SubtitleData {
@@ -68,8 +68,8 @@ export function buildDefaultSpeakerStyles(words: SubtitleWord[]): Record<string,
   for (const w of words) {
     if (w.speaker && !(w.speaker in styles)) {
       styles[w.speaker] = {
-        textColor: SPEAKER_COLORS[idx % SPEAKER_COLORS.length],
-        bgColor: "",
+        color: SPEAKER_COLORS[idx % SPEAKER_COLORS.length],
+        textColor: "#FFFFFF",
       };
       idx++;
     }

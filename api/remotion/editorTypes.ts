@@ -38,8 +38,8 @@ export interface SubtitleWord {
 }
 
 export interface SpeakerStyle {
-  textColor: string;
-  bgColor: string;
+  color: string;      // speaker identity color (background pill)
+  textColor: string;  // text on top (default white)
 }
 
 export interface SubtitleData {

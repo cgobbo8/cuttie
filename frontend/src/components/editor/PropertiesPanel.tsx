@@ -458,15 +458,35 @@ export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange
 
                   {/* Per-speaker color pickers */}
                   {subtitle.showSpeaker && (
-                    <div className="flex flex-col gap-2 pl-1">
+                    <div className="flex flex-col gap-2.5 pl-1">
                       {speakers.map((spk) => {
-                        const s = styles[spk] ?? { textColor: SPEAKER_COLORS[0], bgColor: "" };
+                        const s = styles[spk] ?? { color: SPEAKER_COLORS[0], textColor: "#FFFFFF" };
                         return (
                           <div key={spk} className="flex items-center gap-2">
+                            {/* Color preview dot */}
+                            <div
+                              className="w-3 h-3 rounded-full shrink-0 border border-white/[0.1]"
+                              style={{ backgroundColor: s.color }}
+                            />
                             {/* Speaker name */}
                             <span className="text-[10px] text-zinc-300 truncate flex-1 min-w-0" title={spk}>
                               {spk}
                             </span>
+
+                            {/* Background (pill) color */}
+                            <div className="flex items-center gap-1 shrink-0" title={t("editor.speakerBg")}>
+                              <span className="text-[9px] text-zinc-500">BG</span>
+                              <input
+                                type="color"
+                                value={s.color}
+                                onChange={(e) => {
+                                  const updated = { ...styles, [spk]: { ...s, color: e.target.value } };
+                                  onSubtitleChange(layer.id, { speakerStyles: updated });
+                                }}
+                                onFocus={onCommit}
+                                className="w-5 h-5 bg-transparent border border-white/[0.1] rounded cursor-pointer"
+                              />
+                            </div>
 
                             {/* Text color */}
                             <div className="flex items-center gap-1 shrink-0" title={t("editor.speakerText")}>
@@ -481,46 +501,6 @@ export default function PropertiesPanel({ layer, onStyleChange, onSubtitleChange
                                 onFocus={onCommit}
                                 className="w-5 h-5 bg-transparent border border-white/[0.1] rounded cursor-pointer"
                               />
-                            </div>
-
-                            {/* Background color */}
-                            <div className="flex items-center gap-1 shrink-0" title={t("editor.speakerBg")}>
-                              <span className="text-[9px] text-zinc-500">BG</span>
-                              {s.bgColor ? (
-                                <div className="relative">
-                                  <input
-                                    type="color"
-                                    value={s.bgColor}
-                                    onChange={(e) => {
-                                      const updated = { ...styles, [spk]: { ...s, bgColor: e.target.value } };
-                                      onSubtitleChange(layer.id, { speakerStyles: updated });
-                                    }}
-                                    onFocus={onCommit}
-                                    className="w-5 h-5 bg-transparent border border-white/[0.1] rounded cursor-pointer"
-                                  />
-                                  <button
-                                    onClick={() => {
-                                      onCommit();
-                                      const updated = { ...styles, [spk]: { ...s, bgColor: "" } };
-                                      onSubtitleChange(layer.id, { speakerStyles: updated });
-                                    }}
-                                    className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-zinc-700 text-zinc-400 text-[7px] flex items-center justify-center hover:bg-red-500/50 hover:text-white"
-                                  >
-                                    ×
-                                  </button>
-                                </div>
-                              ) : (
-                                <button
-                                  onClick={() => {
-                                    onCommit();
-                                    const updated = { ...styles, [spk]: { ...s, bgColor: s.textColor + "33" } };
-                                    onSubtitleChange(layer.id, { speakerStyles: updated });
-                                  }}
-                                  className="w-5 h-5 border border-dashed border-white/[0.1] rounded text-[9px] text-zinc-600 hover:border-white/[0.2] hover:text-zinc-400 flex items-center justify-center"
-                                >
-                                  +
-                                </button>
-                              )}
                             </div>
                           </div>
                         );

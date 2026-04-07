@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Play, Pause, Diamond } from "lucide-react";
 import type { Layer, LayerAnimation, KeyframeSnapshot } from "../../lib/editorTypes";
+import { SPEAKER_COLORS } from "../../lib/editorTypes";
 import { layerVisibilityAtTime, ANIMATION_DEFS } from "../../lib/animations";
 
 function fmtShort(s: number): string {
@@ -30,8 +31,8 @@ interface Props {
   waveform?: Float32Array | null;
   /** Chat message timestamps (seconds, relative to clip start) */
   chatTimestamps?: number[];
-  /** Subtitle word intervals */
-  subtitleWords?: { start: number; end: number }[];
+  /** Subtitle word intervals with optional speaker */
+  subtitleWords?: { start: number; end: number; speaker?: string }[];
   /** Currently selected layer — shows lifetime bar when set */
   selectedLayer?: Layer | null;
   /** Called to update an animation on the selected layer (for lifetime bar drag) */
@@ -412,21 +413,42 @@ export default function PlaybackBar({
             </div>
           )}
 
-          {/* Subtitle word markers */}
-          {showSubtitles && subtitleWords && subtitleWords.length > 0 && (
-            <div className="absolute bottom-0 left-0 right-0 h-1.5 pointer-events-none">
-              {subtitleWords.map((w, i) => (
-                <div
-                  key={i}
-                  className="absolute top-0 h-full bg-emerald-400/40 rounded-sm"
-                  style={{
-                    left: `${pct(w.start)}%`,
-                    width: `${Math.max(0.2, pct(w.end) - pct(w.start))}%`,
-                  }}
-                />
-              ))}
-            </div>
-          )}
+          {/* Subtitle word markers — colored per speaker */}
+          {showSubtitles && subtitleWords && subtitleWords.length > 0 && (() => {
+            // Build speaker → color map
+            const hasSpeakers = subtitleWords.some((w) => w.speaker);
+            const speakerColorMap = new Map<string, string>();
+            if (hasSpeakers) {
+              let idx = 0;
+              for (const w of subtitleWords) {
+                if (w.speaker && !speakerColorMap.has(w.speaker)) {
+                  // Speaker 1 = emerald (default), others = palette
+                  speakerColorMap.set(
+                    w.speaker,
+                    idx === 0
+                      ? "rgba(52, 211, 153, 0.5)"
+                      : SPEAKER_COLORS[(idx - 1) % SPEAKER_COLORS.length] + "80",
+                  );
+                  idx++;
+                }
+              }
+            }
+            return (
+              <div className="absolute bottom-0 left-0 right-0 h-1.5 pointer-events-none">
+                {subtitleWords.map((w, i) => (
+                  <div
+                    key={i}
+                    className="absolute top-0 h-full rounded-sm"
+                    style={{
+                      left: `${pct(w.start)}%`,
+                      width: `${Math.max(0.2, pct(w.end) - pct(w.start))}%`,
+                      backgroundColor: (w.speaker && speakerColorMap.get(w.speaker)) || "rgba(52, 211, 153, 0.4)",
+                    }}
+                  />
+                ))}
+              </div>
+            );
+          })()}
 
           {/* Dimmed regions outside trim */}
           {hasTrim && (
@@ -540,19 +562,52 @@ export default function PlaybackBar({
                 {t("editor.chat")}
               </button>
             )}
-            {subtitleWords && subtitleWords.length > 0 && (
-              <button
-                onClick={() => setShowSubtitles((v) => !v)}
-                className={`flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded-full border transition-colors ${
-                  showSubtitles
-                    ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
-                    : "border-white/[0.06] bg-transparent text-zinc-600"
-                }`}
-              >
-                <span className={`inline-block w-1.5 h-1.5 rounded-full ${showSubtitles ? "bg-emerald-400" : "bg-zinc-700"}`} />
-                {t("editor.subtitlesToggle")}
-              </button>
-            )}
+            {subtitleWords && subtitleWords.length > 0 && (() => {
+              const speakers = [...new Set(subtitleWords.filter((w) => w.speaker).map((w) => w.speaker!))];
+              const hasSpeakers = speakers.length > 1;
+              return hasSpeakers ? (
+                // Per-speaker legend chips
+                <>
+                  {speakers.map((spk, i) => {
+                    const dotColor = i === 0
+                      ? "bg-emerald-400"
+                      : "";
+                    const dotStyle = i === 0
+                      ? undefined
+                      : { backgroundColor: SPEAKER_COLORS[(i - 1) % SPEAKER_COLORS.length] };
+                    return (
+                      <button
+                        key={spk}
+                        onClick={() => setShowSubtitles((v) => !v)}
+                        className={`flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded-full border transition-colors ${
+                          showSubtitles
+                            ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+                            : "border-white/[0.06] bg-transparent text-zinc-600"
+                        }`}
+                      >
+                        <span
+                          className={`inline-block w-1.5 h-1.5 rounded-full ${showSubtitles ? dotColor : "bg-zinc-700"}`}
+                          style={showSubtitles ? dotStyle : undefined}
+                        />
+                        {spk}
+                      </button>
+                    );
+                  })}
+                </>
+              ) : (
+                <button
+                  onClick={() => setShowSubtitles((v) => !v)}
+                  className={`flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded-full border transition-colors ${
+                    showSubtitles
+                      ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+                      : "border-white/[0.06] bg-transparent text-zinc-600"
+                  }`}
+                >
+                  <span className={`inline-block w-1.5 h-1.5 rounded-full ${showSubtitles ? "bg-emerald-400" : "bg-zinc-700"}`} />
+                  {t("editor.subtitlesToggle")}
+                </button>
+              );
+            })()}
           </div>
         )}
       </div>

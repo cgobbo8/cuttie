@@ -179,9 +179,10 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
     .filter((l) => l.type === "chat" && l.chat)
     .flatMap((l) => l.chat!.messages.map((m) => m.timestamp));
 
-  const subtitleWords = layers
-    .filter((l) => l.type === "subtitles" && l.subtitle)
-    .flatMap((l) => l.subtitle!.words.map((w) => ({ start: w.start, end: w.end })));
+  const subtitleLayer = layers.find((l) => l.type === "subtitles" && l.subtitle);
+  const subtitleWords = subtitleLayer
+    ? subtitleLayer.subtitle!.words.map((w) => ({ start: w.start, end: w.end, speaker: w.speaker }))
+    : [];
 
   // Playback state — driven by native video events from NativePreviewViewport
   const [playerTime, setPlayerTime] = useState(0);

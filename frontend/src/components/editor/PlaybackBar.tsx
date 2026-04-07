@@ -576,14 +576,19 @@ export default function PlaybackBar({
                       <button
                         key={spk}
                         onClick={() => {
-                          setHiddenSpeakers((prev) => {
-                            const next = new Set(prev);
-                            if (next.has(spk)) { next.delete(spk); } else { next.add(spk); }
-                            // If all hidden, turn off global; if any visible, ensure global on
-                            if (next.size >= speakers.length) { setShowSubtitles(false); next.clear(); }
-                            else { setShowSubtitles(true); }
-                            return next;
-                          });
+                          if (!showSubtitles) {
+                            // All off → solo this speaker
+                            const allExcept = new Set(speakers.filter((s) => s !== spk));
+                            setHiddenSpeakers(allExcept);
+                            setShowSubtitles(true);
+                          } else {
+                            setHiddenSpeakers((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(spk)) { next.delete(spk); } else { next.add(spk); }
+                              if (next.size >= speakers.length) { setShowSubtitles(false); next.clear(); }
+                              return next;
+                            });
+                          }
                         }}
                         className={`flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded-full border transition-colors ${
                           isVisible

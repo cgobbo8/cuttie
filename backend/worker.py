@@ -109,6 +109,10 @@ def main() -> None:
                     shutil.rmtree(entry_path, ignore_errors=True)
                     logger.info("Cleaned up orphaned temp dir: %s/%s", temp_dir, entry)
 
+    # Log compute device (triggers detection + GPU info)
+    from app.services.device import get_device
+    get_device()
+
     logger.info("Waiting for jobs on queue: %s", QUEUE_KEY)
 
     def handle_signal(sig, frame):

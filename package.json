@@ -7,7 +7,11 @@
     "dev:worker": "cd backend && uv run watchmedo auto-restart --directory=./app --pattern='*.py' --recursive -- python worker.py",
     "infra:up": "docker compose up -d",
     "infra:down": "docker compose down",
-    "infra:logs": "docker compose logs -f"
+    "infra:logs": "docker compose logs -f",
+    "docker:up": "node scripts/docker-up.mjs up",
+    "docker:down": "node scripts/docker-up.mjs down",
+    "docker:logs": "node scripts/docker-up.mjs logs",
+    "docker:reset": "node scripts/docker-up.mjs reset"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"

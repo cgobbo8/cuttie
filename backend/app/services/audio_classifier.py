@@ -16,6 +16,8 @@ import logging
 import librosa
 import numpy as np
 
+from app.services.device import get_device
+
 logger = logging.getLogger(__name__)
 
 # PANNs works fine at 16kHz (half the memory, same quality for our classes)
@@ -55,32 +57,21 @@ _GAME_AUDIO_CLASSES = {
 _model = None
 
 
-def _get_device() -> str:
-    """Pick the best available torch device for PANNs inference."""
-    import torch
-    if torch.backends.mps.is_available():
-        return "mps"
-    if torch.cuda.is_available():
-        return "cuda"
-    return "cpu"
-
-
 def _get_model():
     global _model
     if _model is None:
-        import torch
         from panns_inference import AudioTagging
 
-        device = _get_device()
+        device = get_device()
         logger.info(f"Loading PANNs CNN14 model on {device}...")
 
         # Load on CPU first (PANNs only supports cpu/cuda natively)
         at = AudioTagging(checkpoint_path=None, device="cpu")
 
         # Move model to MPS/CUDA if available
-        if device != "cpu":
+        if device.type != "cpu":
             at.model.to(device)
-            at.device = device
+            at.device = device.type
 
         _model = at
         logger.info(f"PANNs CNN14 loaded on {device}")

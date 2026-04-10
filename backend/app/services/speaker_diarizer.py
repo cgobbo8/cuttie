@@ -22,6 +22,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import numpy as np
 import torch
 
+from app.services.device import get_device
+
 logger = logging.getLogger(__name__)
 
 # ─── Lazy singletons ────────────────────────────────────────────────────────
@@ -34,15 +36,6 @@ VOICEPRINT_DURATION = 120  # seconds from VOD start for reference extraction
 DIARIZE_WORKERS = 3  # parallel diarization workers (GPU-bound)
 
 
-def _get_device() -> torch.device:
-    """Pick best available device: MPS > CUDA > CPU."""
-    if torch.backends.mps.is_available():
-        return torch.device("mps")
-    if torch.cuda.is_available():
-        return torch.device("cuda")
-    return torch.device("cpu")
-
-
 def _get_pipeline():
     """Lazy-load pyannote diarization pipeline."""
     global _pipeline
@@ -53,7 +46,7 @@ def _get_pipeline():
 
     t0 = time.time()
     _pipeline = Pipeline.from_pretrained("pyannote/speaker-diarization-community-1")
-    device = _get_device()
+    device = get_device()
     _pipeline.to(device)
     logger.info(f"pyannote pipeline loaded on {device} in {time.time()-t0:.1f}s")
     return _pipeline

@@ -1,0 +1,10 @@
+**/node_modules
+**/.venv
+**/clips
+**/data
+**/triage_audio
+**/diarize_tmp
+**/*.sqlite3
+**/*.db
+**/__pycache__
+.git

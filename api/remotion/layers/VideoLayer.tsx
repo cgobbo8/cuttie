@@ -1,9 +1,20 @@
 import React from "react";
-import { OffthreadVideo } from "remotion";
+import { OffthreadVideo, useRemotionEnvironment } from "remotion";
+import { Video } from "@remotion/media";
 import type { Layer } from "../editorTypes";
 
 interface Props {
   layer: Layer;
+}
+
+/**
+ * <Video> from @remotion/media decodes frames with WebCodecs inside the page —
+ * Remotion's fastest path for rendering (OffthreadVideo round-trips every frame
+ * through its compositor). The editor preview keeps OffthreadVideo.
+ */
+function ClipVideo({ src, style }: { src: string; style: React.CSSProperties }) {
+  const { isRendering } = useRemotionEnvironment();
+  return isRendering ? <Video src={src} style={style} /> : <OffthreadVideo src={src} style={style} />;
 }
 
 export default function VideoLayer({ layer }: Props) {
@@ -14,7 +25,7 @@ export default function VideoLayer({ layer }: Props) {
 
   if (!crop) {
     return (
-      <OffthreadVideo
+      <ClipVideo
         src={video.src}
         style={{
           width: transform.width,
@@ -33,7 +44,7 @@ export default function VideoLayer({ layer }: Props) {
 
   return (
     <div style={{ width: transform.width, height: transform.height, overflow: "hidden" }}>
-      <OffthreadVideo
+      <ClipVideo
         src={video.src}
         style={{
           display: "block",

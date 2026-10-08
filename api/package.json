@@ -72,6 +72,7 @@
     "@japa/api-client": "^3.2.1",
     "@remotion/bundler": "^4.0.441",
     "@remotion/google-fonts": "^4.0.441",
+    "@remotion/media": "4.0.441",
     "@remotion/renderer": "^4.0.441",
     "@tuyau/core": "^1.0.0",
     "@vinejs/vine": "^4.3.0",

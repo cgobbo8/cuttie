@@ -3,7 +3,8 @@
   "scripts": {
     "dev": "node scripts/dev.mjs",
     "dev:api": "cd api && npm run dev",
-    "dev:front": "cd frontend && npm run dev"
+    "dev:front": "cd frontend && npm run dev",
+    "start": "node scripts/start.mjs"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"

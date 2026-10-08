@@ -6,136 +6,96 @@ Automatic highlight extraction from Twitch VODs. Paste a URL, get vertical clips
 
 - **Automatic analysis** — Audio energy, chat sentiment, emote bursts, and LLM scoring to find the best moments
 - **Smart clipping** — Dynamic boundaries based on audio activity (RMS), not fixed durations
-- **Vertical reframing** — 1080x1920 output with facecam detection, game crop, and blurred background
-- **Karaoke subtitles** — Word-level Whisper timestamps + LLM correction, ASS karaoke with dominant color theming
+- **Vertical exports** — 1080x1920 editor templates with facecam detection, game crop, and blurred background
+- **Karaoke subtitles** — Word-level Whisper timestamps with per-speaker colors
 - **Clip editor** — Canvas-based editor with layers (text, shapes, assets, chat overlay) and Remotion export
 - **Multi-language UI** — French, English, Spanish (i18next)
 
 ## Architecture
 
+Cuttie runs entirely on the user's machine (no Docker, no Redis, no S3):
+
 ```
-┌────────────┐     ┌─────────────┐     ┌──────────────┐
-│  Frontend   │────▶│  API         │────▶│  Worker       │
-│  React 19   │     │  AdonisJS 7  │     │  Python/FastAPI│
-│  Vite 8     │     │  Port 3333   │     │  Port 8000    │
-└────────────┘     └──────┬──────┘     └───────┬──────┘
-                          │                     │
-                    ┌─────▼─────┐         ┌────▼────┐
-                    │  SQLite    │         │  S3/Minio│
-                    │  Redis     │         │  FFmpeg  │
-                    └───────────┘         └─────────┘
+ Browser / desktop window
+          │  http://127.0.0.1:3333
+┌─────────▼──────────┐   HTTP (shared secret)   ┌──────────────────────┐
+│  API — AdonisJS 7  │ ───────── jobs ────────▶ │  Worker — Python      │
+│  serves the SPA,   │ ◀──── status events ──── │  FastAPI on 127.0.0.1 │
+│  SSE, Remotion     │                          │  analysis pipeline    │
+└─────────┬──────────┘                          └──────────┬───────────┘
+          └──────────────┬─────────────────────────────────┘
+                 CUTTIE_DATA_DIR (shared folder)
+        api.sqlite3 · worker.sqlite3 · settings.json · storage/{clips,renders,assets}
 ```
 
 | Layer | Stack | Role |
 |-------|-------|------|
-| **Frontend** | React 19, TypeScript, Tailwind 4, Remotion 4 | SPA, clip editor, real-time status via SSE |
-| **API** | AdonisJS 7, SQLite, Redis | Auth (session + Google OAuth), job queue, SSE relay, Remotion rendering |
-| **Worker** | Python 3.10+, FastAPI, librosa, PANNs, MediaPipe | VOD download, audio/chat analysis, scoring, clipping, subtitle generation, LLM analysis |
-| **Infra** | Docker Compose (Redis + Minio) | Job queue (Redis lists), file storage (S3-compatible) |
+| **Frontend** | React 19, TypeScript, Tailwind 4, Remotion 4 | SPA, clip editor, settings/diagnostics, real-time status via SSE |
+| **API** | AdonisJS 7, SQLite | Local auto-login, jobs, signed file URLs, SSE relay, Remotion rendering |
+| **Worker** | Python 3.12, FastAPI, librosa, PANNs, pyannote | VOD download, audio/chat analysis, scoring, LLM analysis, clipping |
+
+API keys (Groq, OpenRouter) are entered in the app's Settings page and stored in `<data dir>/settings.json`.
 
 ## Prerequisites
 
-- **Node.js** >= 20
-- **Python** >= 3.10 + [uv](https://docs.astral.sh/uv/)
-- **FFmpeg** (with libx264, libass)
-- **Docker** (for Redis + Minio)
-- **OpenAI API key** (Whisper + GPT)
+- **Node.js** >= 22
+- **[uv](https://docs.astral.sh/uv/)** (installs Python 3.12 and the worker dependencies)
+- **FFmpeg** on the `PATH`
 
 ## Quick Start
 
-### 1. Infrastructure
-
 ```bash
-docker compose up -d
+npm install                        # root launcher deps
+(cd api && npm install)
+(cd frontend && npm install)
+(cd backend && uv sync)
+cp api/.env.example api/.env       # then set APP_KEY: cd api && node ace generate:key
+
+npm run dev     # API (HMR) + worker (auto-reload) + Vite → http://localhost:5173
+npm start       # production-like: compiled API serving the built SPA + worker
 ```
 
-This starts Redis (port 6379) and Minio (port 9000, console on 9001) with automatic bucket creation.
-
-### 2. API (AdonisJS)
-
-```bash
-cd api
-cp .env.example .env
-# Edit .env: set APP_KEY (node ace generate:key), Google OAuth credentials
-npm install
-node ace migration:run
-node ace db:seed    # creates admin@cuttie.com / admin
-node ace serve --watch
-```
-
-### 3. Worker (Python)
-
-```bash
-cd backend
-cp .env.example .env
-# Edit .env: set OPENAI_API_KEY
-uv sync
-uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-```
-
-### 4. Frontend
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-Open http://localhost:5173 and log in with `admin@cuttie.com` / `admin`.
+Both launchers share `<repo>/.data` by default (override with `CUTTIE_DATA_DIR`). There is no login screen: requests from the app on this machine are signed in as the local user.
 
 ## Project Structure
 
 ```
 cuttie/
-├── api/                    # AdonisJS API (auth, jobs, renders, SSE)
+├── api/                    # AdonisJS API (jobs, renders, storage, SSE, settings)
 │   ├── app/controllers/    # Route handlers
-│   ├── app/models/         # Lucid ORM models (User, Job)
-│   ├── app/services/       # S3, Redis SSE bus, Remotion renderer
-│   ├── app/validators/     # VineJS request validation
+│   ├── app/services/       # storage (signed URLs), worker client, job status bus, Remotion renderer
 │   ├── database/migrations/
 │   ├── remotion/           # Server-side Remotion compositions
 │   └── start/routes.ts
 │
 ├── backend/                # Python worker (VOD analysis pipeline)
-│   ├── app/main.py         # FastAPI app
-│   ├── app/routers/        # HTTP endpoints (clips, assets)
-│   ├── app/services/       # Pipeline steps (14 modules)
+│   ├── app/main.py         # Local HTTP server: job queue, editor helpers, diagnostics
+│   ├── app/services/       # Pipeline steps
 │   └── pyproject.toml
 │
 ├── frontend/               # React SPA
-│   ├── src/pages/          # Route pages (Home, Job, Edit, Exports, Profile)
+│   ├── src/pages/          # Route pages (Home, Job, Edit, Exports, Settings)
 │   ├── src/components/     # UI components + editor layers
-│   ├── src/lib/            # API client, auth context, i18n, editor state
-│   └── src/app.css         # Tailwind design tokens + animations
+│   └── src/lib/            # API client, contexts, i18n, editor state
 │
-├── docker-compose.yml      # Redis + Minio
+├── scripts/                # dev.mjs, start.mjs, launcher.mjs
 └── CLAUDE.md               # AI assistant context
 ```
 
 ## Analysis Pipeline
 
-The worker processes VODs through 10 steps with resumable checkpoints:
-
-1. **Download Audio** — yt-dlp extracts 11025Hz mono WAV
-2. **Download Chat** — Twitch GQL API fetches all chat messages
-3. **Analyze Audio** — librosa extracts RMS, spectral flux, pitch variance, onset, ZCR per 5s window
-4. **Analyze Chat** — Message speed, emote density, caps ratio, burst detection, mood tagging
-5. **Score** — Weighted composite score (10 signals) + peak detection → top 50 candidates
-6. **Triage** — Whisper transcription + LLM light scoring → top 20
-7. **Clip** — yt-dlp video download + FFmpeg extraction with dynamic RMS-based boundaries
-8. **Vertical** — Parallel: subtitle generation (Whisper + LLM) then FFmpeg 9:16 render
-9. **LLM Analysis** — Frame extraction + GPT-4.5 vision + narrative synthesis
-10. **Done**
+1. **Download** — VOD metadata, audio-only stream (yt-dlp) and chat replay (Twitch GQL), in parallel
+2. **Analyze audio** — librosa features (RMS, flux, onset, pitch, centroid, ZCR) + PANNs audio events
+3. **Analyze chat** — message speed, bursts, emotes, caps, mood
+4. **Score** — weighted composite + peak detection → top 200 candidates
+5. **Analyze candidates** — Whisper transcription, VOD context, blended re-rank, frames + speaker diarization, one multimodal LLM call per candidate → top 20
+6. **Clip** — FFmpeg stream copy of the selected moments into storage
 
 ## Environment Variables
 
-See `api/.env.example` and `backend/.env.example` for all required variables.
-
-Key variables:
-- `OPENAI_API_KEY` — Required for Whisper transcription and GPT analysis
-- `APP_KEY` — AdonisJS encryption key (`node ace generate:key`)
-- `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` — For Google OAuth (optional)
-- `S3_*` — Minio/S3 connection (defaults work with docker-compose)
+See `api/.env.example` and `backend/.env.example`. The launchers set the runtime ones
+(`CUTTIE_DATA_DIR`, `CUTTIE_INTERNAL_SECRET`, ports); in dev, the worker also falls back to
+`GROQ_API_KEY` / `OPENROUTER_API_KEY` from `backend/.env`.
 
 ## Testing
 
@@ -159,7 +119,7 @@ cd api && npm run typecheck
 - **Code language**: English (variables, functions, comments)
 - **UI language**: French (default), English, Spanish
 - **Frontend**: React 19 functional components, TypeScript strict mode, Tailwind utility classes
-- **Backend**: Python 3.10+ type hints, FastAPI, Pydantic v2
+- **Backend**: Python 3.12 type hints, FastAPI, Pydantic v2
 - **API**: AdonisJS conventions (controllers, models, validators, services)
 - **Commits**: Conventional commits (`feat:`, `fix:`, `chore:`, etc.)
 

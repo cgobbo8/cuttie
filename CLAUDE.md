@@ -2,55 +2,46 @@
 
 Outil d'extraction automatique des moments forts de VODs Twitch. URL in -> clips horizontaux analyses et scores out. Editeur de clips integre avec export Remotion.
 
+Tourne 100 % en local (cible : app desktop Windows pour un ami streamer) : pas de Docker, Redis ni S3/MinIO. L'API et le worker partagent un dossier de donnees (`CUTTIE_DATA_DIR`) et se parlent en HTTP sur 127.0.0.1.
+
 ## Stack
 
-- **API** : AdonisJS 7 (TypeScript), SQLite (better-sqlite3), Redis (SSE + sessions)
-- **Worker** : Python 3.10+, FastAPI, SQLite (WAL), uv
+- **API** : AdonisJS 7 (TypeScript), SQLite (better-sqlite3), Transmit SSE en memoire
+- **Worker** : Python 3.12, serveur FastAPI local (file de jobs en memoire), SQLite (WAL), uv
 - **Frontend** : React 19, TypeScript 5.9, Tailwind CSS 4, Vite 8, React Router 7
 - **Editor** : Remotion 4 (player + renderer), canvas editor custom
 - **ML/Audio** : librosa (11025 Hz), PANNs CNN14 (AudioSet)
 - **LLM** : Groq — Whisper large-v3-turbo (transcription), OpenRouter — Gemini 3 Flash Preview (audio + vision + analyse + scoring + correction transcription)
 - **Video** : FFmpeg, OpenCV, yt-dlp
-- **Storage** : S3/Minio (clips, assets, renders)
+- **Storage** : disque local `<data dir>/storage/{clips,renders,assets}`, servi par l'API via URLs signees
 - **Tests** : Vitest (frontend + backend unit/functional)
 
 ## Commandes
 
 ```bash
-# API (AdonisJS)
-cd api && node ace serve --watch    # dev (port 3333)
-cd api && node ace build            # production
+# Tout lancer en dev (API HMR + worker auto-reload + Vite, data dir partage <repo>/.data)
+npm run dev                         # http://localhost:5173
 
-# Worker (Python)
-cd backend && uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-
-# Frontend
-cd frontend && npm run dev          # dev (port 5173)
-cd frontend && npm run build        # production
+# Mode "comme l'app desktop" : API compilee qui sert le front build + worker
+npm start                           # npm start -- --build pour forcer le rebuild
 
 # Tests
 cd frontend && npx vitest           # frontend tests
 cd backend && uv run pytest         # backend tests
-cd api && node ace test             # API tests
-
-# Infrastructure
-docker compose up -d                # Redis + Minio
+cd api && node ace test             # API tests (.env.test : data dir jetable, sans auto-login)
 ```
 
 ## Variables d'environnement
 
-Fichier `backend/.env` :
-```
-OPENAI_API_KEY=sk-proj-...
-S3_ENDPOINT=http://localhost:9000
-S3_BUCKET=cuttie
-S3_ACCESS_KEY=...
-S3_SECRET_KEY=...
-CORS_ORIGINS=http://localhost:5173
-TWITCH_CLIENT_ID=...
-```
+Les cles API (Groq, OpenRouter, OpenAI optionnelle) se saisissent dans la page **Parametres** de l'app → `<data dir>/settings.json` (relu a chaud par le worker). En dev, le worker retombe sur `GROQ_API_KEY` / `OPENROUTER_API_KEY` de `backend/.env`.
 
-Fichier `api/.env` : voir `api/.env.example`
+Positionnees par les lanceurs (`scripts/dev.mjs`, `scripts/launcher.mjs`) :
+- `CUTTIE_DATA_DIR` — dossier de donnees partage (defaut `<repo>/.data`)
+- `CUTTIE_INTERNAL_SECRET` — secret partage API <-> worker (header `X-Cuttie-Secret`)
+- `WORKER_URL` (API) / `CUTTIE_API_URL` + `CUTTIE_WORKER_PORT` (worker)
+- `CUTTIE_AUTO_LOGIN` (defaut true), `FRONTEND_DIST` (API sert le front build)
+
+Fichier `api/.env` : voir `api/.env.example` (APP_KEY en dev ; l'app packagee genere `<data dir>/app.key`).
 
 ## Architecture
 
@@ -64,6 +55,10 @@ cuttie/
 │   │   │   ├── google_auth_controller.ts     # OAuth Google
 │   │   │   ├── jobs_controller.ts            # CRUD jobs + SSE
 │   │   │   ├── clips_controller.ts           # Download clips + edit-env
+│   │   │   ├── storage_controller.ts         # GET /api/storage/* (URLs signees, Range)
+│   │   │   ├── app_controller.ts             # app info, parametres (cles API), diagnostic
+│   │   │   ├── internal_controller.ts        # evenements de statut pousses par le worker
+│   │   │   ├── spa_controller.ts             # sert frontend/dist (FRONTEND_DIST)
 │   │   │   ├── renders_controller.ts         # Remotion renders
 │   │   │   ├── assets_controller.ts          # Upload/serve assets
 │   │   │   └── profile_controller.ts         # Profil utilisateur
@@ -72,20 +67,23 @@ cuttie/
 │   │   │   └── job.ts                        # Job + JSON columns
 │   │   ├── middleware/                        # Auth, SSE auth, silent auth, JSON
 │   │   ├── services/
-│   │   │   ├── s3.ts                         # S3/Minio client
-│   │   │   ├── job_status_bus.ts             # Redis pub/sub pour SSE
+│   │   │   ├── storage.ts                    # stockage local + URLs signees (ex-S3)
+│   │   │   ├── data_paths.ts                 # layout du data dir partage
+│   │   │   ├── worker_client.ts              # client HTTP du worker (jobs, cancel, words, facecam)
+│   │   │   ├── local_user.ts                 # utilisateur local + auto-login
+│   │   │   ├── job_status_bus.ts             # evenements worker -> DB + Transmit SSE
 │   │   │   └── remotion_renderer.ts          # Bundle + render Remotion
 │   │   ├── validators/user.ts                # VineJS validation
 │   │   └── transformers/user_transformer.ts
-│   ├── database/migrations/                   # 10 migrations SQLite
+│   ├── database/migrations/                   # migrations SQLite (lancees au boot par start/local_app.ts)
 │   ├── remotion/                              # Compositions Remotion (server-side)
 │   ├── config/                                # AdonisJS config (auth, cors, shield, etc.)
 │   └── start/routes.ts                        # Routes centralisees
 │
 ├── backend/                           # Python Worker — analyse VOD + generation clips
+│   ├── worker.py                              # point d'entree (uvicorn sur 127.0.0.1)
 │   ├── app/
-│   │   ├── main.py                            # FastAPI app + CORS
-│   │   ├── routers/analyze.py                 # Endpoints clips, renders, assets
+│   │   ├── main.py                            # serveur local : file de jobs, cancel, words, facecam, diagnostics
 │   │   ├── models/schemas.py                  # Pydantic v2
 │   │   └── services/
 │   │       ├── pipeline.py                    # Orchestrateur (6 etapes)
@@ -99,7 +97,11 @@ cuttie/
 │   │       ├── clipper.py                     # Extraction clips video
 │   │       ├── frame_extractor.py             # Extraction frames pour vision
 │   │       ├── subtitle_generator.py          # Whisper word-level + LLM correction sous-titres
-│   │       ├── s3_storage.py                  # Upload S3/Minio
+│   │       ├── paths.py                       # layout du data dir (CUTTIE_DATA_DIR)
+│   │       ├── storage.py                     # stockage local (ex-S3)
+│   │       ├── api_events.py                  # envoi ordonne des statuts a l'API
+│   │       ├── settings.py                    # lecture settings.json (cles API)
+│   │       ├── clip_tools.py                  # transcription a la demande + facecam (editeur)
 │   │       ├── openai_client.py               # Clients multi-provider (Groq, OpenRouter)
 │   │       └── db.py                          # SQLite persistence (WAL)
 │   ├── assets/fonts/LuckiestGuy-Regular.ttf
@@ -180,12 +182,10 @@ Checkpoints resumables : CLIPPING, LLM_ANALYSIS.
 
 ## Authentification
 
-- Auth token-based via AdonisJS (`@adonisjs/auth` access tokens)
-- Google OAuth via `@adonisjs/ally`
-- User par defaut : `admin@cuttie.com` / `admin`
-- Tous les endpoints API sont proteges (sauf login et OAuth)
-- SSE : token passe en query param `?token=xxx` (EventSource ne supporte pas les headers)
-- `user_id` (nullable) sur tables `jobs` et `renders` — filtre par ownership
+- App locale mono-utilisateur : les requetes venant de l'app sur cette machine (IP loopback, Host loopback, `Sec-Fetch-Site` same-origin/none) sont connectees automatiquement a l'utilisateur local (`local@cuttie.app`, permission `*`) — pas d'ecran de login. Desactivable avec `CUTTIE_AUTO_LOGIN=false` (cas des tests).
+- Auth session cookie AdonisJS conservee (login email/password, Google OAuth) pour le mode non-local
+- Fichiers (clips, renders, assets) servis via `/api/storage/*` avec URLs signees HMAC(APP_KEY) a duree limitee (pas de session requise pour `<video>` / Remotion)
+- Worker <-> API : header `X-Cuttie-Secret` (secret genere a chaque lancement)
 - Le Python worker ne connait pas les users (il fait des UPDATE, jamais de INSERT sur jobs)
 
 ## API
@@ -210,6 +210,11 @@ Checkpoints resumables : CLIPPING, LLM_ANALYSIS.
 | `/api/renders/{id}`                   | GET     | Token    | Status d'un export               |
 | `/api/assets`                         | GET     | Token    | Liste des assets                 |
 | `/api/assets/upload`                  | POST    | Token    | Upload asset                     |
+| `/api/app/info`                       | GET     | Public   | Mode local / auto-login          |
+| `/api/settings`                       | GET/PUT | Token    | Cles API (masquees en lecture)   |
+| `/api/diagnostics`                    | GET     | Token    | GPU, ffmpeg, yt-dlp, cles, disque|
+| `/api/storage/*`                      | GET     | Signee   | Fichiers stockes (Range)         |
+| `/api/internal/worker-events`         | POST    | Secret   | Statuts pousses par le worker    |
 
 ## Conventions
 

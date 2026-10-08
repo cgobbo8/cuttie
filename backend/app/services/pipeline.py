@@ -11,13 +11,14 @@ from app.models.schemas import HotPoint, StepTiming
 from app.services import timeline
 from app.services.audio_analyzer import analyze_audio
 from app.services.audio_classifier import classify_audio
-from app.services.chat_analyzer import analyze_chat
+from app.services.chat_analyzer import analyze_chat, estimate_chat_lag
 from app.services.clipper import CLIPS_DIR, compute_clip_bounds, extract_group, plan_downloads, plan_downloads_detected
 from app.services.frame_extractor import get_vod_direct_url
-from app.services.db import get_job, save_hot_points, update_hot_point_clip, update_job
+from app.services.db import get_job, reset_notices, save_hot_points, update_hot_point_clip, update_job
 from app.services.downloader import extract_metadata, download_audio, download_chat
 from app.services.llm_analyzer import analyze_candidates, analyze_hot_points, analyze_single_clip
 from app.services.scorer import compute_scores
+from app.services.speaker_diarizer import pick_voice_reference
 from app.services import job_control
 from app.services.job_control import JobCancelled
 from app.services.paths import clip_dir as job_clip_dir, work_dir
@@ -68,7 +69,7 @@ RESUMABLE_FROM = {
 def _save_words_for_clips(
     job_id: str,
     hot_points: list[HotPoint],
-    candidate_words: dict[int, list[dict]],
+    words_by_hp: dict[int, list[dict]],
 ) -> None:
     """Save word-level subtitle JSON for each clipped hot point.
 
@@ -82,11 +83,11 @@ def _save_words_for_clips(
     clip_dir = os.path.join(CLIPS_DIR, job_id)
     saved = 0
 
-    for idx, hp in enumerate(hot_points):
-        if not hp.clip_filename or idx not in candidate_words:
+    for hp in hot_points:
+        words = words_by_hp.get(id(hp))
+        if not hp.clip_filename or not words:
             continue
 
-        words = candidate_words[idx]
         if not words:
             continue
 
@@ -296,8 +297,8 @@ def _run_clipping_only(
     logger.info(f"Clipping complete: {len(hot_points)} clips downloaded")
 
 
-def _shift_key_moments(job_id: str, hot_points: list) -> None:
-    """Put each clip's key moments on the clip's own clock.
+def _shift_to_clip_clock(job_id: str, hot_points: list) -> None:
+    """Put each clip's key moments and suggested cut on the clip's own clock.
 
     The LLM timed them from the start of the window it analyzed (hp.clip_start);
     the extracted clip can start a little earlier or later (silence snapping,
@@ -307,7 +308,7 @@ def _shift_key_moments(job_id: str, hot_points: list) -> None:
 
     clip_dir = os.path.join(CLIPS_DIR, job_id)
     for hp in hot_points:
-        if not hp.clip_filename or not hp.llm or not hp.llm.key_moments:
+        if not hp.clip_filename or not hp.llm:
             continue
         meta_path = os.path.join(clip_dir, f"{os.path.splitext(hp.clip_filename)[0]}_meta.json")
         try:
@@ -319,8 +320,12 @@ def _shift_key_moments(job_id: str, hot_points: list) -> None:
             continue
         window_start = hp.clip_start if hp.clip_start is not None else max(0, hp.timestamp_seconds - CLIP_HALF_DURATION)
         offset = window_start - clip_vod_start
+        on_clip = lambda t: round(min(max(0.0, t + offset), max(0.0, clip_duration)), 1)
         for moment in hp.llm.key_moments:
-            moment.time = round(min(max(0.0, moment.time + offset), max(0.0, clip_duration)), 1)
+            moment.time = on_clip(moment.time)
+        if hp.llm.cut_start is not None and hp.llm.cut_end is not None:
+            a, b = on_clip(hp.llm.cut_start), on_clip(hp.llm.cut_end)
+            hp.llm.cut_start, hp.llm.cut_end = (a, b) if b - a >= 5 else (None, None)
 
 
 def _check_facecam(job_id: str, hot_points: list) -> None:
@@ -349,6 +354,7 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
     timer = StepTimer()
 
     try:
+        reset_notices(job_id)
         job = get_job(job_id) if resume_from else None
         hot_points = list(job.hot_points) if job and job.hot_points else None
         duration = job.vod_duration_seconds if job else 0
@@ -363,7 +369,7 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
         audio_path: str | None = None
         audio_features: list[dict] = []
         detected_hot_points: list[HotPoint] = []
-        candidate_words: dict[int, list[dict]] = {}
+        words_by_hp: dict[int, list[dict]] = {}
 
         # Steps 1-6: Download + Analysis + LLM Scoring (skip if resuming from later step)
         if not resume_from or resume_from in (
@@ -431,7 +437,9 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
             logger.info(f"[{job_id[:8]}] Analyzing chat ({len(chat_messages)} messages)...")
             update_job(job_id, status="ANALYZING_CHAT", progress="Analyzing chat activity...", step_timings=timer.timings)
             chat_features = analyze_chat(chat_messages, duration)
-            logger.info(f"[{job_id[:8]}] Chat analysis done: {len(chat_features)} windows")
+            # Chat reacts a few seconds after the stream: line it up before scoring
+            chat_lag = estimate_chat_lag(audio_features, chat_features)
+            logger.info(f"[{job_id[:8]}] Chat analysis done: {len(chat_features)} windows, chat reacts ~{chat_lag:.1f}s late")
 
             # The live at a glance, for the analysis screen
             try:
@@ -455,6 +463,7 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
                 audio_features, chat_features,
                 total_duration=duration, top_n=200,
                 classification_features=classification_features,
+                chat_lag=chat_lag,
             )
             logger.info(f"[{job_id[:8]}] Scoring done: {len(hot_points)} hot points")
 
@@ -483,7 +492,7 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
                 progress=f"Analyse IA de {len(hot_points)} candidats...",
                 step_timings=timer.timings,
             )
-            hot_points, detected_hot_points, candidate_words, _vod_context = analyze_candidates(
+            hot_points, detected_hot_points, words_by_hp, _vod_context = analyze_candidates(
                 job_id=job_id,
                 hot_points=hot_points,
                 audio_path=audio_path,
@@ -492,6 +501,8 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
                 vod_meta=vod_meta,
                 chat_messages=chat_messages,
                 keep_n=20,
+                chat_lag=chat_lag,
+                voice_reference=pick_voice_reference(classification_features, duration),
             )
 
         # Step 7: Clipping — download video only for top 20
@@ -548,8 +559,8 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
                     direct_url=direct_url,
                 )
 
-            # The LLM timed key moments on the window it analyzed: move them onto each clip
-            _shift_key_moments(job_id, [*hot_points, *(detected_hot_points or [])])
+            # The LLM timed key moments and the cut on the window it analyzed: move them onto each clip
+            _shift_to_clip_clock(job_id, [*hot_points, *(detected_hot_points or [])])
 
         elif resume_from == "LLM_ANALYSIS":
             # Legacy resume: re-analyze already-clipped files
@@ -564,8 +575,8 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
             )
 
         # Save word-level subtitles for each clipped hot point
-        if candidate_words:
-            _save_words_for_clips(job_id, hot_points, candidate_words)
+        if words_by_hp:
+            _save_words_for_clips(job_id, [*hot_points, *(detected_hot_points or [])], words_by_hp)
 
         # Where the webcam is on this live, and whether it shows in each clip
         _check_facecam(job_id, [*(hot_points or []), *(detected_hot_points or [])])

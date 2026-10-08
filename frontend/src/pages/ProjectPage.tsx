@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { useTranslation } from "react-i18next";
-import { ArrowLeft, ArrowRight, Check, ChevronDown, Loader2, RotateCcw, Upload, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ArrowRight, Check, ChevronDown, Loader2, RotateCcw, Sparkles, Upload, X } from "lucide-react";
 import {
   clipThumbUrl,
   deleteClip,
@@ -91,12 +91,15 @@ export default function ProjectPage() {
         status: data.status ?? prev.status,
         progress: data.progress ?? prev.progress,
         step_timings: data.step_timings ?? prev.step_timings,
+        notices: data.notices ?? prev.notices,
         error: data.error ?? prev.error,
         hot_points: data.status === "DONE" && data.hot_points?.length && !(prev.hot_points ?? []).some((h) => h.clip_filename)
           ? data.hot_points.map(mapSSEHotPoint)
           : prev.hot_points,
       };
     });
+    // Done: the final clips (cuts and key moments on each clip's clock), as saved
+    if (data.status === "DONE" && jobId) getJobStatus(jobId).then(setJob).catch(() => {});
   });
 
   const moments = useMemo(() => buildMoments(job?.hot_points ?? [], job?.selection ?? {}), [job]);
@@ -284,6 +287,15 @@ export default function ProjectPage() {
         </div>
       )}
 
+      {(job.notices ?? []).map((notice) =>
+        notice.kind === "transcription" ? (
+          <div key={notice.kind} className="mt-4 flex items-start gap-3 p-3.5 pl-4 rounded-[14px] max-w-[860px] bg-[rgba(245,177,76,0.10)] border border-[rgba(245,177,76,0.30)]">
+            <AlertTriangle className="w-4 h-4 text-[#F5B14C] flex-none mt-0.5" />
+            <p className="text-[12.5px] leading-snug text-[#f7d9a8]">{t("project.notice.transcription", { failed: notice.failed ?? 0, total: notice.total ?? 0 })}</p>
+          </div>
+        ) : null,
+      )}
+
       {processing && (
         <div className="mt-6">
           <AnalysisView job={job} vodId={vodId} />
@@ -332,8 +344,17 @@ export default function ProjectPage() {
               >
                 <div className="flex flex-wrap items-center gap-2.5 px-1.5 pt-3 pb-1.5">
                   <span className="text-[12.5px] text-ink-3">
-                    {current.duplicateOf ? t("project.duplicateHint", { rank: current.duplicateOf.rank }) : t("project.trimHint")}
+                    {current.duplicateOf
+                      ? t("project.duplicateHint", { rank: current.duplicateOf.rank })
+                      : current.suggested && !current.trimmedByUser
+                        ? t("project.suggestedTrimHint", { seconds: Math.round(current.suggested[1] - current.suggested[0]) })
+                        : t("project.trimHint")}
                   </span>
+                  {current.suggested && current.trimmedByUser && (
+                    <button onClick={() => saveChoice(current.filename, { trim: null })} className="btn btn-ghost btn-sm h-7 px-2 -ml-1">
+                      <Sparkles className="w-3.5 h-3.5" /> {t("project.backToSuggestedTrim")}
+                    </button>
+                  )}
                   <div className="flex-1" />
                   <button
                     onClick={() => decide("passed")}

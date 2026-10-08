@@ -39,6 +39,21 @@ describe("moments", () => {
     expect(moments[0].duration).toBe(65);
   });
 
+  it("starts from the cut the AI suggests, until the streamer trims it", () => {
+    const withCut = { ...hp("hélico.mp4", 0.75, 9007, 9072), llm: { cut_start: 12.5, cut_end: 41 } as HotPoint["llm"] };
+    const [suggested] = buildMoments([withCut], {});
+    expect(suggested.trim).toEqual([12.5, 41]);
+    expect(suggested.suggested).toEqual([12.5, 41]);
+    expect(suggested.trimmedByUser).toBe(false);
+    // The streamer's own trim (even the whole clip) wins
+    const [own] = buildMoments([withCut], { "hélico.mp4": { trim: [0, 65] } });
+    expect(own.trim).toEqual([0, 65]);
+    expect(own.trimmedByUser).toBe(true);
+    // No usable suggestion: the whole clip
+    const tooShort = { ...withCut, llm: { cut_start: 10, cut_end: 12 } as HotPoint["llm"] };
+    expect(buildMoments([tooShort], {})[0].trim).toBeNull();
+  });
+
   it("flags a weaker clip of the same passage", () => {
     const moments = buildMoments(hotPoints, {});
     expect(moments[2].duplicateOf?.filename).toBe("raté.mp4");

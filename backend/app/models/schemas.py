@@ -30,6 +30,7 @@ class SignalBreakdown(BaseModel):
     chat_speed: float = 0.0
     vocal_excitement: float = 0.0
     speech_presence: float = 0.0
+    clip_requests: int = 0  # viewers asking for a clip right after this moment
 
 
 class KeyMoment(BaseModel):
@@ -47,6 +48,11 @@ class LlmAnalysis(BaseModel):
     is_clipable: bool = True  # Can this stand alone as a clip?
     key_moments: list[KeyMoment] = []  # Vision-based timeline of key moments
     narrative: str = ""  # Full narrative combining transcript + vision
+    hook: str = ""  # on-screen hook line for the first seconds of the short
+    # Tightest standalone cut suggested by the LLM, clip seconds (the clip keeps its margins)
+    cut_start: float | None = None
+    cut_end: float | None = None
+    clip_request: bool | None = None  # "clip" said on stream: a real request to clip?
 
 
 class HotPoint(BaseModel):

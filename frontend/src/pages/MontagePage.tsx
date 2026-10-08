@@ -149,7 +149,7 @@ export default function MontagePage() {
         facecam: camFor(m, env),
         startAt: m.trim?.[0] ?? 0,
         endAt: m.trim?.[1] ?? m.duration,
-        hook: prefs.hooks[m.filename] ?? m.hp.clip_name,
+        hook: prefs.hooks[m.filename] ?? (m.hp.llm?.hook || m.hp.clip_name),
       });
     },
     [camFor, channel, jobId, kit, prefs.hooks],
@@ -389,7 +389,7 @@ export default function MontagePage() {
               >
                 {ctx ? (
                   <TemplateSketch
-                    layers={buildAny(templateFor(m), { ...ctx, words: [], hook: prefs.hooks[m.filename] ?? m.hp.clip_name }, customs)}
+                    layers={buildAny(templateFor(m), { ...ctx, words: [], hook: prefs.hooks[m.filename] ?? (m.hp.llm?.hook || m.hp.clip_name) }, customs)}
                     frameUrl={clipThumbUrl(jobId, m.filename)}
                     width={40}
                     sample={[]}
@@ -411,7 +411,7 @@ export default function MontagePage() {
             </label>
             <input
               id="hook"
-              value={prefs.hooks[current.filename] ?? current.hp.clip_name}
+              value={prefs.hooks[current.filename] ?? (current.hp.llm?.hook || current.hp.clip_name)}
               onChange={(e) => setPrefs({ hooks: { ...prefs.hooks, [current.filename]: e.target.value } })}
               disabled={!showsHook(template, customs)}
               className="mt-2.5 w-full h-10 px-3 rounded-[10px] bg-black/30 border border-white/10 text-[13.5px] text-white outline-none focus:border-accent-line disabled:opacity-40"

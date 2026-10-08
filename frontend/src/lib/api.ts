@@ -335,6 +335,11 @@ export interface LlmAnalysis {
   is_clipable: boolean;
   key_moments: KeyMoment[];
   narrative: string;
+  /** On-screen hook line for the first seconds of the short */
+  hook?: string;
+  /** Tightest standalone cut suggested by the AI, clip seconds (the clip keeps its margins) */
+  cut_start?: number | null;
+  cut_end?: number | null;
 }
 
 export interface HotPoint {
@@ -413,6 +418,15 @@ export interface JobResponse {
   selection: Record<string, ClipSelection>;
   /** Live view of the analysis */
   timeline: JobTimeline | null;
+  /** Things that degraded the analysis without failing it */
+  notices?: JobNotice[] | null;
+}
+
+/** e.g. segments Whisper could not transcribe (rate limits) */
+export interface JobNotice {
+  kind: "transcription" | string;
+  failed?: number;
+  total?: number;
 }
 
 export interface TimelineCandidate {

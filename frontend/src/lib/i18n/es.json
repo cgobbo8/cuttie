@@ -673,7 +673,12 @@
     "why": "Por qué este momento",
     "advancedEditor": "Editor avanzado",
     "downloadRaw": "Clip original",
-    "deleteClip": "Eliminar"
+    "deleteClip": "Eliminar",
+    "suggestedTrimHint": "Corte sugerido por la IA ({{seconds}} s): amplíalo si quieres más contexto.",
+    "backToSuggestedTrim": "Corte de la IA",
+    "notice": {
+      "transcription": "{{failed}} de {{total}} fragmentos no se pudieron transcribir (¿límite de la clave de Groq?). La IA los escuchó igualmente; sus subtítulos se harán al abrir el clip."
+    }
   },
   "montage": {
     "title": "Viste tus clips",

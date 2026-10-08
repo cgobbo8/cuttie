@@ -4,7 +4,7 @@
  * @adonisjs/transmit so frontend clients get real-time updates.
  */
 
-import Job, { type JobTimeline, type TimelineCandidate } from '#models/job'
+import Job, { type JobNotice, type JobTimeline, type TimelineCandidate } from '#models/job'
 import Creator from '#models/creator'
 import transmit from '@adonisjs/transmit/services/main'
 
@@ -42,6 +42,7 @@ export interface JobStatusUpdate {
   stream_date?: string | null
   step_timings?: Record<string, { start: number; duration_seconds: number | null }> | null
   vod_context?: any | null
+  notices?: JobNotice[] | null
 }
 
 class JobStatusBus {
@@ -105,6 +106,7 @@ class JobStatusBus {
     if (update.stream_date !== undefined) job.streamDate = update.stream_date ?? null
     if (update.step_timings !== undefined) job.stepTimings = update.step_timings ?? null
     if (update.vod_context !== undefined) job.vodContext = update.vod_context ?? null
+    if (update.notices !== undefined) job.notices = update.notices ?? null
 
     // Upsert creator when streamer info arrives
     if (update.streamer && job.userId) {

@@ -137,6 +137,24 @@ def create_job(job_id: str, url: str) -> None:
     conn.close()
 
 
+# Things the streamer should know about a job (e.g. segments Whisper could not
+# transcribe). Kept by the API only: the worker just sends the current list.
+_notices: dict[str, list[dict]] = {}
+
+
+def add_notice(job_id: str, kind: str, **data) -> None:
+    """Report something that degraded the analysis without failing it."""
+    notices = [n for n in _notices.get(job_id, []) if n.get("kind") != kind]
+    notices.append({"kind": kind, **data})
+    _notices[job_id] = notices
+    update_job(job_id, notices=notices)
+
+
+def reset_notices(job_id: str) -> None:
+    _notices.pop(job_id, None)
+    update_job(job_id, notices=[])
+
+
 def update_job(job_id: str, **kwargs) -> None:
     if not kwargs:
         return
@@ -147,6 +165,7 @@ def update_job(job_id: str, **kwargs) -> None:
     hot_points = kwargs.pop("hot_points", None)
     step_timings = kwargs.pop("step_timings", None)
     vod_context = kwargs.pop("vod_context", None)
+    notices = kwargs.pop("notices", None)
 
     # Serialize step_timings to JSON for storage
     if step_timings is not None:
@@ -183,6 +202,8 @@ def update_job(job_id: str, **kwargs) -> None:
         publish_payload["vod_context"] = (
             vod_context.model_dump() if hasattr(vod_context, "model_dump") else vod_context
         )
+    if notices is not None:
+        publish_payload["notices"] = notices
     if hot_points is not None:
         publish_payload["hot_points"] = [hp.model_dump() for hp in hot_points]
     _publish_status(job_id, publish_payload)

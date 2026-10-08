@@ -46,12 +46,25 @@ export default class Job extends JobSchema {
   })
   declare timeline: JobTimeline | null
 
+  /** Things that degraded the analysis without failing it, sent by the worker */
+  @column({
+    prepare: (value) => (value !== null && value !== undefined ? JSON.stringify(value) : null),
+    consume: (value) => (typeof value === 'string' ? JSON.parse(value) : value),
+  })
+  declare notices: JobNotice[] | null
+
   /** Webcam framing set by hand for this live: a rectangle, or false for no cam */
   @column({
     prepare: (value) => (value !== null && value !== undefined ? JSON.stringify(value) : null),
     consume: (value) => (typeof value === 'string' ? JSON.parse(value) : value),
   })
   declare facecam: FacecamRect | false | null
+}
+
+/** e.g. { kind: 'transcription', failed: 37, total: 200 } */
+export interface JobNotice {
+  kind: string
+  [detail: string]: unknown
 }
 
 export interface TimelineCandidate {

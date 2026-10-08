@@ -33,6 +33,11 @@ WEIGHTS = {
 # Note: vocal_excitement is added separately as a strong additive bonus (0.25)
 # outside of these base weights — see classification section below
 
+# Viewers asking for a clip: strong evidence, even on a small chat
+CLIP_REQUEST_WEIGHT = 0.3
+CLIP_REQUEST_FULL = 2  # requesters for the full bonus
+CLIP_REQUEST_SPAN = 20.0  # seconds after the (lag-corrected) moment they can ask in
+
 # Minimum distance between peaks in seconds
 MIN_PEAK_DISTANCE_SEC = 60.0
 
@@ -69,8 +74,13 @@ def compute_scores(
     top_n: int = 20,
     hop_sec: float = 2.5,
     classification_features: list[dict] | None = None,
+    chat_lag: float = 0.0,
 ) -> list[HotPoint]:
-    """Compute composite scores and detect peak hot points."""
+    """Compute composite scores and detect peak hot points.
+
+    Chat reacts `chat_lag` seconds after what happens on stream: the chat
+    window at t + chat_lag scores the moment at t.
+    """
     if not audio_features:
         return []
 
@@ -92,6 +102,7 @@ def compute_scores(
     caps_ratio = np.zeros(n)
     sentiment_intensity = np.zeros(n)
     dominant_moods: list[str] = [""] * n
+    clip_requests = np.zeros(n)
 
     if chat_features:
         chat_times_arr = np.array([c["time"] for c in chat_features])
@@ -103,8 +114,12 @@ def compute_scores(
             "sentiment_intensity": np.array([c.get("sentiment_intensity", 0) for c in chat_features]),
         }
         chat_moods = [c.get("dominant_mood", "") for c in chat_features]
+        requesters = [c.get("clip_requesters", []) for c in chat_features]
         for i, t in enumerate(times):
-            diffs = np.abs(chat_times_arr - t)
+            # Viewers asking for a clip in the seconds after the moment (each counted once)
+            span = (chat_times_arr >= t + chat_lag) & (chat_times_arr < t + chat_lag + CLIP_REQUEST_SPAN)
+            clip_requests[i] = len({a for j in np.where(span)[0] for a in requesters[j]})
+            diffs = np.abs(chat_times_arr - (t + chat_lag))
             nearest = np.argmin(diffs)
             if diffs[nearest] < hop_sec:
                 chat_speed[i] = chat_arrays["chat_speed"][nearest]
@@ -186,6 +201,9 @@ def compute_scores(
         game_only = np.clip(norm_game - norm_speech, 0, 1)
         score *= 1.0 - 0.15 * game_only
 
+    # Viewers asked for a clip: additive, like vocal excitement
+    score += CLIP_REQUEST_WEIGHT * np.clip(clip_requests / CLIP_REQUEST_FULL, 0, 1)
+
     # Smooth score curve for cleaner peak detection
     score_smooth = gaussian_filter1d(score, sigma=SMOOTH_SIGMA)
 
@@ -216,6 +234,7 @@ def compute_scores(
                     chat_speed=round(float(norm["chat_speed"][idx]), 3),
                     vocal_excitement=round(float(norm_excite[idx]), 3),
                     speech_presence=round(float(norm_speech[idx]), 3),
+                    clip_requests=int(clip_requests[max(0, idx - 2) : idx + 3].max()),
                 ),
                 chat_mood=dominant_moods[idx],
             )

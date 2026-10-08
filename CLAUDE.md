@@ -172,12 +172,15 @@ cuttie/
 
 ```
 1. DOWNLOADING_AUDIO   -> Metadata + audio 16 kHz mono WAV + chat Twitch GQL (en parallele)
-2. ANALYZING_AUDIO     -> librosa features (5s/2.5s hop) + PANNs CNN14 classification (en parallele)
-3. ANALYZING_CHAT      -> Sentiment, emotes, burst detection
+2. ANALYZING_AUDIO     -> librosa features (5s/2.5s hop) + PANNs CNN14 16 kHz (rires, cris, parole ; en parallele)
+3. ANALYZING_CHAT      -> Sentiment, emotes, burst, demandes de clip des viewers ;
+                          decalage du chat estime (correlation son/chat, defaut 5 s)
 4. SCORING             -> Score composite pondere + peak detection -> top 200
 5. ANALYZING_CLIPS     -> Pour chaque candidat (sans download video) :
-                          a. Whisper transcription (200 segments audio depuis WAV)
-                          b. Clip keyword detection ("clip", "clippe", etc.)
+                          a. Whisper transcription (200 segments audio depuis WAV ; limites de debit
+                             attendues, echecs comptes -> job.notices)
+                          b. Mot "clip" dit en live -> fenetre des 2 min avant, verifiee par le LLM
+                             (vraie demande = clip "detected", garde quel que soit son rang)
                           c. VOD context gathering (1 appel LLM text-only) :
                              - Lit les 200 transcripts chronologiquement
                              - Produit contexte VOD (narrative, phases, protagonistes, themes)
@@ -188,7 +191,8 @@ cuttie/
                              - 6 frames par candidat via ffmpeg seek sur URL VOD directe
                              - Speaker diarization (pyannote community-1 MPS) + voiceprint ECAPA-TDNN
                                → transcript avec labels speakers ([Streamer]: ..., [SPEAKER_01]: ...)
-                          f. 1 appel LLM multimodal par candidat (audio + frames + speaker transcript + chat + vod_context)
+                          f. 1 appel LLM multimodal par candidat (audio + frames + speaker transcript
+                             + chat recale + vod_context) -> score, titre, accroche, coupe conseillee
                           -> Re-rank par final_score, garde top 20
 6. CLIPPING            -> yt-dlp video + FFmpeg extraction (bornes dynamiques RMS)
                           uniquement pour les 20 candidats gardes
@@ -200,13 +204,17 @@ Checkpoints resumables : CLIPPING, LLM_ANALYSIS.
 
 ## Scoring
 
-**Score heuristique** (normalisation baseline-relative, median/P95) :
-- RMS 18%, chat_speed 18%, spectral_flux 12%, onset 10%, pitch_var 10%
+**Score heuristique** (normalisation baseline-relative, median/P95 ; chat lu `chat_lag` s plus tard) :
+- chat_speed 18%, onset 14%, pitch_var 14%, spectral_flux 12%, RMS 10%
 - chat_burst 10%, emote_density 8%, caps_ratio 7%, centroid 5%, zcr 2%
+- Multiplicateurs : accord son + chat (x1,3 max), sentiment du chat, voix forte ; son de jeu seul (x0,85)
+- Bonus additifs : excitation vocale PANNs (+0,25), viewers qui demandent un clip (+0,3 a partir de 2)
 
 **Pre-filtre** : `0.5 * heuristique + 0.5 * content_score_LLM` (+ bonus/malus content gems/false positives)
 
 **Score final** : `0.2 * heuristique + 0.8 * LLM virality`
+
+**Coupe conseillee** : le clip extrait garde ses marges (45-90 s) ; le LLM propose `cut_start` / `cut_end` (15-45 s en general), appliques comme trim par defaut dans Choisir et Monter tant que le streamer n'a pas coupe lui-meme.
 
 ## Authentification
 

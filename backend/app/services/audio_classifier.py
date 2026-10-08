@@ -23,7 +23,9 @@ from app.services.downloads import download_if_missing
 
 logger = logging.getLogger(__name__)
 
-# PANNs works fine at 16kHz (half the memory, same quality for our classes)
+# The VOD audio is 16 kHz: the 16 kHz CNN14 checkpoint matches it. The 32 kHz one
+# fed 16 kHz audio heard everything an octave up and twice as fast (laughter
+# scored ~0.01 instead of ~0.6 on real clips)
 PANNS_SR = 16000
 
 # AudioSet class indices
@@ -42,7 +44,9 @@ _EXCITEMENT_CLASSES = {
     14: 1.0,   # Screaming
     16: 1.0,   # Laughter
     18: 0.8,   # Giggle
+    19: 0.7,   # Snicker
     20: 1.0,   # Belly laugh
+    21: 0.6,   # Chuckle, chortle
     44: 0.7,   # Gasp
     66: 0.9,   # Cheering
 }
@@ -63,33 +67,51 @@ _model = None
 # so we download them ourselves to the paths it expects.
 _PANNS_DIR = os.path.join(str(Path.home()), "panns_data")
 _LABELS_URL = "http://storage.googleapis.com/us_audioset/youtube_corpus/v1/csv/class_labels_indices.csv"
-_CHECKPOINT_URL = "https://zenodo.org/record/3987831/files/Cnn14_mAP%3D0.431.pth?download=1"
-_CHECKPOINT_PATH = os.path.join(_PANNS_DIR, "Cnn14_mAP=0.431.pth")
+_CHECKPOINT_URL = "https://zenodo.org/records/3987831/files/Cnn14_16k_mAP=0.438.pth?download=1"
+_CHECKPOINT_PATH = os.path.join(_PANNS_DIR, "Cnn14_16k_mAP=0.438.pth")
 
 
 def _ensure_panns_files() -> None:
     download_if_missing(_LABELS_URL, os.path.join(_PANNS_DIR, "class_labels_indices.csv"))
-    download_if_missing(_CHECKPOINT_URL, _CHECKPOINT_PATH, min_bytes=300_000_000)
+    download_if_missing(_CHECKPOINT_URL, _CHECKPOINT_PATH, min_bytes=350_000_000)
+
+
+def _load_checkpoint(path: str) -> dict:
+    """The checkpoint keeps its training sampler state as numpy arrays: allow just
+    those types instead of turning off torch's weights-only loading."""
+    import torch
+
+    reconstruct = getattr(np, "_core", None)
+    reconstruct = (reconstruct or np.core).multiarray._reconstruct
+    allowed = [
+        (reconstruct, "numpy.core.multiarray._reconstruct"),
+        np.ndarray,
+        np.dtype,
+        type(np.dtype(np.float64)),
+        type(np.dtype(np.float32)),
+        type(np.dtype(np.int64)),
+    ]
+    import warnings
+
+    with torch.serialization.safe_globals(allowed), warnings.catch_warnings():
+        # Old numpy pickles: harmless deprecation noise on load
+        warnings.simplefilter("ignore", getattr(np, "exceptions", np).VisibleDeprecationWarning)
+        return torch.load(path, map_location="cpu", weights_only=True)
 
 
 def _get_model():
     global _model
     if _model is None:
         _ensure_panns_files()
-        from panns_inference import AudioTagging
+        from panns_inference.models import Cnn14
 
         device = get_device()
-        logger.info(f"Loading PANNs CNN14 model on {device}...")
-
-        # Load on CPU first (PANNs only supports cpu/cuda natively)
-        at = AudioTagging(checkpoint_path=_CHECKPOINT_PATH, device="cpu")
-
-        # Move model to MPS/CUDA if available
-        if device.type != "cpu":
-            at.model.to(device)
-            at.device = device.type
-
-        _model = at
+        logger.info(f"Loading PANNs CNN14 (16 kHz) on {device}...")
+        model = Cnn14(sample_rate=PANNS_SR, window_size=512, hop_size=160, mel_bins=64, fmin=50, fmax=8000, classes_num=527)
+        model.load_state_dict(_load_checkpoint(_CHECKPOINT_PATH)["model"])
+        model.eval()
+        model.to(device)
+        _model = (model, device)
         logger.info(f"PANNs CNN14 loaded on {device}")
     return _model
 
@@ -162,8 +184,11 @@ def classify_audio(
 
 def _process_batch(model, batch_audio, batch_times, windows):
     """Process a batch of audio chunks through PANNs."""
-    audio_array = np.stack(batch_audio)
-    clipwise_output, _ = model.inference(audio_array)
+    import torch
+
+    net, device = model
+    with torch.no_grad():
+        clipwise_output = net(torch.from_numpy(np.stack(batch_audio)).to(device))["clipwise_output"].cpu().numpy()
 
     for j, time in enumerate(batch_times):
         scores = _compute_window_scores(clipwise_output[j])

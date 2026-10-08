@@ -34,7 +34,9 @@ _pipeline = None
 _classifier = None
 
 VOICEPRINT_THRESHOLD = 0.55  # cosine similarity to match streamer
-VOICEPRINT_DURATION = 120  # seconds from VOD start for reference extraction
+VOICEPRINT_DURATION = 120  # seconds of reference audio (from the VOD start when no passages are given)
+VOICE_REFERENCE_LEN = 30.0  # seconds per reference passage
+VOICE_REFERENCE_COUNT = 4
 DIARIZE_WORKERS = 3  # parallel diarization workers (GPU-bound)
 
 
@@ -122,26 +124,63 @@ def _extract_wav_segment(
 
 # ─── Voiceprint ──────────────────────────────────────────────────────────────
 
-def extract_voiceprint(wav_path: str, duration: float = VOICEPRINT_DURATION) -> np.ndarray | None:
-    """Extract streamer voiceprint from the beginning of the VOD.
+def pick_voice_reference(classification: list[dict], duration: float) -> list[float]:
+    """Starts of a few speech-dense passages spread over the VOD, to learn the
+    streamer's voice from. Not the VOD start: it's often a "starting soon"
+    screen with music. `classification` comes from classify_audio (5 s windows).
+    """
+    if not classification:
+        return []
+    times = np.array([w["time"] for w in classification], dtype=float)
+    voice = np.array([w["speech_presence"] - 0.5 * w.get("game_audio", 0.0) for w in classification], dtype=float)
+    per = max(1, int(round(VOICE_REFERENCE_LEN / max(times[1] - times[0], 1.0)))) if len(times) > 1 else 1
+    if len(voice) < per:
+        return []
+    # Mean over each 30 s passage starting at every window
+    passage = np.convolve(voice, np.ones(per) / per, mode="valid")
+    skip = 180.0 if duration > 900 else 0.0
+    order = np.argsort(passage)[::-1]
+    picked: list[float] = []
+    spacing = max(VOICE_REFERENCE_LEN, min(300.0, duration / (VOICE_REFERENCE_COUNT * 2)))
+    for i in order:
+        t = float(times[i])
+        if t < skip or passage[i] < 0.3:
+            continue
+        if all(abs(t - p) >= spacing for p in picked):
+            picked.append(t)
+        if len(picked) == VOICE_REFERENCE_COUNT:
+            break
+    return sorted(picked)
 
-    Strategy: diarize first 2 min, find dominant speaker, extract their
-    embedding. The dominant speaker at VOD start is almost always the streamer.
+
+def extract_voiceprint(wav_path: str, duration: float = VOICEPRINT_DURATION, starts: list[float] | None = None) -> np.ndarray | None:
+    """Extract the streamer's voiceprint.
+
+    Strategy: diarize the reference audio, take the dominant speaker, extract
+    their embedding. The reference is a few speech-dense passages spread over
+    the VOD (`starts`, see pick_voice_reference): the voice heard in most of
+    them is the streamer's. Without passages, the first 2 minutes.
 
     Returns 192-dim ECAPA-TDNN embedding, or None on failure.
     """
     t0 = time.time()
-    logger.info("Extracting streamer voiceprint from VOD start...")
+    logger.info(f"Extracting streamer voiceprint from {len(starts) if starts else 'the VOD start'} passage(s)...")
 
-    # Extract first N seconds as 16kHz WAV
-    ref_path = wav_path + ".voiceprint_ref.wav"
+    ref_paths: list[str] = []
     try:
-        if not _extract_wav_segment(wav_path, 0, duration, ref_path):
+        spans = [(s, s + VOICE_REFERENCE_LEN) for s in starts] if starts else [(0.0, duration)]
+        parts = []
+        for i, (a, b) in enumerate(spans):
+            ref_path = f"{wav_path}.voiceprint_ref_{i}.wav"
+            ref_paths.append(ref_path)
+            if _extract_wav_segment(wav_path, a, b, ref_path):
+                parts.append(_load_wav(ref_path)[0])
+        if not parts:
             logger.warning("Failed to extract reference audio for voiceprint")
             return None
 
-        # Diarize reference segment
-        waveform, sr = _load_wav(ref_path)
+        # Diarize the reference passages together
+        waveform, sr = torch.cat(parts, dim=1), 16000
         pipeline = _get_pipeline()
         output = pipeline({"waveform": waveform, "sample_rate": sr})
         annotation = getattr(output, "exclusive_speaker_diarization", None)
@@ -157,13 +196,13 @@ def extract_voiceprint(wav_path: str, duration: float = VOICEPRINT_DURATION) -> 
             speaker_segments.setdefault(speaker, []).append((turn.start, turn.end))
 
         if not speaker_durations:
-            logger.warning("No speakers found in VOD start — cannot create voiceprint")
+            logger.warning("No speakers found in the reference audio — cannot create voiceprint")
             return None
 
         dominant = max(speaker_durations, key=speaker_durations.get)
         dominant_dur = speaker_durations[dominant]
         logger.info(
-            f"Dominant speaker in VOD start: {dominant} ({dominant_dur:.1f}s / "
+            f"Dominant speaker in the reference audio: {dominant} ({dominant_dur:.1f}s / "
             f"{len(speaker_durations)} speakers)"
         )
 
@@ -196,8 +235,9 @@ def extract_voiceprint(wav_path: str, duration: float = VOICEPRINT_DURATION) -> 
         logger.error(f"Voiceprint extraction failed: {e}")
         return None
     finally:
-        if os.path.isfile(ref_path):
-            os.remove(ref_path)
+        for ref_path in ref_paths:
+            if os.path.isfile(ref_path):
+                os.remove(ref_path)
 
 
 # ─── Segment diarization ────────────────────────────────────────────────────

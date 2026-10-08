@@ -24,8 +24,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from app.models.schemas import HotPoint, KeyMoment, LlmAnalysis, VodContext
 from app.services import timeline
-from app.services.clipper import CLIP_HALF_DURATION
-from app.services.db import save_hot_points, update_job
+from app.services.clipper import CLIP_HALF_DURATION, DETECTED_POST_PEAK, DETECTED_PRE_PEAK
+from app.services.db import add_notice, save_hot_points, update_job
 from app.services.frame_extractor import (
     FRAMES_DIR,
     NUM_FRAMES,
@@ -34,6 +34,7 @@ from app.services.frame_extractor import (
     get_vod_direct_url,
 )
 from app.services.openai_client import get_groq_client, get_openrouter_client, LLM_MODEL, WHISPER_MODEL
+from app.services.scorer import seconds_to_display
 from app.services.paths import CLIPS_DIR, work_dir
 from app.services.transcript_format import format_labeled_transcript
 
@@ -101,6 +102,42 @@ def _extract_audio_from_clip(clip_path: str, output_path: str) -> bool:
         return False
 
 
+class _RateGate:
+    """Shared pause for all transcription workers once the provider says "too many"."""
+
+    def __init__(self) -> None:
+        import threading
+
+        self._lock = threading.Lock()
+        self._resume_at = 0.0
+
+    def wait(self) -> None:
+        delay = self._resume_at - _time.time()
+        if delay > 0:
+            _time.sleep(delay)
+
+    def defer(self, seconds: float) -> None:
+        with self._lock:
+            self._resume_at = max(self._resume_at, _time.time() + seconds)
+
+
+_whisper_gate = _RateGate()
+WHISPER_RATE_RETRIES = 6
+
+
+def _retry_after(err: Exception, attempt: int) -> float:
+    """Seconds the provider asks to wait (Retry-After), else a growing pause."""
+    headers = getattr(getattr(err, "response", None), "headers", None) or {}
+    try:
+        return min(90.0, max(1.0, float(headers.get("retry-after"))))
+    except (TypeError, ValueError):
+        return min(90.0, 10.0 * (attempt + 1))
+
+
+class TranscriptionFailed(Exception):
+    """Whisper gave up on a segment (rate limits or errors): not the same as silence."""
+
+
 def _transcribe_audio(
     audio_path: str,
 ) -> tuple[str, float, list[tuple[float, float, str]], list[dict]]:
@@ -109,16 +146,35 @@ def _transcribe_audio(
     Returns (transcript_text, speech_rate, segments, words) where:
     - segments: list of (start, end, text) tuples
     - words: list of {"word": str, "start": float, "end": float}
+
+    Rate limits pause every worker and retry; raises TranscriptionFailed when
+    the segment could not be transcribed.
     """
+    from openai import RateLimitError
+
     client = get_groq_client()
+    for attempt in range(WHISPER_RATE_RETRIES):
+        _whisper_gate.wait()
+        try:
+            with open(audio_path, "rb") as f:
+                result = client.audio.transcriptions.create(
+                    model=WHISPER_MODEL,
+                    file=f,
+                    response_format="verbose_json",
+                    timestamp_granularities=["word", "segment"],
+                )
+            break
+        except RateLimitError as e:
+            pause = _retry_after(e, attempt)
+            logger.warning(f"Whisper rate limited, every worker waits {pause:.0f}s (attempt {attempt + 1})")
+            _whisper_gate.defer(pause)
+        except Exception as e:
+            logger.error(f"Whisper transcription failed: {e}")
+            raise TranscriptionFailed(str(e)) from e
+    else:
+        raise TranscriptionFailed("rate limited")
+
     try:
-        with open(audio_path, "rb") as f:
-            result = client.audio.transcriptions.create(
-                model=WHISPER_MODEL,
-                file=f,
-                response_format="verbose_json",
-                timestamp_granularities=["word", "segment"],
-            )
 
         text = result.text or ""
         word_count = len(text.split())
@@ -140,8 +196,8 @@ def _transcribe_audio(
         return text, speech_rate, segments, words
 
     except Exception as e:
-        logger.error(f"Whisper transcription failed: {e}")
-        return "", 0.0, [], []
+        logger.error(f"Whisper response unreadable: {e}")
+        raise TranscriptionFailed(str(e)) from e
 
 
 def _transcribe_candidates(
@@ -149,6 +205,7 @@ def _transcribe_candidates(
     candidates: list[tuple[int, HotPoint]],
     vod_duration: float,
     job_id: str,
+    failed: set[int] | None = None,
 ) -> dict[int, tuple[str, float, float, list[tuple[float, float, str]], list[dict]]]:
     """Transcribe audio segments for all candidates in parallel.
 
@@ -159,6 +216,7 @@ def _transcribe_candidates(
     clip_start_abs is the absolute VOD timestamp where the clip begins.
     raw_segments are Whisper (start, end, text) tuples relative to clip_start_abs.
     words are word-level timestamps for subtitle generation.
+    Indices Whisper could not transcribe (not silence) are added to `failed`.
     """
     triage_dir = work_dir("triage_audio", job_id)
     os.makedirs(triage_dir, exist_ok=True)
@@ -180,9 +238,16 @@ def _transcribe_candidates(
         seg_path = os.path.join(triage_dir, f"seg_{idx:03d}.mp3")
 
         if _extract_audio_from_wav(wav_path, clip_start, clip_end, seg_path):
-            text, speech_rate, segments, words = _transcribe_audio(seg_path)
+            try:
+                text, speech_rate, segments, words = _transcribe_audio(seg_path)
+            except TranscriptionFailed:
+                if failed is not None:
+                    failed.add(idx)
+                return idx, "", 0.0, clip_start, [], []
             # Keep MP3 for LLM audio analysis — cleaned up after analyze_candidates
             return idx, text, speech_rate, clip_start, segments, words
+        if failed is not None:
+            failed.add(idx)
         return idx, "", 0.0, 0.0, [], []
 
     with ThreadPoolExecutor(max_workers=MAX_WHISPER_WORKERS) as executor:
@@ -233,11 +298,16 @@ def _extract_chat_for_clip(
     clip_start: float,
     clip_end: float,
     max_messages: int = 80,
+    lag: float = 0.0,
 ) -> str:
-    """Extract chat messages within a clip's time window, formatted for LLM context."""
+    """Chat messages reacting to a clip's window, formatted for LLM context.
+
+    Chat reacts `lag` seconds after the stream: the messages are taken `lag`
+    later and timed back onto the clip's clock, next to what they react to.
+    """
     relevant = [
         m for m in chat_messages
-        if clip_start <= m["timestamp"] <= clip_end
+        if clip_start + lag <= m["timestamp"] <= clip_end + lag
     ]
     if not relevant:
         return ""
@@ -248,7 +318,7 @@ def _extract_chat_for_clip(
 
     lines = []
     for m in relevant:
-        offset = m["timestamp"] - clip_start
+        offset = m["timestamp"] - lag - clip_start
         lines.append(f"[{offset:.0f}s] {m['author']}: {m['text']}")
 
     return "\n".join(lines)
@@ -266,8 +336,15 @@ def _build_unified_prompt(
     chat_mood: str = "",
     signals: "SignalBreakdown | None" = None,
     vod_context: "VodContext | None" = None,
+    window: float | None = None,
+    chat_lag: float = 0.0,
+    clip_keyword_at: float | None = None,
 ) -> str:
-    """Build the unified analysis prompt (English, vision + synthesis in one)."""
+    """Build the unified analysis prompt (English, vision + synthesis in one).
+
+    `window`: length of the audio (seconds), for the suggested cut.
+    `clip_keyword_at`: someone says "clip" at that second: ask whether it's a request.
+    """
     vod_title = vod_meta.get("title", "")
     vod_game = vod_meta.get("game", "")
     streamer = vod_meta.get("streamer", "")
@@ -328,12 +405,25 @@ def _build_unified_prompt(
         if signals.speech_presence > 0.01:
             signals_text += f"\n**Speech presence:** {signals.speech_presence:.0%}"
 
+        if signals.clip_requests:
+            signals_text += f"\n**Viewers asking for a clip right after:** {signals.clip_requests} (strong sign the moment landed)"
+
     chat_section = ""
     if chat_context:
+        shifted = f", timed back {chat_lag:.0f}s so each message sits next to what it reacts to" if chat_lag else ""
         chat_section = f"""
 
-**Twitch chat (viewer messages during the clip):**
+**Twitch chat (viewer messages reacting to the clip{shifted}):**
 {chat_context}"""
+
+    keyword_section = ""
+    if clip_keyword_at is not None:
+        keyword_section = f"""
+
+## "Clip" said on stream
+Someone says "clip" at about {clip_keyword_at:.0f}s. Set "clip_request" to true if it is a request to clip what just happened ("clip ça", "clip it", "quelqu'un clip", "clippez"), and put "cut" around that moment (usually in the minute before the request). Set it to false if the word is used otherwise (talking about clips in general, a music clip, a game item...)."""
+
+    window_text = f" of the {window:.0f}s window" if window else ""
 
     game_narrative = f", referencing {vod_game} gameplay" if vod_game else ""
 
@@ -367,7 +457,7 @@ def _build_unified_prompt(
 **Transcript** (each line starts with its time in the clip, in seconds; speaker-labeled when several voices were told apart):
 {transcript if transcript else "(silence / no speech)"}
 {chat_section}
-{vod_context_section}
+{vod_context_section}{keyword_section}
 
 ## Audio analysis
 
@@ -435,6 +525,8 @@ Return a single JSON object:
   - "label": short title (5-8 words), in French{game_narrative}
   - "description": 1 sentence describing what happens visually (include HUD info if relevant)
 - "narrative": fluid story of the clip (3-5 sentences), driven by what you HEAR in the audio, using visuals only for gameplay context{game_narrative}. In French.
+- "hook": the on-screen hook shown during the first seconds of the short (max 8 words). Makes people stay without lying about what happens; not the clip name. In French.
+- "cut": {{"start": float, "end": float}} — the tightest cut{window_text} that works as a standalone short, in seconds on the same clock as the transcript: start just before the setup (enough context to follow), end once the payoff and the reactions have landed. Usually 15-45 s, never in the middle of a sentence.{chr(10) + '- "clip_request": true or false (see above).' if clip_keyword_at is not None else ""}
 
 JSON only, no markdown."""
 
@@ -537,6 +629,21 @@ def _call_unified_llm(
 
     key_moments.sort(key=lambda k: k.time)
 
+    # Suggested cut, on the same clock, at least 5 s long
+    cut_start = cut_end = None
+    cut = data.get("cut")
+    if isinstance(cut, dict):
+        try:
+            a, b = max(0.0, float(cut["start"])), float(cut["end"])
+            if limit:
+                b = min(b, limit)
+            if b - a >= 5:
+                cut_start, cut_end = round(a, 1), round(b, 1)
+        except (KeyError, TypeError, ValueError):
+            pass
+
+    clip_request = data.get("clip_request")
+
     llm = LlmAnalysis(
         transcript="",  # filled by caller
         speech_rate=0.0,
@@ -546,6 +653,10 @@ def _call_unified_llm(
         is_clipable=bool(data.get("is_clipable", True)),
         narrative=data.get("narrative", ""),
         key_moments=key_moments,
+        hook=str(data.get("hook", "") or "").strip()[:80],
+        cut_start=cut_start,
+        cut_end=cut_end,
+        clip_request=clip_request if isinstance(clip_request, bool) else None,
     )
 
     return llm, clip_name
@@ -585,37 +696,6 @@ def _find_clip_keyword_timestamp(
                 best_time = clip_start_abs + midpoint  # Keep last match
     return best_time
 
-
-
-def _build_detected_clip(
-    hp: HotPoint, clip_transcript: str, speech_rate: float,
-    clip_keyword_timestamp: float | None = None,
-) -> HotPoint:
-    """Enrich a detected "clip" hot point with minimal metadata (no LLM call).
-
-    If clip_keyword_timestamp is provided, override the hot point timestamp
-    so clip boundaries (-2min/+5s) are relative to where "clip" was actually said.
-    """
-    # Override timestamp to where "clip" was actually said
-    if clip_keyword_timestamp is not None:
-        hp.timestamp_seconds = clip_keyword_timestamp
-        h = int(clip_keyword_timestamp // 3600)
-        m = int((clip_keyword_timestamp % 3600) // 60)
-        s = int(clip_keyword_timestamp % 60)
-        hp.timestamp_display = f"{h}:{m:02d}:{s:02d}"
-
-    summary = clip_transcript[:200] if clip_transcript else ""
-
-    hp.clip_source = "detected"
-    hp.llm = LlmAnalysis(
-        category="clip_moment",
-        summary=summary,
-        transcript=clip_transcript,
-        speech_rate=round(speech_rate, 2),
-    )
-    hp.clip_name = f"[CLIP] {hp.timestamp_display}"
-    hp.final_score = None  # No LLM scoring — detected by keyword
-    return hp
 
 
 # ─── VOD context gathering + heat map ────────────────────────────────────────
@@ -803,14 +883,20 @@ def analyze_candidates(
     vod_meta: dict,
     chat_messages: list[dict] | None = None,
     keep_n: int = KEEP_TOP_N,
+    chat_lag: float = 0.0,
+    voice_reference: list[float] | None = None,
 ) -> tuple[list[HotPoint], list[HotPoint], dict[int, list[dict]], VodContext | None]:
     """Analyze all candidates with Whisper, gather VOD context, then LLM-rank.
 
-    Returns (normal_hot_points, detected_hot_points, candidate_words, vod_context):
+    Returns (normal_hot_points, detected_hot_points, words_by_hp, vod_context):
     - normal: top keep_n after full LLM analysis
-    - detected: candidates where Whisper found "clip" keyword (clip_source="detected")
-    - candidate_words: {candidate_idx -> word-level timestamps} for subtitle generation
+    - detected: moments someone asked to clip on stream ("clip ça"), confirmed by
+      the LLM (clip_source="detected"), kept whatever their rank
+    - words_by_hp: {id(hot_point) -> word-level timestamps} for the subtitles
     - vod_context: VOD-wide narrative context (or None if gathering failed)
+
+    `chat_lag`: how late chat reacts (estimate_chat_lag). `voice_reference`:
+    starts of speech-dense passages to learn the streamer's voice from.
     """
     total = len(hot_points)
     logger.info(f"═══ Analyzing {total} candidates (keeping top {keep_n}) ═══")
@@ -828,41 +914,48 @@ def analyze_candidates(
     logger.info(f"[2/7] Transcribing {total} candidates...")
     update_job(job_id, progress=f"Transcription de {total} segments audio...")
     candidates = [(i, hp) for i, hp in enumerate(hot_points)]
-    transcripts = _transcribe_candidates(audio_path, candidates, vod_duration, job_id)
+    failed: set[int] = set()
+    transcripts = _transcribe_candidates(audio_path, candidates, vod_duration, job_id, failed=failed)
 
-    # ── Step 3: Detect "clip" keyword in transcripts ──
+    # ── Step 3: "clip" said on stream ──
+    # Analyzed on the 2 minutes before the word (the moment they want is usually
+    # there); the LLM tells a request ("clip ça") from the word used otherwise.
     logger.info(f"[3/7] Scanning transcripts for 'clip' keywords...")
-    detected_indices: list[int] = []
+    keyword_at: dict[int, float] = {}
     normal_indices: list[int] = []
 
     for idx, hp in candidates:
-        transcript, speech_rate, clip_start_abs, segments, _words = transcripts.get(
-            idx, ("", 0.0, 0.0, [], [])
-        )
-        if _has_clip_keyword(transcript):
-            detected_indices.append(idx)
-            clip_ts = _find_clip_keyword_timestamp(segments, clip_start_abs)
-            hot_points[idx] = _build_detected_clip(hp, transcript, speech_rate, clip_keyword_timestamp=clip_ts)
-            logger.info(f"  CLIP DETECTED at {hot_points[idx].timestamp_display}: \"{transcript[:80]}\"")
-        else:
+        transcript, _rate, clip_start_abs, segments, _words = transcripts.get(idx, ("", 0.0, 0.0, [], []))
+        kw = _find_clip_keyword_timestamp(segments, clip_start_abs) if _has_clip_keyword(transcript) else None
+        if kw is None:
             normal_indices.append(idx)
+            continue
+        keyword_at[idx] = kw
+        hp.clip_start = round(max(0.0, kw - DETECTED_PRE_PEAK), 1)
+        hp.clip_end = round(min(vod_duration, kw + DETECTED_POST_PEAK), 1)
+        logger.info(f"  'clip' said at {seconds_to_display(kw)}: \"{transcript[:80]}\"")
 
-    detected_hps = [hot_points[i] for i in detected_indices]
-    logger.info(
-        f"Keyword scan: {len(detected_hps)} clip(s) detected, "
-        f"{len(normal_indices)} normal candidates"
-    )
+    if keyword_at:
+        update_job(job_id, progress=f"Transcription des {len(keyword_at)} moments « clip »...")
+        transcripts.update(
+            _transcribe_candidates(audio_path, [(i, hot_points[i]) for i in keyword_at], vod_duration, job_id, failed=failed)
+        )
+    logger.info(f"Keyword scan: {len(keyword_at)} 'clip' moment(s) to check, {len(normal_indices)} normal candidates")
+
+    if failed:
+        logger.warning(f"[{job_id[:8]}] Whisper could not transcribe {len(failed)}/{len(candidates)} segments")
+        add_notice(job_id, "transcription", failed=len(failed), total=len(candidates))
 
     # ── Step 3b: VOD context gathering + content scoring ──
     vod_context: VodContext | None = None
     content_scores: dict[int, float] = {}
-    normal_transcripts = {i: transcripts[i] for i in normal_indices if i in transcripts}
-    if normal_transcripts:
-        logger.info(f"[3b/7] Gathering VOD context from {len(normal_transcripts)} transcripts...")
-        update_job(job_id, progress=f"Analyse du contexte de la VOD ({len(normal_transcripts)} segments)...")
+    context_transcripts = {i: transcripts[i] for i, _ in candidates if i in transcripts}
+    if context_transcripts:
+        logger.info(f"[3b/7] Gathering VOD context from {len(context_transcripts)} transcripts...")
+        update_job(job_id, progress=f"Analyse du contexte de la VOD ({len(context_transcripts)} segments)...")
         try:
             vod_context, content_scores = gather_vod_context(
-                job_id, normal_transcripts, hot_points, vod_meta,
+                job_id, context_transcripts, hot_points, vod_meta,
             )
             # Save vod_context to DB immediately
             update_job(job_id, vod_context=vod_context)
@@ -908,14 +1001,16 @@ def analyze_candidates(
                 f"{demoted} false positives demoted"
             )
 
-    llm_total = len(normal_for_llm)
+    # The "clip" moments are all checked, on top of the best normal ones
+    analyzed = normal_for_llm + list(keyword_at)
+    llm_total = len(analyzed)
 
-    # Show the passages the AI is about to watch (and the "clip!" ones, kept anyway)
+    # Show the passages the AI is about to watch (and the "clip!" ones)
     try:
         timeline.publish(
             job_id,
             candidates=[timeline.candidate(hot_points[i], "pending") for i in normal_for_llm]
-            + [timeline.candidate(hp, "clip") for hp in detected_hps],
+            + [timeline.candidate(hot_points[i], "clip") for i in keyword_at],
         )
     except Exception as e:
         logger.warning(f"Timeline candidates not published: {e}")
@@ -945,7 +1040,7 @@ def analyze_candidates(
         with ThreadPoolExecutor(max_workers=10) as executor:
             futures = {
                 executor.submit(_extract_frames_one, idx, hot_points[idx]): idx
-                for idx in normal_for_llm
+                for idx in analyzed
             }
             done = 0
             for future in as_completed(futures):
@@ -969,8 +1064,8 @@ def analyze_candidates(
         from app.services.speaker_diarizer import extract_voiceprint, diarize_candidates
         import numpy as np
 
-        # Extract streamer voiceprint from VOD start (one-time)
-        voiceprint = extract_voiceprint(audio_path)
+        # The streamer's voice, from speech-dense passages across the VOD (one-time)
+        voiceprint = extract_voiceprint(audio_path, starts=voice_reference)
         streamer_name = vod_meta.get("streamer", "Streamer")
 
         # Persist voiceprint for lazy re-transcription (clip_tools.transcribe_clip_words)
@@ -981,13 +1076,13 @@ def analyze_candidates(
 
         # Collect Whisper words for the top 50 candidates
         whisper_words_for_diarize: dict[int, list[dict]] = {}
-        for idx in normal_for_llm:
+        for idx in analyzed:
             _, _, _, _, words = transcripts.get(idx, ("", 0.0, 0.0, [], []))
             if words:
                 whisper_words_for_diarize[idx] = words
 
         # Diarize all candidates
-        llm_candidates = [(idx, hot_points[idx]) for idx in normal_for_llm]
+        llm_candidates = [(idx, hot_points[idx]) for idx in analyzed]
         nonlocal speaker_transcripts, speaker_labeled_words
         speaker_transcripts, speaker_labeled_words = diarize_candidates(
             wav_path=audio_path,
@@ -1047,8 +1142,10 @@ def analyze_candidates(
             else:
                 clip_start = max(0, hp.timestamp_seconds - CLIP_HALF_DURATION)
                 clip_end = hp.timestamp_seconds + CLIP_HALF_DURATION
-            chat_context = _extract_chat_for_clip(chat_messages, clip_start, clip_end)
+            chat_context = _extract_chat_for_clip(chat_messages, clip_start, clip_end, lag=chat_lag)
 
+        keyword_offset = keyword_at[idx] - hp.clip_start if idx in keyword_at and hp.clip_start is not None else None
+        window = hp.clip_end - hp.clip_start if hp.clip_start is not None and hp.clip_end is not None else None
         prompt = _build_unified_prompt(
             transcript=display_transcript,
             speech_rate=speech_rate,
@@ -1059,13 +1156,11 @@ def analyze_candidates(
             chat_mood=hp.chat_mood,
             signals=hp.signals,
             vod_context=vod_context,
+            window=window,
+            chat_lag=chat_lag,
+            clip_keyword_at=keyword_offset,
         )
 
-        window = (
-            hp.clip_end - hp.clip_start
-            if hp.clip_start is not None and hp.clip_end is not None
-            else None
-        )
         try:
             llm, clip_name = _call_unified_llm(frames, prompt, audio_path, duration=window)
             llm.transcript = transcript
@@ -1101,7 +1196,7 @@ def analyze_candidates(
     with ThreadPoolExecutor(max_workers=MAX_LLM_WORKERS) as executor:
         futures = {
             executor.submit(_analyze_one, idx, hot_points[idx]): idx
-            for idx in normal_for_llm
+            for idx in analyzed
         }
         done = 0
         for future in as_completed(futures):
@@ -1125,8 +1220,24 @@ def analyze_candidates(
     llm_elapsed = _time.time() - llm_t0
     logger.info(f"LLM analysis complete: {llm_total} candidates in {llm_elapsed:.1f}s")
 
-    # ── Re-rank normal candidates and keep top N ──
+    # ── "clip" moments: a real request is kept whatever its rank ──
+    detected_hps: list[HotPoint] = []
     normal_hps = [hot_points[i] for i in normal_for_llm]
+    for idx, kw in keyword_at.items():
+        hp = hot_points[idx]
+        # Analysis failed: keep it, the streamer may well have asked
+        if hp.llm is None or hp.llm.clip_request is not False:
+            hp.clip_source = "detected"
+            hp.timestamp_seconds = round(kw, 1)
+            hp.timestamp_display = seconds_to_display(kw)
+            if not hp.clip_name:
+                hp.clip_name = f"Clip {hp.timestamp_display}"
+            detected_hps.append(hp)
+        else:
+            logger.info(f"  'clip' at {seconds_to_display(kw)} is not a request: ranked with the others")
+            normal_hps.append(hp)
+
+    # ── Re-rank normal candidates and keep top N ──
     normal_hps.sort(
         key=lambda hp: hp.final_score if hp.final_score is not None else -1,
         reverse=True,
@@ -1144,18 +1255,11 @@ def analyze_candidates(
     except Exception as e:
         logger.warning(f"Timeline final candidates not published: {e}")
 
-    # Remap candidate_words from original indices to kept-list indices
-    # so _save_words_for_clips matches words to the correct clip.
-    hp_to_words: dict[int, list[dict]] = {}
-    for orig_idx in normal_for_llm:
-        if orig_idx in candidate_words:
-            hp_to_words[id(hot_points[orig_idx])] = candidate_words[orig_idx]
-
-    kept_words: dict[int, list[dict]] = {}
-    for new_idx, hp in enumerate(kept):
-        words = hp_to_words.get(id(hp))
-        if words:
-            kept_words[new_idx] = words
+    # Words by hot point (not by position: clipping can drop or merge clips)
+    clipped = {id(hp) for hp in [*kept, *detected_hps]}
+    words_by_hp: dict[int, list[dict]] = {
+        id(hot_points[i]): candidate_words[i] for i in analyzed if i in candidate_words and id(hot_points[i]) in clipped
+    }
 
     logger.info(f"═══ Re-ranking results ═══")
     for i, hp in enumerate(kept):
@@ -1192,7 +1296,7 @@ def analyze_candidates(
     )
 
     save_hot_points(job_id, kept)
-    return kept, detected_hps, kept_words, vod_context
+    return kept, detected_hps, words_by_hp, vod_context
 
 
 # ─── Post-clipping single clip analysis (for resume/retry) ───────────────────
@@ -1221,7 +1325,10 @@ def analyze_single_clip(
     logger.info(f"  [1/3] Whisper transcription...")
     audio_path = clip_path.replace(".mp4", "_audio.mp3")
     if _extract_audio_from_clip(clip_path, audio_path):
-        transcript, speech_rate, _ = _transcribe_audio(audio_path)
+        try:
+            transcript, speech_rate, _, _ = _transcribe_audio(audio_path)
+        except TranscriptionFailed:
+            transcript, speech_rate = "", 0.0
     else:
         transcript, speech_rate = "", 0.0
         audio_path = None

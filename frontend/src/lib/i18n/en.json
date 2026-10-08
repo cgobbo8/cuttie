@@ -673,7 +673,12 @@
     "why": "Why this moment",
     "advancedEditor": "Advanced editor",
     "downloadRaw": "Raw clip",
-    "deleteClip": "Delete"
+    "deleteClip": "Delete",
+    "suggestedTrimHint": "Cut suggested by the AI ({{seconds}} s): widen it if you want more context.",
+    "backToSuggestedTrim": "AI cut",
+    "notice": {
+      "transcription": "{{failed}} of {{total}} passages could not be transcribed (Groq key limit?). The AI still listened to them; their subtitles will be made when you open the clip."
+    }
   },
   "montage": {
     "title": "Dress up your clips",

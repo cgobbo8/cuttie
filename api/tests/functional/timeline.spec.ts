@@ -26,4 +26,17 @@ test.group('Jobs | live analysis timeline', (group) => {
     // The status is untouched by timeline events
     assert.equal((await Job.findOrFail(job.id)).status, 'ANALYZING_CHAT')
   })
+
+  test('keeps the notices the worker sends, and clears them on a new run', async ({ assert, client }) => {
+    const user = await User.create({ fullName: 'S', email: `s-${randomUUID()}@cuttie.app`, password: 'password123' })
+    const job = await Job.create({ id: randomUUID(), url: 'https://twitch.tv/videos/1', status: 'ANALYZING_CLIPS', userId: user.id })
+
+    await jobStatusBus.handle({ job_id: job.id, status: 'ANALYZING_CLIPS', notices: [{ kind: 'transcription', failed: 37, total: 200 }] })
+    const shown = await client.get(`/api/jobs/${job.id}`).loginAs(user)
+    shown.assertStatus(200)
+    assert.deepEqual((shown.body() as { notices?: unknown }).notices, [{ kind: 'transcription', failed: 37, total: 200 }])
+
+    await jobStatusBus.handle({ job_id: job.id, status: 'DOWNLOADING_AUDIO', notices: [] })
+    assert.deepEqual((await Job.findOrFail(job.id)).notices, [])
+  })
 })

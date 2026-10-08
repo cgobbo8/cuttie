@@ -11,6 +11,9 @@ Extracts per time window:
 - sentiment_rip: semantic score for death/sadness moments (F, RIP, etc.)
 - sentiment_intensity: overall emotional intensity (max of all sentiments)
 - dominant_mood: the dominant mood label for this window
+- clip_requesters: viewers asking for a clip ("CLIP", "clip it", "clippez")
+
+estimate_chat_lag() measures how late chat reacts to what happens on stream.
 """
 
 import re
@@ -91,6 +94,9 @@ _EMOTE_PATTERNS = re.compile(
     re.IGNORECASE,
 )
 
+# A viewer asking for a clip: "CLIP", "clip it", "clippez ça", "clipped"
+CLIP_REQUEST = re.compile(r"\bclip(?:s|it|ped|pe|pez|per|pé|pée|é)?\b", re.IGNORECASE)
+
 # Bot usernames to filter out
 _BOT_NAMES = {
     "streamelements", "nightbot", "streamlabs", "moobot",
@@ -150,6 +156,7 @@ def analyze_chat(
         len(_EMOTE_PATTERNS.findall(t)) for t in texts
     ])
     sentiments = _compute_message_sentiments(texts)
+    asks_clip = [bool(CLIP_REQUEST.search(t)) for t in texts]
 
     # Build windows matching audio analyzer's grid
     windows = []
@@ -204,7 +211,56 @@ def analyze_chat(
             "sentiment_rip": sentiment_rip,
             "sentiment_intensity": sentiment_intensity,
             "dominant_mood": dominant_mood,
+            "clip_requesters": sorted({authors[i] for i in indices if asks_clip[i]}),
         })
         t += hop_sec
 
     return windows
+
+
+DEFAULT_CHAT_LAG = 5.0  # stream latency + reading + typing
+MAX_CHAT_LAG = 20.0
+
+
+def _detrend(x: np.ndarray, span: int) -> np.ndarray:
+    """Remove the slow ups and downs (activity level), keep the spikes."""
+    if len(x) < span:
+        return x - x.mean()
+    return x - np.convolve(x, np.ones(span) / span, mode="same")
+
+
+def estimate_chat_lag(
+    audio_features: list[dict],
+    chat_features: list[dict],
+    hop_sec: float = 2.5,
+) -> float:
+    """Seconds between something happening on stream and chat reacting to it.
+
+    Cross-correlates audio action spikes (onset, flux, volume) with chat
+    activity over the whole VOD; falls back to DEFAULT_CHAT_LAG when chat is
+    too quiet to tell.
+    """
+    n = min(len(audio_features), len(chat_features))
+    if n < 120:  # under 5 minutes
+        return DEFAULT_CHAT_LAG
+    chat = np.array([c["chat_speed"] for c in chat_features[:n]], dtype=float)
+    if np.count_nonzero(chat) < 30:
+        return DEFAULT_CHAT_LAG
+
+    def z(key: str) -> np.ndarray:
+        v = np.nan_to_num(np.array([w.get(key, 0.0) for w in audio_features[:n]], dtype=float))
+        return (v - v.mean()) / (v.std() or 1.0)
+
+    span = max(3, int(60 / hop_sec))
+    action = _detrend((z("onset") + z("flux") + z("rms")) / 3, span)
+    chat = _detrend(chat, span)
+
+    best_lag, best_r = DEFAULT_CHAT_LAG, 0.08  # weaker than that: noise
+    for k in range(1, int(MAX_CHAT_LAG / hop_sec) + 1):
+        a, c = action[:-k], chat[k:]
+        if a.std() == 0 or c.std() == 0:
+            continue
+        r = float(np.corrcoef(a, c)[0, 1])
+        if r > best_r:
+            best_lag, best_r = k * hop_sec, r
+    return best_lag

@@ -113,7 +113,8 @@ const MomentPlayer = forwardRef<MomentPlayerHandle, Props>(function MomentPlayer
   const commitTrim = () => {
     const [a, b] = trimRef.current;
     const full = a <= 0.05 && b >= duration - 0.05;
-    onTrimChange(full ? null : [a, b]);
+    // With a suggested cut, "the whole clip" is a choice of its own (null would bring the suggestion back)
+    onTrimChange(full && !moment.suggested ? null : [a, b]);
   };
 
   const pct = (time: number) => `${(time / Math.max(duration, 0.1)) * 100}%`;

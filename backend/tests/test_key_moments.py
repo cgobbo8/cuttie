@@ -71,9 +71,51 @@ def test_key_moments_move_onto_the_extracted_clip(tmp_path, monkeypatch):
         clip_start=100.0,
         clip_end=165.0,
         clip_filename="pneus.mp4",
-        llm=LlmAnalysis(key_moments=[KeyMoment(time=10.0, label="a"), KeyMoment(time=59.0, label="b")]),
+        llm=LlmAnalysis(key_moments=[KeyMoment(time=10.0, label="a"), KeyMoment(time=59.0, label="b")], cut_start=8.0, cut_end=40.0),
     )
 
-    pipeline._shift_key_moments("job", [hp])
+    pipeline._shift_to_clip_clock("job", [hp])
 
     assert [k.time for k in hp.llm.key_moments] == [13.0, 60.0]
+    # The suggested cut moves with them
+    assert (hp.llm.cut_start, hp.llm.cut_end) == (11.0, 43.0)
+
+
+def test_reads_the_suggested_cut_the_hook_and_clip_requests(monkeypatch):
+    answer = {
+        "clip_name": "Pneus Crevés",
+        "virality_score": 0.7,
+        "hook": "Il pensait que personne ne verrait",
+        "cut": {"start": 12.5, "end": 70},
+        "clip_request": True,
+    }
+    monkeypatch.setattr(llm_analyzer, "get_openrouter_client", lambda: _FakeClient(json.dumps(answer)))
+    llm, _ = llm_analyzer._call_unified_llm([], "prompt", None, duration=65.0)
+    assert llm.hook == "Il pensait que personne ne verrait"
+    # Kept inside the clip
+    assert (llm.cut_start, llm.cut_end) == (12.5, 65.0)
+    assert llm.clip_request is True
+
+    # Too short or missing: no cut
+    answer.update(cut={"start": 10, "end": 12}, clip_request="maybe")
+    llm, _ = llm_analyzer._call_unified_llm([], "prompt", None, duration=65.0)
+    assert llm.cut_start is None and llm.clip_request is None
+
+
+def test_asks_whether_clip_is_a_request_and_lines_chat_up():
+    prompt = llm_analyzer._build_unified_prompt(
+        transcript="[100.0s] clip ça", speech_rate=2.0, score=0.5, timestamp_display="0:10:00",
+        vod_meta={"title": "t"}, chat_context="[3s] viewer: KEKW", window=125.0, chat_lag=6.0, clip_keyword_at=100.0,
+    )
+    assert '"clip_request"' in prompt and "at about 100s" in prompt
+    assert '"cut"' in prompt and "of the 125s window" in prompt
+    assert "timed back 6s" in prompt
+    plain = llm_analyzer._build_unified_prompt(
+        transcript="", speech_rate=0, score=0.5, timestamp_display="0:10:00", vod_meta={"title": "t"},
+    )
+    assert '"clip_request"' not in plain
+
+    # Messages are taken 6 s later and timed back onto the clip
+    messages = [{"timestamp": 104.0, "author": "a", "text": "trop tôt"}, {"timestamp": 112.0, "author": "b", "text": "MDR"}, {"timestamp": 170.0, "author": "c", "text": "hors"}]
+    chat = llm_analyzer._extract_chat_for_clip(messages, 100.0, 160.0, lag=6.0)
+    assert chat == "[6s] b: MDR"

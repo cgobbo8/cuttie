@@ -15,8 +15,12 @@ export interface Moment {
   end: number;
   duration: number;
   state: MomentState;
-  /** Trim bounds in clip seconds */
+  /** Trim bounds in clip seconds: the streamer's, else the cut the AI suggests */
   trim: [number, number] | null;
+  /** The cut the AI suggests, clip seconds */
+  suggested: [number, number] | null;
+  /** The streamer set the trim themselves */
+  trimmedByUser: boolean;
   /** Better-ranked moment covering the same passage, if any */
   duplicateOf: Moment | null;
 }
@@ -36,6 +40,8 @@ export function buildMoments(hotPoints: HotPoint[], selection: Record<string, Cl
       const start = hp.clip_start ?? Math.max(0, hp.timestamp_seconds - 30);
       const end = hp.clip_end ?? hp.timestamp_seconds + 30;
       const choice = selection[hp.clip_filename!] ?? {};
+      const cut = hp.llm?.cut_start != null && hp.llm?.cut_end != null && hp.llm.cut_end - hp.llm.cut_start >= 5 ? hp.llm : null;
+      const suggested: [number, number] | null = cut ? [cut.cut_start!, cut.cut_end!] : null;
       return {
         hp,
         filename: hp.clip_filename!,
@@ -45,7 +51,9 @@ export function buildMoments(hotPoints: HotPoint[], selection: Record<string, Cl
         end,
         duration: end - start,
         state: choice.state ?? "todo",
-        trim: choice.trim ?? null,
+        trim: choice.trim ?? suggested,
+        suggested,
+        trimmedByUser: !!choice.trim,
         duplicateOf: null,
       };
     });

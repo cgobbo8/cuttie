@@ -673,7 +673,12 @@
     "why": "Pourquoi ce moment",
     "advancedEditor": "Éditeur avancé",
     "downloadRaw": "Clip brut",
-    "deleteClip": "Supprimer"
+    "deleteClip": "Supprimer",
+    "suggestedTrimHint": "Coupe proposée par l'IA ({{seconds}} s) : élargis-la si tu veux plus de contexte.",
+    "backToSuggestedTrim": "Coupe de l'IA",
+    "notice": {
+      "transcription": "{{failed}} extraits sur {{total}} n'ont pas pu être transcrits (limite de la clé Groq ?). L'IA les a quand même écoutés ; leurs sous-titres se feront à l'ouverture du clip."
+    }
   },
   "montage": {
     "title": "Habille tes clips",

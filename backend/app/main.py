@@ -297,6 +297,18 @@ def diagnostics() -> dict:
         "busy": jobs.current.job_id if jobs.current else None,
     }
     try:
+        from app.services import transcriber
+
+        model_dir = transcriber.local_model_dir()
+        info["transcription"] = {
+            "engine": transcriber.chosen_engine(),
+            # On this PC: fast with an NVIDIA GPU ("cuda"), slow on the CPU
+            "local_device": transcriber.local_device(),
+            "local_model_ready": os.path.isdir(model_dir) and any(os.scandir(model_dir)),
+        }
+    except Exception as e:
+        info["transcription"] = {"error": str(e)}
+    try:
         import torch
 
         from app.services.device import get_device

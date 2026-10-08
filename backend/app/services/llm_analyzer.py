@@ -33,7 +33,8 @@ from app.services.frame_extractor import (
     extract_frames_from_url,
     get_vod_direct_url,
 )
-from app.services.openai_client import get_groq_client, get_openrouter_client, LLM_MODEL, WHISPER_MODEL
+from app.services import transcriber
+from app.services.openai_client import get_openrouter_client, LLM_MODEL
 from app.services.scorer import seconds_to_display
 from app.services.paths import CLIPS_DIR, work_dir
 from app.services.transcript_format import format_labeled_transcript
@@ -116,13 +117,19 @@ class _RateGate:
         if delay > 0:
             _time.sleep(delay)
 
+    def remaining(self) -> float:
+        return max(0.0, self._resume_at - _time.time())
+
     def defer(self, seconds: float) -> None:
         with self._lock:
             self._resume_at = max(self._resume_at, _time.time() + seconds)
 
 
-_whisper_gate = _RateGate()
+# One pause per engine: Groq refusing doesn't slow OpenRouter down
+_whisper_gates: dict[str, _RateGate] = {engine: _RateGate() for engine in transcriber.ENGINES}
 WHISPER_RATE_RETRIES = 6
+# A longer wait than this goes to the fallback engine instead
+MAX_WAIT_WITH_FALLBACK = 15.0
 
 
 def _retry_after(err: Exception, attempt: int) -> float:
@@ -140,64 +147,48 @@ class TranscriptionFailed(Exception):
 
 def _transcribe_audio(
     audio_path: str,
+    engine: str | None = None,
 ) -> tuple[str, float, list[tuple[float, float, str]], list[dict]]:
-    """Transcribe an audio file using Whisper API via Groq.
+    """Transcribe an audio file with word timings (engine: see transcriber).
 
     Returns (transcript_text, speech_rate, segments, words) where:
     - segments: list of (start, end, text) tuples
     - words: list of {"word": str, "start": float, "end": float}
 
-    Rate limits pause every worker and retry; raises TranscriptionFailed when
-    the segment could not be transcribed.
+    Rate limits pause that engine's workers and retry; a long pause or an error
+    hands the segment to the fallback engine (OpenRouter). Raises
+    TranscriptionFailed when nobody could transcribe it.
     """
     from openai import RateLimitError
 
-    client = get_groq_client()
+    engine = engine or transcriber.chosen_engine()
+    fallback = transcriber.fallback_for(engine)
+    gate = _whisper_gates[engine]
+    result = None
     for attempt in range(WHISPER_RATE_RETRIES):
-        _whisper_gate.wait()
+        if fallback and gate.remaining() > MAX_WAIT_WITH_FALLBACK:
+            break
+        gate.wait()
         try:
-            with open(audio_path, "rb") as f:
-                result = client.audio.transcriptions.create(
-                    model=WHISPER_MODEL,
-                    file=f,
-                    response_format="verbose_json",
-                    timestamp_granularities=["word", "segment"],
-                )
+            result = transcriber.transcribe(audio_path, engine)
             break
         except RateLimitError as e:
             pause = _retry_after(e, attempt)
-            logger.warning(f"Whisper rate limited, every worker waits {pause:.0f}s (attempt {attempt + 1})")
-            _whisper_gate.defer(pause)
+            logger.warning(f"Whisper ({engine}) rate limited, its workers wait {pause:.0f}s (attempt {attempt + 1})")
+            gate.defer(pause)
         except Exception as e:
-            logger.error(f"Whisper transcription failed: {e}")
-            raise TranscriptionFailed(str(e)) from e
-    else:
-        raise TranscriptionFailed("rate limited")
+            logger.error(f"Whisper ({engine}) transcription failed: {e}")
+            break
 
-    try:
+    if result is None:
+        if fallback:
+            logger.info(f"Whisper: {fallback} takes the segment {engine} could not do")
+            return _transcribe_audio(audio_path, fallback)
+        raise TranscriptionFailed(f"{engine} could not transcribe the segment")
 
-        text = result.text or ""
-        word_count = len(text.split())
-
-        segments: list[tuple[float, float, str]] = []
-        duration = 0.0
-        if hasattr(result, "segments") and result.segments:
-            duration = max(s.end for s in result.segments)
-            segments = [(s.start, s.end, s.text) for s in result.segments]
-
-        words: list[dict] = []
-        if hasattr(result, "words") and result.words:
-            for w in result.words:
-                words.append({"word": w.word, "start": w.start, "end": w.end})
-            if not duration and words:
-                duration = words[-1]["end"]
-
-        speech_rate = word_count / duration if duration > 0 else 0.0
-        return text, speech_rate, segments, words
-
-    except Exception as e:
-        logger.error(f"Whisper response unreadable: {e}")
-        raise TranscriptionFailed(str(e)) from e
+    duration = max((end for _s, end, _t in result.segments), default=0.0) or (result.words[-1]["end"] if result.words else 0.0)
+    speech_rate = len(result.text.split()) / duration if duration > 0 else 0.0
+    return result.text, speech_rate, result.segments, result.words
 
 
 def _transcribe_candidates(

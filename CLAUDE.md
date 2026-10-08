@@ -11,7 +11,8 @@ Tourne 100 % en local (cible : app desktop Windows pour un ami streamer) : pas d
 - **Frontend** : React 19, TypeScript 5.9, Tailwind CSS 4, Vite 8, React Router 7
 - **Editor** : Remotion 4 (player + renderer), canvas editor custom
 - **ML/Audio** : librosa (11025 Hz), PANNs CNN14 (AudioSet)
-- **LLM** : Groq — Whisper large-v3-turbo (transcription), OpenRouter — Gemini 3 Flash Preview (audio + vision + analyse + scoring + correction transcription)
+- **Transcription** : Whisper large-v3 turbo, via Groq (si cle, le plus rapide), OpenRouter ou en local (faster-whisper, GPU NVIDIA) — `transcriber.py`, bascule sur OpenRouter si le moteur choisi coince
+- **LLM** : OpenRouter — Gemini 3 Flash Preview (audio + vision + analyse + scoring)
 - **Video** : FFmpeg, OpenCV, yt-dlp
 - **Storage** : disque local `<data dir>/storage/{clips,renders,assets}`, servi par l'API via URLs signees
 - **Tests** : Vitest (frontend + backend unit/functional)
@@ -33,7 +34,7 @@ cd api && node ace test             # API tests (.env.test : data dir jetable, s
 
 ## Variables d'environnement
 
-Les cles API (Groq, OpenRouter, OpenAI optionnelle) se saisissent dans la page **Parametres** de l'app → `<data dir>/settings.json` (relu a chaud par le worker). En dev, le worker retombe sur `GROQ_API_KEY` / `OPENROUTER_API_KEY` de `backend/.env`.
+Les cles API (OpenRouter obligatoire, Groq et OpenAI facultatives) et le moteur de transcription (`transcription` : auto | groq | openrouter | local) se reglent dans la page **Parametres** de l'app → `<data dir>/settings.json` (relu a chaud par le worker). En dev, le worker retombe sur `GROQ_API_KEY` / `OPENROUTER_API_KEY` de `backend/.env`. Le modele Whisper local (1,5 Go) se telecharge dans `<data dir>/models/whisper`.
 
 Positionnees par les lanceurs (`scripts/dev.mjs`, `scripts/launcher.mjs`) :
 - `CUTTIE_DATA_DIR` — dossier de donnees partage (defaut `<repo>/.data`)
@@ -99,6 +100,7 @@ cuttie/
 │   │       ├── chat_analyzer.py               # Sentiment chat : vitesse, burst, emotes, mood
 │   │       ├── scorer.py                      # Score composite + peak detection (scipy)
 │   │       ├── llm_analyzer.py                # Whisper + frames + LLM unifie (scoring + analyse)
+│   │       ├── transcriber.py                 # Speech-to-text : Groq / OpenRouter / local (faster-whisper), mots normalises
 │   │       ├── speaker_diarizer.py            # pyannote diarization + ECAPA-TDNN voiceprint
 │   │       ├── clipper.py                     # Extraction clips video
 │   │       ├── facecam_detector.py            # YOLOv8 pose + accroche au cadre de la cam, visages par clip

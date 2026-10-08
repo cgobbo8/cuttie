@@ -10,6 +10,9 @@ import { getDiagnostics } from '#services/worker_client'
 const KEY_SETTINGS = ['groq_api_key', 'openrouter_api_key', 'openai_api_key'] as const
 type KeySetting = (typeof KEY_SETTINGS)[number]
 
+/** Speech to text: Groq when its key is set ("auto"), OpenRouter, or this PC (see backend/app/services/transcriber.py) */
+const TRANSCRIPTION_ENGINES = ['auto', 'groq', 'openrouter', 'local'] as const
+
 /** Cheapest authenticated call of each provider, to check a key works */
 const KEY_CHECKS: Partial<Record<KeySetting, string>> = {
   groq_api_key: 'https://api.groq.com/openai/v1/models',
@@ -41,18 +44,22 @@ export default class AppController {
         KEY_SETTINGS.map((k) => [k, { configured: Boolean(settings[k]), preview: mask(settings[k]) }])
       ),
       onboarded: await isOnboarded(settings),
+      transcription: TRANSCRIPTION_ENGINES.includes(settings.transcription as any) ? settings.transcription : 'auto',
     }
   }
 
   /**
-   * PUT /api/settings — body: { keys?: { groq_api_key?: string, ... }, onboarded?: boolean };
-   * empty string or null clears a key
+   * PUT /api/settings — body: { keys?: { groq_api_key?: string, ... }, onboarded?: boolean,
+   * transcription?: 'auto' | 'groq' | 'openrouter' | 'local' }; empty string or null clears a key
    */
   async updateSettings({ request, response }: HttpContext) {
-    const body = request.body() as { keys?: Partial<Record<KeySetting, unknown>>; onboarded?: unknown }
+    const body = request.body() as { keys?: Partial<Record<KeySetting, unknown>>; onboarded?: unknown; transcription?: unknown }
     const keys = body.keys ?? {}
     if (body.onboarded !== undefined && typeof body.onboarded !== 'boolean') {
       return response.badRequest({ error: 'onboarded must be a boolean' })
+    }
+    if (body.transcription !== undefined && !TRANSCRIPTION_ENGINES.includes(body.transcription as any)) {
+      return response.badRequest({ error: `transcription must be one of ${TRANSCRIPTION_ENGINES.join(', ')}` })
     }
 
     const settings = readSettings()
@@ -69,6 +76,7 @@ export default class AppController {
     }
 
     if (typeof body.onboarded === 'boolean') settings.onboarded = body.onboarded
+    if (typeof body.transcription === 'string') settings.transcription = body.transcription
 
     writeSettings(settings)
     return this.showSettings({} as HttpContext)

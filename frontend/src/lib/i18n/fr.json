@@ -470,7 +470,7 @@
   "settings": {
     "title": "Paramètres",
     "keysTitle": "Tes clés d'IA",
-    "keysHelp": "Cuttie utilise deux services d'IA, payés à l'usage. Tes clés restent sur ton PC, Cuttie les vérifie auprès de chaque service.",
+    "keysHelp": "OpenRouter suffit. Groq est facultatif : il rend la transcription plus rapide. Tes clés restent sur ton PC, Cuttie les vérifie auprès de chaque service.",
     "remove": "Supprimer",
     "languageTitle": "Langue",
     "diagnosticsTitle": "Diagnostic",
@@ -491,18 +491,36 @@
       "ytdlp": "yt-dlp (téléchargement Twitch)",
       "notFound": "Introuvable",
       "keys": "Clés API",
-      "keysOk": "Groq et OpenRouter configurées",
+      "keysOk": "OpenRouter configurée",
       "keysMissing": "À configurer ci-dessus",
       "disk": "Espace disque libre",
       "diskLow": "{{gb}} Go — c'est juste, une VOD peut prendre plusieurs Go",
       "dataDir": "Dossier des données",
-      "versions": "Versions"
+      "versions": "Versions",
+      "keysBoth": "OpenRouter et Groq configurées",
+      "cpu": "processeur (lent)"
     },
     "subtitle": "Tes clés d'IA, la langue de l'app et l'état de ton installation.",
     "openaiRole": "Assistant de l'éditeur avancé (facultatif)",
     "welcomeTitle": "Réglage de départ",
     "welcomeHint": "Refais le premier lancement : ta chaîne Twitch, tes clés et ta webcam.",
-    "welcomeCta": "Revoir le réglage"
+    "welcomeCta": "Revoir le réglage",
+    "transcription": {
+      "title": "Transcription",
+      "help": "Ce qui écoute ce qui se dit, pour l'analyse et les sous-titres. Si Groq ou ta carte graphique coince, OpenRouter prend le relais.",
+      "groq": "Groq",
+      "openrouter": "OpenRouter",
+      "local": "Sur ce PC",
+      "groqHint": "Le plus rapide : environ 1 s par minute d'audio.",
+      "groqNeedsKey": "Ajoute une clé Groq ci-dessus pour l'utiliser.",
+      "openrouterHint": "Sans clé de plus. Environ 1 centime par heure d'audio, un peu plus lent.",
+      "localGpu": "Gratuit, sur ta carte graphique NVIDIA.",
+      "localCpu": "Gratuit, mais lent ici : pas de carte NVIDIA, à peu près le temps réel.",
+      "localUnknown": "Gratuit, sur ta carte graphique NVIDIA si tu en as une.",
+      "download": "Le modèle (1,5 Go) se télécharge une fois, à la première analyse.",
+      "saved": "Transcription : {{engine}}",
+      "saveError": "Impossible d'enregistrer ce choix"
+    }
   },
   "analyze": {
     "hello": "Salut {{name}}",
@@ -847,10 +865,10 @@
     },
     "keys": {
       "label": "Étape 2 · Tes clés",
-      "title": "Deux clés, et c'est parti",
-      "lead": "Cuttie utilise deux services d'IA, payés à l'usage. Tes clés restent sur ton PC.",
-      "groqRole": "Écoute ce que tu dis",
-      "openrouterRole": "Regarde et note chaque moment",
+      "title": "Une clé, et c'est parti",
+      "lead": "Cuttie utilise des services d'IA payés à l'usage (quelques centimes par live). Tes clés restent sur ton PC.",
+      "groqRole": "Facultatif : transcription la plus rapide",
+      "openrouterRole": "Écoute, regarde et note chaque moment",
       "create": "Créer ma clé",
       "paste": "Clé {{provider}}",
       "save": "Enregistrer",
@@ -862,7 +880,8 @@
       "format": "Une clé {{provider}} commence par {{prefix}}",
       "replace": "Remplacer",
       "later": "Je les mettrai plus tard",
-      "rejected": "Refusée"
+      "rejected": "Refusée",
+      "optional": "Facultatif"
     },
     "cam": {
       "label": "Étape 3 · Ta webcam",

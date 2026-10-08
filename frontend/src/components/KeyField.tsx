@@ -19,13 +19,16 @@ export interface KeyDef {
   verifiable: boolean;
 }
 
-/** The two keys every analysis needs */
+/** The key every analysis needs: OpenRouter watches, rates and (without Groq) transcribes */
 export const REQUIRED_KEYS: KeyDef[] = [
-  { name: "groq_api_key", provider: "Groq", roleKey: "welcome.keys.groqRole", url: "https://console.groq.com/keys", prefix: "gsk_", verifiable: true },
   { name: "openrouter_api_key", provider: "OpenRouter", roleKey: "welcome.keys.openrouterRole", url: "https://openrouter.ai/keys", prefix: "sk-or-", verifiable: true },
 ];
 
+/** Groq: the fastest transcription */
+export const GROQ_KEY: KeyDef = { name: "groq_api_key", provider: "Groq", roleKey: "welcome.keys.groqRole", url: "https://console.groq.com/keys", prefix: "gsk_", verifiable: true };
+
 export const OPTIONAL_KEYS: KeyDef[] = [
+  GROQ_KEY,
   { name: "openai_api_key", provider: "OpenAI", roleKey: "settings.openaiRole", url: "https://platform.openai.com/api-keys", prefix: "sk-", verifiable: false },
 ];
 
@@ -46,7 +49,7 @@ export function useKeyChecks() {
   useEffect(() => {
     if (!settings || checked.current) return;
     checked.current = true;
-    for (const def of REQUIRED_KEYS) {
+    for (const def of [...REQUIRED_KEYS, ...OPTIONAL_KEYS].filter((k) => k.verifiable)) {
       if (!settings.keys[def.name]?.configured) continue;
       setKeyState(def.name, "checking");
       check(def.name as Checkable).then((state) => setKeyState(def.name, state));

@@ -18,6 +18,7 @@ test.group('First launch', (group) => {
     delete settings.onboarded
     delete settings.groq_api_key
     delete settings.openrouter_api_key
+    delete settings.transcription
     writeSettings(settings)
   })
   group.each.teardown(() => writeSettings(saved))
@@ -37,6 +38,16 @@ test.group('First launch', (group) => {
     assert.isTrue(response.body().onboarded)
     assert.isTrue(readSettings().onboarded as boolean)
     ;(await client.put('/api/settings').loginAs(user).json({ onboarded: 'yes' })).assertStatus(400)
+  })
+
+  test('picks the transcription engine (Groq when its key is set, else OpenRouter or this PC)', async ({ client, assert }) => {
+    const user = await makeUser()
+    assert.equal((await client.get('/api/settings').loginAs(user)).body().transcription, 'auto')
+    const response = await client.put('/api/settings').loginAs(user).json({ transcription: 'local' })
+    response.assertStatus(200)
+    assert.equal(response.body().transcription, 'local')
+    assert.equal(readSettings().transcription, 'local')
+    ;(await client.put('/api/settings').loginAs(user).json({ transcription: 'whisper.cpp' })).assertStatus(400)
   })
 
   test('checking a key that is not saved', async ({ client, assert }) => {

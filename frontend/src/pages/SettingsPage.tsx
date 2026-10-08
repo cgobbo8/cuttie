@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { Link } from "react-router";
 import { useTranslation } from "react-i18next";
-import { AlertTriangle, ArrowRight, CheckCircle2, Copy, Globe, KeyRound, Loader2, RefreshCw, Sparkles, Stethoscope, XCircle } from "lucide-react";
-import { getDiagnostics, type Diagnostics } from "../lib/api";
+import { AlertTriangle, ArrowRight, Check, CheckCircle2, Copy, Globe, KeyRound, Loader2, Mic, RefreshCw, Sparkles, Stethoscope, XCircle } from "lucide-react";
+import { getDiagnostics, updateTranscription, type Diagnostics, type TranscriptionEngine, type WorkerDiagnostics } from "../lib/api";
+import { useSettings } from "../lib/SettingsContext";
 import { LANGUAGE_STORAGE_KEY } from "../lib/i18n";
 import KeyField, { OPTIONAL_KEYS, REQUIRED_KEYS, useKeyChecks } from "../components/KeyField";
 import { useToast } from "../components/Toast";
@@ -28,6 +29,83 @@ function Section({ icon: Icon, title, hint, action, children }: { icon: typeof G
       </div>
       <div className="mt-5">{children}</div>
     </section>
+  );
+}
+
+// ── Transcription ───────────────────────────────────────────────────────────
+
+/** Who transcribes: Groq when its key is set, else OpenRouter or this PC */
+function TranscriptionSection() {
+  const { t } = useTranslation();
+  const toast = useToast();
+  const { settings, refresh } = useSettings();
+  const [local, setLocal] = useState<WorkerDiagnostics["transcription"] | null>(null);
+  const [saving, setSaving] = useState<TranscriptionEngine | null>(null);
+
+  useEffect(() => {
+    getDiagnostics()
+      .then((d) => setLocal(d.worker?.transcription ?? null))
+      .catch(() => setLocal(null));
+  }, []);
+
+  const hasGroq = !!settings?.keys.groq_api_key?.configured;
+  const choice = settings?.transcription ?? "auto";
+  // What actually runs: "auto", or Groq without its key, means Groq if there's a key, else OpenRouter
+  const active: Exclude<TranscriptionEngine, "auto"> = choice === "auto" || (choice === "groq" && !hasGroq) ? (hasGroq ? "groq" : "openrouter") : choice;
+
+  const pick = async (engine: Exclude<TranscriptionEngine, "auto">) => {
+    if (engine === active) return;
+    setSaving(engine);
+    try {
+      await updateTranscription(engine);
+      await refresh();
+      toast.success(t("settings.transcription.saved", { engine: t(`settings.transcription.${engine}`) }));
+    } catch {
+      toast.error(t("settings.transcription.saveError"));
+    } finally {
+      setSaving(null);
+    }
+  };
+
+  const options: { id: Exclude<TranscriptionEngine, "auto">; hint: string; disabled?: boolean }[] = [
+    { id: "groq", hint: t(hasGroq ? "settings.transcription.groqHint" : "settings.transcription.groqNeedsKey"), disabled: !hasGroq },
+    { id: "openrouter", hint: t("settings.transcription.openrouterHint") },
+    {
+      id: "local",
+      hint: t(
+        local?.local_device === "cuda"
+          ? "settings.transcription.localGpu"
+          : local?.local_device === "cpu"
+            ? "settings.transcription.localCpu"
+            : "settings.transcription.localUnknown",
+      ),
+    },
+  ];
+
+  return (
+    <Section icon={Mic} title={t("settings.transcription.title")} hint={t("settings.transcription.help")}>
+      <div role="radiogroup" aria-label={t("settings.transcription.title")} className="grid gap-2 sm:grid-cols-3">
+        {options.map((o) => (
+          <button
+            key={o.id}
+            role="radio"
+            aria-checked={active === o.id}
+            disabled={o.disabled || saving !== null}
+            onClick={() => pick(o.id)}
+            className={`text-left rounded-[14px] p-3.5 border transition-colors disabled:cursor-not-allowed ${
+              active === o.id ? "bg-white/[0.08] border-accent shadow-[0_0_0_3px_var(--color-accent-soft)]" : "border-white/[0.08] hover:bg-white/[0.05] disabled:opacity-50"
+            }`}
+          >
+            <span className="flex items-center justify-between gap-2">
+              <span className="text-[14px] font-semibold text-white">{t(`settings.transcription.${o.id}`)}</span>
+              {saving === o.id ? <Loader2 className="w-4 h-4 animate-spin text-ink-3" /> : active === o.id ? <Check className="w-4 h-4 text-accent" /> : null}
+            </span>
+            <span className="mt-1 block text-[12px] leading-snug text-ink-3">{o.hint}</span>
+          </button>
+        ))}
+      </div>
+      {active === "local" && local && !local.local_model_ready && <p className="mt-3 text-[12.5px] text-ink-3">{t("settings.transcription.download")}</p>}
+    </Section>
   );
 }
 
@@ -126,9 +204,16 @@ function DiagnosticsSection() {
               <DiagRow label={t("settings.diag.ytdlp")} level={w.yt_dlp ? "ok" : "error"} value={w.yt_dlp ?? t("settings.diag.notFound")} />
               <DiagRow
                 label={t("settings.diag.keys")}
-                level={w.keys?.groq && w.keys?.openrouter ? "ok" : "error"}
-                value={w.keys?.groq && w.keys?.openrouter ? t("settings.diag.keysOk") : t("settings.diag.keysMissing")}
+                level={w.keys?.openrouter ? "ok" : "error"}
+                value={w.keys?.openrouter ? t(w.keys?.groq ? "settings.diag.keysBoth" : "settings.diag.keysOk") : t("settings.diag.keysMissing")}
               />
+              {w.transcription?.engine && (
+                <DiagRow
+                  label={t("settings.transcription.title")}
+                  level={w.transcription.engine === "local" && w.transcription.local_device === "cpu" ? "warn" : "ok"}
+                  value={`${t(`settings.transcription.${w.transcription.engine}`)}${w.transcription.engine === "local" ? ` · ${w.transcription.local_device === "cuda" ? "NVIDIA" : t("settings.diag.cpu")}` : ""}`}
+                />
+              )}
             </>
           )}
           {diskGb !== null && (
@@ -187,6 +272,8 @@ export default function SettingsPage() {
             ))}
           </div>
         </Section>
+
+        <TranscriptionSection />
 
         <Section icon={Globe} title={t("settings.languageTitle")}>
           <div role="group" aria-label={t("settings.languageTitle")} className="seg">

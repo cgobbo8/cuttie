@@ -60,10 +60,14 @@ export async function getAppInfo(): Promise<AppInfo> {
 
 export type ApiKeyName = "groq_api_key" | "openrouter_api_key" | "openai_api_key";
 
+/** Speech to text: "auto" = Groq when its key is set, else OpenRouter */
+export type TranscriptionEngine = "auto" | "groq" | "openrouter" | "local";
+
 export interface AppSettings {
   keys: Record<ApiKeyName, { configured: boolean; preview: string | null }>;
   /** First launch done (channel, keys, webcam) */
   onboarded: boolean;
+  transcription: TranscriptionEngine;
 }
 
 export async function getSettings(): Promise<AppSettings> {
@@ -78,6 +82,16 @@ export async function updateSettings(keys: Partial<Record<ApiKeyName, string>>):
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ keys }),
+  });
+  if (!res.ok) throw new Error("Failed to save settings");
+  return res.json();
+}
+
+export async function updateTranscription(transcription: TranscriptionEngine): Promise<AppSettings> {
+  const res = await fetch(`${BASE}/settings`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ transcription }),
   });
   if (!res.ok) throw new Error("Failed to save settings");
   return res.json();
@@ -118,6 +132,13 @@ export interface WorkerDiagnostics {
   device?: "cuda" | "mps" | "cpu" | "error";
   gpu?: string;
   device_error?: string;
+  transcription?: {
+    engine?: "groq" | "openrouter" | "local";
+    /** Whisper on this PC: "cuda" = NVIDIA GPU (fast), "cpu" (slow) */
+    local_device?: "cuda" | "cpu";
+    local_model_ready?: boolean;
+    error?: string;
+  };
 }
 
 export interface Diagnostics {

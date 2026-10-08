@@ -23,6 +23,7 @@ dependencies = [
     "ultralytics>=8.4.33",
     "pyannote-audio>=4.0.4",
     "speechbrain>=1.1.0",
+    "faster-whisper>=1.1",
 ]
 
 [dependency-groups]

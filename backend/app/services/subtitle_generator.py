@@ -10,7 +10,7 @@ import subprocess
 
 import cv2
 import numpy as np
-from app.services.openai_client import get_groq_client, WHISPER_MODEL
+
 
 logger = logging.getLogger(__name__)
 
@@ -73,8 +73,6 @@ def transcribe_with_words(clip_path: str) -> tuple[str, float, list[dict]]:
     Returns (full_text, speech_rate, words) where words is a list of
     {"word": str, "start": float, "end": float}.
     """
-    client = get_groq_client()
-
     # Extract audio as mp3
     audio_path = clip_path.replace(".mp4", "_sub_audio.mp3")
     try:
@@ -93,23 +91,10 @@ def transcribe_with_words(clip_path: str) -> tuple[str, float, list[dict]]:
         return "", 0.0, []
 
     try:
-        with open(audio_path, "rb") as f:
-            result = client.audio.transcriptions.create(
-                model=WHISPER_MODEL,
-                file=f,
-                response_format="verbose_json",
-                timestamp_granularities=["word"],
-            )
+        # Same engine choice, retries and fallback as the analysis
+        from app.services.llm_analyzer import _transcribe_audio
 
-        text = result.text or ""
-        words = []
-        if hasattr(result, "words") and result.words:
-            for w in result.words:
-                words.append({
-                    "word": w.word,
-                    "start": w.start,
-                    "end": w.end,
-                })
+        text, _rate, _segments, words = _transcribe_audio(audio_path)
 
         if words:
             # Snap timestamps that fall in silence to next speech onset

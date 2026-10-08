@@ -8,7 +8,7 @@ interface SettingsContextValue {
   /** Settings were fetched once (successfully or not) */
   loaded: boolean;
   /** Required API keys that are not configured yet (empty once loaded and complete). */
-  missingKeys: ("groq_api_key" | "openrouter_api_key")[];
+  missingKeys: "openrouter_api_key"[];
   refresh: () => Promise<void>;
 }
 
@@ -20,7 +20,8 @@ const SettingsContext = createContext<SettingsContextValue>({
   refresh: async () => {},
 });
 
-const REQUIRED_KEYS = ["groq_api_key", "openrouter_api_key"] as const;
+// Groq is optional: without it, OpenRouter (or this PC) transcribes
+const REQUIRED_KEYS = ["openrouter_api_key"] as const;
 
 export function SettingsProvider({ children }: { children: ReactNode }) {
   const [appInfo, setAppInfo] = useState<AppInfo | null>(null);

@@ -1,10 +1,10 @@
 import { useTranslation } from "react-i18next";
 import { ArrowRight } from "lucide-react";
 import type { ApiKeyName } from "../../lib/api";
-import KeyField, { REQUIRED_KEYS, type KeyState } from "../KeyField";
+import KeyField, { GROQ_KEY, REQUIRED_KEYS, type KeyState } from "../KeyField";
 import { Progress } from "./shared";
 
-/** Step 2: the two API keys, checked with their provider as soon as they are pasted */
+/** Step 2: the OpenRouter key (and Groq, optional, for faster transcription), checked as soon as pasted */
 export default function KeysStep({
   stateOf,
   setKeyState,
@@ -13,12 +13,12 @@ export default function KeysStep({
 }: {
   stateOf: (name: ApiKeyName) => KeyState;
   setKeyState: (name: ApiKeyName, state: KeyState) => void;
-  /** Both keys saved and none rejected */
+  /** The required key saved and not rejected */
   ready: boolean;
   onContinue: () => void;
 }) {
   const { t } = useTranslation();
-  const busy = REQUIRED_KEYS.some((k) => stateOf(k.name) === "saving" || stateOf(k.name) === "checking");
+  const busy = [...REQUIRED_KEYS, GROQ_KEY].some((k) => stateOf(k.name) === "saving" || stateOf(k.name) === "checking");
 
   return (
     <>
@@ -31,6 +31,8 @@ export default function KeysStep({
         {REQUIRED_KEYS.map((def) => (
           <KeyField key={def.name} def={def} state={stateOf(def.name)} setState={(state) => setKeyState(def.name, state)} />
         ))}
+        <div className="mt-2 text-[12.5px] text-ink-3">{t("welcome.keys.optional")}</div>
+        <KeyField def={GROQ_KEY} state={stateOf(GROQ_KEY.name)} setState={(state) => setKeyState(GROQ_KEY.name, state)} removable />
       </div>
 
       <div className="mt-6 flex flex-wrap items-center justify-between gap-3">

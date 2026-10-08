@@ -470,7 +470,7 @@
   "settings": {
     "title": "Settings",
     "keysTitle": "Your AI keys",
-    "keysHelp": "Cuttie uses two AI services, paid as you go. Your keys stay on your PC; Cuttie checks them with each service.",
+    "keysHelp": "OpenRouter is enough. Groq is optional: it makes transcription faster. Your keys stay on your PC; Cuttie checks them with each service.",
     "remove": "Remove",
     "languageTitle": "Language",
     "diagnosticsTitle": "Diagnostics",
@@ -491,18 +491,36 @@
       "ytdlp": "yt-dlp (Twitch downloads)",
       "notFound": "Not found",
       "keys": "API keys",
-      "keysOk": "Groq and OpenRouter configured",
+      "keysOk": "OpenRouter set",
       "keysMissing": "Set them up above",
       "disk": "Free disk space",
       "diskLow": "{{gb}} GB — tight, a VOD can take several GB",
       "dataDir": "Data folder",
-      "versions": "Versions"
+      "versions": "Versions",
+      "keysBoth": "OpenRouter and Groq set",
+      "cpu": "processor (slow)"
     },
     "subtitle": "Your AI keys, the app language and the state of your install.",
     "openaiRole": "Advanced editor assistant (optional)",
     "welcomeTitle": "First setup",
     "welcomeHint": "Go through the first launch again: your Twitch channel, your keys and your webcam.",
-    "welcomeCta": "Run the setup again"
+    "welcomeCta": "Run the setup again",
+    "transcription": {
+      "title": "Transcription",
+      "help": "What listens to what's said, for the analysis and the subtitles. If Groq or your graphics card fails, OpenRouter takes over.",
+      "groq": "Groq",
+      "openrouter": "OpenRouter",
+      "local": "On this PC",
+      "groqHint": "The fastest: about 1 s per minute of audio.",
+      "groqNeedsKey": "Add a Groq key above to use it.",
+      "openrouterHint": "No extra key. About 1 cent per hour of audio, a bit slower.",
+      "localGpu": "Free, on your NVIDIA graphics card.",
+      "localCpu": "Free but slow here: no NVIDIA card, about real time.",
+      "localUnknown": "Free, on your NVIDIA graphics card if you have one.",
+      "download": "The model (1.5 GB) downloads once, on the first analysis.",
+      "saved": "Transcription: {{engine}}",
+      "saveError": "Couldn't save this choice"
+    }
   },
   "analyze": {
     "hello": "Hi {{name}}",
@@ -847,10 +865,10 @@
     },
     "keys": {
       "label": "Step 2 · Your keys",
-      "title": "Two keys and you're set",
-      "lead": "Cuttie uses two AI services, paid as you go. Your keys stay on your PC.",
-      "groqRole": "Listens to what you say",
-      "openrouterRole": "Watches and rates every moment",
+      "title": "One key and you're set",
+      "lead": "Cuttie uses pay-as-you-go AI services (a few cents per stream). Your keys stay on your PC.",
+      "groqRole": "Optional: the fastest transcription",
+      "openrouterRole": "Listens to, watches and rates each moment",
       "create": "Get my key",
       "paste": "{{provider}} key",
       "save": "Save",
@@ -862,7 +880,8 @@
       "format": "A {{provider}} key starts with {{prefix}}",
       "replace": "Replace",
       "later": "I'll add them later",
-      "rejected": "Rejected"
+      "rejected": "Rejected",
+      "optional": "Optional"
     },
     "cam": {
       "label": "Step 3 · Your webcam",

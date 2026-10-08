@@ -53,10 +53,11 @@ cuttie/
 │   │   │   ├── access_token_controller.ts    # Login/logout
 │   │   │   ├── auth_me_controller.ts         # GET /auth/me
 │   │   │   ├── google_auth_controller.ts     # OAuth Google
-│   │   │   ├── jobs_controller.ts            # CRUD jobs + SSE
-│   │   │   ├── clips_controller.ts           # Download clips + edit-env
+│   │   │   ├── jobs_controller.ts            # CRUD jobs + SSE, selection (gardes/passes/trim), cam par live
+│   │   │   ├── clips_controller.ts           # Download clips, edit-env, vignettes, fond floute 9:16
+│   │   │   ├── brand_controller.ts           # Kit de marque, chaine Twitch, couleurs, webcam, recherche de chaine
 │   │   │   ├── storage_controller.ts         # GET /api/storage/* (URLs signees, Range)
-│   │   │   ├── app_controller.ts             # app info, parametres (cles API), diagnostic
+│   │   │   ├── app_controller.ts             # app info, parametres (cles API + verification, onboarded), diagnostic
 │   │   │   ├── internal_controller.ts        # evenements de statut pousses par le worker
 │   │   │   ├── spa_controller.ts             # sert frontend/dist (FRONTEND_DIST)
 │   │   │   ├── renders_controller.ts         # Remotion renders
@@ -64,14 +65,19 @@ cuttie/
 │   │   │   └── profile_controller.ts         # Profil utilisateur
 │   │   ├── models/
 │   │   │   ├── user.ts                       # User + auth + access tokens
-│   │   │   └── job.ts                        # Job + JSON columns
+│   │   │   └── job.ts                        # Job + JSON columns (hot_points, selection, timeline, facecam)
 │   │   ├── middleware/                        # Auth, SSE auth, silent auth, JSON
 │   │   ├── services/
 │   │   │   ├── storage.ts                    # stockage local + URLs signees (ex-S3)
 │   │   │   ├── data_paths.ts                 # layout du data dir partage
-│   │   │   ├── worker_client.ts              # client HTTP du worker (jobs, cancel, words, facecam)
+│   │   │   ├── worker_client.ts              # client HTTP du worker (jobs, cancel, words, facecam, palette)
 │   │   │   ├── local_user.ts                 # utilisateur local + auto-login
-│   │   │   ├── job_status_bus.ts             # evenements worker -> DB + Transmit SSE
+│   │   │   ├── job_status_bus.ts             # evenements worker -> DB + Transmit SSE (statut, timeline, candidats)
+│   │   │   ├── brand_kit.ts                  # kit de marque dans settings.json (couleurs, widget, sous-titres, webcam)
+│   │   │   ├── facecam_resolver.ts           # quelle cam pour un live / visible dans un clip (voir "Webcam")
+│   │   │   ├── edit_env_resolver.ts          # donnees editeur d'un clip (dims, cam, mots, chat)
+│   │   │   ├── twitch.ts                     # GQL public Twitch : chaine, VODs, storyboards
+│   │   │   ├── clip_variants.ts              # fond floute 9:16 pre-calcule (ffmpeg)
 │   │   │   └── remotion_renderer.ts          # Bundle + render Remotion
 │   │   ├── validators/user.ts                # VineJS validation
 │   │   └── transformers/user_transformer.ts
@@ -83,7 +89,7 @@ cuttie/
 ├── backend/                           # Python Worker — analyse VOD + generation clips
 │   ├── worker.py                              # point d'entree (uvicorn sur 127.0.0.1)
 │   ├── app/
-│   │   ├── main.py                            # serveur local : file de jobs, cancel, words, facecam, diagnostics
+│   │   ├── main.py                            # serveur local : file de jobs, cancel, words, facecam (clips + VOD), palette, diagnostics
 │   │   ├── models/schemas.py                  # Pydantic v2
 │   │   └── services/
 │   │       ├── pipeline.py                    # Orchestrateur (6 etapes)
@@ -95,13 +101,16 @@ cuttie/
 │   │       ├── llm_analyzer.py                # Whisper + frames + LLM unifie (scoring + analyse)
 │   │       ├── speaker_diarizer.py            # pyannote diarization + ECAPA-TDNN voiceprint
 │   │       ├── clipper.py                     # Extraction clips video
+│   │       ├── facecam_detector.py            # YOLOv8 pose + accroche au cadre de la cam, visages par clip
+│   │       ├── palette.py                     # couleurs du logo / de la banniere (roles accent, highlight, dark, light)
+│   │       ├── timeline.py                    # analyse en direct : courbe d'energie, chat, candidats
 │   │       ├── frame_extractor.py             # Extraction frames pour vision
 │   │       ├── subtitle_generator.py          # Whisper word-level + LLM correction sous-titres
 │   │       ├── paths.py                       # layout du data dir (CUTTIE_DATA_DIR)
 │   │       ├── storage.py                     # stockage local (ex-S3)
 │   │       ├── api_events.py                  # envoi ordonne des statuts a l'API
 │   │       ├── settings.py                    # lecture settings.json (cles API)
-│   │       ├── clip_tools.py                  # transcription a la demande + facecam (editeur)
+│   │       ├── clip_tools.py                  # transcription a la demande + cam d'un live (clips) ou d'une VOD
 │   │       ├── openai_client.py               # Clients multi-provider (Groq, OpenRouter)
 │   │       └── db.py                          # SQLite persistence (WAL)
 │   ├── assets/fonts/LuckiestGuy-Regular.ttf
@@ -113,20 +122,27 @@ cuttie/
         ├── main.tsx                           # Entry point + providers
         ├── app.css                            # Tailwind @theme + animations custom
         ├── pages/
-        │   ├── HomePage.tsx                   # Liste des projets
-        │   ├── LoginPage.tsx                  # Auth
-        │   ├── JobPage.tsx                    # Detail job + hot points
-        │   ├── EditPage.tsx                   # Editeur canvas
-        │   ├── RemotionEditPage.tsx           # Editeur Remotion
-        │   ├── ExportsPage.tsx                # Liste renders/exports
-        │   └── ProfilePage.tsx                # Profil + langue
+        │   ├── WelcomePage.tsx                # Premier lancement /bienvenue (chaine, cles, webcam)
+        │   ├── HomePage.tsx                   # Accueil : dernier live, lives de la chaine, coller un lien
+        │   ├── ChannelPage.tsx                # Ma chaine : couleurs, widget, sous-titres, apercu
+        │   ├── ProjectsPage.tsx               # Projets (cartes, ouvre l'etape en cours)
+        │   ├── ProjectPage.tsx                # /:jobId — Analyse en direct puis Choisir
+        │   ├── MontagePage.tsx                # /:jobId/montage — 6 modeles Remotion, cam par live
+        │   ├── ExportStepPage.tsx             # /:jobId/export — exports du projet
+        │   ├── ExportsPage.tsx                # Bibliotheque d'exports par live
+        │   ├── SettingsPage.tsx               # Cles API, langue, diagnostic
+        │   ├── RemotionEditPage.tsx           # Editeur avance (calques)
+        │   ├── EditPage.tsx                   # Ancien editeur canvas (/:jobId/edit-old)
+        │   └── LoginPage.tsx                  # Auth (mode non-local)
         ├── components/
-        │   ├── Layout.tsx                     # Shell : sidebar + main
-        │   ├── Sidebar.tsx                    # Navigation
-        │   ├── HotPoints.tsx                  # Grille clips analysés
-        │   ├── JobStatus.tsx                  # Progression job
-        │   ├── NewProjectModal.tsx            # Modal creation projet
-        │   ├── ClipEditor.tsx                 # Editeur clip inline
+        │   ├── Layout.tsx                     # Shell : fond floute (AppBackdrop) + TopBar
+        │   ├── TopBar.tsx                     # Navigation flottante
+        │   ├── welcome/                       # Etapes du premier lancement + mur de lives
+        │   ├── project/                       # AnalysisView, MomentPlayer/List/Details, VodTimeline, Stepper, RenderCard
+        │   ├── montage/                       # TemplateSketch (vignettes de modeles), CamSheet (cam d'un live)
+        │   ├── KeyField.tsx                   # Champ de cle API verifie aupres du fournisseur
+        │   ├── WebcamFrame.tsx                # Frame + rectangle de cam deplacable
+        │   ├── SignaturePreview.tsx           # Apercu fixe du modele Signature
         │   ├── Toast.tsx                      # Systeme de notifications
         │   ├── ConfirmModal.tsx               # Dialog confirmation
         │   ├── ui/Tooltip.tsx                 # Radix tooltip wrapper
@@ -135,6 +151,12 @@ cuttie/
         └── lib/
             ├── api.ts                         # Client REST type-safe + SSE
             ├── AuthContext.tsx                 # Auth context + session
+            ├── SettingsContext.tsx            # Parametres (cles, onboarded)
+            ├── ChannelContext.tsx             # Kit de marque + chaine Twitch, couleur d'accent de l'app
+            ├── BackdropContext.tsx            # Image floutee derriere l'app
+            ├── TransmitContext.tsx            # SSE Transmit (un uid par flux)
+            ├── templates.ts                   # Les 6 modeles de clips -> calques (Player + rendu serveur)
+            ├── moments.ts / renders.ts / projects.ts  # Logique pure des ecrans (testee)
             ├── editorTypes.ts                 # Types editeur (layers, state)
             ├── editorThemes.ts                # Themes pre-definis
             ├── animations.ts                  # Animations Remotion
@@ -165,6 +187,7 @@ cuttie/
                           -> Re-rank par final_score, garde top 20
 6. CLIPPING            -> yt-dlp video + FFmpeg extraction (bornes dynamiques RMS)
                           uniquement pour les 20 candidats gardes
+                          + reperage de la webcam sur les clips (facecam.json v2 : cadre + visages par clip)
 -> DONE
 ```
 
@@ -201,20 +224,46 @@ Checkpoints resumables : CLIPPING, LLM_ANALYSIS.
 | `/api/jobs`                           | GET     | Token    | Lister les analyses (du user)    |
 | `/api/jobs/{id}`                      | GET     | Token    | Status + hot points d'un job     |
 | `/api/jobs/{id}/retry`                | POST    | Token    | Relancer depuis un checkpoint    |
+| `/api/jobs/{id}/selection`            | PATCH   | Token    | Garder / passer / trim un clip   |
+| `/api/jobs/{id}/facecam`              | PUT     | Token    | Cam reglee a la main pour ce live|
 | `/api/jobs/{id}/sse`                  | GET     | SSE Token| SSE temps reel                   |
 | `/api/clips/{id}/{filename}`          | GET     | Token    | Telecharger un clip              |
 | `/api/clips/{id}/{filename}/edit-env` | GET     | Token    | Donnees editeur                  |
 | `/api/clips/{id}/{filename}/trim`     | POST    | Token    | Trim clip FFmpeg                 |
+| `/api/clips/{id}/{filename}/thumb`    | GET     | Token    | Vignette (clip ou render)        |
+| `/api/clips/{id}/{filename}/background` | GET   | Token    | Fond floute 9:16 du clip         |
+| `/api/brand-kit`                      | GET/PUT | Token    | Kit de marque                    |
+| `/api/brand-kit/detect-colors`        | POST    | Token    | Couleurs du logo -> kit          |
+| `/api/brand-kit/detect-facecam`       | POST    | Token    | Cam sur le dernier live (non sauvee) |
+| `/api/brand-kit/frame`                | GET     | Token    | Frame ou la cam a ete confirmee  |
+| `/api/twitch/channel`                 | GET     | Token    | Chaine du kit + VODs + analyses  |
+| `/api/twitch/lookup?login=`           | GET     | Token    | Chaine avant sauvegarde          |
+| `/api/twitch/lookup/colors?login=`    | GET     | Token    | Couleurs avant sauvegarde        |
+| `/api/twitch/vods/{id}/storyboard`    | GET     | Token    | Planches d'apercu d'une VOD      |
 | `/api/renders`                        | GET     | Token    | Liste des exports                |
 | `/api/renders`                        | POST    | Token    | Lancer un export Remotion        |
 | `/api/renders/{id}`                   | GET     | Token    | Status d'un export               |
 | `/api/assets`                         | GET     | Token    | Liste des assets                 |
 | `/api/assets/upload`                  | POST    | Token    | Upload asset                     |
 | `/api/app/info`                       | GET     | Public   | Mode local / auto-login          |
-| `/api/settings`                       | GET/PUT | Token    | Cles API (masquees en lecture)   |
+| `/api/settings`                       | GET/PUT | Token    | Cles API (masquees), onboarded   |
+| `/api/settings/verify`                | POST    | Token    | Verifie une cle aupres du fournisseur |
 | `/api/diagnostics`                    | GET     | Token    | GPU, ffmpeg, yt-dlp, cles, disque|
 | `/api/storage/*`                      | GET     | Signee   | Fichiers stockes (Range)         |
 | `/api/internal/worker-events`         | POST    | Secret   | Statuts pousses par le worker    |
+
+## Parcours
+
+- Premier lancement `/bienvenue` (installation sans analyse ni `onboarded` dans settings.json) : chaine Twitch (lives + couleurs du logo), deux cles (verifiees aupres de Groq / OpenRouter), webcam reperee sur le dernier live pendant ce temps.
+- Projet en 4 etapes : Analyse (en direct) -> Choisir (garder / passer / trim) -> Monter (6 modeles a la DA de la chaine) -> Exporter.
+- Design : verre fonce pose sur du contenu floute (vignettes, frames), une seule couleur d'accent = couleur de la chaine.
+
+## Webcam
+
+La position confirmee au premier lancement est un **repere**, pas une regle : la cam peut bouger d'un live a l'autre.
+- Chaque analyse relocalise la cam sur ses clips (worker, fin de CLIPPING) -> `facecam.json` v2.
+- `facecam_resolver.ts` : cam reglee a la main pour ce live (`jobs.facecam`) > repere si meme place (IoU >= 0.5) > position du live sinon (`moved`, signale dans Monter).
+- Clip ou personne n'est dans la cam (mode realisateur, pause) -> monte sans cam, sauf « afficher quand meme ».
 
 ## Conventions
 

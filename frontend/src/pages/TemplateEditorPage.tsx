@@ -29,6 +29,7 @@ import { useLatestMoments } from "../lib/useLatestMoment";
 import { kitWidget, type KitWidget } from "../components/editor/widgets/kit";
 import EditorCanvas, { type CanvasElement } from "../components/template-editor/EditorCanvas";
 import LayerList from "../components/template-editor/LayerList";
+import Scrubber from "../components/template-editor/Scrubber";
 import {
   AddWidgetButton,
   BackgroundPanel,
@@ -279,7 +280,9 @@ export default function TemplateEditorPage() {
     reveal(widget);
   };
 
-  /* ── Keyboard: nudge, delete, undo / redo ── */
+  const playerRef = useRef<PlayerRef | null>(null);
+
+  /* ── Keyboard: nudge, delete, undo / redo, play / pause ── */
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
@@ -294,6 +297,13 @@ export default function TemplateEditorPage() {
       if (mod && e.key.toLowerCase() === "y") {
         e.preventDefault();
         redo();
+        return;
+      }
+      // Space plays / pauses, unless a button or slider has the focus (it uses Space itself)
+      if (e.key === " " && !target?.closest("button, a, [role='slider'], [role='button']")) {
+        e.preventDefault();
+        stopPreview();
+        playerRef.current?.toggle();
         return;
       }
       if (!spec || !selected) return;
@@ -325,7 +335,6 @@ export default function TemplateEditorPage() {
   }, [spec, selected, undo, redo, update, removeWidget]);
 
   /* ── Playback ── */
-  const playerRef = useRef<PlayerRef | null>(null);
   /** Paused on a moment where a widget isn't on screen: go where it shows, to see what you edit */
   function reveal(widget: SpecWidget) {
     const player = playerRef.current;
@@ -337,14 +346,24 @@ export default function TemplateEditorPage() {
     if (now < appearAt + 0.6 || now > until - 0.1) player.seekTo(Math.round(Math.min(appearAt + 1.2, (appearAt + until) / 2) * FPS));
   }
 
-  /** Plays a widget's entrance (and exit when it's close by) to see the animation */
-  function replay(widget: SpecWidget) {
+  /** Plays just a widget's arrival or departure, then pauses: no waiting for the end of the clip */
+  const previewTimer = useRef<number | undefined>(undefined);
+  function stopPreview() {
+    window.clearTimeout(previewTimer.current);
+  }
+  function preview(widget: SpecWidget, edge: "in" | "out") {
     const player = playerRef.current;
     if (!player) return;
-    const { appearAt } = widgetWindow(widget, 0, duration);
-    player.seekTo(Math.max(0, Math.round((appearAt - 0.4) * FPS)));
+    const { appearAt, leaveAt } = widgetWindow(widget, 0, duration);
+    const at = edge === "in" ? appearAt : leaveAt ?? duration;
+    const from = Math.max(0, at - 0.6);
+    player.seekTo(Math.round(from * FPS));
     player.play();
+    stopPreview();
+    const length = edge === "in" ? 2.4 : 1.8;
+    previewTimer.current = window.setTimeout(() => playerRef.current?.pause(), Math.min(length, duration - from) * 1000);
   }
+  useEffect(() => () => window.clearTimeout(previewTimer.current), []);
   const [playing, setPlaying] = useState(false);
   const [muted, setMuted] = useState(false);
   useEffect(() => {
@@ -480,12 +499,26 @@ export default function TemplateEditorPage() {
             initialFrame={45}
             still={sampleJob && sampleClip && env ? null : { frameUrl, sample: firstWords.length ? firstWords : [t("templateEditor.sampleWords")] }}
           />
-          <div className="glass flex items-center gap-1.5 p-1.5 rounded-[14px]">
-            {sampleJob && sampleClip && env && (
+          {/* Playback: play, where in the clip, sound, covered zones */}
+          <div className="glass flex items-center gap-1.5 p-1.5 rounded-[14px]" style={{ width: Math.round((canvasHeight * 1080) / 1920) + 72 }}>
+            {sampleJob && sampleClip && env ? (
               <>
-                <button onClick={() => playerRef.current?.toggle()} aria-label={playing ? t("project.pause") : t("project.play")} className="btn btn-primary btn-icon w-9 h-9 rounded-[10px]">
+                <button
+                  onClick={() => {
+                    stopPreview();
+                    playerRef.current?.toggle();
+                  }}
+                  aria-label={playing ? t("project.pause") : t("project.play")}
+                  className="btn btn-primary btn-icon w-9 h-9 rounded-[10px] flex-none"
+                >
                   {playing ? <Pause className="w-4 h-4" fill="currentColor" /> : <Play className="w-4 h-4 translate-x-[1px]" fill="currentColor" />}
                 </button>
+                <Scrubber
+                  playerRef={playerRef}
+                  durationInFrames={Math.max(1, Math.round(duration * FPS))}
+                  fps={FPS}
+                  window={selectedWidget ? (({ appearAt, leaveAt }) => ({ from: appearAt, to: leaveAt ?? duration }))(widgetWindow(selectedWidget, 0, duration)) : null}
+                />
                 <button
                   onClick={() => {
                     if (muted) playerRef.current?.unmute();
@@ -493,14 +526,23 @@ export default function TemplateEditorPage() {
                     setMuted(!muted);
                   }}
                   aria-label={muted ? t("project.unmute") : t("project.mute")}
-                  className="btn btn-ghost btn-icon w-9 h-9"
+                  title={muted ? t("project.unmute") : t("project.mute")}
+                  className="btn btn-ghost btn-icon w-9 h-9 flex-none"
                 >
                   {muted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
                 </button>
               </>
+            ) : (
+              <span className="flex-1" />
             )}
-            <button onClick={() => setShowZones((v) => !v)} aria-pressed={showZones} className={`btn btn-sm h-9 ${showZones ? "bg-white/[0.12] text-white" : "btn-ghost"}`}>
-              <ScanLine className="w-4 h-4" /> {t("templateEditor.zones")}
+            <button
+              onClick={() => setShowZones((v) => !v)}
+              aria-pressed={showZones}
+              aria-label={t("templateEditor.zones")}
+              title={t("templateEditor.zones")}
+              className={`btn btn-icon w-9 h-9 flex-none ${showZones ? "bg-white/[0.12] text-white" : "btn-ghost"}`}
+            >
+              <ScanLine className="w-4 h-4" />
             </button>
           </div>
           <p className="text-[12px] text-ink-3 text-center max-w-[420px]">
@@ -583,10 +625,13 @@ export default function TemplateEditorPage() {
                 duration={duration}
                 onChange={(widget, done) => {
                   update({ ...spec, widgets: spec.widgets.map((w) => (w.id === widget.id ? widget : w)) }, done);
-                  if (widget.enter !== selectedWidget.enter) replay(widget);
+                  if (widget.enter !== selectedWidget.enter) preview(widget, "in");
+                  else if (widget.exit !== selectedWidget.exit) preview(widget, "out");
                   else if (JSON.stringify(widget.show) !== JSON.stringify(selectedWidget.show)) reveal(widget);
                 }}
-                onReplay={() => replay(selectedWidget)}
+                onPreview={(edge) => preview(selectedWidget, edge)}
+                playerRef={sampleJob && sampleClip && env ? playerRef : null}
+                fps={FPS}
                 onRemove={() => removeWidget(`widget:${selectedWidget.id}`)}
                 onReset={() => {
                   const def = kitWidget(selectedWidget.kind);

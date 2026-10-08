@@ -1045,7 +1045,6 @@
     "leavesBefore": "leaves {{s}} s before the end",
     "staysFor": "stays {{s}} s",
     "staysToEnd": "stays to the end",
-    "replay": "Replay the animation",
     "enter": "Entrance",
     "exit": "Exit",
     "enters": {
@@ -1067,7 +1066,10 @@
       "slideLeft": "To the left",
       "slideRight": "To the right",
       "none": "Cut"
-    }
+    },
+    "timeline": "Position in the clip",
+    "seeArrival": "See it come in",
+    "seeDeparture": "See it go"
   },
   "widgets": {
     "channel-pill": {

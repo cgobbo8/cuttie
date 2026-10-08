@@ -128,7 +128,7 @@ cuttie/
         │   ├── ProjectsPage.tsx               # Projets (cartes, ouvre l'etape en cours)
         │   ├── ProjectPage.tsx                # /:jobId — Analyse en direct puis Choisir
         │   ├── MontagePage.tsx                # /:jobId/montage — 6 modeles Remotion, cam par live
-        │   ├── TemplateEditorPage.tsx         # /modeles/:id — editeur de modele simple (mise en page + reglages)
+        │   ├── TemplateEditorPage.tsx         # /modeles/:id — editeur de modele par elements (glisser, calques, widgets, timing)
         │   ├── ExportStepPage.tsx             # /:jobId/export — exports du projet
         │   ├── ExportsPage.tsx                # Bibliotheque d'exports par live
         │   ├── SettingsPage.tsx               # Cles API, langue, diagnostic
@@ -140,14 +140,15 @@ cuttie/
         │   ├── TopBar.tsx                     # Navigation flottante
         │   ├── welcome/                       # Etapes du premier lancement + mur de lives
         │   ├── project/                       # AnalysisView, MomentPlayer/List/Details, VodTimeline, Stepper, RenderCard
-        │   ├── montage/                       # TemplateSketch (vignettes de modeles), CamSheet (cam d'un live)
+        │   ├── montage/                       # TemplatePicker (onglets Mes modeles / Modeles Cuttie, etoile par defaut), TemplateSketch, CamSheet
+        │   ├── template-editor/               # EditorCanvas (apercu + poignees), LayerList (calques), Panels (reglages), Scrubber (timeline)
         │   ├── KeyField.tsx                   # Champ de cle API verifie aupres du fournisseur
         │   ├── WebcamFrame.tsx                # Frame + rectangle de cam deplacable
         │   ├── SignaturePreview.tsx           # Apercu fixe du modele Signature
         │   ├── Toast.tsx                      # Systeme de notifications
         │   ├── ConfirmModal.tsx               # Dialog confirmation
         │   ├── ui/Tooltip.tsx                 # Radix tooltip wrapper
-        │   ├── editor/                        # Canvas editor (layers, panels, viewport)
+        │   ├── editor/                        # Canvas editor (layers, panels, viewport) ; widgets/kit = widgets de marque (copies cote API)
         │   └── remotion-editor/               # Remotion composition + layers
         └── lib/
             ├── api.ts                         # Client REST type-safe + SSE
@@ -156,7 +157,10 @@ cuttie/
             ├── ChannelContext.tsx             # Kit de marque + chaine Twitch, couleur d'accent de l'app
             ├── BackdropContext.tsx            # Image floutee derriere l'app
             ├── TransmitContext.tsx            # SSE Transmit (un uid par flux)
-            ├── templates.ts                   # 6 mises en page x reglages (look) -> calques ; modeles perso = base + look
+            ├── templates.ts                   # 6 mises en page -> calques (hors des zones couvertes par TikTok)
+            ├── templateSpec.ts                # modeles perso v2 (elements) -> calques, timing des widgets, zones couvertes, drag
+            ├── templateKeys.ts                # cle de modele : une des 6 mises en page ou un modele perso
+            ├── fonts.ts                       # polices des clips (@fontsource, copiees cote API)
             ├── moments.ts / renders.ts / projects.ts  # Logique pure des ecrans (testee)
             ├── editorTypes.ts                 # Types editeur (layers, state)
             ├── editorThemes.ts                # Themes pre-definis
@@ -258,7 +262,9 @@ Checkpoints resumables : CLIPPING, LLM_ANALYSIS.
 - Premier lancement `/bienvenue` (installation sans analyse ni `onboarded` dans settings.json) : chaine Twitch (lives + couleurs du logo), deux cles (verifiees aupres de Groq / OpenRouter), webcam reperee sur le dernier live pendant ce temps.
 - Projet en 4 etapes : Analyse (en direct) -> Choisir (garder / passer / trim) -> Monter (6 modeles a la DA de la chaine) -> Exporter.
 - Design : verre fonce pose sur du contenu floute (vignettes, frames), une seule couleur d'accent = couleur de la chaine.
-- Modeles : les 6 mises en page + les modeles perso du streamer (`brand_kit.templates` : base + reglages cam / fond / sous-titres / widget / accroche), crees dans l'editeur simple ; l'editeur a calques reste le mode avance.
+- Modeles : les 6 mises en page + les modeles perso du streamer (`brand_kit.templates`, v2 = elements : fond, jeu, cam, sous-titres, accroche, widgets avec arrivee / depart / animations, ordre des calques) ; `brand_kit.default_template` sert aux nouveaux projets. L'editeur a calques reste le mode avance.
+- Zones couvertes par TikTok / Shorts / Reels (1080x1920) : haut y < 140, bas y > 1500, droite x > 930 entre y 760 et 1500. Textes, cam et marque restent hors de ces zones (teste) ; le jeu peut passer dessous.
+- Widgets du kit et polices : ecrits dans `frontend/`, copies dans `api/remotion` par `node scripts/sync-remotion.mjs` (verifie par `remotionSync.test.ts`).
 
 ## Webcam
 

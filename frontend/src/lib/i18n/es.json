@@ -1045,7 +1045,6 @@
     "leavesBefore": "se va {{s}} s antes del final",
     "staysFor": "se queda {{s}} s",
     "staysToEnd": "se queda hasta el final",
-    "replay": "Ver la animación",
     "enter": "Entrada",
     "exit": "Salida",
     "enters": {
@@ -1067,7 +1066,10 @@
       "slideLeft": "Hacia la izquierda",
       "slideRight": "Hacia la derecha",
       "none": "Corte"
-    }
+    },
+    "timeline": "Posición en el clip",
+    "seeArrival": "Ver la llegada",
+    "seeDeparture": "Ver la salida"
   },
   "widgets": {
     "channel-pill": {

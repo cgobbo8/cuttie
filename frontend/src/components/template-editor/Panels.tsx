@@ -1,4 +1,5 @@
-import { useRef, type ReactNode } from "react";
+import { useRef, type ReactNode, type RefObject } from "react";
+import type { PlayerRef } from "@remotion/player";
 import { useTranslation } from "react-i18next";
 import { Circle, Eye, EyeOff, Play, Plus, RotateCcw, Trash2 } from "lucide-react";
 import type { BrandColors } from "../../lib/api";
@@ -23,6 +24,7 @@ import {
 import { buildTemplate, TEMPLATE_IDS, type TemplateContext, type TemplateId } from "../../lib/templates";
 import { KIT_WIDGETS, type KitWidget } from "../editor/widgets/kit";
 import TemplateSketch from "../montage/TemplateSketch";
+import { usePlayerFrame } from "./Scrubber";
 
 /* ── Controls ─────────────────────────────────────────────── */
 
@@ -432,7 +434,26 @@ function barScale(duration: number) {
  * from the end, so the timing fits clips of any length. All the way right:
  * it stays to the very end. Arrow keys nudge a focused end by 0.1 s (Shift: 1 s).
  */
-function PresenceBar({ show, duration, onChange }: { show: WidgetShow; duration: number; onChange: (show: WidgetShow, done: boolean) => void }) {
+/** Where the preview is, on the presence bar (its own component: it re-renders on every frame) */
+function Playhead({ playerRef, fps, at }: { playerRef: RefObject<PlayerRef | null>; fps: number; at: (seconds: number) => string }) {
+  const frame = usePlayerFrame(playerRef);
+  return <span aria-hidden className="absolute top-0.5 bottom-0.5 w-0.5 -ml-px rounded-full bg-white/80 pointer-events-none" style={{ left: at(frame / fps) }} />;
+}
+
+function PresenceBar({
+  show,
+  duration,
+  onChange,
+  playerRef,
+  fps,
+}: {
+  show: WidgetShow;
+  duration: number;
+  onChange: (show: WidgetShow, done: boolean) => void;
+  /** The preview: shows where it is, a click on the bar goes there */
+  playerRef: RefObject<PlayerRef | null> | null;
+  fps: number;
+}) {
   const { t, i18n } = useTranslation();
   const track = useRef<HTMLDivElement>(null);
   const [tIn, tOut] = presenceTimes(show, duration);
@@ -501,11 +522,23 @@ function PresenceBar({ show, duration, onChange }: { show: WidgetShow; duration:
 
   return (
     <div className="w-full mt-2">
-      <div ref={track} className="relative h-7 mx-2">
+      <div
+        ref={track}
+        className={`relative h-7 mx-2 ${playerRef ? "cursor-pointer" : ""}`}
+        onPointerDown={(e) => {
+          // On the bar, not a handle: the preview goes there
+          if (!playerRef || (e.target as HTMLElement).getAttribute("role") === "slider") return;
+          const r = track.current!.getBoundingClientRect();
+          const time = scale.toT(Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)));
+          playerRef.current?.pause();
+          playerRef.current?.seekTo(Math.round(time * fps));
+        }}
+      >
         <div className="absolute inset-x-0 top-1/2 h-1.5 -mt-[3px] rounded-full bg-white/10" />
         {/* The squeezed middle of the clip */}
         <div className="absolute top-1/2 h-1.5 -mt-[3px] left-[40%] w-[20%] bg-[repeating-linear-gradient(90deg,rgba(255,255,255,0.18)_0_2px,transparent_2px_6px)]" />
-        <div className="absolute top-1/2 h-1.5 -mt-[3px] rounded-full bg-accent" style={{ left: pct(tIn), width: `calc(${pct(tOut)} - ${pct(tIn)})` }} />
+        <div className="absolute top-1/2 h-1.5 -mt-[3px] rounded-full bg-accent pointer-events-none" style={{ left: pct(tIn), width: `calc(${pct(tOut)} - ${pct(tIn)})` }} />
+        {playerRef && <Playhead playerRef={playerRef} fps={fps} at={pct} />}
         <span role="slider" tabIndex={0} aria-label={t("templateEditor.arrival")} aria-valuemin={0} aria-valuemax={duration} aria-valuenow={tIn} aria-valuetext={arrive} className={handle} style={{ left: pct(tIn) }} onPointerDown={grab("in")} onKeyDown={nudge("in")} />
         <span role="slider" tabIndex={0} aria-label={t("templateEditor.departure")} aria-valuemin={0} aria-valuemax={duration} aria-valuenow={tOut} aria-valuetext={leave} className={handle} style={{ left: pct(tOut) }} onPointerDown={grab("out")} onKeyDown={nudge("out")} />
       </div>
@@ -549,7 +582,9 @@ export function WidgetPanel({
   widget,
   duration,
   onChange,
-  onReplay,
+  onPreview,
+  playerRef,
+  fps,
   onRemove,
   onReset,
 }: {
@@ -557,8 +592,11 @@ export function WidgetPanel({
   /** Length of the clip the preview runs on, seconds */
   duration: number;
   onChange: (w: SpecWidget, done?: boolean) => void;
-  /** Plays its entrance in the preview */
-  onReplay: () => void;
+  /** Plays just its arrival or departure in the preview */
+  onPreview: (edge: "in" | "out") => void;
+  /** The preview (none on a still frame) */
+  playerRef: RefObject<PlayerRef | null> | null;
+  fps: number;
   onRemove: () => void;
   onReset: () => void;
 }) {
@@ -572,9 +610,6 @@ export function WidgetPanel({
   return (
     <>
       <PanelHead title={name}>
-        <button onClick={onReplay} title={t("templateEditor.replay")} aria-label={t("templateEditor.replay")} className="btn btn-ghost btn-icon btn-sm w-8 h-8">
-          <Play className="w-3.5 h-3.5" />
-        </button>
         <ResetButton onClick={onReset} />
         <button onClick={onRemove} title={t("templateEditor.removeWidget")} aria-label={t("templateEditor.removeWidget")} className="btn btn-ghost btn-icon btn-sm w-8 h-8 hover:text-[#ff8a7a]">
           <Trash2 className="w-3.5 h-3.5" />
@@ -593,7 +628,25 @@ export function WidgetPanel({
       </Row>
       <div className="py-3 border-b border-white/[0.06]">
         <span className="text-[13px] text-ink-2">{t("templateEditor.presence")}</span>
-        <PresenceBar show={show} duration={duration} onChange={(next, done) => onChange({ ...widget, show: next, timing: timingOf(next) }, done)} />
+        <PresenceBar
+          show={show}
+          duration={duration}
+          playerRef={playerRef}
+          fps={fps}
+          onChange={(next, done) => onChange({ ...widget, show: next, timing: timingOf(next) }, done)}
+        />
+        {playerRef && (
+          <div className="mt-2.5 flex flex-wrap gap-1.5">
+            <button onClick={() => onPreview("in")} className="btn btn-glass btn-sm">
+              <Play className="w-3 h-3" fill="currentColor" /> {t("templateEditor.seeArrival")}
+            </button>
+            {show.out !== null && (
+              <button onClick={() => onPreview("out")} className="btn btn-glass btn-sm">
+                <Play className="w-3 h-3" fill="currentColor" /> {t("templateEditor.seeDeparture")}
+              </button>
+            )}
+          </div>
+        )}
       </div>
       <div className="py-3 border-b border-white/[0.06]">
         <span className="text-[13px] text-ink-2">{t("templateEditor.enter")}</span>

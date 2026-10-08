@@ -1,17 +1,9 @@
 {
   "private": true,
   "scripts": {
-    "dev": "docker compose up -d && concurrently --kill-others-on-fail -n redis,api,worker,front -c cyan,blue,yellow,green \"docker compose logs -f\" \"cd api && npm run dev\" \"cd backend && uv run watchmedo auto-restart --directory=./app --pattern='*.py' --recursive -- python worker.py\" \"cd frontend && npm run dev\"",
+    "dev": "node scripts/dev.mjs",
     "dev:api": "cd api && npm run dev",
-    "dev:front": "cd frontend && npm run dev",
-    "dev:worker": "cd backend && uv run watchmedo auto-restart --directory=./app --pattern='*.py' --recursive -- python worker.py",
-    "infra:up": "docker compose up -d",
-    "infra:down": "docker compose down",
-    "infra:logs": "docker compose logs -f",
-    "docker:up": "node scripts/docker-up.mjs up",
-    "docker:down": "node scripts/docker-up.mjs down",
-    "docker:logs": "node scripts/docker-up.mjs logs",
-    "docker:reset": "node scripts/docker-up.mjs reset"
+    "dev:front": "cd frontend && npm run dev"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"

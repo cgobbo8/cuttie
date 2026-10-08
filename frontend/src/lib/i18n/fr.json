@@ -38,7 +38,8 @@
     "creators": "Créateurs",
     "exports": "Exports",
     "workers": "Workers",
-    "profile": "Profil"
+    "profile": "Profil",
+    "settings": "Paramètres"
   },
 
   "workspace": {
@@ -506,5 +507,59 @@
     "flushConfirmTitle": "Tout arrêter ?",
     "flushConfirmMessage": "Cela va vider la file d'attente et annuler tous les jobs et exports en cours. Cette action est irréversible.",
     "flushConfirmButton": "Tout arrêter"
+  },
+
+  "keysBanner": {
+    "text": "Il manque tes clés API pour lancer une analyse.",
+    "action": "Configurer"
+  },
+
+  "settings": {
+    "title": "Paramètres",
+    "keysTitle": "Clés API",
+    "keysHelp": "Cuttie utilise des services d'IA en ligne pour transcrire et analyser tes VODs. Colle tes clés ici : elles restent sur ton ordinateur.",
+    "groqLabel": "Groq",
+    "groqDesc": "Transcription de la voix (Whisper). Obligatoire.",
+    "openrouterLabel": "OpenRouter",
+    "openrouterDesc": "Analyse des moments forts (Gemini). Obligatoire.",
+    "openaiLabel": "OpenAI",
+    "openaiDesc": "Assistant IA de l'éditeur. Facultatif.",
+    "getKey": "Obtenir une clé",
+    "configured": "Configurée",
+    "missing": "Manquante",
+    "optional": "Facultative",
+    "placeholder": "Colle ta clé ici",
+    "replacePlaceholder": "Nouvelle clé (remplace l'actuelle)",
+    "save": "Enregistrer",
+    "remove": "Supprimer",
+    "keySaved": "Clé enregistrée",
+    "keyRemoved": "Clé supprimée",
+    "saveError": "Impossible d'enregistrer la clé",
+    "languageTitle": "Langue",
+    "diagnosticsTitle": "Diagnostic",
+    "diagnosticsHelp": "Vérifie que tout est prêt sur ce PC. En cas de souci, copie le rapport et envoie-le pour qu'on puisse t'aider.",
+    "runDiagnostics": "Relancer le diagnostic",
+    "copyReport": "Copier le rapport",
+    "reportCopied": "Rapport copié",
+    "copyFailed": "Impossible de copier le rapport",
+    "diag": {
+      "running": "Vérification en cours...",
+      "failed": "Le diagnostic a échoué",
+      "worker": "Moteur d'analyse",
+      "workerOk": "Démarré",
+      "workerDown": "Ne répond pas",
+      "gpu": "Carte graphique",
+      "noGpu": "Aucune détectée : l'analyse sera plus lente",
+      "ffmpeg": "FFmpeg",
+      "ytdlp": "yt-dlp (téléchargement Twitch)",
+      "notFound": "Introuvable",
+      "keys": "Clés API",
+      "keysOk": "Groq et OpenRouter configurées",
+      "keysMissing": "À configurer ci-dessus",
+      "disk": "Espace disque libre",
+      "diskLow": "{{gb}} Go — c'est juste, une VOD peut prendre plusieurs Go",
+      "dataDir": "Dossier des données",
+      "versions": "Versions"
+    }
   }
 }

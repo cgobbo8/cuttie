@@ -38,7 +38,8 @@
     "creators": "Creadores",
     "exports": "Exportaciones",
     "workers": "Workers",
-    "profile": "Perfil"
+    "profile": "Perfil",
+    "settings": "Ajustes"
   },
 
   "workspace": {
@@ -506,5 +507,59 @@
     "flushConfirmTitle": "Detener todo?",
     "flushConfirmMessage": "Esto vaciará la cola y cancelará todos los trabajos y exportaciones activos. Esta acción no se puede deshacer.",
     "flushConfirmButton": "Detener todo"
+  },
+
+  "keysBanner": {
+    "text": "Faltan tus claves API para lanzar un análisis.",
+    "action": "Configurar"
+  },
+
+  "settings": {
+    "title": "Ajustes",
+    "keysTitle": "Claves API",
+    "keysHelp": "Cuttie usa servicios de IA en línea para transcribir y analizar tus VODs. Pega tus claves aquí: se quedan en este ordenador.",
+    "groqLabel": "Groq",
+    "groqDesc": "Transcripción de voz (Whisper). Obligatoria.",
+    "openrouterLabel": "OpenRouter",
+    "openrouterDesc": "Análisis de momentos destacados (Gemini). Obligatoria.",
+    "openaiLabel": "OpenAI",
+    "openaiDesc": "Asistente IA del editor. Opcional.",
+    "getKey": "Obtener una clave",
+    "configured": "Configurada",
+    "missing": "Falta",
+    "optional": "Opcional",
+    "placeholder": "Pega tu clave aquí",
+    "replacePlaceholder": "Nueva clave (reemplaza la actual)",
+    "save": "Guardar",
+    "remove": "Eliminar",
+    "keySaved": "Clave guardada",
+    "keyRemoved": "Clave eliminada",
+    "saveError": "No se pudo guardar la clave",
+    "languageTitle": "Idioma",
+    "diagnosticsTitle": "Diagnóstico",
+    "diagnosticsHelp": "Comprueba que todo está listo en este PC. Si algo falla, copia el informe y envíalo para que podamos ayudarte.",
+    "runDiagnostics": "Volver a comprobar",
+    "copyReport": "Copiar informe",
+    "reportCopied": "Informe copiado",
+    "copyFailed": "No se pudo copiar el informe",
+    "diag": {
+      "running": "Comprobando...",
+      "failed": "El diagnóstico ha fallado",
+      "worker": "Motor de análisis",
+      "workerOk": "En marcha",
+      "workerDown": "No responde",
+      "gpu": "Tarjeta gráfica",
+      "noGpu": "Ninguna detectada: el análisis será más lento",
+      "ffmpeg": "FFmpeg",
+      "ytdlp": "yt-dlp (descargas de Twitch)",
+      "notFound": "No encontrado",
+      "keys": "Claves API",
+      "keysOk": "Groq y OpenRouter configuradas",
+      "keysMissing": "Configúralas arriba",
+      "disk": "Espacio libre en disco",
+      "diskLow": "{{gb}} GB — justo, un VOD puede ocupar varios GB",
+      "dataDir": "Carpeta de datos",
+      "versions": "Versiones"
+    }
   }
 }

@@ -1,0 +1,55 @@
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import { getAppInfo, getSettings, type AppInfo, type AppSettings } from "./api";
+import { useAuth } from "./AuthContext";
+
+interface SettingsContextValue {
+  appInfo: AppInfo | null;
+  settings: AppSettings | null;
+  /** Required API keys that are not configured yet (empty once loaded and complete). */
+  missingKeys: ("groq_api_key" | "openrouter_api_key")[];
+  refresh: () => Promise<void>;
+}
+
+const SettingsContext = createContext<SettingsContextValue>({
+  appInfo: null,
+  settings: null,
+  missingKeys: [],
+  refresh: async () => {},
+});
+
+const REQUIRED_KEYS = ["groq_api_key", "openrouter_api_key"] as const;
+
+export function SettingsProvider({ children }: { children: ReactNode }) {
+  const [appInfo, setAppInfo] = useState<AppInfo | null>(null);
+  const [settings, setSettings] = useState<AppSettings | null>(null);
+
+  const refresh = useCallback(async () => {
+    try {
+      setSettings(await getSettings());
+    } catch {
+      // Not signed in yet / API unreachable — the banner simply stays hidden
+    }
+  }, []);
+
+  const { user } = useAuth();
+
+  useEffect(() => {
+    getAppInfo().then(setAppInfo).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (user) refresh();
+  }, [user, refresh]);
+
+  const missingKeys = settings ? REQUIRED_KEYS.filter((k) => !settings.keys[k]?.configured) : [];
+
+  return (
+    <SettingsContext.Provider value={{ appInfo, settings, missingKeys, refresh }}>
+      {children}
+    </SettingsContext.Provider>
+  );
+}
+
+export function useSettings() {
+  return useContext(SettingsContext);
+}

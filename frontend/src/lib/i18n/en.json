@@ -38,7 +38,8 @@
     "creators": "Creators",
     "exports": "Exports",
     "workers": "Workers",
-    "profile": "Profile"
+    "profile": "Profile",
+    "settings": "Settings"
   },
 
   "workspace": {
@@ -506,5 +507,59 @@
     "flushConfirmTitle": "Stop everything?",
     "flushConfirmMessage": "This will clear the queue and cancel all active jobs and exports. This action cannot be undone.",
     "flushConfirmButton": "Stop all"
+  },
+
+  "keysBanner": {
+    "text": "Your API keys are missing — add them to start an analysis.",
+    "action": "Set up"
+  },
+
+  "settings": {
+    "title": "Settings",
+    "keysTitle": "API keys",
+    "keysHelp": "Cuttie uses online AI services to transcribe and analyze your VODs. Paste your keys here: they stay on this computer.",
+    "groqLabel": "Groq",
+    "groqDesc": "Speech transcription (Whisper). Required.",
+    "openrouterLabel": "OpenRouter",
+    "openrouterDesc": "Highlight analysis (Gemini). Required.",
+    "openaiLabel": "OpenAI",
+    "openaiDesc": "Editor AI assistant. Optional.",
+    "getKey": "Get a key",
+    "configured": "Configured",
+    "missing": "Missing",
+    "optional": "Optional",
+    "placeholder": "Paste your key here",
+    "replacePlaceholder": "New key (replaces the current one)",
+    "save": "Save",
+    "remove": "Remove",
+    "keySaved": "Key saved",
+    "keyRemoved": "Key removed",
+    "saveError": "Could not save the key",
+    "languageTitle": "Language",
+    "diagnosticsTitle": "Diagnostics",
+    "diagnosticsHelp": "Checks that everything is ready on this PC. If something is wrong, copy the report and send it so we can help.",
+    "runDiagnostics": "Run again",
+    "copyReport": "Copy report",
+    "reportCopied": "Report copied",
+    "copyFailed": "Could not copy the report",
+    "diag": {
+      "running": "Checking...",
+      "failed": "Diagnostics failed",
+      "worker": "Analysis engine",
+      "workerOk": "Running",
+      "workerDown": "Not responding",
+      "gpu": "Graphics card",
+      "noGpu": "None detected: analysis will be slower",
+      "ffmpeg": "FFmpeg",
+      "ytdlp": "yt-dlp (Twitch downloads)",
+      "notFound": "Not found",
+      "keys": "API keys",
+      "keysOk": "Groq and OpenRouter configured",
+      "keysMissing": "Set them up above",
+      "disk": "Free disk space",
+      "diskLow": "{{gb}} GB — tight, a VOD can take several GB",
+      "dataDir": "Data folder",
+      "versions": "Versions"
+    }
   }
 }

@@ -42,6 +42,69 @@ export async function getMe(): Promise<AuthUser> {
   return data.user;
 }
 
+// ── Local app (settings, diagnostics) ───────────────────────────────────────
+
+export interface AppInfo {
+  mode: "local";
+  auto_login: boolean;
+}
+
+export async function getAppInfo(): Promise<AppInfo> {
+  const res = await fetch(`${BASE}/app/info`);
+  if (!res.ok) throw new Error("Failed to load app info");
+  return res.json();
+}
+
+export type ApiKeyName = "groq_api_key" | "openrouter_api_key" | "openai_api_key";
+
+export interface AppSettings {
+  keys: Record<ApiKeyName, { configured: boolean; preview: string | null }>;
+}
+
+export async function getSettings(): Promise<AppSettings> {
+  const res = await fetch(`${BASE}/settings`);
+  if (!res.ok) throw new Error("Failed to load settings");
+  return res.json();
+}
+
+/** Save API keys — an empty string removes a key. */
+export async function updateSettings(keys: Partial<Record<ApiKeyName, string>>): Promise<AppSettings> {
+  const res = await fetch(`${BASE}/settings`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ keys }),
+  });
+  if (!res.ok) throw new Error("Failed to save settings");
+  return res.json();
+}
+
+export interface WorkerDiagnostics {
+  python?: string;
+  platform?: string;
+  data_dir?: string;
+  ffmpeg?: string | null;
+  yt_dlp?: string | null;
+  keys?: { groq: boolean; openrouter: boolean };
+  disk_free_gb?: number;
+  busy?: string | null;
+  torch?: string;
+  device?: "cuda" | "mps" | "cpu" | "error";
+  gpu?: string;
+  device_error?: string;
+}
+
+export interface Diagnostics {
+  api: { node: string; platform: string; data_dir: string; disk_free_gb: number | null };
+  worker: WorkerDiagnostics | null;
+  worker_error: string | null;
+}
+
+export async function getDiagnostics(): Promise<Diagnostics> {
+  const res = await fetch(`${BASE}/diagnostics`);
+  if (!res.ok) throw new Error("Failed to load diagnostics");
+  return res.json();
+}
+
 // ── Data interfaces ─────────────────────────────────────────────────────────
 
 export interface SignalBreakdown {

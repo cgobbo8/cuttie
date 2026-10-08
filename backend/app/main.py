@@ -253,7 +253,7 @@ def diagnostics() -> dict:
         "python": platform.python_version(),
         "platform": platform.platform(),
         "data_dir": paths.DATA_DIR,
-        "ffmpeg": _first_line(["ffmpeg", "-version"]),
+        "ffmpeg": (_first_line(["ffmpeg", "-version"]) or "").split(" Copyright")[0] or None,
         "yt_dlp": _first_line(["yt-dlp", "--version"]),
         "keys": {
             "groq": bool(settings.get("groq_api_key", "GROQ_API_KEY")),

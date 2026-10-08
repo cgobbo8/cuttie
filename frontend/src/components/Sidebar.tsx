@@ -1,10 +1,11 @@
 import { NavLink, useNavigate } from "react-router";
 import { useState } from "react";
-import { Cpu, Film, FolderOpen, Gamepad2, Home, LogOut, Plus, Users } from "lucide-react";
+import { Cpu, Film, FolderOpen, Gamepad2, Home, LogOut, Plus, Settings, Users } from "lucide-react";
 import NewProjectModal from "./NewProjectModal";
 import CreatorSelector from "./CreatorSelector";
 import { useAuth } from "../lib/AuthContext";
 import { useCreatorWorkspace } from "../lib/CreatorWorkspaceContext";
+import { useSettings } from "../lib/SettingsContext";
 import { useTranslation } from "react-i18next";
 
 export default function Sidebar() {
@@ -12,6 +13,9 @@ export default function Sidebar() {
   const [modalOpen, setModalOpen] = useState(false);
   const { user, logout } = useAuth();
   const { isAllMode } = useCreatorWorkspace();
+  const { appInfo } = useSettings();
+  // Desktop app: single local user, no account to show or log out of
+  const isLocalApp = appInfo?.mode === "local" && appInfo.auto_login;
   const navigate = useNavigate();
 
   const navClass = ({ isActive }: { isActive: boolean }) =>
@@ -84,9 +88,14 @@ export default function Sidebar() {
           </NavLink>
         </nav>
 
-        {/* User section */}
-        {user && (
-          <div className="px-3 py-3 border-t border-white/[0.06] space-y-1">
+        {/* Settings + user section */}
+        <div className="px-3 py-3 border-t border-white/[0.06] space-y-1">
+          <NavLink to="/settings" className={navClass}>
+            <Settings className="w-4 h-4" />
+            {t("sidebar.settings")}
+          </NavLink>
+          {user && !isLocalApp && (
+            <>
             <NavLink to="/profile" className={navClass}>
               <div className="w-6 h-6 rounded-full bg-white/[0.08] flex items-center justify-center text-[10px] font-medium text-zinc-300 shrink-0">
                 {user.initials}
@@ -100,8 +109,9 @@ export default function Sidebar() {
               <LogOut className="w-4 h-4" />
               {t("auth.logout")}
             </button>
-          </div>
-        )}
+            </>
+          )}
+        </div>
       </aside>
 
       <NewProjectModal open={modalOpen} onClose={() => setModalOpen(false)} />

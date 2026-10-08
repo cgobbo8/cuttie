@@ -13,6 +13,8 @@ import EditPage from "./pages/RemotionEditPage";
 import ExportsPage from "./pages/ExportsPage";
 import LoginPage from "./pages/LoginPage";
 import ProfilePage from "./pages/ProfilePage";
+import SettingsPage from "./pages/SettingsPage";
+import { SettingsProvider } from "./lib/SettingsContext";
 import GamesPage from "./pages/GamesPage";
 import CreatorsPage from "./pages/CreatorsPage";
 import WorkersPage from "./pages/WorkersPage";
@@ -51,6 +53,7 @@ function AppRoutes() {
         <Route path="exports" element={<ExportsPage />} />
         <Route path="workers" element={<WorkersPage />} />
         <Route path="profile" element={<ProfilePage />} />
+        <Route path="settings" element={<SettingsPage />} />
         <Route path=":jobId" element={<JobPage />} />
       </Route>
       {/* Edit pages: fullscreen, outside the standard layout */}
@@ -77,6 +80,7 @@ function AppRoutes() {
 export default function App() {
   return (
     <AuthProvider>
+      <SettingsProvider>
       <TransmitProvider>
         <TooltipProvider>
           <ToastProvider>
@@ -88,6 +92,7 @@ export default function App() {
           </ToastProvider>
         </TooltipProvider>
       </TransmitProvider>
+      </SettingsProvider>
     </AuthProvider>
   );
 }

@@ -93,7 +93,26 @@ export async function transcribeClipWords(
   })
 }
 
-/** Facecam region detected across a few clips of a job (null when no webcam overlay). */
+export interface VodFacecam {
+  facecam: { x: number; y: number; w: number; h: number } | null
+  /** Storage key of the frame to show the streamer */
+  frame_key: string
+  frame_w: number
+  frame_h: number
+}
+
+/** Webcam on a Twitch VOD, before any analysis (reads ~10 frames of the live) */
+export async function detectVodFacecam(vodId: string, durationSeconds: number): Promise<VodFacecam> {
+  return call<VodFacecam>('POST', '/facecam/vod', {
+    body: { vod_id: vodId, duration: durationSeconds },
+    timeoutMs: 120_000,
+  })
+}
+
+/**
+ * Locate the webcam on clips of a job (null when no webcam overlay). The worker
+ * also stores where people stand in each clip (facecam.json).
+ */
 export async function detectFacecam(
   jobId: string,
   clipFilenames: string[]

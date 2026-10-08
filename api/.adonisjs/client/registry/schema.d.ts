@@ -199,6 +199,18 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/brand_controller').default['detectFacecam']>>>
     }
   }
+  'brand.frame': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/brand-kit/frame'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/brand_controller').default['frame']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/brand_controller').default['frame']>>>
+    }
+  }
   'brand.channel': {
     methods: ["GET","HEAD"]
     pattern: '/api/twitch/channel'
@@ -209,6 +221,30 @@ export interface Registry {
       query: {}
       response: ExtractResponse<Awaited<ReturnType<import('#controllers/brand_controller').default['channel']>>>
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/brand_controller').default['channel']>>>
+    }
+  }
+  'brand.lookup': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/twitch/lookup'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/brand_controller').default['lookup']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/brand_controller').default['lookup']>>>
+    }
+  }
+  'brand.lookup_colors': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/twitch/lookup/colors'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/brand_controller').default['lookupColors']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/brand_controller').default['lookupColors']>>>
     }
   }
   'brand.storyboard': {
@@ -245,6 +281,18 @@ export interface Registry {
       query: {}
       response: ExtractResponse<Awaited<ReturnType<import('#controllers/app_controller').default['updateSettings']>>>
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/app_controller').default['updateSettings']>>>
+    }
+  }
+  'app.verify_key': {
+    methods: ["POST"]
+    pattern: '/api/settings/verify'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/app_controller').default['verifyKey']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/app_controller').default['verifyKey']>>>
     }
   }
   'app.diagnostics': {
@@ -353,6 +401,18 @@ export interface Registry {
       query: {}
       response: ExtractResponse<Awaited<ReturnType<import('#controllers/jobs_controller').default['updateSelection']>>>
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/jobs_controller').default['updateSelection']>>>
+    }
+  }
+  'jobs.update_facecam': {
+    methods: ["PUT"]
+    pattern: '/api/jobs/:id/facecam'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { id: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/jobs_controller').default['updateFacecam']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/jobs_controller').default['updateFacecam']>>>
     }
   }
   'jobs.retry': {

@@ -10,15 +10,27 @@ import path from 'node:path'
 import logger from '@adonisjs/core/services/logger'
 import { CLIPS_DIR as CLIPS_BASE } from '#services/data_paths'
 import { listObjects } from '#services/storage'
+import Job from '#models/job'
 import { detectFacecam, transcribeClipWords } from '#services/worker_client'
 import { brandFacecamFor, getBrandKit } from '#services/brand_kit'
+import {
+  camVisible,
+  resolveFacecam,
+  scaleRect,
+  type FacecamSource,
+  type Rect,
+  type ResolvedFacecam,
+} from '#services/facecam_resolver'
 
 const execFileAsync = promisify(execFile)
 
 export interface EditEnvironment {
   clip_width: number
   clip_height: number
-  facecam: { x: number; y: number; w: number; h: number } | null
+  /** Webcam to use for this clip: null when there is none or it doesn't show in this clip */
+  facecam: Rect | null
+  /** How this live's webcam was resolved (see facecam_resolver.ts) */
+  cam: { rect: Rect | null; source: FacecamSource | null; moved: boolean; visible: boolean }
   dominant_color: { r: number; g: number; b: number } | null
   words: { word: string; start: number; end: number }[]
   chat_messages: { author: string; text: string; timestamp: number }[]
@@ -26,7 +38,9 @@ export interface EditEnvironment {
 
 /** Shared data that is per-job (not per-clip). Load once, reuse for batch. */
 export interface JobSharedData {
-  facecam: { x: number; y: number; w: number; h: number } | null
+  facecam: ResolvedFacecam
+  /** People seen on each clip's frames by the worker (clip pixels), when checked */
+  people: Record<string, [number, number][]> | null
   dominantColor: { r: number; g: number; b: number } | null
   allChat: { timestamp: number; text: string; author: string }[]
   clipWidth: number
@@ -60,33 +74,87 @@ export async function getClipDimensions(
   return { width: 1920, height: 1080 }
 }
 
+/** What the worker found on a live's clips (clips/<job>/facecam.json), in clip pixels */
+function readStoredFacecam(
+  jobId: string,
+  width: number,
+  height: number
+): { rect: Rect | null; people: Record<string, [number, number][]> | null } | null {
+  const file = path.join(CLIPS_BASE, jobId, 'facecam.json')
+  if (!existsSync(file)) return null
+  try {
+    const data = JSON.parse(readFileSync(file, 'utf-8'))
+    if (data?.version === 2) {
+      const fw = data.frame_w || width
+      const fh = data.frame_h || height
+      const people: Record<string, [number, number][]> = {}
+      for (const [clip, points] of Object.entries(data.people ?? {})) {
+        people[clip] = (points as [number, number][]).map(([x, y]) => [
+          Math.round((x * width) / fw),
+          Math.round((y * height) / fh),
+        ])
+      }
+      return { rect: data.rect ? scaleRect(data.rect, fw, fh, width, height) : null, people }
+    }
+    // Before every live was checked: just the rectangle
+    if (Number.isFinite(data?.x)) return { rect: { x: data.x, y: data.y, w: data.w, h: data.h }, people: null }
+  } catch {}
+  return null
+}
+
+const checking = new Map<string, Promise<unknown>>()
+
+/** Locate the webcam on every clip of a live, once (analyses made before the worker did it) */
+async function checkLiveFacecam(jobId: string): Promise<void> {
+  let pending = checking.get(jobId)
+  if (!pending) {
+    pending = (async () => {
+      const clipFilenames = (await listObjects(`clips/${jobId}/`))
+        .map((key) => path.basename(key))
+        .filter((name) => name.endsWith('.mp4') && !name.startsWith('render_'))
+        .sort()
+      // The worker stores the result in facecam.json
+      if (clipFilenames.length > 0) await detectFacecam(jobId, clipFilenames)
+    })().finally(() => checking.delete(jobId))
+    checking.set(jobId, pending)
+  }
+  await pending
+}
+
+/** This live's webcam: set by hand, the streamer's usual one, or the one found on its clips */
+async function resolveJobFacecam(jobId: string, width: number, height: number) {
+  const job = await Job.find(jobId)
+  const brand = brandFacecamFor(await getBrandKit(), width, height)
+  const manual = job?.facecam
+  const live =
+    manual === false
+      ? false
+      : manual
+        ? scaleRect(manual, manual.ref_w || 1920, manual.ref_h || 1080, width, height)
+        : null
+
+  let stored = readStoredFacecam(jobId, width, height)
+  if (live === null && brand !== false && !stored?.people) {
+    try {
+      await checkLiveFacecam(jobId)
+      stored = readStoredFacecam(jobId, width, height)
+    } catch (err) {
+      logger.warn({ err }, 'Facecam detection failed for job %s', jobId)
+    }
+  }
+
+  return {
+    resolved: resolveFacecam({ live, brand, detected: stored?.rect ?? null }),
+    people: stored?.people ?? null,
+  }
+}
+
 /** Load shared job data (facecam, dominant_color, chat). Cached per batch. */
 export async function loadJobSharedData(jobId: string, sampleClipFilename: string): Promise<JobSharedData> {
   // Clip dimensions (same for all clips in a job since they come from the same VOD)
   const { width, height } = await getClipDimensions(jobId, sampleClipFilename)
 
-  // Facecam: the webcam confirmed in the brand kit wins over per-job detection
-  const confirmed = brandFacecamFor(await getBrandKit(), width, height)
-  let facecam: { x: number; y: number; w: number; h: number } | null = confirmed || null
-  const facecamPath = path.join(CLIPS_BASE, jobId, 'facecam.json')
-  if (confirmed === null && existsSync(facecamPath)) {
-    try { facecam = JSON.parse(readFileSync(facecamPath, 'utf-8')) } catch {}
-  }
-  if (confirmed === null && !facecam) {
-    try {
-      const clipFilenames = (await listObjects(`clips/${jobId}/`))
-        .map((key) => path.basename(key))
-        .filter((name) => name.endsWith('.mp4') && !name.startsWith('render_'))
-        .sort()
-        .slice(0, 5)
-      if (clipFilenames.length > 0) {
-        // The worker caches the result in facecam.json
-        facecam = await detectFacecam(jobId, clipFilenames)
-      }
-    } catch (err) {
-      logger.warn({ err }, 'Facecam detection failed for job %s', jobId)
-    }
-  }
+  const facecam = await resolveJobFacecam(jobId, width, height)
 
   // Dominant color
   const dominantPath = path.join(CLIPS_BASE, jobId, 'dominant_color.json')
@@ -102,7 +170,7 @@ export async function loadJobSharedData(jobId: string, sampleClipFilename: strin
     try { allChat = JSON.parse(readFileSync(chatPath, 'utf-8')) } catch {}
   }
 
-  return { facecam, dominantColor, allChat, clipWidth: width, clipHeight: height }
+  return { facecam: facecam.resolved, people: facecam.people, dominantColor, allChat, clipWidth: width, clipHeight: height }
 }
 
 /** Resolve full edit environment for a single clip, using shared job data. */
@@ -152,10 +220,14 @@ export async function resolveEditEnv(
     } catch {}
   }
 
+  const { rect, source, moved } = shared.facecam
+  const visible = camVisible(rect, shared.people?.[path.basename(clipFilename)])
+
   return {
     clip_width: shared.clipWidth,
     clip_height: shared.clipHeight,
-    facecam: shared.facecam,
+    facecam: visible ? rect : null,
+    cam: { rect, source, moved, visible },
     dominant_color: shared.dominantColor,
     words,
     chat_messages: chatMessages,

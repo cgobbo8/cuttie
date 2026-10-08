@@ -1,15 +1,20 @@
-"""Detect facecam overlay position using YOLOv8 pose estimation.
+"""Find the webcam overlay on a stream with YOLOv8 pose estimation.
 
 Strategy:
-1. Run YOLOv8n-pose on sampled frames across multiple clips
+1. Run YOLOv8n-pose on frames sampled across several clips (or across a VOD)
 2. Cluster person detections by center proximity
-3. Pick the cluster spanning the most distinct clips (the facecam is static,
+3. Pick the cluster spanning the most distinct sources (the facecam is static,
    game characters change between clips)
-4. Compute tight face bounding box from facial keypoints (nose, eyes, ears)
+4. Grow the person box to the overlay's borders (see _snap_to_overlay)
+
+Every person seen is also kept per source, so callers can tell whether the cam
+is on screen in a given clip (scene without cam, streamer away...).
 """
 
 import logging
 import os
+from collections.abc import Iterable
+from dataclasses import dataclass, field
 
 import cv2
 import numpy as np
@@ -22,10 +27,15 @@ logger = logging.getLogger(__name__)
 _model: YOLO | None = None
 
 SAMPLE_POSITIONS = [0.2, 0.35, 0.5, 0.65, 0.8]
+# Fewer frames per clip when checking a whole analysis (20+ clips)
+MANY_CLIPS = 8
+MANY_CLIPS_POSITIONS = [0.15, 0.4, 0.65, 0.9]
 MIN_CONFIDENCE = 0.4
 CLUSTER_DISTANCE_RATIO = 0.15
 # Edge maps for overlay snapping are computed at 1/EDGE_SCALE resolution
 EDGE_SCALE = 2
+# Frames stacked for overlay snapping (each costs a few MB per intermediate array)
+MAX_SNAP_FRAMES = 24
 
 # YOLOv8 pose keypoint indices for face
 KP_NOSE = 0
@@ -45,7 +55,7 @@ def _get_model() -> YOLO:
     return _model
 
 
-# Detection tuple: (clip_idx, person_x, person_y, person_w, person_h, conf,
+# Detection tuple: (source_idx, person_x, person_y, person_w, person_h, conf,
 #                    face_x, face_y, face_w, face_h)
 Detection = tuple[int, int, int, int, int, float, int, int, int, int]
 
@@ -80,51 +90,67 @@ def _face_bbox_from_keypoints(
     return x, y, size, size
 
 
-def _collect_detections(clip_paths: list[str]) -> tuple[list[Detection], int, int, list[np.ndarray]]:
-    """Detect persons + face keypoints on sampled frames from multiple clips.
+@dataclass
+class _Scan:
+    """What the pose model saw on the sampled frames."""
 
-    Also returns the sampled frames (grayscale, downscaled) for overlay snapping.
-    """
-    model = _get_model()
-    detections: list[Detection] = []
-    gray_frames: list[np.ndarray] = []
-    frame_w = frame_h = 0
+    n_sources: int
+    detections: list[Detection] = field(default_factory=list)
+    # Center of every person seen, per source (an empty list = scanned, nobody)
+    people: dict[int, list[tuple[int, int]]] = field(default_factory=dict)
+    # Grayscale copies at 1/EDGE_SCALE, for overlay snapping
+    gray_frames: list[np.ndarray] = field(default_factory=list)
+    frame_w: int = 0
+    frame_h: int = 0
 
+
+def _clip_frames(clip_paths: list[str], positions: list[float]) -> Iterable[tuple[int, np.ndarray]]:
+    """(clip index, BGR frame) at the given relative positions of each clip."""
     for clip_idx, clip_path in enumerate(clip_paths):
         cap = cv2.VideoCapture(clip_path)
         if not cap.isOpened():
             continue
-
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        frame_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        frame_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-
-        for pos in SAMPLE_POSITIONS:
+        for pos in positions:
             cap.set(cv2.CAP_PROP_POS_FRAMES, int(total_frames * pos))
             ret, frame = cap.read()
-            if not ret:
-                continue
-            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            gray_frames.append(cv2.resize(gray, (frame_w // EDGE_SCALE, frame_h // EDGE_SCALE), interpolation=cv2.INTER_AREA))
-            results = model(frame, conf=MIN_CONFIDENCE, verbose=False)
-
-            for i, box in enumerate(results[0].boxes):
-                x1, y1, x2, y2 = box.xyxy[0].cpu().numpy().astype(int)
-                conf = float(box.conf[0])
-                pw, ph = x2 - x1, y2 - y1
-
-                # Extract face bbox from keypoints
-                kps = results[0].keypoints.data[i].cpu().numpy()
-                face = _face_bbox_from_keypoints(kps)
-                if face is None:
-                    continue
-                fx, fy, fw, fh = face
-
-                detections.append((clip_idx, x1, y1, pw, ph, conf, fx, fy, fw, fh))
-
+            if ret:
+                yield clip_idx, frame
         cap.release()
 
-    return detections, frame_w, frame_h, gray_frames
+
+def _scan(frames: Iterable[tuple[int, np.ndarray]], n_sources: int) -> _Scan:
+    """Run the pose model on each frame; only small grayscale copies are kept."""
+    model = _get_model()
+    scan = _Scan(n_sources=n_sources)
+
+    for source, frame in frames:
+        scan.frame_h, scan.frame_w = frame.shape[:2]
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        scan.gray_frames.append(
+            cv2.resize(gray, (scan.frame_w // EDGE_SCALE, scan.frame_h // EDGE_SCALE), interpolation=cv2.INTER_AREA)
+        )
+        people = scan.people.setdefault(source, [])
+        results = model(frame, conf=MIN_CONFIDENCE, verbose=False)
+
+        for i, box in enumerate(results[0].boxes):
+            x1, y1, x2, y2 = box.xyxy[0].cpu().numpy().astype(int)
+            conf = float(box.conf[0])
+            pw, ph = int(x2 - x1), int(y2 - y1)
+
+            # Extract face bbox from keypoints
+            kps = results[0].keypoints.data[i].cpu().numpy()
+            face = _face_bbox_from_keypoints(kps)
+            if face is None:
+                people.append((int(x1 + pw // 2), int(y1 + ph // 2)))
+                continue
+            fx, fy, fw, fh = face
+            # Where the face is: the streamer's body can line up with a game
+            # character's below the cam and come out as one tall person
+            people.append((int(fx + fw // 2), int(fy + fh // 2)))
+            scan.detections.append((source, int(x1), int(y1), pw, ph, conf, fx, fy, fw, fh))
+
+    return scan
 
 
 def _static_edges(frames: list[np.ndarray]) -> tuple[np.ndarray, np.ndarray]:
@@ -154,16 +180,33 @@ def _strongest_line(profile: np.ndarray, lo: float, hi: float) -> int | None:
 
 
 def _scan_border(moving: np.ndarray, start: int, step: int, limit: int, threshold: float) -> int:
-    """Walk from `start` (inside the cam) until the content starts moving like
-    game footage; returns the first moving index, or the frame edge if none."""
+    """Walk from `start` (inside the cam) outwards and return the first index
+    that moves like game footage, or where the walk ended (frame edge or limit)
+    when everything up to there is static.
+
+    The border is the split that best separates static pixels (inside) from
+    moving ones (outside), so a band of motion right at the start (the
+    streamer's head moving between frames, lighting changing over a long
+    live) doesn't stop the walk early.
+    """
+    samples: list[int] = []
     i = start
     for _ in range(limit):
         if i < 0 or i >= len(moving):
             break
-        if moving[i] > threshold:
-            return i
+        samples.append(i)
         i += step
-    return min(max(i, 0), len(moving))
+    end = min(max(i, 0), len(moving))
+    if not samples:
+        return end
+
+    is_moving = np.array([moving[j] > threshold for j in samples])
+    # Cost of putting the border after k samples: moving samples kept inside
+    # plus static samples left outside (k = 0..n)
+    inside_moving = np.concatenate([[0], np.cumsum(is_moving)])
+    outside_static = np.concatenate([np.cumsum(~is_moving[::-1])[::-1], [0]])
+    k = int(np.argmin(inside_moving + outside_static))
+    return samples[k] if k < len(samples) else end
 
 
 def _snap_to_overlay(
@@ -182,6 +225,7 @@ def _snap_to_overlay(
     """
     if len(frames) < 3:
         return box
+
     stack = np.stack(frames).astype(np.float32)
     # Median deviation rather than std: the streamer's head passing over a spot
     # in a few frames must not make their room look like game footage
@@ -307,63 +351,112 @@ def _pick_best_cluster(
     return max(valid, key=score)
 
 
-def detect_facecam(clip_path: str, extra_clips: list[str] | None = None) -> dict | None:
-    """Detect the facecam face region using YOLOv8 pose estimation.
+def _same_lighting(frames: list[np.ndarray], box: tuple[int, int, int, int], frame_w: int) -> list[np.ndarray]:
+    """The largest group of frames where the cam is lit about the same way.
 
-    Uses multiple clips for robustness. Person detections are clustered by
-    position, and the cluster spanning the most distinct clips is selected.
-    The face bounding box is computed from facial keypoints (nose, eyes, ears).
-
-    Returns dict with keys: x, y, w, h (pixel coords in clip resolution)
-    or None if no face found.
+    Over a long live the room's lighting changes (lamps, daylight, the
+    camera's auto exposure), which makes the room look like moving game
+    footage to _snap_to_overlay. Falls back to every frame when no group is
+    big enough.
     """
-    all_clips = [clip_path]
-    if extra_clips:
-        all_clips.extend(extra_clips)
+    if not frames:
+        return frames
+    s = frame_w / frames[0].shape[1]
+    x, y, w, h = (max(0, int(v / s)) for v in box)
+    levels = np.array([float(f[y:y + h, x:x + w].mean()) for f in frames])
 
-    detections, frame_w, frame_h, gray_frames = _collect_detections(all_clips)
+    def group(ref: float) -> np.ndarray:
+        return np.abs(levels - ref) <= 0.12 * ref + 4
 
-    if not detections:
-        logger.info("No face detected in any clip")
+    best = max(levels, key=lambda ref: int(group(ref).sum()))
+    keep = group(best)
+    return [f for f, k in zip(frames, keep) if k] if keep.sum() >= 8 else frames
+
+
+def _locate(scan: _Scan) -> tuple[int, int, int, int] | None:
+    """The webcam overlay (x, y, w, h), or None when no consistent cam was seen."""
+    if not scan.detections:
+        logger.info("No face detected on any frame")
         return None
 
-    merge_dist = min(frame_w, frame_h) * CLUSTER_DISTANCE_RATIO
-    clusters = _cluster_detections(detections, merge_dist)
-
+    merge_dist = min(scan.frame_w, scan.frame_h) * CLUSTER_DISTANCE_RATIO
+    clusters = _cluster_detections(scan.detections, merge_dist)
     for i, cluster in enumerate(clusters):
-        n_clips = len(set(d[0] for d in cluster))
-        avg_fw = int(np.mean([d[8] for d in cluster]))
-        avg_fh = int(np.mean([d[9] for d in cluster]))
         logger.debug(
-            f"Cluster {i}: face {avg_fw}x{avg_fh}, "
-            f"{len(cluster)} dets, {n_clips}/{len(all_clips)} clips"
+            f"Cluster {i}: face {int(np.mean([d[8] for d in cluster]))}x{int(np.mean([d[9] for d in cluster]))}, "
+            f"{len(cluster)} dets, {len(set(d[0] for d in cluster))}/{scan.n_sources} sources"
         )
 
-    best = _pick_best_cluster(clusters, len(all_clips))
+    best = _pick_best_cluster(clusters, scan.n_sources)
     if best is None:
         logger.info("No consistent facecam detected (likely no webcam overlay)")
         return None
-    n_clips = len(set(d[0] for d in best))
 
     # Use person bbox (the webcam overlay area), not the face bbox
-    x = int(np.median([d[1] for d in best]))
-    y = int(np.median([d[2] for d in best]))
-    w = int(np.median([d[3] for d in best]))
-    h = int(np.median([d[4] for d in best]))
-
-    # Clamp to frame
-    x = max(0, x)
-    y = max(0, y)
-    w = min(frame_w - x, w)
-    h = min(frame_h - y, h)
-
+    x = max(0, int(np.median([d[1] for d in best])))
+    y = max(0, int(np.median([d[2] for d in best])))
+    w = min(scan.frame_w - x, int(np.median([d[3] for d in best])))
+    h = min(scan.frame_h - y, int(np.median([d[4] for d in best])))
     person = (x, y, w, h)
-    x, y, w, h = _snap_to_overlay(gray_frames, person, frame_w, frame_h)
+
+    frames = _same_lighting(scan.gray_frames, person, scan.frame_w)
+    if len(frames) > MAX_SNAP_FRAMES:
+        step = len(frames) / MAX_SNAP_FRAMES
+        frames = [frames[int(i * step)] for i in range(MAX_SNAP_FRAMES)]
+    rect = _snap_to_overlay(frames, person, scan.frame_w, scan.frame_h)
 
     logger.info(
-        f"Facecam region: ({x},{y}) {w}x{h} (person box {person}) "
-        f"[{len(best)} dets across {n_clips}/{len(all_clips)} clips]"
+        f"Facecam region: {rect} (person box {person}) "
+        f"[{len(best)} dets across {len(set(d[0] for d in best))}/{scan.n_sources} sources]"
     )
+    return rect
 
-    result = {"x": x, "y": y, "w": w, "h": h}
-    return result
+
+def _as_dict(rect: tuple[int, int, int, int] | None) -> dict | None:
+    return dict(zip(("x", "y", "w", "h"), (int(v) for v in rect))) if rect else None
+
+
+def detect_facecam(clip_path: str, extra_clips: list[str] | None = None) -> dict | None:
+    """Webcam region over a few clips: {x, y, w, h} in clip pixels, or None."""
+    clips = [clip_path, *(extra_clips or [])]
+    return _as_dict(_locate(_scan(_clip_frames(clips, SAMPLE_POSITIONS), len(clips))))
+
+
+def analyze_clips(clip_paths: list[str]) -> dict:
+    """Webcam of a whole analysis.
+
+    Returns {"rect": {x, y, w, h} | None, "frame_w", "frame_h", "people"}, where
+    `people` lists, per clip filename, the centers of the persons seen on its
+    sampled frames: the API uses them to tell whether the cam shows in a clip.
+    """
+    positions = MANY_CLIPS_POSITIONS if len(clip_paths) >= MANY_CLIPS else SAMPLE_POSITIONS
+    scan = _scan(_clip_frames(clip_paths, positions), len(clip_paths))
+    return {
+        "rect": _as_dict(_locate(scan)),
+        "frame_w": scan.frame_w,
+        "frame_h": scan.frame_h,
+        "people": {
+            os.path.basename(clip_paths[i]): [list(p) for p in centers] for i, centers in sorted(scan.people.items())
+        },
+    }
+
+
+def analyze_frames(frames: list[np.ndarray]) -> tuple[dict | None, int]:
+    """Webcam on frames taken across a VOD (each frame is its own source).
+
+    Returns the rectangle (or None) and the index of the frame to show the
+    streamer: the one closest to the middle with somebody inside the cam.
+    """
+    scan = _scan(enumerate(frames), len(frames))
+    rect = _locate(scan)
+    middle = len(frames) // 2
+    if not rect:
+        return None, middle
+
+    x, y, w, h = rect
+    order = sorted(range(len(frames)), key=lambda i: abs(i - middle))
+    shown = next(
+        (i for i in order if any(x <= px <= x + w and y <= py <= y + h for px, py in scan.people.get(i, []))),
+        middle,
+    )
+    return _as_dict(rect), shown

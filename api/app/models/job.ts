@@ -1,5 +1,6 @@
 import { JobSchema } from '#database/schema'
 import { column } from '@adonisjs/lucid/orm'
+import type { FacecamRect } from '#services/brand_kit'
 
 export default class Job extends JobSchema {
   static selfAssignPrimaryKey = true
@@ -44,6 +45,13 @@ export default class Job extends JobSchema {
     consume: (value) => (typeof value === 'string' ? JSON.parse(value) : value),
   })
   declare timeline: JobTimeline | null
+
+  /** Webcam framing set by hand for this live: a rectangle, or false for no cam */
+  @column({
+    prepare: (value) => (value !== null && value !== undefined ? JSON.stringify(value) : null),
+    consume: (value) => (typeof value === 'string' ? JSON.parse(value) : value),
+  })
+  declare facecam: FacecamRect | false | null
 }
 
 export interface TimelineCandidate {

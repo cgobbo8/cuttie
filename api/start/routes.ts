@@ -50,12 +50,16 @@ router
         router.put('/brand-kit', [() => import('#controllers/brand_controller'), 'update'])
         router.post('/brand-kit/detect-colors', [() => import('#controllers/brand_controller'), 'detectColors'])
         router.post('/brand-kit/detect-facecam', [() => import('#controllers/brand_controller'), 'detectFacecam'])
+        router.get('/brand-kit/frame', [() => import('#controllers/brand_controller'), 'frame'])
         router.get('/twitch/channel', [() => import('#controllers/brand_controller'), 'channel'])
+        router.get('/twitch/lookup', [() => import('#controllers/brand_controller'), 'lookup'])
+        router.get('/twitch/lookup/colors', [() => import('#controllers/brand_controller'), 'lookupColors'])
         router.get('/twitch/vods/:id/storyboard', [() => import('#controllers/brand_controller'), 'storyboard'])
 
         // Local app: settings (API keys) + diagnostics
         router.get('/settings', [() => import('#controllers/app_controller'), 'showSettings'])
         router.put('/settings', [() => import('#controllers/app_controller'), 'updateSettings'])
+        router.post('/settings/verify', [() => import('#controllers/app_controller'), 'verifyKey'])
         router.get('/diagnostics', [() => import('#controllers/app_controller'), 'diagnostics'])
 
         // Games
@@ -71,6 +75,7 @@ router
         router.get('/jobs/:id', [() => import('#controllers/jobs_controller'), 'show'])
         router.patch('/jobs/:id', [() => import('#controllers/jobs_controller'), 'update'])
         router.patch('/jobs/:id/selection', [() => import('#controllers/jobs_controller'), 'updateSelection'])
+        router.put('/jobs/:id/facecam', [() => import('#controllers/jobs_controller'), 'updateFacecam'])
         router.post('/jobs/:id/retry', [() => import('#controllers/jobs_controller'), 'retry'])
         router.delete('/jobs/:id', [() => import('#controllers/jobs_controller'), 'destroy'])
         router.delete('/jobs/:id/clips/:clipFilename', [() => import('#controllers/jobs_controller'), 'destroyClip'])

@@ -62,6 +62,11 @@ class FacecamRequest(BaseModel):
     clip_filenames: list[str]
 
 
+class VodFacecamRequest(BaseModel):
+    vod_id: str
+    duration: float
+
+
 class PaletteRequest(BaseModel):
     # Logo first, then banner; only https images
     urls: list[str]
@@ -242,6 +247,20 @@ def facecam(job_id: str, req: FacecamRequest) -> dict:
     from app.services.clip_tools import detect_job_facecam
 
     return {"facecam": detect_job_facecam(_check_job_id(job_id), req.clip_filenames)}
+
+
+@app.post("/facecam/vod", dependencies=[Depends(require_secret)])
+def vod_facecam(req: VodFacecamRequest) -> dict:
+    """Webcam on a Twitch VOD, before any analysis (first launch)."""
+    from app.services.clip_tools import detect_vod_facecam
+
+    if not req.vod_id.isdigit() or req.duration <= 0:
+        raise HTTPException(status_code=400, detail="invalid vod")
+    try:
+        return detect_vod_facecam(req.vod_id, req.duration)
+    except Exception as e:
+        logger.warning(f"Webcam detection on VOD {req.vod_id} failed: {e}")
+        raise HTTPException(status_code=502, detail=str(e)) from e
 
 
 @app.post("/palette", dependencies=[Depends(require_secret)])

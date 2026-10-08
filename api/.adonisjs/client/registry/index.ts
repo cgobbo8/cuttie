@@ -102,11 +102,29 @@ const routes = {
     tokens: [{"old":"/api/brand-kit/detect-facecam","type":0,"val":"api","end":""},{"old":"/api/brand-kit/detect-facecam","type":0,"val":"brand-kit","end":""},{"old":"/api/brand-kit/detect-facecam","type":0,"val":"detect-facecam","end":""}],
     types: placeholder as Registry['brand.detect_facecam']['types'],
   },
+  'brand.frame': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/brand-kit/frame',
+    tokens: [{"old":"/api/brand-kit/frame","type":0,"val":"api","end":""},{"old":"/api/brand-kit/frame","type":0,"val":"brand-kit","end":""},{"old":"/api/brand-kit/frame","type":0,"val":"frame","end":""}],
+    types: placeholder as Registry['brand.frame']['types'],
+  },
   'brand.channel': {
     methods: ["GET","HEAD"],
     pattern: '/api/twitch/channel',
     tokens: [{"old":"/api/twitch/channel","type":0,"val":"api","end":""},{"old":"/api/twitch/channel","type":0,"val":"twitch","end":""},{"old":"/api/twitch/channel","type":0,"val":"channel","end":""}],
     types: placeholder as Registry['brand.channel']['types'],
+  },
+  'brand.lookup': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/twitch/lookup',
+    tokens: [{"old":"/api/twitch/lookup","type":0,"val":"api","end":""},{"old":"/api/twitch/lookup","type":0,"val":"twitch","end":""},{"old":"/api/twitch/lookup","type":0,"val":"lookup","end":""}],
+    types: placeholder as Registry['brand.lookup']['types'],
+  },
+  'brand.lookup_colors': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/twitch/lookup/colors',
+    tokens: [{"old":"/api/twitch/lookup/colors","type":0,"val":"api","end":""},{"old":"/api/twitch/lookup/colors","type":0,"val":"twitch","end":""},{"old":"/api/twitch/lookup/colors","type":0,"val":"lookup","end":""},{"old":"/api/twitch/lookup/colors","type":0,"val":"colors","end":""}],
+    types: placeholder as Registry['brand.lookup_colors']['types'],
   },
   'brand.storyboard': {
     methods: ["GET","HEAD"],
@@ -125,6 +143,12 @@ const routes = {
     pattern: '/api/settings',
     tokens: [{"old":"/api/settings","type":0,"val":"api","end":""},{"old":"/api/settings","type":0,"val":"settings","end":""}],
     types: placeholder as Registry['app.update_settings']['types'],
+  },
+  'app.verify_key': {
+    methods: ["POST"],
+    pattern: '/api/settings/verify',
+    tokens: [{"old":"/api/settings/verify","type":0,"val":"api","end":""},{"old":"/api/settings/verify","type":0,"val":"settings","end":""},{"old":"/api/settings/verify","type":0,"val":"verify","end":""}],
+    types: placeholder as Registry['app.verify_key']['types'],
   },
   'app.diagnostics': {
     methods: ["GET","HEAD"],
@@ -179,6 +203,12 @@ const routes = {
     pattern: '/api/jobs/:id/selection',
     tokens: [{"old":"/api/jobs/:id/selection","type":0,"val":"api","end":""},{"old":"/api/jobs/:id/selection","type":0,"val":"jobs","end":""},{"old":"/api/jobs/:id/selection","type":1,"val":"id","end":""},{"old":"/api/jobs/:id/selection","type":0,"val":"selection","end":""}],
     types: placeholder as Registry['jobs.update_selection']['types'],
+  },
+  'jobs.update_facecam': {
+    methods: ["PUT"],
+    pattern: '/api/jobs/:id/facecam',
+    tokens: [{"old":"/api/jobs/:id/facecam","type":0,"val":"api","end":""},{"old":"/api/jobs/:id/facecam","type":0,"val":"jobs","end":""},{"old":"/api/jobs/:id/facecam","type":1,"val":"id","end":""},{"old":"/api/jobs/:id/facecam","type":0,"val":"facecam","end":""}],
+    types: placeholder as Registry['jobs.update_facecam']['types'],
   },
   'jobs.retry': {
     methods: ["POST"],

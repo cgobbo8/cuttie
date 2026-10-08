@@ -296,6 +296,23 @@ def _run_clipping_only(
     logger.info(f"Clipping complete: {len(hot_points)} clips downloaded")
 
 
+def _check_facecam(job_id: str, hot_points: list) -> None:
+    """Locate the webcam on this live's clips. The API compares it with the
+    streamer's usual position and checks each clip; this never fails the job."""
+    from app.services.clip_tools import detect_job_facecam
+
+    filenames = sorted({hp.clip_filename for hp in hot_points if hp.clip_filename})
+    if not filenames:
+        return
+    update_job(job_id, progress="Repérage de la webcam...")
+    t0 = time.time()
+    try:
+        rect = detect_job_facecam(job_id, filenames)
+        logger.info(f"[{job_id[:8]}] Webcam {rect} checked on {len(filenames)} clips in {time.time() - t0:.1f}s")
+    except Exception as e:
+        logger.warning(f"[{job_id[:8]}] Webcam check skipped: {e}")
+
+
 def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> None:
     """Synchronous pipeline — FastAPI runs this in a threadpool automatically.
 
@@ -519,6 +536,9 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
         # Save word-level subtitles for each clipped hot point
         if candidate_words:
             _save_words_for_clips(job_id, hot_points, candidate_words)
+
+        # Where the webcam is on this live, and whether it shows in each clip
+        _check_facecam(job_id, [*(hot_points or []), *(detected_hot_points or [])])
 
         # Done — merge normal + detected hot points, finalize
         timer.finish()

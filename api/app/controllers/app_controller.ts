@@ -1,5 +1,6 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import { statfsSync } from 'node:fs'
+import Job from '#models/job'
 import { DATA_DIR } from '#services/data_paths'
 import { autoLoginEnabled } from '#services/local_user'
 import { readSettings, writeSettings } from '#services/user_settings'
@@ -8,6 +9,18 @@ import { getDiagnostics } from '#services/worker_client'
 /** Secret settings the user can edit from the Settings page (stored in settings.json). */
 const KEY_SETTINGS = ['groq_api_key', 'openrouter_api_key', 'openai_api_key'] as const
 type KeySetting = (typeof KEY_SETTINGS)[number]
+
+/** Cheapest authenticated call of each provider, to check a key works */
+const KEY_CHECKS: Partial<Record<KeySetting, string>> = {
+  groq_api_key: 'https://api.groq.com/openai/v1/models',
+  openrouter_api_key: 'https://openrouter.ai/api/v1/key',
+}
+
+/** First launch done: explicit flag, or an install that already has analyses */
+async function isOnboarded(settings: Record<string, unknown>): Promise<boolean> {
+  if (typeof settings.onboarded === 'boolean') return settings.onboarded
+  return Boolean(await Job.query().select('id').first())
+}
 
 function mask(value: unknown): string | null {
   if (typeof value !== 'string' || !value) return null
@@ -27,13 +40,20 @@ export default class AppController {
       keys: Object.fromEntries(
         KEY_SETTINGS.map((k) => [k, { configured: Boolean(settings[k]), preview: mask(settings[k]) }])
       ),
+      onboarded: await isOnboarded(settings),
     }
   }
 
-  /** PUT /api/settings — body: { keys: { groq_api_key?: string, ... } }; empty string or null clears a key */
+  /**
+   * PUT /api/settings — body: { keys?: { groq_api_key?: string, ... }, onboarded?: boolean };
+   * empty string or null clears a key
+   */
   async updateSettings({ request, response }: HttpContext) {
-    const body = request.body() as { keys?: Partial<Record<KeySetting, unknown>> }
+    const body = request.body() as { keys?: Partial<Record<KeySetting, unknown>>; onboarded?: unknown }
     const keys = body.keys ?? {}
+    if (body.onboarded !== undefined && typeof body.onboarded !== 'boolean') {
+      return response.badRequest({ error: 'onboarded must be a boolean' })
+    }
 
     const settings = readSettings()
     for (const name of KEY_SETTINGS) {
@@ -48,8 +68,34 @@ export default class AppController {
       else delete settings[name]
     }
 
+    if (typeof body.onboarded === 'boolean') settings.onboarded = body.onboarded
+
     writeSettings(settings)
     return this.showSettings({} as HttpContext)
+  }
+
+  /**
+   * POST /api/settings/verify — body: { name } — checks a saved key with its
+   * provider. Returns { ok } or { ok: false, reason: missing | invalid | unreachable }.
+   */
+  async verifyKey({ request, response }: HttpContext) {
+    const name = request.input('name') as KeySetting
+    const url = KEY_CHECKS[name]
+    if (!url) return response.badRequest({ error: 'unknown key' })
+
+    const key = readSettings()[name]
+    if (typeof key !== 'string' || !key) return { ok: false, reason: 'missing' }
+    try {
+      const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${key}` },
+        signal: AbortSignal.timeout(10_000),
+      })
+      if (res.ok) return { ok: true }
+      if (res.status === 401 || res.status === 403) return { ok: false, reason: 'invalid' }
+      return { ok: false, reason: 'unreachable' }
+    } catch {
+      return { ok: false, reason: 'unreachable' }
+    }
   }
 
   /** GET /api/diagnostics — health of the local install (worker, GPU, tools, keys, disk) */

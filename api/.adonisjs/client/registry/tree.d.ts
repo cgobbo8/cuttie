@@ -9,6 +9,7 @@ export interface ApiDefinition {
     info: typeof routes['app.info']
     showSettings: typeof routes['app.show_settings']
     updateSettings: typeof routes['app.update_settings']
+    verifyKey: typeof routes['app.verify_key']
     diagnostics: typeof routes['app.diagnostics']
   }
   storage: {
@@ -36,7 +37,10 @@ export interface ApiDefinition {
     update: typeof routes['brand.update']
     detectColors: typeof routes['brand.detect_colors']
     detectFacecam: typeof routes['brand.detect_facecam']
+    frame: typeof routes['brand.frame']
     channel: typeof routes['brand.channel']
+    lookup: typeof routes['brand.lookup']
+    lookupColors: typeof routes['brand.lookup_colors']
     storyboard: typeof routes['brand.storyboard']
   }
   games: {
@@ -52,6 +56,7 @@ export interface ApiDefinition {
     show: typeof routes['jobs.show']
     update: typeof routes['jobs.update']
     updateSelection: typeof routes['jobs.update_selection']
+    updateFacecam: typeof routes['jobs.update_facecam']
     retry: typeof routes['jobs.retry']
     destroy: typeof routes['jobs.destroy']
     destroyClip: typeof routes['jobs.destroy_clip']

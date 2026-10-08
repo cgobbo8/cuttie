@@ -97,6 +97,7 @@ export default class ClipsController {
       clip_width: env.clip_width,
       clip_height: env.clip_height,
       facecam: env.facecam,
+      cam: env.cam,
       dominant_color: env.dominant_color,
       game_crop: { x: cropX, y: cropY, w: cropW, h: cropH },
       layout: {

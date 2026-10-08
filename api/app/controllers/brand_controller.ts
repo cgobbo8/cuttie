@@ -1,11 +1,17 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import path from 'node:path'
 import Job from '#models/job'
-import { getBrandKit, saveBrandKit, type BrandKit, type FacecamRect } from '#services/brand_kit'
+import { getBrandKit, parseFacecamRect, saveBrandKit, type BrandKit } from '#services/brand_kit'
 import { getClipDimensions } from '#services/edit_env_resolver'
-import { listObjects } from '#services/storage'
-import { fetchChannel, fetchStoryboard } from '#services/twitch'
-import { detectFacecam, detectPalette } from '#services/worker_client'
+import { getPresignedUrl, headObject, listObjects } from '#services/storage'
+import { fetchChannel, fetchStoryboard, type TwitchChannel, type TwitchVod } from '#services/twitch'
+import {
+  detectFacecam,
+  detectPalette,
+  detectVodFacecam,
+  type DetectedPalette,
+  type VodFacecam,
+} from '#services/worker_client'
 
 const HEX = /^#[0-9a-fA-F]{6}$/
 const LOGIN = /^[a-zA-Z0-9_]{2,25}$/
@@ -13,8 +19,41 @@ const COLOR_KEYS = ['accent', 'highlight', 'dark', 'light'] as const
 const WIDGET_TIMINGS = ['start', 'always', 'end']
 const SUBTITLE_STYLES = ['bold', 'karaoke', 'minimal']
 
-function validRect(f: any): f is FacecamRect {
-  return !!f && [f.x, f.y, f.w, f.h].every((v) => Number.isFinite(v) && v >= 0) && f.w > 0 && f.h > 0
+/** Webcam frames saved by the worker for the brand kit */
+const FACECAM_FRAME = /^brand\/webcam_\d{1,20}\.jpg$/
+
+/** Palettes by logo + banner URL: the onboarding preview and the saved kit share them */
+const palettes = new Map<string, Promise<DetectedPalette>>()
+
+function paletteFor(channel: TwitchChannel): Promise<DetectedPalette> | null {
+  const urls = [channel.avatar_url, channel.banner_url].filter((u): u is string => !!u)
+  if (urls.length === 0) return null
+  const key = urls.join(' ')
+  let pending = palettes.get(key)
+  if (!pending) {
+    pending = detectPalette(urls)
+    pending.catch(() => palettes.delete(key))
+    palettes.set(key, pending)
+  }
+  return pending
+}
+
+/** Webcam detections by VOD, shared by the onboarding prefetch and the step that shows it */
+const VOD_FACECAM_MS = 30 * 60_000
+const vodFacecams = new Map<string, { at: number; pending: Promise<VodFacecam> }>()
+
+function vodFacecamFor(vod: TwitchVod): Promise<VodFacecam> {
+  const hit = vodFacecams.get(vod.id)
+  if (hit && Date.now() - hit.at < VOD_FACECAM_MS) return hit.pending
+  const pending = detectVodFacecam(vod.id, vod.duration_seconds)
+  pending.catch(() => vodFacecams.delete(vod.id))
+  vodFacecams.set(vod.id, { at: Date.now(), pending })
+  return pending
+}
+
+/** Lives worth reading frames from: finished, long enough */
+function readableVods(channel: TwitchChannel | null): TwitchVod[] {
+  return (channel?.vods ?? []).filter((v) => v.thumbnail_url && v.duration_seconds >= 600)
 }
 
 /** Clips of the most recent finished analysis, for webcam detection and previews */
@@ -63,18 +102,17 @@ export default class BrandController {
     }
     if (body.facecam !== undefined) {
       const f = body.facecam
-      if (f !== null && f !== false && !validRect(f)) return response.badRequest({ error: 'Cadre webcam invalide' })
-      patch.facecam =
-        f === null || f === false
-          ? f
-          : {
-              x: Math.round(f.x),
-              y: Math.round(f.y),
-              w: Math.round(f.w),
-              h: Math.round(f.h),
-              ref_w: Math.round(f.ref_w || 1920),
-              ref_h: Math.round(f.ref_h || 1080),
-            }
+      if (f === null || f === false) {
+        patch.facecam = f
+        patch.facecam_frame = null
+      } else {
+        const rect = parseFacecamRect(f)
+        if (!rect) return response.badRequest({ error: 'Cadre webcam invalide' })
+        patch.facecam = rect
+        // The live frame it was confirmed on, for previews before any analysis
+        const frame = body.facecam_frame
+        patch.facecam_frame = typeof frame === 'string' && FACECAM_FRAME.test(frame) ? frame : null
+      }
     }
     if (body.widget !== undefined) {
       const { enabled, timing } = body.widget ?? {}
@@ -140,10 +178,10 @@ export default class BrandController {
     const kit = await getBrandKit()
     if (!kit.twitch_login) return response.badRequest({ error: 'Aucune chaîne Twitch configurée' })
     const channel = await fetchChannel(kit.twitch_login).catch(() => null)
-    const urls = [channel?.avatar_url, channel?.banner_url].filter((u): u is string => !!u)
-    if (urls.length === 0) return response.unprocessableEntity({ error: 'Pas de logo sur cette chaîne' })
+    const pending = channel ? paletteFor(channel) : null
+    if (!pending) return response.unprocessableEntity({ error: 'Pas de logo sur cette chaîne' })
 
-    const detected = await detectPalette(urls)
+    const detected = await pending
     return saveBrandKit({
       colors: detected.roles,
       palette: detected.palette,
@@ -151,19 +189,81 @@ export default class BrandController {
     })
   }
 
+  /** GET /api/twitch/lookup?login= — a channel's public info, before saving it (first launch) */
+  async lookup({ request, response }: HttpContext) {
+    const login = String(request.input('login', '')).trim().replace(/^@/, '').toLowerCase()
+    if (!LOGIN.test(login)) return response.badRequest({ error: 'Pseudo Twitch invalide' })
+    try {
+      return { channel: await fetchChannel(login) }
+    } catch (err: any) {
+      return response.status(502).json({ error: `Twitch ne répond pas (${err.message})` })
+    }
+  }
+
+  /** GET /api/twitch/lookup/colors?login= — the colors of a channel's logo, not saved */
+  async lookupColors({ request, response }: HttpContext) {
+    const login = String(request.input('login', '')).trim().replace(/^@/, '').toLowerCase()
+    if (!LOGIN.test(login)) return response.badRequest({ error: 'Pseudo Twitch invalide' })
+    const channel = await fetchChannel(login).catch(() => null)
+    const pending = channel ? paletteFor(channel) : null
+    if (!pending) return response.unprocessableEntity({ error: 'Pas de logo sur cette chaîne' })
+    try {
+      return await pending
+    } catch (err: any) {
+      return response.status(502).json({ error: `Couleurs indisponibles (${err.message})` })
+    }
+  }
+
   /**
-   * POST /api/brand-kit/detect-facecam — find the webcam on the latest analysis.
+   * POST /api/brand-kit/detect-facecam — find the webcam on the latest live
+   * (frames read straight from Twitch), else on the latest analysis.
    * Not saved: the streamer confirms (or adjusts) it first.
    */
   async detectFacecam({ response }: HttpContext) {
-    const latest = await latestClips()
-    if (!latest) return response.unprocessableEntity({ error: "Lance d'abord une analyse pour repérer ta webcam" })
-    const sample = latest.clips.slice(0, 5)
-    const rect = await detectFacecam(latest.jobId, sample)
-    const { width, height } = await getClipDimensions(latest.jobId, sample[0])
-    return {
-      facecam: rect ? { ...rect, ref_w: width, ref_h: height } : null,
-      frame: { job_id: latest.jobId, clip_filename: sample[0] },
+    const kit = await getBrandKit()
+    const channel = kit.twitch_login ? await fetchChannel(kit.twitch_login).catch(() => null) : null
+
+    let lastError: string | null = null
+    for (const vod of readableVods(channel).slice(0, 2)) {
+      try {
+        const found = await vodFacecamFor(vod)
+        return {
+          facecam: found.facecam ? { ...found.facecam, ref_w: found.frame_w, ref_h: found.frame_h } : null,
+          frame_url: await getPresignedUrl(found.frame_key),
+          frame_key: found.frame_key,
+          vod: { id: vod.id, title: vod.title },
+        }
+      } catch (err: any) {
+        lastError = err.message
+      }
     }
+
+    const latest = await latestClips()
+    if (latest) {
+      const sample = latest.clips.slice(0, 5)
+      const rect = await detectFacecam(latest.jobId, sample)
+      const { width, height } = await getClipDimensions(latest.jobId, sample[0])
+      return {
+        facecam: rect ? { ...rect, ref_w: width, ref_h: height } : null,
+        frame_url: `/api/clips/${latest.jobId}/${encodeURIComponent(sample[0])}/thumb?w=1280`,
+        frame_key: null,
+        vod: null,
+      }
+    }
+
+    return response.unprocessableEntity({
+      error: lastError
+        ? "Impossible de lire ton dernier live pour l'instant"
+        : "Aucun live à regarder : lance d'abord une analyse",
+    })
+  }
+
+  /** GET /api/brand-kit/frame — the live frame the webcam was confirmed on */
+  async frame({ response }: HttpContext) {
+    const kit = await getBrandKit()
+    if (!kit.facecam_frame || !(await headObject(kit.facecam_frame))) {
+      return response.notFound({ error: 'no frame' })
+    }
+    return response.redirect(await getPresignedUrl(kit.facecam_frame))
   }
 }

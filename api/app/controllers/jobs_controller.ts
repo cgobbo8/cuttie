@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
 import path from 'node:path'
 import Job, { type ClipSelection } from '#models/job'
+import { parseFacecamRect, saveBrandKit, type FacecamRect } from '#services/brand_kit'
 import db from '@adonisjs/lucid/services/db'
 import { clipDir } from '#services/data_paths'
 import { deleteObject, storagePath } from '#services/storage'
@@ -265,6 +266,31 @@ export default class JobsController {
     job.selection = selection
     await job.save()
     return { selection }
+  }
+
+  /**
+   * PUT /api/jobs/:id/facecam — webcam framing for this live only:
+   * { facecam: rect | false (no cam on this live) | null (automatic), remember?: true }
+   * `remember` also makes it the streamer's usual position for the next lives.
+   */
+  async updateFacecam({ params, request, response, auth }: HttpContext) {
+    const user = auth.getUserOrFail()
+    const job = await Job.find(params.id)
+    if (!job || job.userId !== user.id) return response.notFound({ error: 'job not found' })
+
+    const body = request.body() as { facecam?: unknown; remember?: unknown }
+    let facecam: FacecamRect | false | null
+    if (body.facecam === null || body.facecam === false) {
+      facecam = body.facecam
+    } else {
+      facecam = parseFacecamRect(body.facecam)
+      if (!facecam) return response.badRequest({ error: 'Cadre webcam invalide' })
+    }
+
+    job.facecam = facecam
+    await job.save()
+    if (body.remember === true && facecam) saveBrandKit({ facecam, facecam_frame: null })
+    return { facecam: job.facecam }
   }
 
   // POST /api/jobs/:id/retry

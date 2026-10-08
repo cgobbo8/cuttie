@@ -38,8 +38,13 @@ export interface BrandKit {
   palette: string[]
   /** Logo URL the palette was detected on (re-detect when it changes) */
   palette_source: string | null
-  /** Webcam overlay in stream pixels, false = no webcam, null = not confirmed yet */
+  /**
+   * Where the webcam usually sits, in stream pixels (false = no webcam, null =
+   * not confirmed yet). Every analysis checks it again on its own clips.
+   */
   facecam: FacecamRect | false | null
+  /** Storage key of the live frame the webcam was confirmed on */
+  facecam_frame: string | null
   widget: { enabled: boolean; timing: WidgetTiming }
   subtitles: { style: SubtitleStyle }
 }
@@ -50,6 +55,7 @@ export const DEFAULT_BRAND_KIT: BrandKit = {
   palette: [],
   palette_source: null,
   facecam: null,
+  facecam_frame: null,
   widget: { enabled: true, timing: 'start' },
   subtitles: { style: 'bold' },
 }
@@ -95,6 +101,18 @@ export function saveBrandKit(patch: Partial<BrandKit>): BrandKit {
   settings.brand_kit = next
   writeSettings(settings)
   return next
+}
+
+/** A webcam rectangle from a request body (rounded), or null when invalid */
+export function parseFacecamRect(f: any): FacecamRect | null {
+  if (!f || typeof f !== 'object') return null
+  const values = [f.x, f.y, f.w, f.h].map(Number)
+  if (!values.every((v) => Number.isFinite(v) && v >= 0)) return null
+  const [x, y, w, h] = values.map(Math.round)
+  const refW = Math.round(Number(f.ref_w) || 1920)
+  const refH = Math.round(Number(f.ref_h) || 1080)
+  if (w < 8 || h < 8 || refW <= 0 || refH <= 0 || x + w > refW + 2 || y + h > refH + 2) return null
+  return { x, y, w, h, ref_w: refW, ref_h: refH }
 }
 
 /**

@@ -20,15 +20,17 @@ NUM_FRAMES = 6  # Evenly-spaced frames per candidate
 FRAME_WORKERS = 10  # Parallel ffmpeg seeks for remote extraction
 
 
-def get_vod_direct_url(vod_url: str) -> str:
+def get_vod_direct_url(vod_url: str, max_height: int | None = None) -> str:
     """Get direct video URL from a Twitch VOD URL via yt-dlp.
 
-    Returns the best quality direct/m3u8 URL that ffmpeg can seek into.
+    Returns the best quality direct/m3u8 URL that ffmpeg can seek into, or the
+    best rendition up to `max_height` (much smaller segments to fetch).
     """
+    fmt = f"best[height<={max_height}]/best" if max_height else "best"
     t0 = _time.time()
     try:
         result = subprocess.run(
-            ["yt-dlp", "-g", "-f", "best", "--no-warnings", vod_url],
+            ["yt-dlp", "-g", "-f", fmt, "--no-warnings", vod_url],
             capture_output=True, text=True, timeout=30, check=True,
         )
         url = result.stdout.strip().split("\n")[0]

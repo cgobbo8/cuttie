@@ -90,8 +90,9 @@ def download_audio(url: str, output_dir: str) -> str:
                 "preferredcodec": "wav",
             }
         ],
-        # Keys must be lowercase: yt-dlp ignored "FFmpegExtractAudio" and kept 48 kHz stereo
-        "postprocessor_args": {"ffmpegextractaudio": ["-ar", str(AUDIO_SAMPLE_RATE), "-ac", "1"]},
+        # Key = postprocessor name without the "FFmpeg" prefix, lowercase ("extractaudio").
+        # The old "FFmpegExtractAudio" key was silently ignored: the WAV stayed 48 kHz stereo.
+        "postprocessor_args": {"extractaudio": ["-ar", str(AUDIO_SAMPLE_RATE), "-ac", "1"]},
         "quiet": True,
         "no_warnings": True,
         "noprogress": True,

@@ -39,8 +39,8 @@ logger = logging.getLogger(__name__)
 
 HEURISTIC_WEIGHT = 0.2
 LLM_WEIGHT = 0.8
-MAX_LLM_WORKERS = 5  # Parallel LLM calls (API-bound)
-MAX_WHISPER_WORKERS = 5  # Parallel Whisper calls
+MAX_LLM_WORKERS = 12  # Parallel LLM calls (API-bound)
+MAX_WHISPER_WORKERS = 12  # Parallel Whisper calls
 KEEP_TOP_N = 20  # How many candidates to keep after LLM scoring
 KEEP_NORMAL_FOR_LLM = 50  # Top N non-clip candidates that get full LLM analysis (from 100 scored)
 
@@ -810,10 +810,10 @@ def analyze_candidates(
     # Triage audio directory — shared with _transcribe_candidates for MP3 segments
     triage_dir = work_dir("triage_audio", job_id)
 
-    # ── Step 1: Get direct VOD URL for frame extraction ──
+    # ── Step 1: Get direct VOD URL for frame extraction (480p is plenty for the LLM) ──
     logger.info(f"[1/7] Getting direct VOD URL...")
     update_job(job_id, progress=f"Récupération URL vidéo...")
-    direct_url = get_vod_direct_url(vod_url)
+    direct_url = get_vod_direct_url(vod_url, max_height=480)
 
     # ── Step 2: Whisper transcription for ALL candidates (parallel) ──
     logger.info(f"[2/7] Transcribing {total} candidates...")

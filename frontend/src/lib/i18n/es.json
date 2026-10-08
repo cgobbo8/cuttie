@@ -39,7 +39,10 @@
     "exports": "Exportaciones",
     "workers": "Workers",
     "profile": "Perfil",
-    "settings": "Ajustes"
+    "settings": "Ajustes",
+    "home": "Inicio",
+    "analyses": "Análisis",
+    "newAnalysis": "Nuevo análisis"
   },
 
   "workspace": {
@@ -560,6 +563,36 @@
       "diskLow": "{{gb}} GB — justo, un VOD puede ocupar varios GB",
       "dataDir": "Carpeta de datos",
       "versions": "Versiones"
+    }
+  },
+
+  "analyze": {
+    "hello": "Hola {{name}}",
+    "evening": "Buenas noches {{name}}",
+    "title": "¿Qué VOD cortamos?",
+    "subtitle": "Elige un VOD: Cuttie encuentra los mejores momentos y prepara los clips. Cuenta unos 5 minutos para un directo de 5 h.",
+    "latestVods": "Tus últimos directos",
+    "processing": "Twitch todavía está procesando este VOD",
+    "clipCount_one": "{{count}} clip",
+    "clipCount_other": "{{count}} clips",
+    "openClips": "Ver los clips",
+    "inProgress": "Analizando",
+    "retry": "Reintentar",
+    "analyze": "Analizar",
+    "submitError": "No se pudo iniciar el análisis",
+    "invalidUrl": "Pega un enlace de VOD de Twitch (twitch.tv/videos/…)",
+    "twitchError": "Twitch no responde ahora mismo. Puedes pegar el enlace de tu VOD abajo.",
+    "noChannel": "Añade tu usuario de Twitch en el kit de marca para ver tus directos aquí.",
+    "urlPlaceholder": "O pega un enlace de VOD de Twitch",
+    "recentAnalyses": "Análisis recientes",
+    "seeAll": "Ver todo",
+    "remaining": "≈ {{minutes}} min restantes",
+    "steps": {
+      "DOWNLOADING_AUDIO": "Descarga",
+      "ANALYZING_AUDIO": "Audio",
+      "SCORING": "Momentos",
+      "ANALYZING_CLIPS": "Análisis IA",
+      "CLIPPING": "Corte"
     }
   }
 }

@@ -1,6 +1,6 @@
 import { NavLink, useNavigate } from "react-router";
 import { useState } from "react";
-import { Cpu, Film, FolderOpen, Gamepad2, Home, LogOut, Plus, Settings, Users } from "lucide-react";
+import { Clapperboard, Cpu, Film, FolderOpen, Gamepad2, Home, LogOut, Plus, Scissors, Settings, Users, type LucideIcon } from "lucide-react";
 import NewProjectModal from "./NewProjectModal";
 import CreatorSelector from "./CreatorSelector";
 import { useAuth } from "../lib/AuthContext";
@@ -8,22 +8,34 @@ import { useCreatorWorkspace } from "../lib/CreatorWorkspaceContext";
 import { useSettings } from "../lib/SettingsContext";
 import { useTranslation } from "react-i18next";
 
+function NavItem({ to, icon: Icon, label, end }: { to: string; icon: LucideIcon; label: string; end?: boolean }) {
+  return (
+    <NavLink
+      to={to}
+      end={end}
+      className={({ isActive }) =>
+        `flex items-center gap-3 h-10 px-3 rounded-[14px] text-[14px] transition-colors duration-200 ${
+          isActive
+            ? "bg-white/[0.11] text-white font-medium shadow-[inset_0_1px_0_rgba(255,255,255,0.09)]"
+            : "text-zinc-400 hover:text-zinc-100 hover:bg-white/[0.05]"
+        }`
+      }
+    >
+      <Icon className="w-[18px] h-[18px]" strokeWidth={1.75} />
+      {label}
+    </NavLink>
+  );
+}
+
 export default function Sidebar() {
   const { t } = useTranslation();
   const [modalOpen, setModalOpen] = useState(false);
   const { user, logout } = useAuth();
   const { isAllMode } = useCreatorWorkspace();
   const { appInfo } = useSettings();
-  // Desktop app: single local user, no account to show or log out of
+  // Desktop app: single local streamer — no account, workspaces or admin pages
   const isLocalApp = appInfo?.mode === "local" && appInfo.auto_login;
   const navigate = useNavigate();
-
-  const navClass = ({ isActive }: { isActive: boolean }) =>
-    `flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
-      isActive
-        ? "bg-white/[0.08] text-white font-medium"
-        : "text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.04]"
-    }`;
 
   const handleLogout = async () => {
     await logout();
@@ -32,84 +44,48 @@ export default function Sidebar() {
 
   return (
     <>
-      <aside className="w-[240px] shrink-0 h-screen sticky top-0 flex flex-col border-r border-white/[0.06] bg-[#09090b]">
-        {/* Logo */}
-        <div className="px-5 py-5 flex items-center justify-between">
-          <NavLink to="/" className="flex items-center gap-2.5">
-            <span className="text-lg font-bold tracking-tight text-white">
-              Cuttie
-            </span>
-          </NavLink>
-        </div>
+      <aside className="w-[244px] shrink-0 h-[calc(100dvh-1.5rem)] sticky top-3 ml-3 my-3 flex flex-col glass rounded-[28px] p-3">
+        <NavLink to="/" className="flex items-center gap-2.5 px-2.5 pt-1.5 pb-5">
+          <span className="w-8 h-8 rounded-[10px] bg-brand grid place-items-center shadow-[inset_0_1px_0_rgba(255,255,255,0.35)]">
+            <Scissors className="w-4 h-4 text-white" strokeWidth={2.25} />
+          </span>
+          <span className="text-[17px] font-semibold tracking-[-0.02em] text-white">Cuttie</span>
+        </NavLink>
 
-        {/* Creator workspace selector */}
-        <div className="px-3 mb-2">
-          <CreatorSelector />
-        </div>
+        {!isLocalApp && (
+          <div className="mb-2">
+            <CreatorSelector />
+          </div>
+        )}
 
-        {/* New project button */}
-        <div className="px-3 mb-1">
-          <button
-            onClick={() => setModalOpen(true)}
-            className="w-full flex items-center gap-2 px-3 py-2 text-sm font-medium text-white bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.08] rounded-lg transition-colors"
-          >
-            <Plus className="w-4 h-4" />
-            {t("sidebar.newProject")}
-          </button>
-        </div>
+        <button onClick={() => setModalOpen(true)} className="btn btn-primary w-full mb-4">
+          <Plus className="w-4 h-4" strokeWidth={2.25} />
+          {t("sidebar.newAnalysis")}
+        </button>
 
-        {/* Navigation */}
-        <nav className="flex-1 px-3 py-3 space-y-0.5">
-          <NavLink to="/" end className={navClass}>
-            <Home className="w-4 h-4" />
-            {t("sidebar.dashboard")}
-          </NavLink>
-          <NavLink to="/projects" className={navClass}>
-            <FolderOpen className="w-4 h-4" />
-            {t("sidebar.projects")}
-          </NavLink>
-          <NavLink to="/games" className={navClass}>
-            <Gamepad2 className="w-4 h-4" />
-            {t("sidebar.games")}
-          </NavLink>
-          {isAllMode && (
-            <NavLink to="/creators" className={navClass}>
-              <Users className="w-4 h-4" />
-              {t("sidebar.creators")}
-            </NavLink>
+        <nav className="flex-1 space-y-1">
+          <NavItem to="/" end icon={Home} label={t("sidebar.home")} />
+          <NavItem to="/projects" icon={isLocalApp ? Clapperboard : FolderOpen} label={t("sidebar.analyses")} />
+          <NavItem to="/exports" icon={Film} label={t("sidebar.exports")} />
+          {!isLocalApp && (
+            <>
+              <NavItem to="/games" icon={Gamepad2} label={t("sidebar.games")} />
+              {isAllMode && <NavItem to="/creators" icon={Users} label={t("sidebar.creators")} />}
+              <NavItem to="/workers" icon={Cpu} label={t("sidebar.workers")} />
+            </>
           )}
-          <NavLink to="/exports" className={navClass}>
-            <Film className="w-4 h-4" />
-            {t("sidebar.exports")}
-          </NavLink>
-          <NavLink to="/workers" className={navClass}>
-            <Cpu className="w-4 h-4" />
-            {t("sidebar.workers")}
-          </NavLink>
         </nav>
 
-        {/* Settings + user section */}
-        <div className="px-3 py-3 border-t border-white/[0.06] space-y-1">
-          <NavLink to="/settings" className={navClass}>
-            <Settings className="w-4 h-4" />
-            {t("sidebar.settings")}
-          </NavLink>
+        <div className="space-y-1 pt-3 border-t border-white/[0.06]">
+          <NavItem to="/settings" icon={Settings} label={t("sidebar.settings")} />
           {user && !isLocalApp && (
-            <>
-            <NavLink to="/profile" className={navClass}>
-              <div className="w-6 h-6 rounded-full bg-white/[0.08] flex items-center justify-center text-[10px] font-medium text-zinc-300 shrink-0">
-                {user.initials}
-              </div>
-              <span className="flex-1 truncate">{user.email}</span>
-            </NavLink>
             <button
               onClick={handleLogout}
-              className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-red-500/70 hover:text-red-400 hover:bg-red-500/[0.06] transition-colors w-full"
+              className="flex items-center gap-3 h-10 px-3 rounded-[14px] text-[14px] text-red-400/80 hover:text-red-300 hover:bg-red-500/[0.08] transition-colors w-full"
             >
-              <LogOut className="w-4 h-4" />
+              <LogOut className="w-[18px] h-[18px]" strokeWidth={1.75} />
               {t("auth.logout")}
             </button>
-            </>
           )}
         </div>
       </aside>

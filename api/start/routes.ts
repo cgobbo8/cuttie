@@ -45,6 +45,11 @@ router
         // Dashboard
         router.get('/dashboard', [() => import('#controllers/dashboard_controller'), 'index'])
 
+        // Brand kit (streamer DA) + their Twitch channel
+        router.get('/brand-kit', [() => import('#controllers/brand_controller'), 'show'])
+        router.put('/brand-kit', [() => import('#controllers/brand_controller'), 'update'])
+        router.get('/twitch/channel', [() => import('#controllers/brand_controller'), 'channel'])
+
         // Local app: settings (API keys) + diagnostics
         router.get('/settings', [() => import('#controllers/app_controller'), 'showSettings'])
         router.put('/settings', [() => import('#controllers/app_controller'), 'updateSettings'])

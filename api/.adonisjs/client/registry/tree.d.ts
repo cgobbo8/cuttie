@@ -31,6 +31,11 @@ export interface ApiDefinition {
   dashboard: {
     index: typeof routes['dashboard.index']
   }
+  brand: {
+    show: typeof routes['brand.show']
+    update: typeof routes['brand.update']
+    channel: typeof routes['brand.channel']
+  }
   games: {
     index: typeof routes['games.index']
   }

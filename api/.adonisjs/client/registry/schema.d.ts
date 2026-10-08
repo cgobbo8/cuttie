@@ -151,6 +151,42 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/dashboard_controller').default['index']>>>
     }
   }
+  'brand.show': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/brand-kit'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/brand_controller').default['show']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/brand_controller').default['show']>>>
+    }
+  }
+  'brand.update': {
+    methods: ["PUT"]
+    pattern: '/api/brand-kit'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/brand_controller').default['update']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/brand_controller').default['update']>>>
+    }
+  }
+  'brand.channel': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/twitch/channel'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/brand_controller').default['channel']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/brand_controller').default['channel']>>>
+    }
+  }
   'app.show_settings': {
     methods: ["GET","HEAD"]
     pattern: '/api/settings'

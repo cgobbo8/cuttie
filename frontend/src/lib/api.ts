@@ -105,6 +105,65 @@ export async function getDiagnostics(): Promise<Diagnostics> {
   return res.json();
 }
 
+// ── Brand kit + Twitch channel ──────────────────────────────────────────────
+
+export interface FacecamRect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+export interface BrandKit {
+  twitch_login: string | null;
+  colors: { primary: string; secondary: string };
+  /** false = the streamer has no webcam, null = not set up yet */
+  facecam: FacecamRect | false | null;
+}
+
+export async function getBrandKit(): Promise<BrandKit> {
+  const res = await fetch(`${BASE}/brand-kit`);
+  if (!res.ok) throw new Error("Failed to load brand kit");
+  return res.json();
+}
+
+export async function updateBrandKit(patch: Partial<BrandKit>): Promise<BrandKit> {
+  const res = await fetch(`${BASE}/brand-kit`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(patch),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json.error ?? "Failed to save brand kit");
+  return json;
+}
+
+export interface TwitchVod {
+  id: string;
+  title: string;
+  duration_seconds: number;
+  published_at: string;
+  thumbnail_url: string | null;
+  game: string | null;
+  url: string;
+  /** Existing analysis of this VOD, if any */
+  job: { id: string; status: string; clip_count: number } | null;
+}
+
+export interface TwitchChannel {
+  login: string;
+  display_name: string;
+  avatar_url: string | null;
+  vods: TwitchVod[];
+}
+
+export async function getTwitchChannel(): Promise<TwitchChannel | null> {
+  const res = await fetch(`${BASE}/twitch/channel`);
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json.error ?? "Failed to load Twitch channel");
+  return json.channel ?? null;
+}
+
 // ── Data interfaces ─────────────────────────────────────────────────────────
 
 export interface SignalBreakdown {

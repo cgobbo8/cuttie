@@ -1,12 +1,19 @@
 @import "tailwindcss";
+@import "@fontsource-variable/geist";
 
 @theme {
   /* ─── Typography ─────────────────────────────────────────── */
-  --font-sans: "Inter", system-ui, sans-serif;
+  /* Geist is bundled so the app looks the same on macOS and Windows */
+  --font-sans: "Geist Variable", -apple-system, BlinkMacSystemFont, "Segoe UI Variable", system-ui, sans-serif;
+
+  /* ─── Brand (streamer DA) ────────────────────────────────── */
+  /* Overridden at runtime from the brand kit (document.documentElement) */
+  --color-brand: #8b7bff;
+  --color-brand-2: #4fbf73;
 
   /* ─── Background levels ──────────────────────────────────── */
-  /* Base app background (zinc-950) */
-  --color-bg-base: #09090b;
+  /* Base app background (near-black, slightly cool) */
+  --color-bg-base: #07070a;
   /* Elevated panel backgrounds: modals, dropdowns, tooltips (zinc-900) */
   --color-bg-panel: #18181b;
   /* Editor workspace background (zinc-950 variant) */
@@ -14,8 +21,8 @@
 
   /* ─── Surface (glass card system) ───────────────────────── */
   /* Used by .surface and .surface-static */
-  --color-surface: rgba(255, 255, 255, 0.03);
-  --color-surface-hover: rgba(255, 255, 255, 0.06);
+  --color-surface: rgba(255, 255, 255, 0.045);
+  --color-surface-hover: rgba(255, 255, 255, 0.075);
   /* Input/field background (slightly lighter than surface) */
   --color-surface-input: rgba(255, 255, 255, 0.04);
   /* Button/control resting state */
@@ -31,8 +38,8 @@
 
   /* ─── Borders ────────────────────────────────────────────── */
   /* Default card / section border */
-  --color-border: rgba(255, 255, 255, 0.08);
-  --color-border-hover: rgba(255, 255, 255, 0.14);
+  --color-border: rgba(255, 255, 255, 0.09);
+  --color-border-hover: rgba(255, 255, 255, 0.16);
   /* Subtle divider inside panels and between rows */
   --color-border-subtle: rgba(255, 255, 255, 0.06);
   /* Focus ring on inputs */
@@ -86,10 +93,10 @@
   --shadow-elevated: 0 20px 25px -5px rgba(0, 0, 0, 0.6), 0 8px 10px -6px rgba(0, 0, 0, 0.4);
 
   /* ─── Border radius ──────────────────────────────────────── */
-  /* Cards, modals, large panels */
-  --radius-card: 0.75rem;    /* 12px — rounded-xl */
+  /* Cards, modals, large panels (iOS-like continuous corners) */
+  --radius-card: 1.25rem;    /* 20px */
   /* Buttons, inputs, standard controls */
-  --radius-control: 0.5rem;  /* 8px  — rounded-lg */
+  --radius-control: 0.75rem; /* 12px */
   /* Small controls: badges, mini-buttons, select */
   --radius-sm: 0.375rem;     /* 6px  — rounded-md */
   /* Micro elements: scrollbar thumb, tiny badges */
@@ -107,27 +114,163 @@
 }
 
 body {
-  background: #09090b;
+  background-color: var(--color-bg-base);
+  /* Ambient brand glows: glass surfaces need something to blur */
+  background-image:
+    radial-gradient(60rem 38rem at 8% -12%, color-mix(in oklab, var(--color-brand) 26%, transparent), transparent 62%),
+    radial-gradient(48rem 34rem at 104% 4%, color-mix(in oklab, var(--color-brand-2) 14%, transparent), transparent 60%),
+    radial-gradient(70rem 46rem at 55% 125%, color-mix(in oklab, var(--color-brand) 16%, transparent), transparent 62%);
+  background-attachment: fixed;
   color: #e4e4e7;
   font-family: var(--font-sans);
+  font-feature-settings: "ss01", "cv11";
   -webkit-font-smoothing: antialiased;
 }
 
-/* Surface card */
-.surface {
-  background: var(--color-surface);
+/* Film grain over everything, so large dark areas don't look flat */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1000;
+  opacity: 0.035;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* ─── Liquid glass ─────────────────────────────────────────── */
+/* Panel: blurred backdrop, bright top edge (refraction), soft dark drop */
+.glass {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.075), rgba(255, 255, 255, 0.03));
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.02),
+    0 24px 60px -28px rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(28px) saturate(170%);
+  -webkit-backdrop-filter: blur(28px) saturate(170%);
+}
+
+.glass-strong {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.11), rgba(255, 255, 255, 0.05));
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    0 30px 70px -30px rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(36px) saturate(180%);
+  -webkit-backdrop-filter: blur(36px) saturate(180%);
+}
+
+/* Surface card (legacy name, now glass) */
+.surface,
+.surface-static {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.025));
   border: 1px solid var(--color-border);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+}
+
+.surface {
+  transition:
+    background 200ms var(--ease-spring),
+    border-color 200ms var(--ease-spring),
+    transform 200ms var(--ease-spring);
 }
 
 .surface:hover {
-  background: var(--color-surface-hover);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.04));
   border-color: var(--color-border-hover);
 }
 
-/* Surface without hover */
-.surface-static {
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
+/* ─── Buttons (pills) ──────────────────────────────────────── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  height: 2.5rem;
+  padding: 0 1.125rem;
+  border-radius: 9999px;
+  font-size: 0.875rem;
+  font-weight: 550;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  transition:
+    background 180ms var(--ease-spring),
+    transform 180ms var(--ease-spring),
+    box-shadow 180ms var(--ease-spring),
+    opacity 180ms;
+}
+.btn:active {
+  transform: scale(0.97);
+}
+.btn:disabled {
+  opacity: 0.45;
+  pointer-events: none;
+}
+.btn:focus-visible {
+  outline: 2px solid color-mix(in oklab, var(--color-brand) 70%, white);
+  outline-offset: 2px;
+}
+.btn-primary {
+  color: #fff;
+  background: linear-gradient(180deg, color-mix(in oklab, var(--color-brand) 92%, white), var(--color-brand));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    0 10px 30px -10px color-mix(in oklab, var(--color-brand) 70%, transparent);
+}
+.btn-primary:hover {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.32),
+    0 14px 36px -10px color-mix(in oklab, var(--color-brand) 85%, transparent);
+}
+.btn-glass {
+  color: #f4f4f5;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+}
+.btn-glass:hover {
+  background: rgba(255, 255, 255, 0.13);
+}
+.btn-sm {
+  height: 2rem;
+  padding: 0 0.875rem;
+  font-size: 0.8125rem;
+}
+.btn-lg {
+  height: 3rem;
+  padding: 0 1.5rem;
+  font-size: 0.9375rem;
+}
+
+/* Large iOS-style title */
+.title-large {
+  font-size: 2.125rem;
+  line-height: 1.1;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: #fff;
+  text-wrap: balance;
+}
+
+/* Staggered entry for lists (set --i on each child) */
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.animate-rise {
+  animation: rise-in 0.5s var(--ease-spring) both;
+  animation-delay: calc(var(--i, 0) * 45ms);
 }
 
 /* Progress bar shimmer */

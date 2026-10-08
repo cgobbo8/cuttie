@@ -33,7 +33,9 @@ const { result } = concurrently(
       command: "node ace serve --hmr",
       cwd: path.join(root, "api"),
       prefixColor: "blue",
-      env: { ...shared, PORT: String(API_PORT), WORKER_URL: `http://127.0.0.1:${WORKER_PORT}` },
+      // HOST pinned to IPv4: with "localhost", Node may bind ::1 only after a restart,
+      // and the worker / Vite proxy / signed URLs all target 127.0.0.1
+      env: { ...shared, HOST: "127.0.0.1", PORT: String(API_PORT), WORKER_URL: `http://127.0.0.1:${WORKER_PORT}` },
     },
     {
       name: "worker",

@@ -78,6 +78,24 @@ const routes = {
     tokens: [{"old":"/api/dashboard","type":0,"val":"api","end":""},{"old":"/api/dashboard","type":0,"val":"dashboard","end":""}],
     types: placeholder as Registry['dashboard.index']['types'],
   },
+  'brand.show': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/brand-kit',
+    tokens: [{"old":"/api/brand-kit","type":0,"val":"api","end":""},{"old":"/api/brand-kit","type":0,"val":"brand-kit","end":""}],
+    types: placeholder as Registry['brand.show']['types'],
+  },
+  'brand.update': {
+    methods: ["PUT"],
+    pattern: '/api/brand-kit',
+    tokens: [{"old":"/api/brand-kit","type":0,"val":"api","end":""},{"old":"/api/brand-kit","type":0,"val":"brand-kit","end":""}],
+    types: placeholder as Registry['brand.update']['types'],
+  },
+  'brand.channel': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/twitch/channel',
+    tokens: [{"old":"/api/twitch/channel","type":0,"val":"api","end":""},{"old":"/api/twitch/channel","type":0,"val":"twitch","end":""},{"old":"/api/twitch/channel","type":0,"val":"channel","end":""}],
+    types: placeholder as Registry['brand.channel']['types'],
+  },
   'app.show_settings': {
     methods: ["GET","HEAD"],
     pattern: '/api/settings',

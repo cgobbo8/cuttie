@@ -9,6 +9,7 @@ export const controllers = {
   App: () => import('#controllers/app_controller'),
   Assets: () => import('#controllers/assets_controller'),
   AuthMe: () => import('#controllers/auth_me_controller'),
+  Brand: () => import('#controllers/brand_controller'),
   Clips: () => import('#controllers/clips_controller'),
   Creators: () => import('#controllers/creators_controller'),
   Dashboard: () => import('#controllers/dashboard_controller'),

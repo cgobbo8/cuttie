@@ -681,7 +681,6 @@
     "subtitle_other": "Elige una plantilla, la aplicamos a tus {{count}} clips guardados. Puedes cambiarla clip a clip.",
     "templates": "Plantillas",
     "inYourColors": "con los colores de tu canal",
-    "yourStyle": "Tu estilo",
     "suggested": "Recomendada",
     "needsWebcam": "Esta plantilla necesita una webcam",
     "template": {
@@ -746,10 +745,19 @@
       "saved": "Cámara reencuadrada para este directo",
       "savedEverywhere": "Cámara reencuadrada y guardada como referencia"
     },
-    "myTemplates": "Mis plantillas",
     "createTemplate": "Crear mi plantilla",
     "editTemplate": "Editar",
-    "basedOn": "Basada en {{base}}"
+    "basedOn": "Basada en {{base}}",
+    "tabMine": "Mis plantillas",
+    "tabCuttie": "Plantillas Cuttie",
+    "defaultBadge": "Por defecto",
+    "setDefault": "Usar por defecto en mis próximos clips",
+    "defaultSaved": "Plantilla por defecto guardada",
+    "customize": "Personalizar",
+    "mineEmpty": "Aún no tienes plantilla propia",
+    "mineEmptyHint": "Parte de un diseño Cuttie: mueve, cambia el tamaño, añade tus widgets.",
+    "ownTemplate": "Tu plantilla",
+    "ownTemplateHint": "Los subtítulos y los widgets vienen de «{{name}}»."
   },
   "exportStep": {
     "title": "Tus clips están listos",
@@ -917,7 +925,7 @@
     "defaultName": "Mi plantilla {{n}}",
     "untitled": "Mi plantilla",
     "name": "Nombre de la plantilla",
-    "subtitle": "Parte de un diseño y ajústalo en unos clics: la vista previa lo sigue.",
+    "subtitle": "Haz clic en un elemento de la vista previa para ajustarlo, arrástralo para moverlo.",
     "save": "Guardar",
     "saved": "Plantilla guardada",
     "saveError": "No se pudo guardar la plantilla",
@@ -929,51 +937,190 @@
     "previewStill": "Vista previa con tu último directo. Lanza un análisis para verla en un clip real.",
     "sampleHook": "El momento más loco del directo",
     "sampleWords": "ALLÁ VAMOS",
-    "base": "Diseño",
-    "baseHint": "Dónde van la cámara y el juego. Tus ajustes se aplican a cada uno.",
-    "cam": "Tu cámara",
-    "noCamHint": "No se encontró cámara: aparecerá aquí cuando haya una.",
-    "camSize": "Tamaño",
-    "camShape": "Forma",
-    "camBorder": "Contorno",
-    "size": {
-      "s": "Pequeña",
-      "m": "Mediana",
-      "l": "Grande"
-    },
     "shape": {
       "rounded": "Redondeada",
       "circle": "Redonda"
     },
-    "border": {
-      "white": "Blanco",
-      "accent": "Tu color",
-      "none": "Ninguno"
-    },
-    "background": "El fondo",
+    "border": "Contorno",
     "backgroundKind": "Detrás",
-    "fullGame": "El juego ocupa toda la pantalla: no hay fondo que elegir.",
     "bg": {
       "blur": "El clip desenfocado",
       "dark": "Oscuro",
-      "brand": "Tu color"
+      "brand": "Tu color",
+      "color": "Color"
     },
-    "subtitles": "Los subtítulos",
-    "subtitlesHint": "El estilo (Grande y blanco, Karaoke, Discreto) se ajusta en Montar.",
-    "position": "Posición",
     "textSize": "Tamaño del texto",
-    "pos": {
-      "auto": "Como el diseño",
-      "top": "Arriba",
-      "middle": "En medio",
-      "bottom": "Abajo",
-      "hidden": "Oculto"
+    "hookHint": "La frase gancho del clip, editable clip a clip en Montar.",
+    "dragHint": "Mayús: mantener proporciones · Alt: sin imán.",
+    "undo": "Deshacer",
+    "redo": "Rehacer",
+    "makeDefault": "Por defecto",
+    "makeDefaultHint": "Usar esta plantilla en tus próximos clips",
+    "zones": "Zonas TikTok",
+    "zone": {
+      "top": "Pestañas",
+      "bottom": "Descripción, usuario, sonido",
+      "right": "Botones"
     },
-    "widget": "Tu widget de canal",
-    "hook": "El gancho",
-    "hookHint": "La frase de arriba del clip, editable clip a clip en Montar.",
-    "hookShow": "Mostrar",
-    "shown": "Sí",
-    "hidden": "No"
+    "covered": "Este elemento queda bajo {{zones}} en TikTok, Shorts y Reels: una parte puede quedar oculta.",
+    "coveredBy": {
+      "top": "las pestañas",
+      "bottom": "la descripción",
+      "right": "los botones"
+    },
+    "el": {
+      "background": "Fondo",
+      "game": "Juego",
+      "cam": "Cámara",
+      "subtitles": "Subtítulos",
+      "hook": "Gancho"
+    },
+    "darken": "Oscurecer",
+    "color": {
+      "label": "Color",
+      "none": "Ninguno",
+      "white": "Blanco",
+      "accent": "Tu color principal",
+      "highlight": "Tu color de acento",
+      "dark": "Tu color oscuro",
+      "light": "Tu color claro",
+      "custom": "Otro color"
+    },
+    "startOver": "Empezar de nuevo con un diseño",
+    "startOverHint": "Reemplaza todos los elementos (puedes deshacer).",
+    "reset": "Volver al inicio",
+    "hide": "Ocultar",
+    "show": "Mostrar",
+    "camHint": "En los clips donde nadie aparece en la cámara, desaparece y el resto no se mueve.",
+    "radius": "Esquinas",
+    "makeRound": "Hacerla redonda",
+    "borderColor": "Color del contorno",
+    "shadow": "Sombra",
+    "font": "Fuente",
+    "textColor": "Color del texto",
+    "spoken": "Palabra hablada",
+    "spokenHint": "La palabra que se dice toma este color, estilo karaoke.",
+    "uppercase": "Mayúsculas",
+    "outline": "Contorno negro",
+    "boxed": "Sobre fondo oscuro",
+    "speakers": "Un color por persona",
+    "speakersHint": "Para conversaciones en grupo (chat de voz, RP).",
+    "hookStyle": "Estilo",
+    "hookOutline": "Contorno",
+    "hookBox": "Banda",
+    "addWidget": "Añadir un widget",
+    "addWidgetHint": "Usan tu logo, tu nombre y tus colores. Pon todos los que quieras.",
+    "removeWidget": "Quitar el widget",
+    "when": "Cuándo",
+    "timing": {
+      "start": "Al principio",
+      "always": "Todo el rato",
+      "end": "Al final"
+    },
+    "field": {
+      "shape": "Forma",
+      "text": "Texto",
+      "tiktok": "TikTok",
+      "youtube": "YouTube",
+      "instagram": "Instagram"
+    },
+    "fieldPlaceholder": {
+      "text": "Texto mostrado",
+      "tiktok": "@tu_usuario",
+      "youtube": "@tu_canal",
+      "instagram": "@tu_usuario"
+    },
+    "layers": "Capas",
+    "dragLayer": "Arrastra para poner delante o detrás",
+    "bringForward": "Adelantar",
+    "sendBackward": "Atrasar",
+    "hidden": "Oculto",
+    "presence": "En pantalla",
+    "arrival": "Llegada",
+    "departure": "Salida",
+    "clipStart": "Inicio del clip",
+    "clipEnd": "Final",
+    "arrivesAt": "Llega a los {{s}} s",
+    "arrivesBefore": "Llega {{s}} s antes del final",
+    "leavesBefore": "se va {{s}} s antes del final",
+    "staysFor": "se queda {{s}} s",
+    "staysToEnd": "se queda hasta el final",
+    "replay": "Ver la animación",
+    "enter": "Entrada",
+    "exit": "Salida",
+    "enters": {
+      "pop": "Pop",
+      "bounce": "Rebote",
+      "elastic": "Elástico",
+      "drop": "Caída",
+      "rise": "Sube",
+      "slideLeft": "Desde la izquierda",
+      "slideRight": "Desde la derecha",
+      "zoom": "Zoom",
+      "fade": "Fundido",
+      "none": "Ninguna"
+    },
+    "exits": {
+      "fade": "Fundido",
+      "shrink": "Encoge",
+      "sink": "Baja",
+      "slideLeft": "Hacia la izquierda",
+      "slideRight": "Hacia la derecha",
+      "none": "Corte"
+    }
+  },
+  "widgets": {
+    "channel-pill": {
+      "name": "Píldora del canal",
+      "desc": "Tu logo y twitch.tv/tu-canal en una píldora blanca"
+    },
+    "logo": {
+      "name": "Logo",
+      "desc": "Tu logo con un anillo de tu color"
+    },
+    "channel-name": {
+      "name": "Nombre del canal",
+      "desc": "Tu nombre en grande, subrayado con tu color"
+    },
+    "handle": {
+      "name": "twitch.tv/usuario",
+      "desc": "Tu enlace de Twitch en una píldora oscura"
+    },
+    "live-badge": {
+      "name": "Insignia EN DIRECTO",
+      "desc": "Una insignia roja que late"
+    },
+    "follow-button": {
+      "name": "Botón Seguir",
+      "desc": "Un cursor viene a pulsar Seguir"
+    },
+    "follow-banner": {
+      "name": "Banda Sígueme",
+      "desc": "Tu logo, tu nombre y un botón Seguir"
+    },
+    "lower-third": {
+      "name": "Banda TV",
+      "desc": "Logo, nombre y juego, estilo tele"
+    },
+    "socials": {
+      "name": "Redes",
+      "desc": "Tus usuarios de Twitch, TikTok, YouTube, Instagram"
+    },
+    "follower-count": {
+      "name": "Contador de seguidores",
+      "desc": "Tus seguidores subiendo hasta el número real"
+    },
+    "clip-sticker": {
+      "name": "Pegatina",
+      "desc": "Una pegatina inclinada que se mueve"
+    },
+    "corner-logo": {
+      "name": "Logo en la esquina",
+      "desc": "Tu logo discreto, como una cadena de tele"
+    },
+    "progress-bar": {
+      "name": "Barra de progreso",
+      "desc": "Avanza con el clip"
+    }
   }
 }

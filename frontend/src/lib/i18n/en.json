@@ -681,7 +681,6 @@
     "subtitle_other": "Pick a template, we apply it to your {{count}} kept clips. You can change it clip by clip.",
     "templates": "Templates",
     "inYourColors": "in your channel's colors",
-    "yourStyle": "Your style",
     "suggested": "Suggested",
     "needsWebcam": "This template needs a webcam",
     "template": {
@@ -746,10 +745,19 @@
       "saved": "Cam reframed for this stream",
       "savedEverywhere": "Cam reframed and kept as the reference"
     },
-    "myTemplates": "My templates",
     "createTemplate": "Create my template",
     "editTemplate": "Edit",
-    "basedOn": "Based on {{base}}"
+    "basedOn": "Based on {{base}}",
+    "tabMine": "My templates",
+    "tabCuttie": "Cuttie templates",
+    "defaultBadge": "Default",
+    "setDefault": "Use by default for my next clips",
+    "defaultSaved": "Default template saved",
+    "customize": "Customize",
+    "mineEmpty": "No template of your own yet",
+    "mineEmptyHint": "Start from a Cuttie layout: move, resize, add your widgets.",
+    "ownTemplate": "Your template",
+    "ownTemplateHint": "Subtitles and widgets come from “{{name}}”."
   },
   "exportStep": {
     "title": "Your clips are ready",
@@ -917,7 +925,7 @@
     "defaultName": "My template {{n}}",
     "untitled": "My template",
     "name": "Template name",
-    "subtitle": "Start from a layout, adjust it in a few clicks: the preview follows.",
+    "subtitle": "Click an element in the preview to style it, grab it to move it.",
     "save": "Save",
     "saved": "Template saved",
     "saveError": "Couldn't save the template",
@@ -929,51 +937,190 @@
     "previewStill": "Preview on your latest stream. Run an analysis to see it on a real clip.",
     "sampleHook": "The craziest moment of the stream",
     "sampleWords": "HERE WE GO",
-    "base": "Layout",
-    "baseHint": "Where the cam and the game go. Your settings apply to each one.",
-    "cam": "Your cam",
-    "noCamHint": "No cam found: it will show here when there is one.",
-    "camSize": "Size",
-    "camShape": "Shape",
-    "camBorder": "Outline",
-    "size": {
-      "s": "Small",
-      "m": "Medium",
-      "l": "Large"
-    },
     "shape": {
       "rounded": "Rounded",
       "circle": "Round"
     },
-    "border": {
-      "white": "White",
-      "accent": "Your color",
-      "none": "None"
-    },
-    "background": "The background",
+    "border": "Outline",
     "backgroundKind": "Behind",
-    "fullGame": "The game fills the whole screen: no background to pick.",
     "bg": {
       "blur": "The blurred clip",
       "dark": "Dark",
-      "brand": "Your color"
+      "brand": "Your color",
+      "color": "Color"
     },
-    "subtitles": "The subtitles",
-    "subtitlesHint": "The style (Bold and white, Karaoke, Subtle) is set in Edit.",
-    "position": "Position",
     "textSize": "Text size",
-    "pos": {
-      "auto": "Like the layout",
-      "top": "Top",
-      "middle": "Middle",
-      "bottom": "Bottom",
-      "hidden": "Hidden"
+    "hookHint": "The clip's hook line, editable clip by clip in Edit.",
+    "dragHint": "Shift: keep proportions · Alt: no snapping.",
+    "undo": "Undo",
+    "redo": "Redo",
+    "makeDefault": "Default",
+    "makeDefaultHint": "Use this template for your next clips",
+    "zones": "TikTok zones",
+    "zone": {
+      "top": "Tabs",
+      "bottom": "Caption, username, sound",
+      "right": "Buttons"
     },
-    "widget": "Your channel widget",
-    "hook": "The hook",
-    "hookHint": "The line at the top of the clip, editable clip by clip in Edit.",
-    "hookShow": "Show",
-    "shown": "Yes",
-    "hidden": "No"
+    "covered": "This element goes under {{zones}} on TikTok, Shorts and Reels: part of it may be hidden.",
+    "coveredBy": {
+      "top": "the tabs",
+      "bottom": "the caption",
+      "right": "the buttons"
+    },
+    "el": {
+      "background": "Background",
+      "game": "Game",
+      "cam": "Cam",
+      "subtitles": "Subtitles",
+      "hook": "Hook"
+    },
+    "darken": "Darken",
+    "color": {
+      "label": "Color",
+      "none": "None",
+      "white": "White",
+      "accent": "Your main color",
+      "highlight": "Your accent color",
+      "dark": "Your dark color",
+      "light": "Your light color",
+      "custom": "Other color"
+    },
+    "startOver": "Start over from a layout",
+    "startOverHint": "Replaces every element (you can undo).",
+    "reset": "Back to how it was",
+    "hide": "Hide",
+    "show": "Show",
+    "camHint": "On clips where nobody is in the cam, it disappears and the rest stays put.",
+    "radius": "Corners",
+    "makeRound": "Make it round",
+    "borderColor": "Outline color",
+    "shadow": "Shadow",
+    "font": "Font",
+    "textColor": "Text color",
+    "spoken": "Spoken word",
+    "spokenHint": "The word being said takes this color, karaoke style.",
+    "uppercase": "Uppercase",
+    "outline": "Black outline",
+    "boxed": "On a dark box",
+    "speakers": "One color per person",
+    "speakersHint": "For group conversations (voice chat, RP).",
+    "hookStyle": "Style",
+    "hookOutline": "Outline",
+    "hookBox": "Banner",
+    "addWidget": "Add a widget",
+    "addWidgetHint": "They use your logo, name and colors. Add as many as you like.",
+    "removeWidget": "Remove the widget",
+    "when": "When",
+    "timing": {
+      "start": "At the start",
+      "always": "All along",
+      "end": "At the end"
+    },
+    "field": {
+      "shape": "Shape",
+      "text": "Text",
+      "tiktok": "TikTok",
+      "youtube": "YouTube",
+      "instagram": "Instagram"
+    },
+    "fieldPlaceholder": {
+      "text": "Text shown",
+      "tiktok": "@your_name",
+      "youtube": "@your_channel",
+      "instagram": "@your_name"
+    },
+    "layers": "Layers",
+    "dragLayer": "Drag to move in front or behind",
+    "bringForward": "Bring forward",
+    "sendBackward": "Send backward",
+    "hidden": "Hidden",
+    "presence": "On screen",
+    "arrival": "Arrival",
+    "departure": "Departure",
+    "clipStart": "Clip start",
+    "clipEnd": "End",
+    "arrivesAt": "Comes in at {{s}} s",
+    "arrivesBefore": "Comes in {{s}} s before the end",
+    "leavesBefore": "leaves {{s}} s before the end",
+    "staysFor": "stays {{s}} s",
+    "staysToEnd": "stays to the end",
+    "replay": "Replay the animation",
+    "enter": "Entrance",
+    "exit": "Exit",
+    "enters": {
+      "pop": "Pop",
+      "bounce": "Bounce",
+      "elastic": "Elastic",
+      "drop": "Drop",
+      "rise": "Rise",
+      "slideLeft": "From the left",
+      "slideRight": "From the right",
+      "zoom": "Zoom",
+      "fade": "Fade",
+      "none": "None"
+    },
+    "exits": {
+      "fade": "Fade",
+      "shrink": "Shrink",
+      "sink": "Sink",
+      "slideLeft": "To the left",
+      "slideRight": "To the right",
+      "none": "Cut"
+    }
+  },
+  "widgets": {
+    "channel-pill": {
+      "name": "Channel pill",
+      "desc": "Your logo and twitch.tv/your-channel on a white pill"
+    },
+    "logo": {
+      "name": "Logo",
+      "desc": "Your logo with a ring in your color"
+    },
+    "channel-name": {
+      "name": "Channel name",
+      "desc": "Your name in big letters, underlined in your color"
+    },
+    "handle": {
+      "name": "twitch.tv/name",
+      "desc": "Your Twitch link on a dark pill"
+    },
+    "live-badge": {
+      "name": "LIVE badge",
+      "desc": "A pulsing red badge"
+    },
+    "follow-button": {
+      "name": "Follow button",
+      "desc": "A cursor comes and clicks Follow"
+    },
+    "follow-banner": {
+      "name": "Follow me banner",
+      "desc": "Your logo, your name and a Follow button"
+    },
+    "lower-third": {
+      "name": "TV lower third",
+      "desc": "Logo, name and game, TV style"
+    },
+    "socials": {
+      "name": "Socials",
+      "desc": "Your Twitch, TikTok, YouTube, Instagram handles"
+    },
+    "follower-count": {
+      "name": "Follower counter",
+      "desc": "Your followers rolling up to the real number"
+    },
+    "clip-sticker": {
+      "name": "Sticker",
+      "desc": "A tilted sticker that wiggles"
+    },
+    "corner-logo": {
+      "name": "Corner logo",
+      "desc": "Your logo, discreet, like a TV channel bug"
+    },
+    "progress-bar": {
+      "name": "Progress bar",
+      "desc": "It moves along with the clip"
+    }
   }
 }

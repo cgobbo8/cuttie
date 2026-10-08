@@ -34,6 +34,14 @@ export const EASING_FUNCTIONS: Record<EasingPreset, (t: number) => number> = {
     if (t === 0 || t === 1) return t;
     return -(2 ** (10 * t - 10)) * Math.sin((t * 10 - 10.75) * (2 * PI) / 3);
   },
+  back: (t) => {
+    const c1 = 1.70158;
+    return 1 + (c1 + 1) * (t - 1) ** 3 + c1 * (t - 1) ** 2;
+  },
+  elasticOut: (t) => {
+    if (t === 0 || t === 1) return t;
+    return 2 ** (-10 * t) * Math.sin((t * 10 - 0.75) * (2 * PI) / 3) + 1;
+  },
 };
 
 export const EASING_LABELS: Record<EasingPreset, string> = {
@@ -49,6 +57,8 @@ export const EASING_LABELS: Record<EasingPreset, string> = {
   "easeInOut.power4": "Ease In-Out (Power 4)",
   bounce: "Bounce",
   elastic: "Elastic",
+  back: "Back (dépassement)",
+  elasticOut: "Elastic Out",
 };
 
 export function applyEasing(preset: EasingPreset, t: number): number {

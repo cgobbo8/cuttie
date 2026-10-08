@@ -1,6 +1,7 @@
 import type { CSSProperties } from "react";
 import { BOX_SHADOW_PRESETS, type Layer } from "../../lib/editorTypes";
 import ChannelPill from "../editor/widgets/ChannelPill";
+import { kitWidget } from "../editor/widgets/kit";
 
 interface Props {
   layers: Layer[];
@@ -68,7 +69,7 @@ export default function TemplateSketch({ layers, frameUrl, width, sample, classN
               lineHeight: 1.2,
               textTransform: sub.uppercase ? "uppercase" : "none",
               color: sub.boxed ? "#fff" : sub.customColor,
-              WebkitTextStroke: sub.boxed ? undefined : `${Math.max(2, sub.fontSize / 25)}px black`,
+              WebkitTextStroke: sub.boxed || sub.noStroke ? undefined : `${Math.max(2, sub.fontSize / 25)}px black`,
               paintOrder: "stroke fill",
               ...(sub.boxed
                 ? { display: "inline-block", padding: `${sub.fontSize * 0.22}px ${sub.fontSize * 0.45}px`, borderRadius: sub.fontSize * 0.35, background: "rgba(0,0,0,0.58)" }
@@ -87,6 +88,12 @@ export default function TemplateSketch({ layers, frameUrl, width, sample, classN
     }
     if (layer.type === "widget" && layer.widget?.widgetId === "channel-pill") {
       return <ChannelPill props={layer.widget.props} width={t.width} height={t.height} />;
+    }
+    const kit = layer.type === "widget" && layer.widget ? kitWidget(layer.widget.widgetId) : undefined;
+    if (kit && layer.widget) {
+      // As it looks once settled, a couple of seconds after it shows up
+      const at = Number(layer.widget.props.appearAt ?? 0) + 2.4;
+      return <kit.Component props={layer.widget.props} width={t.width} height={t.height} currentTime={at} />;
     }
     if (layer.type === "text" && layer.text) {
       const text = layer.text;

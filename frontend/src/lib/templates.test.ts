@@ -118,10 +118,10 @@ describe("templates", () => {
       const layers = buildTemplate("signature", ctx, look({ subtitlePosition: "top", subtitleSize: "l", widgetPosition: "none" }));
       const subs = layers.find((l) => l.type === "subtitles")!;
       expect(subs.transform.y + subs.transform.height / 2).toBe(420);
-      expect(subs.subtitle!.fontSize).toBe(Math.round(96 * 1.2));
+      expect(subs.subtitle!.fontSize).toBe(Math.round(90 * 1.2));
       expect(layers.some((l) => l.type === "widget")).toBe(false);
       const top = buildTemplate("reaction", ctx, look({ widgetPosition: "top" }, "reaction")).find((l) => l.type === "widget")!;
-      expect(top.transform.y).toBe(62);
+      expect(top.transform.y).toBe(152);
     });
 
     it("can hide the hook line", () => {

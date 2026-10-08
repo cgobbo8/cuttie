@@ -1,25 +1,10 @@
-import { registerRoot, Composition, staticFile } from "remotion";
+import { registerRoot, Composition } from "remotion";
 import { CuttieComposition } from "./CuttieComposition";
 import type { CuttieCompositionProps } from "./CuttieComposition";
 
-// Load Luckiest Guy font for Remotion's headless Chrome renderer
-const fontFace = new FontFace(
-  "Luckiest Guy",
-  `url(${staticFile("fonts/LuckiestGuy-Regular.ttf")})`,
-  { style: "normal", weight: "400" }
-);
-fontFace.load().then((ff) => {
-  document.fonts.add(ff);
-});
+import { loadClipFonts } from "./fonts";
 
-// Geist for the channel widget and the "discreet" subtitles
-const geist = new FontFace("Geist Variable", `url(${staticFile("fonts/Geist-Variable.woff2")})`, {
-  style: "normal",
-  weight: "100 900",
-});
-geist.load().then((ff) => {
-  document.fonts.add(ff);
-});
+loadClipFonts();
 
 const defaultLayers: CuttieCompositionProps["layers"] = [];
 

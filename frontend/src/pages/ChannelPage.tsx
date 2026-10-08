@@ -9,7 +9,9 @@ import { useLatestMoments } from "../lib/useLatestMoment";
 import { useToast } from "../components/Toast";
 import SignaturePreview from "../components/SignaturePreview";
 import TemplateSketch from "../components/montage/TemplateSketch";
-import { buildTemplate, type TemplateContext } from "../lib/templates";
+import type { TemplateContext } from "../lib/templates";
+import { customTemplates } from "../lib/templateKeys";
+import { buildFromSpec } from "../lib/templateSpec";
 import { sampleSubtitle } from "../lib/format";
 
 const COLOR_ROLES: (keyof BrandColors)[] = ["accent", "highlight", "dark", "light"];
@@ -125,6 +127,7 @@ export default function ChannelPage() {
         : null;
   const subtitle = sampleSubtitle(best?.llm?.transcript);
   const brandCam = kit?.facecam && typeof kit.facecam === "object" ? kit.facecam : null;
+  const customs = customTemplates(kit);
   const sketchContext: TemplateContext | null = kit
     ? {
         src: "",
@@ -326,18 +329,18 @@ export default function ChannelPage() {
               </Link>
             }
           >
-            {kit.templates.length === 0 ? (
+            {customs.length === 0 ? (
               <p className="mt-3 text-[13px] leading-relaxed text-ink-3">{t("brand.noTemplates")}</p>
             ) : (
               <div className="mt-4 flex gap-3 overflow-x-auto pb-1">
-                {kit.templates.map((tpl) => (
+                {customs.map((tpl) => (
                   <Link
                     key={tpl.id}
                     to={`/modeles/${tpl.id}?back=/chaine`}
                     className="flex-none w-[84px] flex flex-col items-center gap-1.5 group/tpl"
                   >
                     <TemplateSketch
-                      layers={sketchContext ? buildTemplate(tpl.base, sketchContext, tpl.look) : []}
+                      layers={sketchContext ? buildFromSpec(tpl, sketchContext) : []}
                       frameUrl={frame(480)}
                       width={72}
                       sample={[]}

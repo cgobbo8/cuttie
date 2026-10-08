@@ -1,6 +1,15 @@
 @import "tailwindcss";
 @import "@fontsource-variable/geist";
 @import "@fontsource-variable/geist-mono";
+/* Clip fonts (subtitles, hooks): bundled so the app works offline */
+@import "@fontsource/luckiest-guy/latin-400.css";
+@import "@fontsource/bangers/latin-400.css";
+@import "@fontsource/anton/latin-400.css";
+@import "@fontsource/bebas-neue/latin-400.css";
+@import "@fontsource/montserrat/latin-900.css";
+@import "@fontsource/poppins/latin-800.css";
+@import "@fontsource/permanent-marker/latin-400.css";
+@import "@fontsource/archivo-black/latin-400.css";
 
 /*
  * Cuttie design system — "the content behind the glass".
@@ -352,7 +361,8 @@ body::after {
 .seg > button:hover {
   color: var(--color-ink);
 }
-.seg > button[aria-pressed="true"] {
+.seg > button[aria-pressed="true"],
+.seg > button[aria-selected="true"] {
   color: #ffffff;
   font-weight: 550;
   background: rgba(255, 255, 255, 0.16);

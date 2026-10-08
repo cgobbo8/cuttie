@@ -5,12 +5,14 @@ import TwitchSubscribe from "./TwitchSubscribe";
 import TwitchLiveBanner from "./TwitchLiveBanner";
 import SocialFollow from "./SocialFollow";
 import ChannelPill from "./ChannelPill";
+import { KIT_COMPONENTS } from "./kit";
 
 const WIDGET_COMPONENTS: Record<string, React.FC<{ props: Record<string, unknown>; width: number; height: number; currentTime?: number }>> = {
   "twitch-subscribe": TwitchSubscribe,
   "twitch-live-banner": TwitchLiveBanner,
   "social-follow": SocialFollow,
   "channel-pill": ChannelPill,
+  ...KIT_COMPONENTS,
 };
 
 interface Props {

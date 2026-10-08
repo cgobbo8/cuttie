@@ -1,7 +1,7 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import path from 'node:path'
 import Job from '#models/job'
-import { getBrandKit, parseCustomTemplates, parseFacecamRect, saveBrandKit, type BrandKit } from '#services/brand_kit'
+import { getBrandKit, parseCustomTemplates, parseFacecamRect, saveBrandKit, TEMPLATE_BASES, type BrandKit } from '#services/brand_kit'
 import { getClipDimensions } from '#services/edit_env_resolver'
 import { getPresignedUrl, headObject, listObjects } from '#services/storage'
 import { fetchChannel, fetchStoryboard, type TwitchChannel, type TwitchVod } from '#services/twitch'
@@ -125,6 +125,14 @@ export default class BrandController {
       const templates = parseCustomTemplates(body.templates)
       if (!templates) return response.badRequest({ error: 'Modèles invalides' })
       patch.templates = templates
+    }
+    if (body.default_template !== undefined) {
+      const key = body.default_template
+      const known = [...TEMPLATE_BASES, ...(patch.templates ?? (await getBrandKit()).templates).map((t) => t.id)]
+      if (key !== null && !(typeof key === 'string' && known.includes(key))) {
+        return response.badRequest({ error: 'Modèle par défaut inconnu' })
+      }
+      patch.default_template = key
     }
     if (body.subtitles !== undefined) {
       const { style } = body.subtitles ?? {}

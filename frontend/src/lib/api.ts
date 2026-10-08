@@ -1,4 +1,5 @@
 import type { CustomTemplate } from "./templates";
+import type { TemplateSpec } from "./templateSpec";
 
 const BASE = "/api";
 
@@ -172,8 +173,10 @@ export interface BrandKit {
   facecam_frame: string | null;
   widget: { enabled: boolean; timing: WidgetTiming };
   subtitles: { style: SubtitleStyle };
-  /** Templates made in the simple template editor */
-  templates: CustomTemplate[];
+  /** Templates made in the simple template editor (first-version ones are upgraded on read) */
+  templates: (TemplateSpec | CustomTemplate)[];
+  /** Template applied to new projects (a built-in id or a custom template id) */
+  default_template: string | null;
 }
 
 export type BrandKitPatch = Partial<Omit<BrandKit, "colors" | "widget">> & {

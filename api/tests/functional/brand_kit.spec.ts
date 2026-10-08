@@ -127,6 +127,78 @@ test.group('Brand kit | custom templates', (group) => {
   })
 })
 
+test.group('Brand kit | element templates', (group) => {
+  group.each.setup(() => testUtils.db().withGlobalTransaction())
+  group.each.setup(() => {
+    const settings = readSettings()
+    delete settings.brand_kit
+    writeSettings(settings)
+  })
+
+  const frame = { radius: 44, border: 6, borderColor: 'white', shadow: false }
+  const spec = {
+    version: 2,
+    id: 'custom-9a8b7c6d',
+    name: 'Cam ronde',
+    base: 'signature',
+    background: { kind: 'blur', color: 'dark', dim: 0.42 },
+    game: { box: { x: 40, y: 868, w: 1000, h: 600 }, frame: { ...frame, border: 0 } },
+    cam: { visible: true, box: { x: 240, y: 180, w: 600, h: 600 }, frame: { ...frame, radius: 300, borderColor: 'accent' } },
+    subtitles: { box: { x: 60, y: 1250, w: 860, h: 190 }, font: 'bangers', size: 104, color: 'white', highlight: 'highlight', uppercase: true, stroke: true, boxed: false, speakers: false },
+    hook: { visible: false, box: { x: 40, y: 160, w: 1000, h: 230 }, style: 'outline', font: 'luckiest', size: 86 },
+    widgets: [
+      { id: 'w-1a2b', kind: 'logo', box: { x: 60, y: 170, w: 190, h: 190 }, timing: 'start', fields: { shape: 'round' } },
+      { id: 'w-3c4d', kind: 'socials', box: { x: 250, y: 1140, w: 500, h: 320 }, timing: 'end', fields: { tiktok: 'falkarst' } },
+    ],
+  }
+
+  test('saves an element template and makes it the default', async ({ client, assert }) => {
+    const user = await makeUser()
+    const saved = await client.put('/api/brand-kit').loginAs(user).json({ templates: [spec], default_template: spec.id })
+    saved.assertStatus(200)
+    assert.deepEqual(saved.body().templates[0], spec)
+    assert.equal(saved.body().default_template, spec.id)
+    ;(await client.put('/api/brand-kit').loginAs(user).json({ default_template: 'reaction' })).assertStatus(200)
+    ;(await client.put('/api/brand-kit').loginAs(user).json({ default_template: 'custom-nope0000' })).assertStatus(400)
+  })
+
+  test('keeps precise widget timing, animations, stacking and elements past the edges', async ({ client, assert }) => {
+    const user = await makeUser()
+    const rich = {
+      ...spec,
+      id: 'custom-1f2e3d4c',
+      game: { ...spec.game, box: { x: -200, y: 700, w: 1480, h: 832 } },
+      widgets: [
+        { ...spec.widgets[0], timing: 'always', show: { in: 1, inFrom: 'start', out: 1, outFrom: 'end' }, enter: 'elastic', exit: 'shrink' },
+        { ...spec.widgets[1], show: { in: 4.5, inFrom: 'end', out: null, outFrom: 'end' }, enter: 'drop' },
+      ],
+      order: ['cam', 'game', 'subtitles', 'hook', 'widget:w-3c4d', 'widget:w-1a2b'],
+    }
+    const saved = await client.put('/api/brand-kit').loginAs(user).json({ templates: [rich] })
+    saved.assertStatus(200)
+    assert.deepEqual(saved.body().templates[0], rich)
+  })
+
+  test('rejects broken element templates', async ({ client }) => {
+    const user = await makeUser()
+    const broken = [
+      { ...spec, subtitles: { ...spec.subtitles, font: 'comic-sans' } },
+      { ...spec, widgets: [{ ...spec.widgets[0], kind: 'confetti' }] },
+      { ...spec, cam: { ...spec.cam, box: { x: 1200, y: 0, w: 600, h: 600 } } },
+      { ...spec, game: { ...spec.game, box: { x: 0, y: 0, w: 50000, h: 600 } } },
+      { ...spec, widgets: [{ ...spec.widgets[0], show: { in: -1, inFrom: 'start', out: null, outFrom: 'end' } }] },
+      { ...spec, widgets: [{ ...spec.widgets[0], enter: 'teleport' }] },
+      { ...spec, order: ['game', 'game'] },
+      { ...spec, order: ['game', 'widget:w-nope'] },
+      { ...spec, game: { ...spec.game, frame: { ...frame, borderColor: 'javascript:alert(1)' } } },
+      { ...spec, widgets: [{ ...spec.widgets[0], fields: { text: 'x'.repeat(200) } }] },
+    ]
+    for (const template of broken) {
+      ;(await client.put('/api/brand-kit').loginAs(user).json({ templates: [template] })).assertStatus(400)
+    }
+  })
+})
+
 test.group('Brand kit | webcam scaling', () => {
   test('scales the confirmed webcam to the clip size', ({ assert }) => {
     const kit = { ...DEFAULT_BRAND_KIT, facecam: { x: 1518, y: 0, w: 402, h: 446, ref_w: 1920, ref_h: 1080 } }

@@ -1,72 +1,73 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { useTranslation } from "react-i18next";
-import { Player } from "@remotion/player";
-import { ArrowLeft, Check, Layers, Loader2, Trash2 } from "lucide-react";
+import type { PlayerRef } from "@remotion/player";
+import { AlertTriangle, ArrowLeft, Check, Layers, Loader2, Pause, Play, Redo2, ScanLine, Star, Trash2, Undo2, Volume2, VolumeX } from "lucide-react";
 import { brandFrameUrl, clipThumbUrl, getEditEnvironment, getJobStatus, type EditEnvironment, type HotPoint } from "../lib/api";
 import { useBackdrop } from "../lib/BackdropContext";
 import { useChannel } from "../lib/ChannelContext";
 import { buildMoments } from "../lib/moments";
 import { clipTemplateContext } from "../lib/templateContext";
+import { customTemplates } from "../lib/templateKeys";
 import {
-  buildTemplate,
-  HAS_HOOK,
-  NATIVE_LOOKS,
-  newTemplateId,
-  TEMPLATE_IDS,
-  type CustomTemplate,
-  type TemplateContext,
-  type TemplateId,
-  type TemplateLook,
-} from "../lib/templates";
+  buildFromSpec,
+  coveredBy,
+  dragBox,
+  defaultShow,
+  newWidgetId,
+  orderOf,
+  placeWidget,
+  restack,
+  widgetWindow,
+  specFromLayout,
+  type Box,
+  type SpecWidget,
+  type TemplateSpec,
+} from "../lib/templateSpec";
+import { TEMPLATE_IDS, type TemplateContext, type TemplateId } from "../lib/templates";
 import { useLatestMoments } from "../lib/useLatestMoment";
-import CuttieComposition from "../components/remotion-editor/CuttieComposition";
-import TemplateSketch from "../components/montage/TemplateSketch";
+import { kitWidget, type KitWidget } from "../components/editor/widgets/kit";
+import EditorCanvas, { type CanvasElement } from "../components/template-editor/EditorCanvas";
+import LayerList from "../components/template-editor/LayerList";
+import {
+  AddWidgetButton,
+  BackgroundPanel,
+  FramePanel,
+  HookPanel,
+  SubtitlesPanel,
+  WidgetPanel,
+  WidgetPicker,
+} from "../components/template-editor/Panels";
 import ConfirmModal from "../components/ConfirmModal";
 import { useToast } from "../components/Toast";
 
 const FPS = 30;
 
-function Card({ title, hint, children }: { title: string; hint?: string; children: ReactNode }) {
-  return (
-    <section className="glass rounded-[18px] px-[18px] pt-4 pb-1.5 min-w-0">
-      <h2 className="text-[15px] font-semibold tracking-[-0.01em] text-white">{title}</h2>
-      {hint && <p className="mt-0.5 text-[12.5px] leading-snug text-ink-3">{hint}</p>}
-      <div className="mt-1">{children}</div>
-    </section>
-  );
+/** Read / replace the box of an element ("game", "cam", "subtitles", "hook", "widget:<id>") */
+function boxOf(spec: TemplateSpec, key: string): Box | null {
+  if (key === "game") return spec.game.box;
+  if (key === "cam") return spec.cam.box;
+  if (key === "subtitles") return spec.subtitles.box;
+  if (key === "hook") return spec.hook.box;
+  if (key.startsWith("widget:")) return spec.widgets.find((w) => `widget:${w.id}` === key)?.box ?? null;
+  return null;
 }
 
-/** A setting: label on the left, its choices on the right */
-function Choice<T extends string>({
-  label,
-  value,
-  options,
-  onChange,
-}: {
-  label: string;
-  value: T;
-  options: { value: T; label: string }[];
-  onChange: (value: T) => void;
-}) {
-  return (
-    <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 py-2.5 border-b border-white/[0.06] last:border-0">
-      <span className="text-[13.5px] text-ink-2">{label}</span>
-      <div role="group" aria-label={label} className="seg">
-        {options.map((o) => (
-          <button key={o.value} aria-pressed={value === o.value} onClick={() => onChange(o.value)}>
-            {o.label}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
+function withBox(spec: TemplateSpec, key: string, box: Box): TemplateSpec {
+  if (key === "game") return { ...spec, game: { ...spec.game, box } };
+  if (key === "cam") return { ...spec, cam: { ...spec.cam, box } };
+  if (key === "subtitles") return { ...spec, subtitles: { ...spec.subtitles, box } };
+  if (key === "hook") return { ...spec, hook: { ...spec.hook, box } };
+  return { ...spec, widgets: spec.widgets.map((w) => (`widget:${w.id}` === key ? { ...w, box } : w)) };
 }
+
+const isRoundCam = (spec: TemplateSpec) => spec.cam.box.w === spec.cam.box.h && spec.cam.frame.radius >= spec.cam.box.w / 2 - 1;
 
 /**
- * The simple template editor: start from one of the 6 layouts, adjust the
- * webcam, the background, the subtitles, the widget, see it live on a real
- * clip. The layer editor stays available as the advanced mode.
+ * The template editor: click an element of the clip (background, game, webcam,
+ * subtitles, hook, widgets), move it, resize it, style it. Text and brand
+ * elements are kept out of what TikTok / Shorts / Reels cover. The layer
+ * editor stays available as the advanced mode.
  */
 export default function TemplateEditorPage() {
   const { t } = useTranslation();
@@ -78,48 +79,79 @@ export default function TemplateEditorPage() {
   const latest = useLatestMoments();
 
   const isNew = id === "nouveau";
-  const existing: CustomTemplate | null = kit?.templates.find((tpl) => tpl.id === id) ?? null;
+  const customs = useMemo(() => customTemplates(kit), [kit]);
+  const existing = customs.find((tpl) => tpl.id === id) ?? null;
   const back = params.get("back") || "/chaine";
 
-  // Real footage to try it on: the clip we came from, else the latest analysis' best moment
   const sampleJob = params.get("job") || latest?.job.job_id || null;
   const sampleClip = params.get("clip") || latest?.hotPoints[0]?.clip_filename || null;
 
-  const [name, setName] = useState("");
-  const [base, setBase] = useState<TemplateId>("signature");
-  const [look, setLook] = useState<TemplateLook>(NATIVE_LOOKS.signature);
-  const [started, setStarted] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(false);
+  /* ── The template being edited, with undo / redo ── */
+  const [spec, setSpec] = useState<TemplateSpec | null>(null);
+  const committed = useRef<TemplateSpec | null>(null);
+  const past = useRef<TemplateSpec[]>([]);
+  const future = useRef<TemplateSpec[]>([]);
+  const [, setHistoryTick] = useState(0);
 
-  useEffect(() => {
-    if (!kit || started) return;
-    if (existing) {
-      setName(existing.name);
-      setBase(existing.base);
-      setLook(existing.look);
-    } else {
-      const requested = params.get("base") as TemplateId | null;
-      const start = requested && TEMPLATE_IDS.includes(requested) ? requested : "signature";
-      setBase(start);
-      setLook(NATIVE_LOOKS[start]);
-      setName(t("templateEditor.defaultName", { n: kit.templates.length + 1 }));
+  const update = useCallback((next: TemplateSpec, done = true) => {
+    setSpec(next);
+    if (!done) return;
+    if (committed.current && committed.current !== next) {
+      past.current = [...past.current.slice(-60), committed.current];
+      future.current = [];
     }
-    setStarted(true);
-  }, [kit, existing, started, params, t]);
+    committed.current = next;
+    setHistoryTick((n) => n + 1);
+  }, []);
 
-  // An unknown template id: back to where we came from
+  const undo = useCallback(() => {
+    const previous = past.current.pop();
+    if (!previous || !committed.current) return;
+    future.current.push(committed.current);
+    committed.current = previous;
+    setSpec(previous);
+    setHistoryTick((n) => n + 1);
+  }, []);
+
+  const redo = useCallback(() => {
+    const next = future.current.pop();
+    if (!next || !committed.current) return;
+    past.current.push(committed.current);
+    committed.current = next;
+    setSpec(next);
+    setHistoryTick((n) => n + 1);
+  }, []);
+
   useEffect(() => {
-    if (kit && !isNew && !existing) navigate(back, { replace: true });
-  }, [kit, isNew, existing, navigate, back]);
+    if (!kit || spec) return;
+    if (!isNew && !existing) {
+      navigate(back, { replace: true });
+      return;
+    }
+    const requested = params.get("base") as TemplateId | null;
+    const start: TemplateSpec =
+      existing ??
+      specFromLayout(requested && TEMPLATE_IDS.includes(requested) ? requested : "signature", {
+        subtitleStyle: kit.subtitles.style,
+        widgetTiming: kit.widget.timing,
+        name: t("templateEditor.defaultName", { n: customs.length + 1 }),
+      });
+    committed.current = start;
+    setSpec(start);
+  }, [kit, spec, isNew, existing, navigate, back, params, customs.length, t]);
 
+  /* ── Real footage to try it on ── */
   const [env, setEnv] = useState<EditEnvironment | null>(null);
   const [sampleHp, setSampleHp] = useState<HotPoint | null>(null);
+  const [game, setGame] = useState<string | null>(null);
   useEffect(() => {
     if (!sampleJob || !sampleClip) return;
     getEditEnvironment(sampleJob, sampleClip).then(setEnv).catch(() => setEnv(null));
     getJobStatus(sampleJob)
-      .then((job) => setSampleHp(job.hot_points?.find((hp) => hp.clip_filename === sampleClip) ?? null))
+      .then((job) => {
+        setSampleHp(job.hot_points?.find((hp) => hp.clip_filename === sampleClip) ?? null);
+        setGame(job.vod_game ?? null);
+      })
       .catch(() => setSampleHp(null));
   }, [sampleJob, sampleClip]);
 
@@ -131,24 +163,31 @@ export default function TemplateEditorPage() {
 
   const ctx: TemplateContext | null = useMemo(() => {
     if (!kit) return null;
-    const login = channel?.login ?? kit.twitch_login;
-    const avatarUrl = channel?.avatar_url ?? null;
-    const hook = sampleHp?.clip_name || t("templateEditor.sampleHook");
+    const common = {
+      login: channel?.login ?? kit.twitch_login,
+      avatarUrl: channel?.avatar_url ?? null,
+      displayName: channel?.display_name ?? null,
+      followers: channel?.followers ?? null,
+      game,
+      hook: sampleHp?.clip_name || t("templateEditor.sampleHook"),
+    };
     if (sampleJob && sampleClip) {
-      return clipTemplateContext({
-        jobId: sampleJob,
-        filename: sampleClip,
-        env: env ?? undefined,
-        kit,
-        login,
-        avatarUrl,
-        facecam: env?.cam?.rect ?? env?.facecam ?? null,
-        startAt: 0,
-        endAt: duration,
-        hook,
-      });
+      return {
+        ...clipTemplateContext({
+          jobId: sampleJob,
+          filename: sampleClip,
+          env: env ?? undefined,
+          kit,
+          login: common.login,
+          avatarUrl: common.avatarUrl,
+          facecam: env?.cam?.rect ?? env?.facecam ?? null,
+          startAt: 0,
+          endAt: duration,
+          hook: common.hook,
+        }),
+        ...common,
+      };
     }
-    // No analysis yet: the live frame the webcam was confirmed on
     return {
       src: "",
       backgroundSrc: "",
@@ -161,31 +200,178 @@ export default function TemplateEditorPage() {
       colors: kit.colors,
       subtitleStyle: kit.subtitles.style,
       widget: kit.widget,
-      login,
-      avatarUrl,
-      hook,
+      ...common,
     };
-  }, [kit, channel, sampleJob, sampleClip, env, sampleHp, duration, brandCam, t]);
+  }, [kit, channel, sampleJob, sampleClip, env, sampleHp, duration, brandCam, game, t]);
 
-  const layers = useMemo(() => (ctx ? buildTemplate(base, ctx, look) : []), [ctx, base, look]);
+  const layers = useMemo(() => (spec && ctx ? buildFromSpec(spec, ctx) : []), [spec, ctx]);
   const frameUrl = sampleJob && sampleClip ? clipThumbUrl(sampleJob, sampleClip) : kit?.facecam_frame ? brandFrameUrl : null;
   const firstWords = env?.words?.slice(0, 3).map((w) => w.word) ?? [];
-  const sample = firstWords.length ? firstWords : [t("templateEditor.sampleWords")];
 
-  const set = <K extends keyof TemplateLook>(key: K) => (value: TemplateLook[K]) => setLook((prev) => ({ ...prev, [key]: value }));
-  const hasCam = base !== "sanscam";
-  const hasBackground = base !== "plein";
-  const hasHook = HAS_HOOK.includes(base);
+  /* ── Selection, panels, canvas size ── */
+  const [selected, setSelected] = useState<string | null>("background");
+  const [picking, setPicking] = useState(false);
+  const [showZones, setShowZones] = useState(true);
+  const [makeDefault, setMakeDefault] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  // The frame and its playback bar fit the window
+  const fitHeight = () => Math.max(480, Math.min(760, window.innerHeight - 330));
+  const [canvasHeight, setCanvasHeight] = useState(fitHeight);
+  useEffect(() => {
+    const onResize = () => setCanvasHeight(fitHeight());
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+  useEffect(() => {
+    if (kit && existing) setMakeDefault(kit.default_template === existing.id);
+  }, [kit, existing]);
 
+  const select = (key: string | null) => {
+    setPicking(false);
+    setSelected(key ?? "background");
+    const widget = spec?.widgets.find((w) => `widget:${w.id}` === key);
+    if (widget) reveal(widget);
+  };
+
+  const reference = spec ? specFromLayout(spec.base, { subtitleStyle: kit?.subtitles.style, widgetTiming: kit?.widget.timing }) : null;
+
+  const labelOf = (key: string) => {
+    const widget = spec?.widgets.find((w) => `widget:${w.id}` === key);
+    return widget ? t(`widgets.${widget.kind}.name`) : t(`templateEditor.el.${key}`);
+  };
+
+  // Bottom to top, like the render: the top ones get the clicks
+  const elements: CanvasElement[] = spec
+    ? orderOf(spec).flatMap((key): CanvasElement[] => {
+        if (key === "game") return [{ key, label: labelOf(key), box: spec.game.box, checkZones: false }];
+        if (key === "cam") return spec.cam.visible ? [{ key, label: labelOf(key), box: spec.cam.box, keepRatio: isRoundCam(spec) }] : [];
+        if (key === "subtitles") return [{ key, label: labelOf(key), box: spec.subtitles.box }];
+        if (key === "hook") return spec.hook.visible ? [{ key, label: labelOf(key), box: spec.hook.box }] : [];
+        const w = spec.widgets.find((x) => `widget:${x.id}` === key);
+        return w ? [{ key, label: labelOf(key), box: w.box, keepRatio: w.kind === "logo" || w.kind === "corner-logo" }] : [];
+      })
+    : [];
+
+  const removeWidget = useCallback(
+    (key: string) => {
+      if (!spec) return;
+      update({ ...spec, widgets: spec.widgets.filter((w) => `widget:${w.id}` !== key), order: orderOf(spec).filter((k) => k !== key) });
+      setSelected("background");
+    },
+    [spec, update],
+  );
+
+  const addWidget = (kitDef: KitWidget) => {
+    if (!spec) return;
+    const widget: SpecWidget = {
+      id: newWidgetId(),
+      kind: kitDef.id,
+      box: placeWidget(spec, kitDef.box, kitDef.timing),
+      timing: kitDef.timing,
+      show: defaultShow(kitDef.id, kitDef.timing),
+      fields: {},
+    };
+    // On top of everything
+    update({ ...spec, widgets: [...spec.widgets, widget], order: [...orderOf(spec), `widget:${widget.id}`] });
+    setPicking(false);
+    setSelected(`widget:${widget.id}`);
+    reveal(widget);
+  };
+
+  /* ── Keyboard: nudge, delete, undo / redo ── */
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return;
+      const mod = e.metaKey || e.ctrlKey;
+      if (mod && e.key.toLowerCase() === "z") {
+        e.preventDefault();
+        if (e.shiftKey) redo();
+        else undo();
+        return;
+      }
+      if (mod && e.key.toLowerCase() === "y") {
+        e.preventDefault();
+        redo();
+        return;
+      }
+      if (!spec || !selected) return;
+      if (e.key === "Escape") {
+        setPicking(false);
+        setSelected("background");
+        return;
+      }
+      if (e.key === "Delete" || e.key === "Backspace") {
+        if (selected.startsWith("widget:")) removeWidget(selected);
+        else if (selected === "cam") update({ ...spec, cam: { ...spec.cam, visible: false } });
+        else if (selected === "hook") update({ ...spec, hook: { ...spec.hook, visible: false } });
+        else return;
+        e.preventDefault();
+        setSelected("background");
+        return;
+      }
+      const arrows: Record<string, [number, number]> = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
+      const step = arrows[e.key];
+      const box = boxOf(spec, selected);
+      if (step && box) {
+        e.preventDefault();
+        const k = e.shiftKey ? 10 : 2;
+        update(withBox(spec, selected, dragBox(box, "move", step[0] * k, step[1] * k, [], { snap: false }).box));
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [spec, selected, undo, redo, update, removeWidget]);
+
+  /* ── Playback ── */
+  const playerRef = useRef<PlayerRef | null>(null);
+  /** Paused on a moment where a widget isn't on screen: go where it shows, to see what you edit */
+  function reveal(widget: SpecWidget) {
+    const player = playerRef.current;
+    if (!player || player.isPlaying()) return;
+    const { appearAt, leaveAt } = widgetWindow(widget, 0, duration);
+    const until = leaveAt ?? duration;
+    const now = player.getCurrentFrame() / FPS;
+    // Settled: past its entrance, before it leaves
+    if (now < appearAt + 0.6 || now > until - 0.1) player.seekTo(Math.round(Math.min(appearAt + 1.2, (appearAt + until) / 2) * FPS));
+  }
+
+  /** Plays a widget's entrance (and exit when it's close by) to see the animation */
+  function replay(widget: SpecWidget) {
+    const player = playerRef.current;
+    if (!player) return;
+    const { appearAt } = widgetWindow(widget, 0, duration);
+    player.seekTo(Math.max(0, Math.round((appearAt - 0.4) * FPS)));
+    player.play();
+  }
+  const [playing, setPlaying] = useState(false);
+  const [muted, setMuted] = useState(false);
+  useEffect(() => {
+    const player = playerRef.current;
+    if (!player) return;
+    const onPlay = () => setPlaying(true);
+    const onPause = () => setPlaying(false);
+    player.addEventListener("play", onPlay);
+    player.addEventListener("pause", onPause);
+    return () => {
+      player.removeEventListener("play", onPlay);
+      player.removeEventListener("pause", onPause);
+    };
+  }, [env, spec !== null]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /* ── Save / delete / advanced mode ── */
   const save = async () => {
-    if (!kit) return;
-    const template: CustomTemplate = { id: existing?.id ?? newTemplateId(), name: name.trim() || t("templateEditor.untitled"), base, look };
+    if (!kit || !spec) return;
+    const toSave: TemplateSpec = { ...spec, name: spec.name.trim() || t("templateEditor.untitled") };
     setSaving(true);
     try {
-      await saveKit({ templates: [...kit.templates.filter((tpl) => tpl.id !== template.id), template] });
+      await saveKit({
+        templates: [...(kit.templates ?? []).filter((tpl) => tpl.id !== toSave.id), toSave],
+        ...(makeDefault ? { default_template: toSave.id } : kit.default_template === toSave.id ? { default_template: null } : {}),
+      });
       toast.success(t("templateEditor.saved"));
-      // Back to Montage with this template picked
-      navigate(back.includes("/montage") ? `${back.split("?")[0]}?template=${template.id}` : back);
+      navigate(back.includes("/montage") ? `${back.split("?")[0]}?template=${toSave.id}` : back);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t("templateEditor.saveError"));
     } finally {
@@ -196,7 +382,10 @@ export default function TemplateEditorPage() {
   const remove = async () => {
     if (!kit || !existing) return;
     try {
-      await saveKit({ templates: kit.templates.filter((tpl) => tpl.id !== existing.id) });
+      await saveKit({
+        templates: (kit.templates ?? []).filter((tpl) => tpl.id !== existing.id),
+        ...(kit.default_template === existing.id ? { default_template: null } : {}),
+      });
       toast.success(t("templateEditor.deleted"));
       navigate(back.split("?")[0]);
     } catch (err) {
@@ -214,7 +403,7 @@ export default function TemplateEditorPage() {
     navigate(`/${sampleJob}/edit?clip=${encodeURIComponent(sampleClip)}`);
   };
 
-  if (!kit || !started) {
+  if (!kit || !spec || !ctx || !reference) {
     return (
       <div className="flex justify-center py-24">
         <Loader2 className="w-5 h-5 animate-spin text-ink-3" />
@@ -222,7 +411,10 @@ export default function TemplateEditorPage() {
     );
   }
 
-  const sizes = (["s", "m", "l"] as const).map((v) => ({ value: v, label: t(`templateEditor.size.${v}`) }));
+  const selectedBox = selected ? boxOf(spec, selected) : null;
+  const covered = showZones && selectedBox && selected !== "game" ? coveredBy(selectedBox) : [];
+  const selectedWidget = selected?.startsWith("widget:") ? spec.widgets.find((w) => `widget:${w.id}` === selected) : undefined;
+
 
   return (
     <div className="animate-fade-in">
@@ -232,20 +424,35 @@ export default function TemplateEditorPage() {
             <ArrowLeft className="w-4 h-4" /> {back.includes("/montage") ? t("project.step.edit") : t("sidebar.channel")}
           </Link>
           <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
+            value={spec.name}
+            onChange={(e) => setSpec({ ...spec, name: e.target.value })}
+            onBlur={() => update(spec)}
             maxLength={40}
             aria-label={t("templateEditor.name")}
-            className="mt-2 block w-full max-w-[560px] bg-transparent outline-none focus-visible:outline-none border-b border-transparent focus:border-white/20 text-[32px] leading-[1.15] tracking-[-0.03em] font-[650] text-white"
+            className="mt-2 block w-full max-w-[560px] bg-transparent outline-none focus-visible:outline-none border-b border-transparent focus:border-white/20 text-[30px] leading-[1.15] tracking-[-0.03em] font-[650] text-white"
           />
-          <p className="mt-1.5 text-[13.5px] text-ink-2">{t("templateEditor.subtitle")}</p>
+          <p className="mt-1 text-[13px] text-ink-2">{t("templateEditor.subtitle")}</p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <button onClick={undo} disabled={past.current.length === 0} title={t("templateEditor.undo")} aria-label={t("templateEditor.undo")} className="btn btn-ghost btn-icon">
+            <Undo2 className="w-4 h-4" />
+          </button>
+          <button onClick={redo} disabled={future.current.length === 0} title={t("templateEditor.redo")} aria-label={t("templateEditor.redo")} className="btn btn-ghost btn-icon">
+            <Redo2 className="w-4 h-4" />
+          </button>
           {existing && (
-            <button onClick={() => setConfirmDelete(true)} className="btn btn-ghost" aria-label={t("templateEditor.delete")}>
+            <button onClick={() => setConfirmDelete(true)} title={t("templateEditor.delete")} aria-label={t("templateEditor.delete")} className="btn btn-ghost btn-icon hover:text-[#ff8a7a]">
               <Trash2 className="w-4 h-4" />
             </button>
           )}
+          <button
+            onClick={() => setMakeDefault((v) => !v)}
+            aria-pressed={makeDefault}
+            title={t("templateEditor.makeDefaultHint")}
+            className={`btn btn-sm h-10 ${makeDefault ? "btn-accent" : "btn-glass"}`}
+          >
+            <Star className="w-4 h-4" fill={makeDefault ? "currentColor" : "none"} /> {t("templateEditor.makeDefault")}
+          </button>
           {sampleJob && sampleClip && (
             <button onClick={openAdvanced} className="btn btn-glass">
               <Layers className="w-4 h-4" /> {t("templateEditor.advanced")}
@@ -257,152 +464,154 @@ export default function TemplateEditorPage() {
         </div>
       </header>
 
-      <section className="mt-[22px] flex flex-wrap gap-[18px] items-start">
-        {/* Live preview */}
-        <div className="flex-[0_1_380px] min-w-0 flex flex-col items-center gap-3 lg:sticky lg:top-[96px]">
-          <div className="relative w-[360px] max-w-full aspect-[9/16] rounded-[24px] overflow-hidden border border-white/[0.14] shadow-[0_50px_100px_-40px_rgba(0,0,0,0.9)] bg-black">
-            {sampleJob && sampleClip ? (
-              env ? (
-                <Player
-                  component={CuttieComposition}
-                  inputProps={{ layers }}
-                  compositionWidth={1080}
-                  compositionHeight={1920}
-                  fps={FPS}
-                  durationInFrames={Math.max(1, Math.round(duration * FPS))}
-                  controls
-                  loop
-                  clickToPlay
-                  acknowledgeRemotionLicense
-                  style={{ width: "100%", height: "100%" }}
-                />
-              ) : (
-                <div className="absolute inset-0 grid place-items-center">
-                  <Loader2 className="w-5 h-5 animate-spin text-ink-3" />
-                </div>
-              )
-            ) : (
-              <TemplateSketch layers={layers} frameUrl={frameUrl} width={360} sample={sample} />
+      <section className="mt-[22px] flex flex-wrap gap-[22px] items-start">
+        {/* The frame */}
+        <div className="flex flex-col items-center gap-3">
+          <EditorCanvas
+            layers={layers}
+            elements={elements}
+            selected={selected}
+            onSelect={select}
+            onBoxChange={(key, box, done) => update(withBox(spec, key, box), done)}
+            showZones={showZones}
+            height={canvasHeight}
+            durationInFrames={Math.max(1, Math.round(duration * FPS))}
+            playerRef={playerRef}
+            initialFrame={45}
+            still={sampleJob && sampleClip && env ? null : { frameUrl, sample: firstWords.length ? firstWords : [t("templateEditor.sampleWords")] }}
+          />
+          <div className="glass flex items-center gap-1.5 p-1.5 rounded-[14px]">
+            {sampleJob && sampleClip && env && (
+              <>
+                <button onClick={() => playerRef.current?.toggle()} aria-label={playing ? t("project.pause") : t("project.play")} className="btn btn-primary btn-icon w-9 h-9 rounded-[10px]">
+                  {playing ? <Pause className="w-4 h-4" fill="currentColor" /> : <Play className="w-4 h-4 translate-x-[1px]" fill="currentColor" />}
+                </button>
+                <button
+                  onClick={() => {
+                    if (muted) playerRef.current?.unmute();
+                    else playerRef.current?.mute();
+                    setMuted(!muted);
+                  }}
+                  aria-label={muted ? t("project.unmute") : t("project.mute")}
+                  className="btn btn-ghost btn-icon w-9 h-9"
+                >
+                  {muted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+                </button>
+              </>
             )}
+            <button onClick={() => setShowZones((v) => !v)} aria-pressed={showZones} className={`btn btn-sm h-9 ${showZones ? "bg-white/[0.12] text-white" : "btn-ghost"}`}>
+              <ScanLine className="w-4 h-4" /> {t("templateEditor.zones")}
+            </button>
           </div>
-          <p className="text-[12.5px] text-ink-3 text-center max-w-[340px]">
-            {sampleHp ? t("templateEditor.previewOn", { clip: sampleHp.clip_name }) : t("templateEditor.previewStill")}
+          <p className="text-[12px] text-ink-3 text-center max-w-[420px]">
+            {sampleHp ? t("templateEditor.previewOn", { clip: sampleHp.clip_name }) : t("templateEditor.previewStill")} {t("templateEditor.dragHint")}
           </p>
         </div>
 
-        {/* Settings */}
-        <div className="flex-[1_1_520px] min-w-0 grid gap-3.5 items-start grid-cols-[repeat(auto-fill,minmax(340px,1fr))]">
-          <div className="col-span-full">
-            <Card title={t("templateEditor.base")} hint={t("templateEditor.baseHint")}>
-              <div className="flex gap-2.5 overflow-x-auto pb-3 pt-1.5">
-                {TEMPLATE_IDS.map((id) => (
-                  <button
-                    key={id}
-                    onClick={() => setBase(id)}
-                    aria-pressed={base === id}
-                    className={`flex-none flex flex-col items-center gap-1.5 p-1.5 rounded-[12px] border transition-colors ${
-                      base === id ? "border-accent bg-white/[0.08] shadow-[0_0_0_3px_var(--color-accent-soft)]" : "border-transparent hover:bg-white/[0.05]"
-                    }`}
-                  >
-                    {ctx && (
-                      <TemplateSketch
-                        layers={buildTemplate(id, ctx, look)}
-                        frameUrl={frameUrl}
-                        width={64}
-                        sample={[]}
-                        className="rounded-[8px] border border-white/10"
-                      />
-                    )}
-                    <span className="text-[12px] font-[550] text-white">{t(`montage.template.${id}.name`)}</span>
-                  </button>
-                ))}
-              </div>
-            </Card>
-          </div>
+        {/* Settings of the selected element */}
+        <aside className="flex-[1_1_380px] min-w-0 max-w-[480px] flex flex-col gap-3 lg:sticky lg:top-[96px]">
+          <LayerList
+            items={orderOf(spec).map((key) => ({
+              key,
+              label: labelOf(key),
+              hidden: (key === "cam" && !spec.cam.visible) || (key === "hook" && !spec.hook.visible),
+            }))}
+            selected={picking ? null : selected}
+            onSelect={select}
+            onMove={(key, index) => update({ ...spec, order: restack(spec, key, index) })}
+            action={<AddWidgetButton onClick={() => setPicking(true)} />}
+          />
 
-          {hasCam && (
-            <Card title={t("templateEditor.cam")} hint={ctx?.facecam ? undefined : t("templateEditor.noCamHint")}>
-              <Choice label={t("templateEditor.camSize")} value={look.camSize} options={sizes} onChange={set("camSize")} />
-              <Choice
-                label={t("templateEditor.camShape")}
-                value={look.camShape}
-                options={[
-                  { value: "rounded", label: t("templateEditor.shape.rounded") },
-                  { value: "circle", label: t("templateEditor.shape.circle") },
-                ]}
-                onChange={set("camShape")}
-              />
-              <Choice
-                label={t("templateEditor.camBorder")}
-                value={look.camBorder}
-                options={[
-                  { value: "white", label: t("templateEditor.border.white") },
-                  { value: "accent", label: t("templateEditor.border.accent") },
-                  { value: "none", label: t("templateEditor.border.none") },
-                ]}
-                onChange={set("camBorder")}
-              />
-            </Card>
+          {covered.length > 0 && !picking && (
+            <div className="flex items-start gap-2.5 p-3 rounded-[14px] bg-[rgba(245,177,76,0.12)] border border-[rgba(245,177,76,0.35)]">
+              <AlertTriangle className="w-4 h-4 text-[#F5B14C] flex-none mt-0.5" />
+              <p className="text-[12.5px] leading-snug text-[#f7d9a8]">
+                {t("templateEditor.covered", { zones: covered.map((z) => t(`templateEditor.coveredBy.${z}`)).join(", ") })}
+              </p>
+            </div>
           )}
 
-          <Card title={t("templateEditor.background")} hint={hasBackground ? undefined : t("templateEditor.fullGame")}>
-            {hasBackground && (
-              <Choice
-                label={t("templateEditor.backgroundKind")}
-                value={look.background}
-                options={[
-                  { value: "blur", label: t("templateEditor.bg.blur") },
-                  { value: "dark", label: t("templateEditor.bg.dark") },
-                  { value: "brand", label: t("templateEditor.bg.brand") },
-                ]}
-                onChange={set("background")}
+          <div className="glass rounded-[18px] px-[18px] py-4">
+            {picking ? (
+              <WidgetPicker ctx={ctx} onPick={addWidget} />
+            ) : selected === "game" ? (
+              <FramePanel
+                kind="game"
+                frame={spec.game.frame}
+                colors={kit.colors}
+                onFrame={(frame, done) => update({ ...spec, game: { ...spec.game, frame } }, done)}
+                onReset={() => update({ ...spec, game: reference.game })}
+              />
+            ) : selected === "cam" ? (
+              <FramePanel
+                kind="cam"
+                frame={spec.cam.frame}
+                colors={kit.colors}
+                visible={spec.cam.visible}
+                onVisible={(visible) => update({ ...spec, cam: { ...spec.cam, visible } })}
+                onFrame={(frame, done) => update({ ...spec, cam: { ...spec.cam, frame } }, done)}
+                onRound={() => {
+                  const b = spec.cam.box;
+                  const side = Math.min(b.w, b.h);
+                  update({
+                    ...spec,
+                    cam: { ...spec.cam, box: { x: Math.round(b.x + (b.w - side) / 2), y: Math.round(b.y + (b.h - side) / 2), w: side, h: side }, frame: { ...spec.cam.frame, radius: side / 2 } },
+                  });
+                }}
+                onReset={() => update({ ...spec, cam: reference.cam })}
+              />
+            ) : selected === "subtitles" ? (
+              <SubtitlesPanel
+                value={spec.subtitles}
+                colors={kit.colors}
+                onChange={(subtitles, done) => update({ ...spec, subtitles }, done)}
+                onReset={() => update({ ...spec, subtitles: reference.subtitles })}
+              />
+            ) : selected === "hook" ? (
+              <HookPanel
+                value={spec.hook}
+                // Shown again: on a free spot, not over the webcam
+                onChange={(hook, done) => update({ ...spec, hook: hook.visible && !spec.hook.visible ? { ...hook, box: placeWidget(spec, hook.box, "always") } : hook }, done)}
+                onReset={() => {
+                  const hidden = { ...spec, hook: { ...spec.hook, visible: false } };
+                  update({ ...spec, hook: { ...reference.hook, visible: true, box: placeWidget(hidden, reference.hook.box, "always") } });
+                }}
+              />
+            ) : selectedWidget ? (
+              <WidgetPanel
+                widget={selectedWidget}
+                duration={duration}
+                onChange={(widget, done) => {
+                  update({ ...spec, widgets: spec.widgets.map((w) => (w.id === widget.id ? widget : w)) }, done);
+                  if (widget.enter !== selectedWidget.enter) replay(widget);
+                  else if (JSON.stringify(widget.show) !== JSON.stringify(selectedWidget.show)) reveal(widget);
+                }}
+                onReplay={() => replay(selectedWidget)}
+                onRemove={() => removeWidget(`widget:${selectedWidget.id}`)}
+                onReset={() => {
+                  const def = kitWidget(selectedWidget.kind);
+                  const box = def ? def.box : reference.widgets[0]?.box;
+                  if (box) update({ ...spec, widgets: spec.widgets.map((w) => (w.id === selectedWidget.id ? { ...w, box: { ...box } } : w)) });
+                }}
+              />
+            ) : (
+              <BackgroundPanel
+                spec={spec}
+                colors={kit.colors}
+                onChange={(background, done) => update({ ...spec, background }, done)}
+                onLayout={(layout) =>
+                  update({
+                    ...specFromLayout(layout, { subtitleStyle: kit.subtitles.style, widgetTiming: kit.widget.timing }),
+                    id: spec.id,
+                    name: spec.name,
+                  })
+                }
+                layoutCtx={ctx}
+                frameUrl={frameUrl}
               />
             )}
-          </Card>
-
-          <Card title={t("templateEditor.subtitles")} hint={t("templateEditor.subtitlesHint")}>
-            <Choice
-              label={t("templateEditor.position")}
-              value={look.subtitlePosition}
-              options={[
-                { value: "auto", label: t("templateEditor.pos.auto") },
-                { value: "top", label: t("templateEditor.pos.top") },
-                { value: "middle", label: t("templateEditor.pos.middle") },
-                { value: "bottom", label: t("templateEditor.pos.bottom") },
-              ]}
-              onChange={set("subtitlePosition")}
-            />
-            <Choice label={t("templateEditor.textSize")} value={look.subtitleSize} options={sizes} onChange={set("subtitleSize")} />
-          </Card>
-
-          <Card title={t("templateEditor.widget")}>
-            <Choice
-              label={t("templateEditor.position")}
-              value={look.widgetPosition}
-              options={[
-                { value: "auto", label: t("templateEditor.pos.auto") },
-                { value: "top", label: t("templateEditor.pos.top") },
-                { value: "bottom", label: t("templateEditor.pos.bottom") },
-                { value: "none", label: t("templateEditor.pos.hidden") },
-              ]}
-              onChange={set("widgetPosition")}
-            />
-          </Card>
-
-          {hasHook && (
-            <Card title={t("templateEditor.hook")} hint={t("templateEditor.hookHint")}>
-              <Choice
-                label={t("templateEditor.hookShow")}
-                value={look.hook}
-                options={[
-                  { value: "on", label: t("templateEditor.shown") },
-                  { value: "off", label: t("templateEditor.hidden") },
-                ]}
-                onChange={set("hook")}
-              />
-            </Card>
-          )}
-        </div>
+          </div>
+        </aside>
       </section>
 
       <ConfirmModal

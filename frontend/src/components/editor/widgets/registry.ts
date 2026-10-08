@@ -4,6 +4,7 @@ import TwitchSubscribe from "./TwitchSubscribe";
 import SocialFollow from "./SocialFollow";
 import TwitchLiveBanner from "./TwitchLiveBanner";
 import ChannelPill from "./ChannelPill";
+import { KIT_WIDGETS } from "./kit";
 
 /* ── Widget prop schema ──────────────────────────────────── */
 
@@ -86,6 +87,45 @@ export const WIDGET_REGISTRY: Record<string, WidgetDefinition> = {
     Component: SocialFollow,
   },
 };
+
+/* ── Brand kit widgets (simple template editor) ───────────── */
+
+const BRAND_PROPS: WidgetPropDef[] = [
+  { key: "login", label: "Chaîne", type: "text", default: "streamer" },
+  { key: "displayName", label: "Nom affiché", type: "text", default: "Streamer" },
+  { key: "avatarUrl", label: "Logo", type: "image", default: "" },
+  { key: "accent", label: "Couleur principale", type: "color", default: "#3DBE8B" },
+  { key: "highlight", label: "Couleur d'accent", type: "color", default: "#FFD21F" },
+  { key: "dark", label: "Couleur sombre", type: "color", default: "#111317" },
+  { key: "light", label: "Couleur claire", type: "color", default: "#F5F5F2" },
+];
+
+const KIT_NAMES: Record<string, [string, string]> = {
+  logo: ["Logo", "Ton logo avec un anneau à ta couleur"],
+  "channel-name": ["Nom de la chaîne", "Ton nom en grand, souligné"],
+  handle: ["twitch.tv/pseudo", "Ton lien Twitch sur une pastille"],
+  "live-badge": ["Badge EN DIRECT", "Badge rouge qui pulse"],
+  "follow-button": ["Bouton Suivre", "Un curseur clique sur Suivre"],
+  "follow-banner": ["Bandeau Suis-moi", "Logo, nom et bouton Suivre"],
+  "lower-third": ["Bandeau TV", "Logo, nom et jeu, façon télé"],
+  socials: ["Réseaux", "Tes pseudos Twitch, TikTok, YouTube, Instagram"],
+  "follower-count": ["Compteur de followers", "Tes followers qui défilent"],
+  "clip-sticker": ["Sticker", "Un autocollant penché qui gigote"],
+  "corner-logo": ["Logo en coin", "Ton logo discret, façon chaîne télé"],
+  "progress-bar": ["Barre de progression", "Avance avec le clip"],
+};
+
+for (const w of KIT_WIDGETS) {
+  const [name, description] = KIT_NAMES[w.id] ?? [w.id, ""];
+  WIDGET_REGISTRY[w.id] = {
+    id: w.id,
+    name,
+    description,
+    defaultTransform: { x: w.box.x, y: w.box.y, width: w.box.w, height: w.box.h },
+    propDefs: [...BRAND_PROPS, ...w.fields.map((key) => ({ key, label: key, type: "text" as const, default: "" }))],
+    Component: w.Component,
+  };
+}
 
 /** Get widget definition by id, or null if not found. */
 export function getWidgetDef(widgetId: string): WidgetDefinition | null {

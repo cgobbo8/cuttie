@@ -107,11 +107,11 @@ export default function SubtitleLayer({ layer }: Props) {
           fontSize: subtitle.fontSize,
           fontWeight: 700,
           textTransform: subtitle.uppercase ? "uppercase" : "none",
-          WebkitTextStroke: subtitle.boxed ? undefined : `${Math.max(2, subtitle.fontSize / 25)}px black`,
+          WebkitTextStroke: subtitle.boxed || subtitle.noStroke ? undefined : `${Math.max(2, subtitle.fontSize / 25)}px black`,
           paintOrder: "stroke fill",
           lineHeight: 1.2,
           margin: 0,
-          textShadow: subtitle.boxed ? undefined : "2px 3px 5px rgba(0,0,0,0.6)",
+          textShadow: subtitle.boxed ? undefined : subtitle.noStroke ? "0 3px 12px rgba(0,0,0,0.75)" : "2px 3px 5px rgba(0,0,0,0.6)",
           wordBreak: "break-word",
           ...(subtitle.boxed
             ? {

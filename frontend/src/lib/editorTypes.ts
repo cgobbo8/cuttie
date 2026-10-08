@@ -59,6 +59,8 @@ export interface SubtitleData {
   restColor?: string;
   /** Small text on a dark rounded box ("discreet" style) */
   boxed?: boolean;
+  /** No black outline around the letters (a soft shadow instead) */
+  noStroke?: boolean;
 }
 
 /** Distinct colors assigned to speakers when showSpeaker is enabled.
@@ -211,7 +213,9 @@ export type EasingPreset =
   | "easeIn" | "easeOut" | "easeInOut"
   | "easeIn.power3" | "easeOut.power3" | "easeInOut.power3"
   | "easeIn.power4" | "easeOut.power4" | "easeInOut.power4"
-  | "bounce" | "elastic";
+  | "bounce" | "elastic"
+  /** Overshoots then settles (pop), springs back and forth (wobble) */
+  | "back" | "elasticOut";
 
 /* ── Keyframe system ─────────────────────────────────────── */
 

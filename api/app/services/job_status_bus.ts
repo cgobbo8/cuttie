@@ -4,7 +4,7 @@
  * @adonisjs/transmit so frontend clients get real-time updates.
  */
 
-import Job from '#models/job'
+import Job, { type JobTimeline, type TimelineCandidate } from '#models/job'
 import Creator from '#models/creator'
 import transmit from '@adonisjs/transmit/services/main'
 
@@ -24,7 +24,11 @@ export interface JobStatusUpdate {
   hot_points?: HotPointData[]
   clips?: string[]
   step?: string
-  type?: 'clip_ready' | 'status_update'
+  type?: 'clip_ready' | 'status_update' | 'timeline' | 'candidate'
+  /** type "timeline": fields to merge into the job's timeline */
+  timeline?: JobTimeline
+  /** type "candidate": one candidate passage changed */
+  candidate?: TimelineCandidate
   rank?: number
   hot_point?: HotPointData
   vod_title?: string | null
@@ -52,6 +56,23 @@ class JobStatusBus {
   private async persistUpdate(update: JobStatusUpdate) {
     const job = await Job.find(update.job_id)
     if (!job) return
+
+    // Live view of the analysis
+    if (update.type === 'timeline' && update.timeline) {
+      job.timeline = { ...(job.timeline ?? {}), ...update.timeline }
+      await job.save()
+      return
+    }
+    if (update.type === 'candidate' && update.candidate) {
+      const c = update.candidate
+      const candidates = [...(job.timeline?.candidates ?? [])]
+      const idx = candidates.findIndex((x) => Math.abs(x.t - c.t) < 0.05)
+      if (idx >= 0) candidates[idx] = { ...candidates[idx], ...c }
+      else candidates.push(c)
+      job.timeline = { ...(job.timeline ?? {}), candidates }
+      await job.save()
+      return
+    }
 
     // clip_ready: merge a single enriched hot point into the existing array
     if (update.type === 'clip_ready' && update.hot_point) {

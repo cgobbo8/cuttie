@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { getStoryboard, type TwitchStoryboard } from "../lib/api";
 import { clock } from "../lib/format";
+import { evenFrames, tileStyle } from "../lib/storyboard";
 
 interface Props {
   vodId: string;
@@ -8,21 +9,6 @@ interface Props {
   /** Number of frames shown across the strip */
   tiles?: number;
   className?: string;
-}
-
-/** CSS for frame `index` of a Twitch seek-preview sprite sheet */
-function tileStyle(sb: TwitchStoryboard, index: number): CSSProperties {
-  const perSheet = sb.cols * sb.rows;
-  const i = Math.min(Math.max(0, index), sb.count - 1);
-  const sheet = sb.images[Math.floor(i / perSheet)] ?? sb.images[0];
-  const cell = i % perSheet;
-  const col = cell % sb.cols;
-  const row = Math.floor(cell / sb.cols);
-  return {
-    backgroundImage: `url("${sheet}")`,
-    backgroundSize: `${sb.cols * 100}% ${sb.rows * 100}%`,
-    backgroundPosition: `${sb.cols > 1 ? (col / (sb.cols - 1)) * 100 : 0}% ${sb.rows > 1 ? (row / (sb.rows - 1)) * 100 : 0}%`,
-  };
 }
 
 /**
@@ -45,10 +31,7 @@ export default function Storyboard({ vodId, durationSeconds, tiles = 8, classNam
     };
   }, [vodId]);
 
-  const frames = useMemo(
-    () => (storyboard ? Array.from({ length: tiles }, (_, k) => Math.round(((k + 0.5) * storyboard.count) / tiles)) : []),
-    [storyboard, tiles],
-  );
+  const frames = useMemo(() => (storyboard ? evenFrames(storyboard, tiles) : []), [storyboard, tiles]);
 
   if (storyboard === null) return null;
 

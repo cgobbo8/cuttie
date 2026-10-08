@@ -18,22 +18,22 @@ interface TransmitContextValue {
 const TransmitContext = createContext<TransmitContextValue | null>(null);
 
 export function TransmitProvider({ children }: { children: ReactNode }) {
-  const esRef = useRef<EventSource | null>(null);
-  const uidRef = useRef(`cuttie_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`);
+  /** uid of the open stream, null until the server knows it */
+  const openUidRef = useRef<string | null>(null);
   const listenersRef = useRef<Map<string, Set<Listener>>>(new Map());
-  const subscribedChannelsRef = useRef<Set<string>>(new Set());
+  const channelsRef = useRef<Set<string>>(new Set());
 
-  // Open the SSE tunnel once
+  // Open the SSE tunnel once. Each stream gets its own uid: subscriptions are
+  // only sent once the server knows it, and closing the stream drops them, so a
+  // late unsubscribe from a previous stream can never cancel a new one.
   useEffect(() => {
-    const uid = uidRef.current;
-    const url = `${BASE_URL}/__transmit/events?uid=${uid}`;
-    const es = new EventSource(url);
-    esRef.current = es;
+    const uid = `cuttie_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    const es = new EventSource(`${BASE_URL}/__transmit/events?uid=${uid}`);
 
     es.onopen = () => {
-
-      // Re-subscribe all active channels (in case of reconnect)
-      for (const channel of subscribedChannelsRef.current) {
+      openUidRef.current = uid;
+      // First open, or the browser reconnected: (re)subscribe everything
+      for (const channel of channelsRef.current) {
         postSubscribe(uid, channel);
       }
     };
@@ -58,45 +58,32 @@ export function TransmitProvider({ children }: { children: ReactNode }) {
       }
     };
 
-    es.onerror = () => {
-
-    };
-
     return () => {
-
-      // Unsubscribe all channels
-      for (const channel of subscribedChannelsRef.current) {
-        postUnsubscribe(uid, channel);
-      }
+      if (openUidRef.current === uid) openUidRef.current = null;
       es.close();
-      esRef.current = null;
     };
   }, []);
 
   const subscribe = useCallback((channel: string, listener: Listener): (() => void) => {
-    // Add listener
     if (!listenersRef.current.has(channel)) {
       listenersRef.current.set(channel, new Set());
     }
     listenersRef.current.get(channel)!.add(listener);
 
-    // Subscribe to channel on server if first listener
-    if (!subscribedChannelsRef.current.has(channel)) {
-      subscribedChannelsRef.current.add(channel);
-      postSubscribe(uidRef.current, channel);
+    // First listener: subscribe on the server (now, or when the stream opens)
+    if (!channelsRef.current.has(channel)) {
+      channelsRef.current.add(channel);
+      if (openUidRef.current) postSubscribe(openUidRef.current, channel);
     }
 
-    // Return unsubscribe function
     return () => {
       const set = listenersRef.current.get(channel);
-      if (set) {
-        set.delete(listener);
-        // Unsubscribe from server if no more listeners for this channel
-        if (set.size === 0) {
-          listenersRef.current.delete(channel);
-          subscribedChannelsRef.current.delete(channel);
-          postUnsubscribe(uidRef.current, channel);
-        }
+      if (!set) return;
+      set.delete(listener);
+      if (set.size === 0) {
+        listenersRef.current.delete(channel);
+        channelsRef.current.delete(channel);
+        if (openUidRef.current) postUnsubscribe(openUidRef.current, channel);
       }
     };
   }, []);

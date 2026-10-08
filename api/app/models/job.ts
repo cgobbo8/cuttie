@@ -37,6 +37,29 @@ export default class Job extends JobSchema {
     consume: (value) => (typeof value === 'string' ? JSON.parse(value) : value),
   })
   declare selection: Record<string, ClipSelection> | null
+
+  /** Live view of the analysis (see backend/app/services/timeline.py) */
+  @column({
+    prepare: (value) => (value !== null && value !== undefined ? JSON.stringify(value) : null),
+    consume: (value) => (typeof value === 'string' ? JSON.parse(value) : value),
+  })
+  declare timeline: JobTimeline | null
+}
+
+export interface TimelineCandidate {
+  /** Position in the VOD, seconds */
+  t: number
+  state: 'pending' | 'rated' | 'kept' | 'dropped' | 'clip'
+  score?: number
+  name?: string
+  category?: string
+}
+
+export interface JobTimeline {
+  duration?: number
+  energy?: number[]
+  chat?: number[]
+  candidates?: TimelineCandidate[]
 }
 
 export interface ClipSelection {

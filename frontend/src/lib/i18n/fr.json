@@ -777,5 +777,47 @@
     "play": "Lire le clip",
     "empty": "Rien à exporter pour l'instant.",
     "toEdit": "Aller au montage"
+  },
+  "analysis": {
+    "title": {
+      "download": "On récupère le son et le chat du live",
+      "listen": "On écoute ton live",
+      "spot": "On repère les passages prometteurs",
+      "watch": "L'IA regarde les passages prometteurs",
+      "cut": "On découpe tes meilleurs moments"
+    },
+    "subtitle": {
+      "download": "Le son en qualité réduite et tous les messages du chat.",
+      "listen": "Voix, rires, cris : on mesure l'énergie de chaque instant.",
+      "spot": "Le chat et ta voix désignent les passages à regarder de près.",
+      "watch": "L'IA écoute les passages repérés et lit le contexte du live.",
+      "cut": "On extrait les clips des meilleurs moments."
+    },
+    "watched": "{{done}} passages regardés sur {{total}} · {{kept}} retenus pour l'instant",
+    "cutting": "Clip {{done}} sur {{total}}",
+    "left": "encore {{minutes}} min",
+    "curveSoon": "La courbe du live apparaît dès que l'écoute est finie.",
+    "legend": {
+      "voice": "Énergie de ta voix",
+      "chat": "Messages du chat",
+      "kept": "Retenu",
+      "pending": "À regarder",
+      "dropped": "Écarté"
+    },
+    "steps": {
+      "download": "Récupération du son et du chat",
+      "listen": "Écoute du live : voix, rires, cris",
+      "spot": "Lecture du chat et repérage",
+      "watch": "L'IA regarde chaque passage",
+      "cut": "Découpage des meilleurs"
+    },
+    "later": "à venir",
+    "keepUsing": "Tu peux continuer à utiliser Cuttie, on te prévient quand c'est prêt.",
+    "finds": "Déjà retenus",
+    "findsSoon": "Les meilleurs passages s'afficheront ici dès que l'IA commencera à les noter.",
+    "clipHeard": "« Clip ! » entendu à",
+    "clipHeardHint": "Gardé d'office, tu choisiras ensuite",
+    "more_one": "+ {{count}} autre moment retenu",
+    "more_other": "+ {{count}} autres moments retenus"
   }
 }

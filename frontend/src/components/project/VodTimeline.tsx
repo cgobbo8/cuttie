@@ -1,7 +1,8 @@
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { getStoryboard, type TwitchStoryboard } from "../../lib/api";
 import type { Moment } from "../../lib/moments";
+import { evenFrames, tileStyle } from "../../lib/storyboard";
 
 interface Props {
   vodId: string | null;
@@ -9,17 +10,6 @@ interface Props {
   moments: Moment[];
   selected: number;
   onSelect: (index: number) => void;
-}
-
-function sheetStyle(sb: TwitchStoryboard, index: number): CSSProperties {
-  const per = sb.cols * sb.rows;
-  const i = Math.min(Math.max(0, index), sb.count - 1);
-  const cell = i % per;
-  return {
-    backgroundImage: `url("${sb.images[Math.floor(i / per)] ?? sb.images[0]}")`,
-    backgroundSize: `${sb.cols * 100}% ${sb.rows * 100}%`,
-    backgroundPosition: `${sb.cols > 1 ? ((cell % sb.cols) / (sb.cols - 1)) * 100 : 0}% ${sb.rows > 1 ? (Math.floor(cell / sb.cols) / (sb.rows - 1)) * 100 : 0}%`,
-  };
 }
 
 /** The whole live as a strip of frames, with every moment pinned where it happened */
@@ -42,8 +32,8 @@ export default function VodTimeline({ vodId, durationSeconds, moments, selected,
       <div className="relative h-[58px]">
         <div className="absolute inset-x-0 top-0 h-10 rounded-[8px] overflow-hidden flex bg-white/[0.04]">
           {storyboard &&
-            Array.from({ length: tiles }, (_, k) => (
-              <div key={k} className="flex-1 h-full brightness-[0.5] saturate-[0.9]" style={sheetStyle(storyboard, Math.round(((k + 0.5) * storyboard.count) / tiles))} />
+            evenFrames(storyboard, tiles).map((frame, k) => (
+              <div key={k} className="flex-1 h-full brightness-[0.5] saturate-[0.9]" style={tileStyle(storyboard, frame)} />
             ))}
         </div>
         {moments.map((m, i) => {

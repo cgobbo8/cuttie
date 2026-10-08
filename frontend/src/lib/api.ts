@@ -352,6 +352,27 @@ export interface JobResponse {
   vod_context: VodContext | null;
   /** The streamer's choices per clip filename */
   selection: Record<string, ClipSelection>;
+  /** Live view of the analysis */
+  timeline: JobTimeline | null;
+}
+
+export interface TimelineCandidate {
+  /** Position in the VOD, seconds */
+  t: number;
+  state: "pending" | "rated" | "kept" | "dropped" | "clip";
+  /** 0-1 once rated */
+  score?: number;
+  name?: string;
+  category?: string;
+}
+
+export interface JobTimeline {
+  duration?: number;
+  /** Voice energy, 0-1, evenly sampled across the live */
+  energy?: number[];
+  /** Chat messages per slice of the live */
+  chat?: number[];
+  candidates?: TimelineCandidate[];
 }
 
 export interface ClipSelection {
@@ -408,6 +429,7 @@ interface ServerJobResponse {
   stepTimings?: Record<string, StepTiming> | null;
   vodContext?: VodContext | null;
   selection?: Record<string, ClipSelection> | null;
+  timeline?: JobTimeline | null;
 }
 
 interface ServerHotPoint {
@@ -453,6 +475,7 @@ function mapJobResponse(raw: ServerJobResponse): JobResponse {
     step_timings: raw.stepTimings ?? null,
     vod_context: raw.vodContext ?? null,
     selection: raw.selection ?? {},
+    timeline: raw.timeline ?? null,
   };
 }
 

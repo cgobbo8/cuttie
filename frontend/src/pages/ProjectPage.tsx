@@ -12,6 +12,7 @@ import {
   updateSelection,
   type ClipSelection,
   type JobResponse,
+  type TimelineCandidate,
 } from "../lib/api";
 import { useBackdrop } from "../lib/BackdropContext";
 import { useChannel } from "../lib/ChannelContext";
@@ -21,7 +22,7 @@ import { hoursMinutes, shortDate, splitVodTitle } from "../lib/format";
 import { useToast } from "../components/Toast";
 import ConfirmModal from "../components/ConfirmModal";
 import ImportClipModal from "../components/ImportClipModal";
-import JobStatus from "../components/JobStatus";
+import AnalysisView from "../components/project/AnalysisView";
 import Stepper from "../components/project/Stepper";
 import VodTimeline from "../components/project/VodTimeline";
 import MomentPlayer, { type MomentPlayerHandle } from "../components/project/MomentPlayer";
@@ -68,6 +69,18 @@ export default function ProjectPage() {
     const data = raw as Record<string, any>;
     setJob((prev) => {
       if (!prev) return prev;
+      // Live view of the analysis
+      if (data.type === "timeline" && data.timeline) {
+        return { ...prev, timeline: { ...(prev.timeline ?? {}), ...data.timeline } };
+      }
+      if (data.type === "candidate" && data.candidate) {
+        const c = data.candidate as TimelineCandidate;
+        const candidates = [...(prev.timeline?.candidates ?? [])];
+        const i = candidates.findIndex((x) => Math.abs(x.t - c.t) < 0.05);
+        if (i >= 0) candidates[i] = { ...candidates[i], ...c };
+        else candidates.push(c);
+        return { ...prev, timeline: { ...(prev.timeline ?? {}), candidates } };
+      }
       if (data.type === "clip_ready" && data.hot_point) {
         const hp = mapSSEHotPoint(data.hot_point);
         const rest = (prev.hot_points ?? []).filter((c) => c.clip_filename !== hp.clip_filename || !hp.clip_filename);
@@ -273,13 +286,7 @@ export default function ProjectPage() {
 
       {processing && (
         <div className="mt-6">
-          <JobStatus
-            status={job.status}
-            progress={job.progress ?? ""}
-            stepTimings={job.step_timings}
-            clipsReady={moments.length}
-            clipsTotal={null}
-          />
+          <AnalysisView job={job} vodId={vodId} />
         </div>
       )}
 
@@ -307,7 +314,7 @@ export default function ProjectPage() {
         </div>
       )}
 
-      {moments.length > 0 && current && (
+      {!processing && moments.length > 0 && current && (
         <>
           <section className="mt-5">
             <VodTimeline vodId={vodId} durationSeconds={job.vod_duration_seconds ?? Math.max(...moments.map((m) => m.end))} moments={moments} selected={selected} onSelect={select} />

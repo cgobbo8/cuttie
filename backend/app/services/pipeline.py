@@ -8,6 +8,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from app.models.schemas import HotPoint, StepTiming
+from app.services import timeline
 from app.services.audio_analyzer import analyze_audio
 from app.services.audio_classifier import classify_audio
 from app.services.chat_analyzer import analyze_chat
@@ -387,6 +388,18 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
             update_job(job_id, status="ANALYZING_CHAT", progress="Analyzing chat activity...", step_timings=timer.timings)
             chat_features = analyze_chat(chat_messages, duration)
             logger.info(f"[{job_id[:8]}] Chat analysis done: {len(chat_features)} windows")
+
+            # The live at a glance, for the analysis screen
+            try:
+                timeline.publish(
+                    job_id,
+                    duration=duration,
+                    energy=timeline.energy_curve(audio_features, duration),
+                    chat=timeline.chat_histogram(chat_messages, duration),
+                    candidates=[],
+                )
+            except Exception as e:
+                logger.warning(f"[{job_id[:8]}] Timeline not published: {e}")
 
             check_cancelled(job_id)
 

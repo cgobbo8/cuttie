@@ -777,5 +777,47 @@
     "play": "Play the clip",
     "empty": "Nothing to export yet.",
     "toEdit": "Go to editing"
+  },
+  "analysis": {
+    "title": {
+      "download": "Getting the stream's sound and chat",
+      "listen": "Listening to your stream",
+      "spot": "Spotting promising passages",
+      "watch": "The AI is watching the promising passages",
+      "cut": "Cutting your best moments"
+    },
+    "subtitle": {
+      "download": "Low-quality sound and every chat message.",
+      "listen": "Voice, laughs, shouts: we measure the energy of every moment.",
+      "spot": "Chat and your voice point at the passages worth a closer look.",
+      "watch": "The AI listens to the spotted passages and reads the stream's context.",
+      "cut": "We extract the clips of the best moments."
+    },
+    "watched": "{{done}} of {{total}} passages watched · {{kept}} kept so far",
+    "cutting": "Clip {{done}} of {{total}}",
+    "left": "{{minutes}} min left",
+    "curveSoon": "The stream's curve shows up as soon as listening is done.",
+    "legend": {
+      "voice": "Your voice's energy",
+      "chat": "Chat messages",
+      "kept": "Kept",
+      "pending": "To watch",
+      "dropped": "Dropped"
+    },
+    "steps": {
+      "download": "Getting the sound and chat",
+      "listen": "Listening: voice, laughs, shouts",
+      "spot": "Reading chat and spotting",
+      "watch": "The AI watches each passage",
+      "cut": "Cutting the best ones"
+    },
+    "later": "next",
+    "keepUsing": "You can keep using Cuttie, we'll tell you when it's ready.",
+    "finds": "Kept so far",
+    "findsSoon": "The best passages will show up here as soon as the AI starts rating them.",
+    "clipHeard": "“Clip!” heard at",
+    "clipHeardHint": "Kept anyway, you'll choose later",
+    "more_one": "+ {{count}} more moment kept",
+    "more_other": "+ {{count}} more moments kept"
   }
 }

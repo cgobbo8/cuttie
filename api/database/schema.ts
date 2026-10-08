@@ -54,7 +54,7 @@ export class CreatorSchema extends BaseModel {
 }
 
 export class JobSchema extends BaseModel {
-  static $columns = ['clips', 'createdAt', 'creatorId', 'customTitle', 'error', 'hotPoints', 'id', 'progress', 'status', 'stepTimings', 'streamDate', 'streamer', 'streamerThumbnail', 'updatedAt', 'url', 'userId', 'viewCount', 'vodContext', 'vodDurationSeconds', 'vodGame', 'vodGameId', 'vodGameThumbnail', 'vodTitle'] as const
+  static $columns = ['clips', 'createdAt', 'creatorId', 'customTitle', 'error', 'hotPoints', 'id', 'progress', 'selection', 'status', 'stepTimings', 'streamDate', 'streamer', 'streamerThumbnail', 'timeline', 'updatedAt', 'url', 'userId', 'viewCount', 'vodContext', 'vodDurationSeconds', 'vodGame', 'vodGameId', 'vodGameThumbnail', 'vodTitle'] as const
   $columns = JobSchema.$columns
   @column()
   declare clips: any | null
@@ -73,6 +73,8 @@ export class JobSchema extends BaseModel {
   @column()
   declare progress: string | null
   @column()
+  declare selection: any | null
+  @column()
   declare status: string
   @column()
   declare stepTimings: any | null
@@ -82,6 +84,8 @@ export class JobSchema extends BaseModel {
   declare streamer: string | null
   @column()
   declare streamerThumbnail: string | null
+  @column()
+  declare timeline: any | null
   @column.dateTime({ autoCreate: true, autoUpdate: true })
   declare updatedAt: DateTime | null
   @column()

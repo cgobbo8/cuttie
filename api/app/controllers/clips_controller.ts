@@ -122,16 +122,23 @@ export default class ClipsController {
       return response.notFound({ error: 'clip not found' })
     }
     const safeFilename = path.basename(params.filename)
-    const clipPath = storagePath(`clips/${safeJobId}/${safeFilename}`)
+    // Exported videos live next to the clips, under renders/
+    const folder = safeFilename.startsWith('render_') ? 'renders' : 'clips'
+    const clipPath = storagePath(`${folder}/${safeJobId}/${safeFilename}`)
     if (!safeFilename.endsWith('.mp4') || !existsSync(clipPath)) {
       return response.notFound({ error: 'clip not found' })
     }
 
     const width = THUMB_WIDTHS.includes(Number(request.input('w'))) ? Number(request.input('w')) : 480
     const requested = Number(request.input('t'))
-    const seconds = Number.isFinite(requested) && requested >= 0 ? Math.round(requested * 10) / 10 : defaultThumbTime(safeJobId, safeFilename)
+    const seconds =
+      Number.isFinite(requested) && requested >= 0
+        ? Math.round(requested * 10) / 10
+        : folder === 'renders'
+          ? 1.5 // after the widget's entrance
+          : defaultThumbTime(safeJobId, safeFilename)
     const base = safeFilename.replace(/\.mp4$/, '')
-    const thumbPath = storagePath(`clips/${safeJobId}/thumbs/${base}_${width}_${Math.round(seconds * 10)}.jpg`)
+    const thumbPath = storagePath(`${folder}/${safeJobId}/thumbs/${base}_${width}_${Math.round(seconds * 10)}.jpg`)
 
     if (!existsSync(thumbPath)) {
       try {

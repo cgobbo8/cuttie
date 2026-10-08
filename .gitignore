@@ -52,3 +52,6 @@ frontend/pnpm-lock.yaml
 # Debug / test artifacts
 *.test.png
 *.test.mp4
+
+# TypeScript incremental build info
+*.tsbuildinfo

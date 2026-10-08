@@ -4,7 +4,7 @@ import { BaseSchema } from '@adonisjs/lucid/schema'
 export default class extends BaseSchema {
   async up() {
     this.schema.alterTable('jobs', (table) => {
-      table.text('selection').nullable()
+      table.json('selection').nullable()
     })
   }
 

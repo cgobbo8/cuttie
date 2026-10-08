@@ -23,6 +23,7 @@ import time as _time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from app.models.schemas import HotPoint, KeyMoment, LlmAnalysis, VodContext
+from app.services import timeline
 from app.services.clipper import CLIP_HALF_DURATION
 from app.services.db import save_hot_points, update_job
 from app.services.frame_extractor import (
@@ -901,6 +902,16 @@ def analyze_candidates(
 
     llm_total = len(normal_for_llm)
 
+    # Show the passages the AI is about to watch (and the "clip!" ones, kept anyway)
+    try:
+        timeline.publish(
+            job_id,
+            candidates=[timeline.candidate(hot_points[i], "pending") for i in normal_for_llm]
+            + [timeline.candidate(hp, "clip") for hp in detected_hps],
+        )
+    except Exception as e:
+        logger.warning(f"Timeline candidates not published: {e}")
+
     # ── Step 4: Extract frames + diarize in parallel ──
     # Frames use network I/O, diarization uses local GPU — truly parallel.
     logger.info(f"[4/7] Extracting frames + diarizing {llm_total} candidates...")
@@ -1089,6 +1100,10 @@ def analyze_candidates(
                 future.result()
             except Exception as e:
                 logger.error(f"Unexpected error for candidate {idx}: {e}")
+            try:
+                timeline.publish_candidate(job_id, timeline.candidate(hot_points[idx], "rated"))
+            except Exception as e:
+                logger.warning(f"Timeline candidate not published: {e}")
 
             if done % 5 == 0 or done == llm_total:
                 update_job(
@@ -1108,6 +1123,15 @@ def analyze_candidates(
 
     kept = normal_hps[:keep_n]
     dropped = normal_hps[keep_n:]
+    try:
+        timeline.publish(
+            job_id,
+            candidates=[timeline.candidate(hp, "kept") for hp in kept]
+            + [timeline.candidate(hp, "dropped") for hp in dropped]
+            + [timeline.candidate(hp, "clip") for hp in detected_hps],
+        )
+    except Exception as e:
+        logger.warning(f"Timeline final candidates not published: {e}")
 
     # Remap candidate_words from original indices to kept-list indices
     # so _save_words_for_clips matches words to the correct clip.

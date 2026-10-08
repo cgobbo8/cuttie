@@ -777,5 +777,47 @@
     "play": "Ver el clip",
     "empty": "Nada que exportar todavía.",
     "toEdit": "Ir al montaje"
+  },
+  "analysis": {
+    "title": {
+      "download": "Recuperando el sonido y el chat del directo",
+      "listen": "Escuchando tu directo",
+      "spot": "Buscando los pasajes prometedores",
+      "watch": "La IA mira los pasajes prometedores",
+      "cut": "Cortando tus mejores momentos"
+    },
+    "subtitle": {
+      "download": "El sonido en calidad reducida y todos los mensajes del chat.",
+      "listen": "Voz, risas, gritos: medimos la energía de cada instante.",
+      "spot": "El chat y tu voz señalan los pasajes que hay que mirar de cerca.",
+      "watch": "La IA escucha los pasajes detectados y lee el contexto del directo.",
+      "cut": "Extraemos los clips de los mejores momentos."
+    },
+    "watched": "{{done}} pasajes vistos de {{total}} · {{kept}} guardados por ahora",
+    "cutting": "Clip {{done}} de {{total}}",
+    "left": "faltan {{minutes}} min",
+    "curveSoon": "La curva del directo aparece en cuanto termina la escucha.",
+    "legend": {
+      "voice": "Energía de tu voz",
+      "chat": "Mensajes del chat",
+      "kept": "Guardado",
+      "pending": "Por ver",
+      "dropped": "Descartado"
+    },
+    "steps": {
+      "download": "Sonido y chat",
+      "listen": "Escucha: voz, risas, gritos",
+      "spot": "Lectura del chat y detección",
+      "watch": "La IA mira cada pasaje",
+      "cut": "Corte de los mejores"
+    },
+    "later": "pendiente",
+    "keepUsing": "Puedes seguir usando Cuttie, te avisamos cuando esté listo.",
+    "finds": "Ya guardados",
+    "findsSoon": "Los mejores pasajes aparecerán aquí en cuanto la IA empiece a puntuarlos.",
+    "clipHeard": "«¡Clip!» oído en",
+    "clipHeardHint": "Guardado de oficio, elegirás después",
+    "more_one": "+ {{count}} momento guardado más",
+    "more_other": "+ {{count}} momentos guardados más"
   }
 }

@@ -33,7 +33,7 @@ function RenderCard({ jobId, render, queued }: { jobId: string; render: RenderSt
         ) : (
           <>
             <img
-              src={clipThumbUrl(jobId, render.clip_filename)}
+              src={done ? clipThumbUrl(jobId, render.output_filename!) : clipThumbUrl(jobId, render.clip_filename)}
               alt=""
               className={`w-full h-full object-cover ${done ? "" : "brightness-[0.45] grayscale-[0.5]"}`}
             />

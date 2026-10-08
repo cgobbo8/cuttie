@@ -92,8 +92,8 @@ export default function Scrubber({ playerRef, durationInFrames, fps, window: spa
   const now = frame / fps;
 
   return (
-    <div className="flex flex-1 min-w-0 items-center gap-2 select-none">
-      <span className="mono w-[42px] text-right text-[11px] text-white">{clock(now)}</span>
+    <div className="flex flex-1 min-w-0 items-center gap-2 pl-1 select-none">
+
       <div
         ref={track}
         role="slider"
@@ -120,7 +120,10 @@ export default function Scrubber({ playerRef, durationInFrames, fps, window: spa
           style={{ left: pct(now) }}
         />
       </div>
-      <span className="mono w-[42px] text-[11px] text-ink-3">{clock(duration)}</span>
+      <span className="mono text-[11px] text-white whitespace-nowrap">
+        {clock(now)}
+        <span className="text-ink-3"> / {clock(duration).replace(/[.,]\d$/, "")}</span>
+      </span>
     </div>
   );
 }

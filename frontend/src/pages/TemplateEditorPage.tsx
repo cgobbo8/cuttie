@@ -484,8 +484,8 @@ export default function TemplateEditorPage() {
       </header>
 
       <section className="mt-[22px] flex flex-wrap gap-[22px] items-start">
-        {/* The frame */}
-        <div className="flex flex-col items-center gap-3">
+        {/* The frame, its playback bar and hint: all as wide as the frame */}
+        <div className="flex flex-col gap-3 flex-none" style={{ width: Math.round((canvasHeight * 1080) / 1920) }}>
           <EditorCanvas
             layers={layers}
             elements={elements}
@@ -500,7 +500,7 @@ export default function TemplateEditorPage() {
             still={sampleJob && sampleClip && env ? null : { frameUrl, sample: firstWords.length ? firstWords : [t("templateEditor.sampleWords")] }}
           />
           {/* Playback: play, where in the clip, sound, covered zones */}
-          <div className="glass flex items-center gap-1.5 p-1.5 rounded-[14px]" style={{ width: Math.round((canvasHeight * 1080) / 1920) + 72 }}>
+          <div className="glass flex items-center gap-1 p-1.5 rounded-[14px] w-full">
             {sampleJob && sampleClip && env ? (
               <>
                 <button
@@ -545,7 +545,7 @@ export default function TemplateEditorPage() {
               <ScanLine className="w-4 h-4" />
             </button>
           </div>
-          <p className="text-[12px] text-ink-3 text-center max-w-[420px]">
+          <p className="text-[12px] leading-snug text-ink-3 text-center">
             {sampleHp ? t("templateEditor.previewOn", { clip: sampleHp.clip_name }) : t("templateEditor.previewStill")} {t("templateEditor.dragHint")}
           </p>
         </div>

@@ -3,10 +3,12 @@ import type { Layer } from "../../../lib/editorTypes";
 
 interface Props {
   layer: Layer;
+  /** The one clip video that plays the sound */
+  audible?: boolean;
 }
 
 /** The clip, whole or cropped to a region (mirrors api/remotion/layers/VideoLayer.tsx) */
-export default function GameplayLayer({ layer }: Props) {
+export default function GameplayLayer({ layer, audible = false }: Props) {
   const { video, transform } = layer;
   if (!video) return null;
 
@@ -14,7 +16,7 @@ export default function GameplayLayer({ layer }: Props) {
     return (
       <Video
         src={video.src}
-        muted
+        muted={!audible}
         style={{
           width: transform.width,
           height: transform.height,
@@ -31,7 +33,7 @@ export default function GameplayLayer({ layer }: Props) {
     <div style={{ width: transform.width, height: transform.height, overflow: "hidden" }}>
       <Video
         src={video.src}
-        muted
+        muted={!audible}
         style={{
           display: "block",
           maxWidth: "none",

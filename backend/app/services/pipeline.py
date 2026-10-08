@@ -296,6 +296,33 @@ def _run_clipping_only(
     logger.info(f"Clipping complete: {len(hot_points)} clips downloaded")
 
 
+def _shift_key_moments(job_id: str, hot_points: list) -> None:
+    """Put each clip's key moments on the clip's own clock.
+
+    The LLM timed them from the start of the window it analyzed (hp.clip_start);
+    the extracted clip can start a little earlier or later (silence snapping,
+    shared segments), like the subtitle words in _save_words_for_clips.
+    """
+    from app.services.clipper import CLIP_HALF_DURATION
+
+    clip_dir = os.path.join(CLIPS_DIR, job_id)
+    for hp in hot_points:
+        if not hp.clip_filename or not hp.llm or not hp.llm.key_moments:
+            continue
+        meta_path = os.path.join(clip_dir, f"{os.path.splitext(hp.clip_filename)[0]}_meta.json")
+        try:
+            with open(meta_path) as f:
+                meta = json.load(f)
+            clip_vod_start = meta["vod_start"]
+            clip_duration = meta.get("vod_end", 0) - clip_vod_start
+        except (OSError, ValueError, KeyError):
+            continue
+        window_start = hp.clip_start if hp.clip_start is not None else max(0, hp.timestamp_seconds - CLIP_HALF_DURATION)
+        offset = window_start - clip_vod_start
+        for moment in hp.llm.key_moments:
+            moment.time = round(min(max(0.0, moment.time + offset), max(0.0, clip_duration)), 1)
+
+
 def _check_facecam(job_id: str, hot_points: list) -> None:
     """Locate the webcam on this live's clips. The API compares it with the
     streamer's usual position and checks each clip; this never fails the job."""
@@ -520,6 +547,9 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
                     detected_bounds=True,
                     direct_url=direct_url,
                 )
+
+            # The LLM timed key moments on the window it analyzed: move them onto each clip
+            _shift_key_moments(job_id, [*hot_points, *(detected_hot_points or [])])
 
         elif resume_from == "LLM_ANALYSIS":
             # Legacy resume: re-analyze already-clipped files

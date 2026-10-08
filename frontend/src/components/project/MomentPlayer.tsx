@@ -197,13 +197,17 @@ const MomentPlayer = forwardRef<MomentPlayerHandle, Props>(function MomentPlayer
         </div>
       </div>
 
-      {/* Trim: drag the handles to cut the start / end */}
+      {/* Trim: drag the handles to cut the start / end; click or drag elsewhere to move through the clip */}
       <div className="flex items-center gap-3 px-1.5 pt-3 pb-1">
         <div className="w-[92px] flex-none">
           <div className="text-[11.5px] text-ink-3">{t("project.start")}</div>
           <div className="mono text-[13px] font-medium text-white">{clock(trim[0])}</div>
         </div>
-        <div ref={stripRef} className="relative flex-1 h-[52px] rounded-[9px] overflow-hidden bg-black select-none">
+        <div
+          ref={stripRef}
+          className="relative flex-1 h-[52px] rounded-[9px] overflow-hidden bg-black select-none cursor-pointer touch-none"
+          onPointerDown={(e) => dragRatio(e, stripRef.current!, (r) => seek(r * duration))}
+        >
           <div className="absolute inset-0 flex">
             {Array.from({ length: FILMSTRIP_FRAMES }, (_, i) => (
               <img
@@ -218,7 +222,16 @@ const MomentPlayer = forwardRef<MomentPlayerHandle, Props>(function MomentPlayer
           <div className="absolute inset-y-0 left-0 bg-black/70" style={{ width: pct(trim[0]) }} />
           <div className="absolute inset-y-0 right-0 bg-black/70" style={{ width: `calc(100% - ${pct(trim[1])})` }} />
           <div className="absolute inset-y-0 border-y-2 border-accent pointer-events-none" style={{ left: pct(trim[0]), width: pct(trim[1] - trim[0]) }} />
-          <span className="absolute inset-y-0 w-0.5 bg-white shadow-[0_0_6px_rgba(0,0,0,0.6)] pointer-events-none" style={{ left: pct(current) }} />
+          {keys.map((k) => (
+            <span
+              key={`${k.time}-${k.label}`}
+              className="absolute top-0 w-1.5 h-1.5 -ml-[3px] rounded-b-full bg-accent pointer-events-none"
+              style={{ left: pct(Math.min(k.time, duration)) }}
+            />
+          ))}
+          <span className="absolute inset-y-0 w-0.5 -ml-px bg-white shadow-[0_0_6px_rgba(0,0,0,0.6)] pointer-events-none" style={{ left: pct(current) }}>
+            <span className="absolute -top-px left-1/2 -translate-x-1/2 w-2.5 h-2.5 rounded-full bg-white" />
+          </span>
           {(["start", "end"] as const).map((side) => (
             <span
               key={side}

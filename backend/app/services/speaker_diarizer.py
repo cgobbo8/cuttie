@@ -24,6 +24,7 @@ import torch
 
 from app.services import paths
 from app.services.device import get_device
+from app.services.transcript_format import format_labeled_transcript
 
 logger = logging.getLogger(__name__)
 
@@ -473,38 +474,6 @@ def assign_speakers_to_words(
         labeled.append({**w, "speaker": name})
 
     return labeled
-
-
-def format_labeled_transcript(labeled_words: list[dict]) -> str:
-    """Format speaker-labeled words into a readable transcript for LLM.
-
-    Groups consecutive words by the same speaker into lines:
-      [0.0s] Streamer: Hey chat, let's go
-      [2.1s] SPEAKER_01: bro that was insane
-    """
-    if not labeled_words:
-        return ""
-
-    lines = []
-    current_speaker = None
-    current_words: list[str] = []
-    current_start = 0.0
-
-    for w in labeled_words:
-        spk = w.get("speaker")
-        if spk != current_speaker:
-            if current_words:
-                lines.append(f"[{current_start:.1f}s] {current_speaker}: {' '.join(current_words)}")
-            current_speaker = spk
-            current_words = [w["word"]]
-            current_start = w["start"]
-        else:
-            current_words.append(w["word"])
-
-    if current_words:
-        lines.append(f"[{current_start:.1f}s] {current_speaker}: {' '.join(current_words)}")
-
-    return "\n".join(lines)
 
 
 # ─── Batch processing for pipeline ──────────────────────────────────────────

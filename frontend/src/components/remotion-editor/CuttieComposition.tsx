@@ -14,10 +14,10 @@ export interface CuttieCompositionProps {
   layers: Layer[];
 }
 
-function LayerContent({ layer }: { layer: Layer }) {
+function LayerContent({ layer, audible }: { layer: Layer; audible: boolean }) {
   switch (layer.type) {
-    case "gameplay":  return <GameplayLayer layer={layer} />;
-    case "facecam":   return <FacecamLayer layer={layer} />;
+    case "gameplay":  return <GameplayLayer layer={layer} audible={audible} />;
+    case "facecam":   return <FacecamLayer layer={layer} audible={audible} />;
     case "subtitles": return <SubtitleLayer layer={layer} />;
     case "chat":      return <ChatLayer layer={layer} />;
     case "shape":     return <ShapeLayer layer={layer} />;
@@ -55,6 +55,12 @@ function AnimatedLayerWrapper({ layer, children }: { layer: Layer; children: Rea
 }
 
 export default function CuttieComposition({ layers }: CuttieCompositionProps) {
+  // The game and the webcam play the same clip: only one of them is heard
+  // (the blurred background is a silent copy)
+  const audioLayerId = layers.find(
+    (l) => l.visible && (l.type === "gameplay" || l.type === "facecam") && l.video && !l.video.background,
+  )?.id;
+
   return (
     <AbsoluteFill style={{ background: "#000" }}>
       {layers.map((layer) => {
@@ -73,7 +79,7 @@ export default function CuttieComposition({ layers }: CuttieCompositionProps) {
             }}
           >
             <AnimatedLayerWrapper layer={layer}>
-              <LayerContent layer={layer} />
+              <LayerContent layer={layer} audible={layer.id === audioLayerId} />
             </AnimatedLayerWrapper>
           </div>
         );

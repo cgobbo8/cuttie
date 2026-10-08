@@ -639,7 +639,7 @@
     "end": "Fin",
     "trimStart": "Début du clip",
     "trimEnd": "Fin du clip",
-    "trimHint": "Tire les poignées pour couper le début ou la fin",
+    "trimHint": "Tire les poignées pour couper le début ou la fin, clique dans la bande pour te déplacer",
     "duplicateHint": "Même passage que le moment #{{rank}}",
     "pass": "Passer",
     "passed": "Passé",

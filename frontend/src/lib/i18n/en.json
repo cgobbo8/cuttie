@@ -639,7 +639,7 @@
     "end": "End",
     "trimStart": "Clip start",
     "trimEnd": "Clip end",
-    "trimHint": "Drag the handles to cut the start or the end",
+    "trimHint": "Drag the handles to cut the start or the end, click the strip to move through the clip",
     "duplicateHint": "Same passage as moment #{{rank}}",
     "pass": "Pass",
     "passed": "Passed",

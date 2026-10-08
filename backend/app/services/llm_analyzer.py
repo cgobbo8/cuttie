@@ -35,6 +35,7 @@ from app.services.frame_extractor import (
 )
 from app.services.openai_client import get_groq_client, get_openrouter_client, LLM_MODEL, WHISPER_MODEL
 from app.services.paths import CLIPS_DIR, work_dir
+from app.services.transcript_format import format_labeled_transcript
 
 logger = logging.getLogger(__name__)
 
@@ -363,7 +364,7 @@ def _build_unified_prompt(
 **Heuristic score:** {score:.0%}{signals_text}
 **Speech rate:** {speech_rate:.1f} words/s
 
-**Transcript (speaker-labeled when multiple speakers detected):**
+**Transcript** (each line starts with its time in the clip, in seconds; speaker-labeled when several voices were told apart):
 {transcript if transcript else "(silence / no speech)"}
 {chat_section}
 {vod_context_section}
@@ -430,7 +431,7 @@ Return a single JSON object:
 - "summary": ONE single punch line of 10-15 words max, YouTube/TikTok clip title style. Must make people want to click. In French.
 - "is_clipable": true if the clip is understandable on its own without extra context
 - "key_moments": array of 3-6 key moments, each with:
-  - "time": float, MUST be one of the exact frame timestamps shown on the images
+  - "time": float, seconds from the START of the clip, on the same clock as the transcript lines and the audio. Put it on the second the moment actually happens (use the transcript times and what you hear; the frames are only rough visual anchors)
   - "label": short title (5-8 words), in French{game_narrative}
   - "description": 1 sentence describing what happens visually (include HUD info if relevant)
 - "narrative": fluid story of the clip (3-5 sentences), driven by what you HEAR in the audio, using visuals only for gameplay context{game_narrative}. In French.
@@ -452,6 +453,7 @@ def _call_unified_llm(
     frames: list[dict],
     prompt: str,
     audio_path: str | None = None,
+    duration: float | None = None,
 ) -> tuple[LlmAnalysis, str]:
     """Call the LLM with audio + frames + prompt and parse the response.
 
@@ -516,18 +518,24 @@ def _call_unified_llm(
 
     # Parse key moments
     raw_moments = data.get("key_moments", [])
-    frame_times = [f["time"] for f in frames]
+    # Times are on the clip's clock (transcript + audio): keep them, within the clip
+    limit = duration or max((f["time"] for f in frames), default=None)
     key_moments = []
     for m in raw_moments:
         if isinstance(m, dict) and "time" in m and "label" in m:
-            t = float(m["time"])
-            if frame_times:
-                t = min(frame_times, key=lambda ft: abs(ft - t))
+            try:
+                t = max(0.0, float(m["time"]))
+            except (TypeError, ValueError):
+                continue
+            if limit:
+                t = min(t, limit)
             key_moments.append(KeyMoment(
                 time=t,
                 label=str(m["label"]),
                 description=str(m.get("description", "")),
             ))
+
+    key_moments.sort(key=lambda k: k.time)
 
     llm = LlmAnalysis(
         transcript="",  # filled by caller
@@ -1021,12 +1029,10 @@ def analyze_candidates(
         transcript, speech_rate, _, _, whisper_words = transcripts.get(idx, ("", 0.0, 0.0, [], []))
         frames = all_frames.get(idx, [])
 
-        # Use speaker-labeled transcript if available, fall back to plain
-        speaker_transcript = speaker_transcripts.get(idx, "")
-        if speaker_transcript:
-            display_transcript = speaker_transcript
-        else:
-            display_transcript = transcript
+        # Timestamped lines (speaker-labeled when diarization worked) so the
+        # model can place key moments to the second
+        labeled = speaker_labeled_words.get(idx) or whisper_words
+        display_transcript = format_labeled_transcript(labeled) if labeled else (speaker_transcripts.get(idx) or transcript)
 
         # Audio segment path (kept from Whisper step)
         audio_path = os.path.join(triage_dir, f"seg_{idx:03d}.mp3")
@@ -1055,8 +1061,13 @@ def analyze_candidates(
             vod_context=vod_context,
         )
 
+        window = (
+            hp.clip_end - hp.clip_start
+            if hp.clip_start is not None and hp.clip_end is not None
+            else None
+        )
         try:
-            llm, clip_name = _call_unified_llm(frames, prompt, audio_path)
+            llm, clip_name = _call_unified_llm(frames, prompt, audio_path, duration=window)
             llm.transcript = transcript
             llm.speech_rate = round(speech_rate, 2)
 

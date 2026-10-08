@@ -11,6 +11,7 @@ import logger from '@adonisjs/core/services/logger'
 import { CLIPS_DIR as CLIPS_BASE } from '#services/data_paths'
 import { listObjects } from '#services/storage'
 import { detectFacecam, transcribeClipWords } from '#services/worker_client'
+import { brandFacecamFor, getBrandKit } from '#services/brand_kit'
 
 const execFileAsync = promisify(execFile)
 
@@ -33,7 +34,7 @@ export interface JobSharedData {
 }
 
 /** Read clip dimensions from probe JSON or ffprobe fallback */
-async function getClipDimensions(
+export async function getClipDimensions(
   jobId: string,
   clipFilename: string
 ): Promise<{ width: number; height: number }> {
@@ -61,13 +62,17 @@ async function getClipDimensions(
 
 /** Load shared job data (facecam, dominant_color, chat). Cached per batch. */
 export async function loadJobSharedData(jobId: string, sampleClipFilename: string): Promise<JobSharedData> {
-  // Facecam
+  // Clip dimensions (same for all clips in a job since they come from the same VOD)
+  const { width, height } = await getClipDimensions(jobId, sampleClipFilename)
+
+  // Facecam: the webcam confirmed in the brand kit wins over per-job detection
+  const confirmed = brandFacecamFor(await getBrandKit(), width, height)
+  let facecam: { x: number; y: number; w: number; h: number } | null = confirmed || null
   const facecamPath = path.join(CLIPS_BASE, jobId, 'facecam.json')
-  let facecam: { x: number; y: number; w: number; h: number } | null = null
-  if (existsSync(facecamPath)) {
+  if (confirmed === null && existsSync(facecamPath)) {
     try { facecam = JSON.parse(readFileSync(facecamPath, 'utf-8')) } catch {}
   }
-  if (!facecam) {
+  if (confirmed === null && !facecam) {
     try {
       const clipFilenames = (await listObjects(`clips/${jobId}/`))
         .map((key) => path.basename(key))
@@ -96,9 +101,6 @@ export async function loadJobSharedData(jobId: string, sampleClipFilename: strin
   if (existsSync(chatPath)) {
     try { allChat = JSON.parse(readFileSync(chatPath, 'utf-8')) } catch {}
   }
-
-  // Clip dimensions (same for all clips in a job since they come from the same VOD)
-  const { width, height } = await getClipDimensions(jobId, sampleClipFilename)
 
   return { facecam, dominantColor, allChat, clipWidth: width, clipHeight: height }
 }

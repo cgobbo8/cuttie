@@ -34,7 +34,10 @@ export interface ApiDefinition {
   brand: {
     show: typeof routes['brand.show']
     update: typeof routes['brand.update']
+    detectColors: typeof routes['brand.detect_colors']
+    detectFacecam: typeof routes['brand.detect_facecam']
     channel: typeof routes['brand.channel']
+    storyboard: typeof routes['brand.storyboard']
   }
   games: {
     index: typeof routes['games.index']
@@ -64,6 +67,7 @@ export interface ApiDefinition {
   }
   clips: {
     editEnv: typeof routes['clips.edit_env']
+    thumb: typeof routes['clips.thumb']
     show: typeof routes['clips.show']
   }
   assets: {

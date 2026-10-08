@@ -15,7 +15,6 @@
     "noResults": "Aucun résultat",
     "comingSoon": "bientôt"
   },
-
   "auth": {
     "loginTitle": "Cuttie",
     "loginSubtitle": "Connectez-vous pour continuer",
@@ -29,7 +28,6 @@
     "googleError": "Erreur d'authentification Google",
     "logout": "Se déconnecter"
   },
-
   "sidebar": {
     "newProject": "Nouveau projet",
     "dashboard": "Dashboard",
@@ -42,14 +40,14 @@
     "settings": "Paramètres",
     "home": "Accueil",
     "analyses": "Analyses",
-    "newAnalysis": "Nouvelle analyse"
+    "newAnalysis": "Nouvelle analyse",
+    "channel": "Ma chaîne",
+    "navigation": "Navigation principale"
   },
-
   "workspace": {
     "allCreators": "Tous les créateurs",
     "searchCreator": "Rechercher un créateur..."
   },
-
   "dashboard": {
     "welcomeBack": "Bienvenue",
     "topCreators": "Top créateurs",
@@ -66,7 +64,6 @@
     "noData": "Pas encore de données",
     "noDataHint": "Commence à analyser des VODs pour voir ton dashboard."
   },
-
   "home": {
     "title": "Projets",
     "analysisCount_one": "{{count}} analyse",
@@ -97,13 +94,11 @@
     "allStreamers": "Tous les streamers",
     "clearFilters": "Effacer"
   },
-
   "status": {
     "done": "Terminé",
     "error": "Erreur",
     "inProgress": "En cours"
   },
-
   "jobStatus": {
     "PENDING": "En attente...",
     "DOWNLOADING_AUDIO": "Téléchargement audio",
@@ -117,7 +112,6 @@
     "DONE": "Terminé !",
     "ERROR": "Erreur"
   },
-
   "job": {
     "backToProjects": "Projets",
     "starting": "Démarrage...",
@@ -130,7 +124,6 @@
     "vodPhases": "Phases du stream",
     "vodProtagonists": "Protagonistes"
   },
-
   "newProject": {
     "title": "Nouveau projet",
     "twitchVod": "Twitch VOD",
@@ -144,7 +137,6 @@
     "analyze": "Analyser",
     "cancel": "Annuler"
   },
-
   "hotPoints": {
     "views": "vues",
     "renameProject": "Renommer le projet",
@@ -178,7 +170,6 @@
     "deletingClip": "Suppression en cours...",
     "clipDeleted": "Clip supprimé"
   },
-
   "signals": {
     "rms": "Volume",
     "chat_speed": "Chat",
@@ -189,7 +180,6 @@
     "spectral_centroid": "Brillance",
     "zcr": "ZCR"
   },
-
   "categories": {
     "fun": "Fun",
     "rage": "Rage",
@@ -202,7 +192,6 @@
     "awkward": "Awkward",
     "hype": "Hype"
   },
-
   "games": {
     "title": "Jeux",
     "gameCount_one": "{{count}} jeu",
@@ -214,7 +203,6 @@
     "noGames": "Aucun jeu pour l'instant",
     "noGamesHint": "Les jeux apparaitront ici une fois des analyses terminees."
   },
-
   "creators": {
     "title": "Créateurs",
     "creatorCount_one": "{{count}} créateur",
@@ -225,7 +213,6 @@
     "noCreators": "Aucun créateur pour l'instant",
     "noCreatorsHint": "Les créateurs apparaitront ici une fois des analyses terminées."
   },
-
   "exports": {
     "title": "Exports",
     "exportCount_one": "{{count}} export",
@@ -246,12 +233,10 @@
     "batchTitle_one": "Lot — {{count}} clip",
     "batchTitle_other": "Lot — {{count}} clips"
   },
-
   "editPage": {
     "noClipAvailable": "Aucun clip disponible pour l'édition.",
     "backToResults": "Retour aux résultats"
   },
-
   "clipEditor": {
     "noKeyMoments": "Pas de moments clés",
     "keyMoments": "Moments clés",
@@ -267,7 +252,6 @@
     "inOut": "in/out",
     "escape": "quitter"
   },
-
   "editor": {
     "layers": "Calques",
     "hotpoints": "Temps forts",
@@ -284,7 +268,6 @@
     "unlock": "Déverrouiller",
     "lock": "Verrouiller",
     "safeZones": "Zones sûres (TikTok / Reels / Shorts)",
-
     "properties": "Propriétés",
     "layer": "Calque",
     "centerX": "Centrer X",
@@ -329,7 +312,6 @@
     "fontWeight": "Graisse",
     "normal": "Normal",
     "bold": "Gras",
-
     "themes": "Thèmes",
     "default": "défaut",
     "layerCount_one": "{{count}} calque",
@@ -349,7 +331,6 @@
     "themeDeleted": "Thème supprimé",
     "themeDeleteError": "Erreur lors de la suppression du thème",
     "themeDefaultError": "Erreur lors du changement de thème par défaut",
-
     "animations": "Animations",
     "noAnimations": "Aucune animation",
     "noAnimationsHint": "Ajoute une transition d'entrée ou de sortie",
@@ -362,12 +343,10 @@
     "duration": "Durée",
     "easing": "Easing",
     "addAnimation": "Ajouter animation",
-
     "audio": "audio",
     "chat": "chat",
     "subtitlesToggle": "sous-titres",
     "trim": "trim",
-
     "gameplay": "Gameplay",
     "facecam": "Facecam",
     "subtitles": "Sous-titres",
@@ -375,7 +354,6 @@
     "importImage": "Importer image",
     "library": "Bibliothèque",
     "text": "Texte",
-
     "loadingClipData": "Chargement des données du clip...",
     "renameClip": "Renommer le clip",
     "undo": "Annuler (⌘Z)",
@@ -383,28 +361,22 @@
     "exporting": "Export...",
     "export": "Exporter",
     "addLayer": "Ajouter layer",
-
     "selectLayerProperties": "Sélectionne un calque pour voir ses propriétés",
     "selectLayerAnimations": "Sélectionne un calque pour gérer ses animations",
-
     "assetLibrary": "Bibliothèque d'assets",
     "noAssets": "Aucun asset importé pour l'instant.",
     "importNewImage": "Importer une nouvelle image",
-
     "exportSettings": "Paramètres d'export",
     "exportStarted": "Export lancé",
     "exportStartedHint": "Tu peux suivre la progression et télécharger dans la page Exports.",
     "viewExports": "Voir les exports",
     "exportFailed": "Export échoué : {{error}}",
-
     "cropLoading": "Chargement...",
     "cropHint": "Définissez la zone facecam sur la vidéo source",
     "cropCancel": "Annuler (Esc)",
     "cropApply": "Appliquer (Enter)",
-
     "emptyCanvas": "Canvas vide — ajoute un calque"
   },
-
   "shadows": {
     "none": "Aucune",
     "soft": "Douce",
@@ -414,7 +386,6 @@
     "neon": "Néon",
     "outline": "Outline"
   },
-
   "easings": {
     "linear": "Linéaire",
     "easeIn": "Ease In",
@@ -429,7 +400,6 @@
     "bounce": "Bounce",
     "elastic": "Elastic"
   },
-
   "animations": {
     "fadeIn": "Fondu entrant",
     "fadeOut": "Fondu sortant",
@@ -446,12 +416,10 @@
     "slideOutTop": "Glisse vers haut",
     "slideOutBottom": "Glisse vers bas"
   },
-
   "themeNames": {
     "gameplayOnly": "Gameplay seul",
     "classic": "Classique"
   },
-
   "profile": {
     "title": "Profil",
     "emailLabel": "Adresse email",
@@ -473,7 +441,6 @@
     "cancel": "Annuler",
     "modalTitle": "Export par lot",
     "chooseTheme": "Choisir un thème",
-
     "resolution": "Résolution",
     "fastest": "— plus rapide",
     "smoothest": "— plus fluide",
@@ -492,7 +459,6 @@
     "dropZoneHint": "Glisse-dépose un fichier vidéo ou clique pour parcourir",
     "dropZoneActive": "Dépose pour uploader"
   },
-
   "workers": {
     "title": "Workers",
     "queue": "File d'attente",
@@ -511,12 +477,11 @@
     "flushConfirmMessage": "Cela va vider la file d'attente et annuler tous les jobs et exports en cours. Cette action est irréversible.",
     "flushConfirmButton": "Tout arrêter"
   },
-
   "keysBanner": {
     "text": "Il manque tes clés API pour lancer une analyse.",
-    "action": "Configurer"
+    "action": "Configurer",
+    "short": "Clés API manquantes"
   },
-
   "settings": {
     "title": "Paramètres",
     "keysTitle": "Clés API",
@@ -565,7 +530,6 @@
       "versions": "Versions"
     }
   },
-
   "analyze": {
     "hello": "Salut {{name}}",
     "evening": "Bonsoir {{name}}",
@@ -594,5 +558,103 @@
       "ANALYZING_CLIPS": "Analyse IA",
       "CLIPPING": "Découpe"
     }
+  },
+  "start": {
+    "newLive": "Nouveau live",
+    "findMoments": "Trouver les moments forts",
+    "viewOnTwitch": "Voir sur Twitch",
+    "estimate": "Environ 5 minutes · une vingtaine de moments proposés",
+    "analyzing": "Analyse en cours",
+    "minutesLeft": "encore {{minutes}} min",
+    "seeAnalysis": "Voir l'analyse",
+    "momentsFound_one": "{{count}} moment trouvé",
+    "momentsFound_other": "{{count}} moments trouvés",
+    "sortMoments": "Trier les moments",
+    "failed": "L'analyse a échoué",
+    "retry": "Relancer",
+    "yourLives": "Tes derniers lives",
+    "pasteLink": "Coller le lien d'un autre live",
+    "pastePlaceholder": "https://www.twitch.tv/videos/…",
+    "analyze": "Analyser",
+    "toAnalyze": "À analyser",
+    "momentsToSort_one": "{{count}} moment à trier",
+    "momentsToSort_other": "{{count}} moments à trier",
+    "views_one": "{{count}} vue",
+    "views_other": "{{count}} vues",
+    "resume": "À reprendre",
+    "resumeText": "{{count}} moments trouvés. Le meilleur : « {{best}} ».",
+    "step": "Étape {{n}} sur 4 · {{name}}",
+    "stepChoose": "Choisir",
+    "yourTemplate": "Ton modèle",
+    "signature": "Signature",
+    "signatureDesc": "Ta cam en haut, le jeu au centre, ton widget au début de chaque clip.",
+    "confirmCam": "Confirme ta webcam dans Ma chaîne pour qu'elle apparaisse en haut de tes clips.",
+    "tuneBrand": "Régler ma DA",
+    "noChannelTitle": "Quelle est ta chaîne Twitch ?",
+    "noChannelText": "Indique ta chaîne pour voir tes derniers lives ici.",
+    "setChannel": "Choisir ma chaîne",
+    "twitchError": "Twitch ne répond pas pour l'instant. Tu peux coller le lien d'un live.",
+    "processing": "Twitch prépare encore ce live",
+    "analysisStarted": "Analyse lancée"
+  },
+  "brand": {
+    "title": "Ma chaîne",
+    "synced": "Synchronisé avec Twitch",
+    "followers_one": "{{count}} follower",
+    "followers_other": "{{count}} followers",
+    "changeChannel": "Changer de chaîne",
+    "channelPlaceholder": "pseudo Twitch",
+    "save": "Enregistrer",
+    "cancel": "Annuler",
+    "saved": "C'est enregistré",
+    "saveError": "Impossible d'enregistrer",
+    "colors": "Couleurs",
+    "colorsHint": "Repérées sur ton logo et ta bannière",
+    "redetect": "Re-détecter",
+    "colorsDetected": "Couleurs mises à jour",
+    "role": {
+      "accent": "Accent",
+      "highlight": "Mot prononcé",
+      "dark": "Foncé",
+      "light": "Clair"
+    },
+    "roleHint": {
+      "accent": "Widget et accents",
+      "highlight": "Dans les sous-titres",
+      "dark": "Texte du widget",
+      "light": "Fond du logo"
+    },
+    "widget": "Widget de chaîne",
+    "widgetHint": "Ton logo et ton lien, en accroche dans le clip",
+    "widgetShow": "Apparaît",
+    "timing": {
+      "start": "Au début · 3 s",
+      "always": "Tout le long",
+      "end": "À la fin"
+    },
+    "subtitles": "Sous-titres",
+    "subtitlesHint": "En gros au milieu du clip, police Luckiest Guy",
+    "subStyle": {
+      "bold": "Gros et blanc",
+      "karaoke": "Karaoké",
+      "minimal": "Discret"
+    },
+    "webcam": "Webcam",
+    "webcamConfirmed": "Confirmée",
+    "webcamFound": "C'est bien ta cam ?",
+    "webcamHintFound": "Repérée sur ta dernière analyse. On s'en sert pour cadrer tous tes clips.",
+    "webcamHintConfirmed": "Utilisée pour cadrer tous tes clips.",
+    "webcamSearching": "On cherche ta webcam…",
+    "webcamNone": "Pas de webcam",
+    "webcamNoneHint": "Tes clips seront cadrés sur le jeu.",
+    "webcamNotFound": "Aucune webcam repérée sur ta dernière analyse.",
+    "yes": "Oui, c'est ça",
+    "adjust": "Ajuster le cadre",
+    "adjustHint": "Déplace le cadre ou tire ses coins.",
+    "noCam": "Je n'ai pas de webcam",
+    "iHaveCam": "J'ai une webcam",
+    "preview": "Aperçu",
+    "previewTemplate": "Modèle Signature",
+    "previewNeedsAnalysis": "L'aperçu utilisera une image de ta première analyse."
   }
 }

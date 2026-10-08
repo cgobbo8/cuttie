@@ -1,32 +1,26 @@
-import { Link, Outlet, useLocation } from "react-router";
-import { KeyRound } from "lucide-react";
-import { useTranslation } from "react-i18next";
-import Sidebar from "./Sidebar";
-import { useSettings } from "../lib/SettingsContext";
+import { Outlet, useLocation } from "react-router";
+import TopBar from "./TopBar";
+import { AppBackdrop } from "../lib/BackdropContext";
+
+/** Pages that lay out their own full-width hero under the floating top bar */
+const FULL_BLEED = new Set(["/", "/chaine"]);
 
 export default function Layout() {
-  const { t } = useTranslation();
-  const { missingKeys } = useSettings();
   const { pathname } = useLocation();
-  const showKeysBanner = missingKeys.length > 0 && pathname !== "/settings";
 
   return (
-    <div className="flex min-h-dvh">
-      <Sidebar />
-      <main className="flex-1 min-w-0">
-        <div className="max-w-6xl mx-auto px-10 py-10">
-          {showKeysBanner && (
-            <div className="mb-8 flex items-center gap-3 pl-4 pr-2 py-2 rounded-full border border-amber-400/20 bg-amber-400/[0.07] backdrop-blur-xl animate-rise">
-              <KeyRound className="w-4 h-4 text-amber-300 shrink-0" />
-              <span className="text-[14px] text-amber-100/90 flex-1">{t("keysBanner.text")}</span>
-              <Link to="/settings" className="btn btn-sm bg-amber-300 text-black hover:bg-amber-200">
-                {t("keysBanner.action")}
-              </Link>
-            </div>
-          )}
+    <div className="relative min-h-dvh">
+      <AppBackdrop />
+      <TopBar />
+      <div className="relative z-[1]">
+        {FULL_BLEED.has(pathname) ? (
           <Outlet />
-        </div>
-      </main>
+        ) : (
+          <main className="max-w-[1320px] mx-auto px-8 pt-[112px] pb-16">
+            <Outlet />
+          </main>
+        )}
+      </div>
     </div>
   );
 }

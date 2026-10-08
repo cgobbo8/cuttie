@@ -62,6 +62,11 @@ class FacecamRequest(BaseModel):
     clip_filenames: list[str]
 
 
+class PaletteRequest(BaseModel):
+    # Logo first, then banner; only https images
+    urls: list[str]
+
+
 # ── Job queue ────────────────────────────────────────────────────────────────
 
 class JobQueue:
@@ -237,6 +242,16 @@ def facecam(job_id: str, req: FacecamRequest) -> dict:
     from app.services.clip_tools import detect_job_facecam
 
     return {"facecam": detect_job_facecam(_check_job_id(job_id), req.clip_filenames)}
+
+
+@app.post("/palette", dependencies=[Depends(require_secret)])
+def palette(req: PaletteRequest) -> dict:
+    from app.services.palette import extract_palette
+
+    urls = [u for u in req.urls[:3] if u.startswith("https://")]
+    if not urls:
+        raise HTTPException(status_code=400, detail="no image url")
+    return extract_palette(urls)
 
 
 def _first_line(cmd: list[str]) -> str | None:

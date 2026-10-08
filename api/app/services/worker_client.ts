@@ -106,6 +106,16 @@ export async function detectFacecam(
   return res.facecam
 }
 
+export interface DetectedPalette {
+  palette: string[]
+  roles: { accent: string; highlight: string; dark: string; light: string }
+}
+
+/** Brand colors of a logo (first url) and banner (second url) */
+export async function detectPalette(urls: string[]): Promise<DetectedPalette> {
+  return call<DetectedPalette>('POST', '/palette', { body: { urls }, timeoutMs: 30_000 })
+}
+
 export async function getDiagnostics(): Promise<Record<string, unknown>> {
   return call('GET', '/diagnostics', { timeoutMs: 30_000 })
 }

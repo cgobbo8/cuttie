@@ -175,6 +175,30 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/brand_controller').default['update']>>>
     }
   }
+  'brand.detect_colors': {
+    methods: ["POST"]
+    pattern: '/api/brand-kit/detect-colors'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/brand_controller').default['detectColors']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/brand_controller').default['detectColors']>>>
+    }
+  }
+  'brand.detect_facecam': {
+    methods: ["POST"]
+    pattern: '/api/brand-kit/detect-facecam'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/brand_controller').default['detectFacecam']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/brand_controller').default['detectFacecam']>>>
+    }
+  }
   'brand.channel': {
     methods: ["GET","HEAD"]
     pattern: '/api/twitch/channel'
@@ -185,6 +209,18 @@ export interface Registry {
       query: {}
       response: ExtractResponse<Awaited<ReturnType<import('#controllers/brand_controller').default['channel']>>>
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/brand_controller').default['channel']>>>
+    }
+  }
+  'brand.storyboard': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/twitch/vods/:id/storyboard'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { id: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/brand_controller').default['storyboard']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/brand_controller').default['storyboard']>>>
     }
   }
   'app.show_settings': {
@@ -377,6 +413,18 @@ export interface Registry {
       query: {}
       response: ExtractResponse<Awaited<ReturnType<import('#controllers/clips_controller').default['editEnv']>>>
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/clips_controller').default['editEnv']>>>
+    }
+  }
+  'clips.thumb': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/clips/:jobId/:filename/thumb'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue, ParamValue]
+      params: { jobId: ParamValue; filename: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/clips_controller').default['thumb']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/clips_controller').default['thumb']>>>
     }
   }
   'clips.show': {

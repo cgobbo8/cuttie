@@ -15,7 +15,6 @@
     "noResults": "No results",
     "comingSoon": "soon"
   },
-
   "auth": {
     "loginTitle": "Cuttie",
     "loginSubtitle": "Sign in to continue",
@@ -29,7 +28,6 @@
     "googleError": "Google authentication error",
     "logout": "Log out"
   },
-
   "sidebar": {
     "newProject": "New project",
     "dashboard": "Dashboard",
@@ -42,14 +40,14 @@
     "settings": "Settings",
     "home": "Home",
     "analyses": "Analyses",
-    "newAnalysis": "New analysis"
+    "newAnalysis": "New analysis",
+    "channel": "My channel",
+    "navigation": "Main navigation"
   },
-
   "workspace": {
     "allCreators": "All creators",
     "searchCreator": "Search creator..."
   },
-
   "dashboard": {
     "welcomeBack": "Welcome back",
     "topCreators": "Top creators",
@@ -66,7 +64,6 @@
     "noData": "No data yet",
     "noDataHint": "Start analyzing VODs to see your dashboard."
   },
-
   "home": {
     "title": "Projects",
     "analysisCount_one": "{{count}} analysis",
@@ -97,13 +94,11 @@
     "allStreamers": "All streamers",
     "clearFilters": "Clear"
   },
-
   "status": {
     "done": "Done",
     "error": "Error",
     "inProgress": "In progress"
   },
-
   "jobStatus": {
     "PENDING": "Waiting...",
     "DOWNLOADING_AUDIO": "Downloading audio",
@@ -117,7 +112,6 @@
     "DONE": "Done!",
     "ERROR": "Error"
   },
-
   "job": {
     "backToProjects": "Projects",
     "starting": "Starting...",
@@ -130,7 +124,6 @@
     "vodPhases": "Stream phases",
     "vodProtagonists": "Protagonists"
   },
-
   "newProject": {
     "title": "New project",
     "twitchVod": "Twitch VOD",
@@ -144,7 +137,6 @@
     "analyze": "Analyze",
     "cancel": "Cancel"
   },
-
   "hotPoints": {
     "views": "views",
     "renameProject": "Rename project",
@@ -178,7 +170,6 @@
     "deletingClip": "Deleting...",
     "clipDeleted": "Clip deleted"
   },
-
   "signals": {
     "rms": "Volume",
     "chat_speed": "Chat",
@@ -189,7 +180,6 @@
     "spectral_centroid": "Brightness",
     "zcr": "ZCR"
   },
-
   "categories": {
     "fun": "Fun",
     "rage": "Rage",
@@ -202,7 +192,6 @@
     "awkward": "Awkward",
     "hype": "Hype"
   },
-
   "games": {
     "title": "Games",
     "gameCount_one": "{{count}} game",
@@ -214,7 +203,6 @@
     "noGames": "No games yet",
     "noGamesHint": "Games will appear here once analyses are completed."
   },
-
   "creators": {
     "title": "Creators",
     "creatorCount_one": "{{count}} creator",
@@ -225,7 +213,6 @@
     "noCreators": "No creators yet",
     "noCreatorsHint": "Creators will appear here once analyses are completed."
   },
-
   "exports": {
     "title": "Exports",
     "exportCount_one": "{{count}} export",
@@ -246,12 +233,10 @@
     "batchTitle_one": "Batch — {{count}} clip",
     "batchTitle_other": "Batch — {{count}} clips"
   },
-
   "editPage": {
     "noClipAvailable": "No clip available for editing.",
     "backToResults": "Back to results"
   },
-
   "clipEditor": {
     "noKeyMoments": "No key moments",
     "keyMoments": "Key moments",
@@ -267,7 +252,6 @@
     "inOut": "in/out",
     "escape": "quit"
   },
-
   "editor": {
     "layers": "Layers",
     "hotpoints": "Hot Points",
@@ -284,7 +268,6 @@
     "unlock": "Unlock",
     "lock": "Lock",
     "safeZones": "Safe zones (TikTok / Reels / Shorts)",
-
     "properties": "Properties",
     "layer": "Layer",
     "centerX": "Center X",
@@ -329,7 +312,6 @@
     "fontWeight": "Weight",
     "normal": "Normal",
     "bold": "Bold",
-
     "themes": "Themes",
     "default": "default",
     "layerCount_one": "{{count}} layer",
@@ -349,7 +331,6 @@
     "themeDeleted": "Theme deleted",
     "themeDeleteError": "Failed to delete theme",
     "themeDefaultError": "Failed to change default theme",
-
     "animations": "Animations",
     "noAnimations": "No animations",
     "noAnimationsHint": "Add an entrance or exit transition",
@@ -362,12 +343,10 @@
     "duration": "Duration",
     "easing": "Easing",
     "addAnimation": "Add animation",
-
     "audio": "audio",
     "chat": "chat",
     "subtitlesToggle": "subtitles",
     "trim": "trim",
-
     "gameplay": "Gameplay",
     "facecam": "Facecam",
     "subtitles": "Subtitles",
@@ -375,7 +354,6 @@
     "importImage": "Import image",
     "library": "Library",
     "text": "Text",
-
     "loadingClipData": "Loading clip data...",
     "renameClip": "Rename clip",
     "undo": "Undo (⌘Z)",
@@ -383,28 +361,22 @@
     "exporting": "Exporting...",
     "export": "Export",
     "addLayer": "Add layer",
-
     "selectLayerProperties": "Select a layer to view its properties",
     "selectLayerAnimations": "Select a layer to manage its animations",
-
     "assetLibrary": "Asset library",
     "noAssets": "No imported assets yet.",
     "importNewImage": "Import a new image",
-
     "exportSettings": "Export settings",
     "exportStarted": "Export started",
     "exportStartedHint": "You can track progress and download on the Exports page.",
     "viewExports": "View exports",
     "exportFailed": "Export failed: {{error}}",
-
     "cropLoading": "Loading...",
     "cropHint": "Define the facecam area on the source video",
     "cropCancel": "Cancel (Esc)",
     "cropApply": "Apply (Enter)",
-
     "emptyCanvas": "Empty canvas — add a layer"
   },
-
   "shadows": {
     "none": "None",
     "soft": "Soft",
@@ -414,7 +386,6 @@
     "neon": "Neon",
     "outline": "Outline"
   },
-
   "easings": {
     "linear": "Linear",
     "easeIn": "Ease In",
@@ -429,7 +400,6 @@
     "bounce": "Bounce",
     "elastic": "Elastic"
   },
-
   "animations": {
     "fadeIn": "Fade in",
     "fadeOut": "Fade out",
@@ -446,12 +416,10 @@
     "slideOutTop": "Slide to top",
     "slideOutBottom": "Slide to bottom"
   },
-
   "themeNames": {
     "gameplayOnly": "Gameplay only",
     "classic": "Classic"
   },
-
   "profile": {
     "title": "Profile",
     "emailLabel": "Email address",
@@ -473,7 +441,6 @@
     "cancel": "Cancel",
     "modalTitle": "Batch export",
     "chooseTheme": "Choose a theme",
-
     "resolution": "Resolution",
     "fastest": "— fastest",
     "smoothest": "— smoothest",
@@ -492,7 +459,6 @@
     "dropZoneHint": "Drag & drop a video file or click to browse",
     "dropZoneActive": "Drop to upload"
   },
-
   "workers": {
     "title": "Workers",
     "queue": "Queue",
@@ -511,12 +477,11 @@
     "flushConfirmMessage": "This will clear the queue and cancel all active jobs and exports. This action cannot be undone.",
     "flushConfirmButton": "Stop all"
   },
-
   "keysBanner": {
     "text": "Your API keys are missing — add them to start an analysis.",
-    "action": "Set up"
+    "action": "Set up",
+    "short": "API keys missing"
   },
-
   "settings": {
     "title": "Settings",
     "keysTitle": "API keys",
@@ -565,7 +530,6 @@
       "versions": "Versions"
     }
   },
-
   "analyze": {
     "hello": "Hi {{name}}",
     "evening": "Good evening {{name}}",
@@ -594,5 +558,103 @@
       "ANALYZING_CLIPS": "AI analysis",
       "CLIPPING": "Cutting"
     }
+  },
+  "start": {
+    "newLive": "New stream",
+    "findMoments": "Find the best moments",
+    "viewOnTwitch": "Watch on Twitch",
+    "estimate": "About 5 minutes · around twenty moments suggested",
+    "analyzing": "Analyzing",
+    "minutesLeft": "{{minutes}} min left",
+    "seeAnalysis": "See the analysis",
+    "momentsFound_one": "{{count}} moment found",
+    "momentsFound_other": "{{count}} moments found",
+    "sortMoments": "Sort the moments",
+    "failed": "The analysis failed",
+    "retry": "Retry",
+    "yourLives": "Your latest streams",
+    "pasteLink": "Paste another stream's link",
+    "pastePlaceholder": "https://www.twitch.tv/videos/…",
+    "analyze": "Analyze",
+    "toAnalyze": "Not analyzed",
+    "momentsToSort_one": "{{count}} moment to sort",
+    "momentsToSort_other": "{{count}} moments to sort",
+    "views_one": "{{count}} view",
+    "views_other": "{{count}} views",
+    "resume": "Pick up where you left off",
+    "resumeText": "{{count}} moments found. The best: “{{best}}”.",
+    "step": "Step {{n}} of 4 · {{name}}",
+    "stepChoose": "Choose",
+    "yourTemplate": "Your template",
+    "signature": "Signature",
+    "signatureDesc": "Your cam on top, the game in the middle, your widget at the start of each clip.",
+    "confirmCam": "Confirm your webcam in My channel so it shows at the top of your clips.",
+    "tuneBrand": "Tune my branding",
+    "noChannelTitle": "What's your Twitch channel?",
+    "noChannelText": "Set your channel to see your latest streams here.",
+    "setChannel": "Pick my channel",
+    "twitchError": "Twitch isn't responding right now. You can paste a stream link.",
+    "processing": "Twitch is still processing this stream",
+    "analysisStarted": "Analysis started"
+  },
+  "brand": {
+    "title": "My channel",
+    "synced": "Synced with Twitch",
+    "followers_one": "{{count}} follower",
+    "followers_other": "{{count}} followers",
+    "changeChannel": "Change channel",
+    "channelPlaceholder": "Twitch username",
+    "save": "Save",
+    "cancel": "Cancel",
+    "saved": "Saved",
+    "saveError": "Couldn't save",
+    "colors": "Colors",
+    "colorsHint": "Picked from your logo and banner",
+    "redetect": "Detect again",
+    "colorsDetected": "Colors updated",
+    "role": {
+      "accent": "Accent",
+      "highlight": "Spoken word",
+      "dark": "Dark",
+      "light": "Light"
+    },
+    "roleHint": {
+      "accent": "Widget and accents",
+      "highlight": "In subtitles",
+      "dark": "Widget text",
+      "light": "Logo background"
+    },
+    "widget": "Channel widget",
+    "widgetHint": "Your logo and link, as a hook in the clip",
+    "widgetShow": "Shows",
+    "timing": {
+      "start": "At the start · 3 s",
+      "always": "All along",
+      "end": "At the end"
+    },
+    "subtitles": "Subtitles",
+    "subtitlesHint": "Big in the middle of the clip, Luckiest Guy font",
+    "subStyle": {
+      "bold": "Big and white",
+      "karaoke": "Karaoke",
+      "minimal": "Subtle"
+    },
+    "webcam": "Webcam",
+    "webcamConfirmed": "Confirmed",
+    "webcamFound": "Is this your cam?",
+    "webcamHintFound": "Found on your latest analysis. It frames all your clips.",
+    "webcamHintConfirmed": "Used to frame all your clips.",
+    "webcamSearching": "Looking for your webcam…",
+    "webcamNone": "No webcam",
+    "webcamNoneHint": "Your clips will be framed on the game.",
+    "webcamNotFound": "No webcam found on your latest analysis.",
+    "yes": "Yes, that's it",
+    "adjust": "Adjust the frame",
+    "adjustHint": "Move the frame or drag its corners.",
+    "noCam": "I don't have a webcam",
+    "iHaveCam": "I have a webcam",
+    "preview": "Preview",
+    "previewTemplate": "Signature template",
+    "previewNeedsAnalysis": "The preview will use a frame from your first analysis."
   }
 }

@@ -90,11 +90,29 @@ const routes = {
     tokens: [{"old":"/api/brand-kit","type":0,"val":"api","end":""},{"old":"/api/brand-kit","type":0,"val":"brand-kit","end":""}],
     types: placeholder as Registry['brand.update']['types'],
   },
+  'brand.detect_colors': {
+    methods: ["POST"],
+    pattern: '/api/brand-kit/detect-colors',
+    tokens: [{"old":"/api/brand-kit/detect-colors","type":0,"val":"api","end":""},{"old":"/api/brand-kit/detect-colors","type":0,"val":"brand-kit","end":""},{"old":"/api/brand-kit/detect-colors","type":0,"val":"detect-colors","end":""}],
+    types: placeholder as Registry['brand.detect_colors']['types'],
+  },
+  'brand.detect_facecam': {
+    methods: ["POST"],
+    pattern: '/api/brand-kit/detect-facecam',
+    tokens: [{"old":"/api/brand-kit/detect-facecam","type":0,"val":"api","end":""},{"old":"/api/brand-kit/detect-facecam","type":0,"val":"brand-kit","end":""},{"old":"/api/brand-kit/detect-facecam","type":0,"val":"detect-facecam","end":""}],
+    types: placeholder as Registry['brand.detect_facecam']['types'],
+  },
   'brand.channel': {
     methods: ["GET","HEAD"],
     pattern: '/api/twitch/channel',
     tokens: [{"old":"/api/twitch/channel","type":0,"val":"api","end":""},{"old":"/api/twitch/channel","type":0,"val":"twitch","end":""},{"old":"/api/twitch/channel","type":0,"val":"channel","end":""}],
     types: placeholder as Registry['brand.channel']['types'],
+  },
+  'brand.storyboard': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/twitch/vods/:id/storyboard',
+    tokens: [{"old":"/api/twitch/vods/:id/storyboard","type":0,"val":"api","end":""},{"old":"/api/twitch/vods/:id/storyboard","type":0,"val":"twitch","end":""},{"old":"/api/twitch/vods/:id/storyboard","type":0,"val":"vods","end":""},{"old":"/api/twitch/vods/:id/storyboard","type":1,"val":"id","end":""},{"old":"/api/twitch/vods/:id/storyboard","type":0,"val":"storyboard","end":""}],
+    types: placeholder as Registry['brand.storyboard']['types'],
   },
   'app.show_settings': {
     methods: ["GET","HEAD"],
@@ -191,6 +209,12 @@ const routes = {
     pattern: '/api/clips/:jobId/:filename/edit-env',
     tokens: [{"old":"/api/clips/:jobId/:filename/edit-env","type":0,"val":"api","end":""},{"old":"/api/clips/:jobId/:filename/edit-env","type":0,"val":"clips","end":""},{"old":"/api/clips/:jobId/:filename/edit-env","type":1,"val":"jobId","end":""},{"old":"/api/clips/:jobId/:filename/edit-env","type":1,"val":"filename","end":""},{"old":"/api/clips/:jobId/:filename/edit-env","type":0,"val":"edit-env","end":""}],
     types: placeholder as Registry['clips.edit_env']['types'],
+  },
+  'clips.thumb': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/clips/:jobId/:filename/thumb',
+    tokens: [{"old":"/api/clips/:jobId/:filename/thumb","type":0,"val":"api","end":""},{"old":"/api/clips/:jobId/:filename/thumb","type":0,"val":"clips","end":""},{"old":"/api/clips/:jobId/:filename/thumb","type":1,"val":"jobId","end":""},{"old":"/api/clips/:jobId/:filename/thumb","type":1,"val":"filename","end":""},{"old":"/api/clips/:jobId/:filename/thumb","type":0,"val":"thumb","end":""}],
+    types: placeholder as Registry['clips.thumb']['types'],
   },
   'clips.show': {
     methods: ["GET","HEAD"],

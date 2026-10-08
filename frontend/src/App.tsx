@@ -15,6 +15,9 @@ import LoginPage from "./pages/LoginPage";
 import ProfilePage from "./pages/ProfilePage";
 import SettingsPage from "./pages/SettingsPage";
 import { SettingsProvider } from "./lib/SettingsContext";
+import { BackdropProvider } from "./lib/BackdropContext";
+import { ChannelProvider } from "./lib/ChannelContext";
+import ChannelPage from "./pages/ChannelPage";
 import GamesPage from "./pages/GamesPage";
 import CreatorsPage from "./pages/CreatorsPage";
 import WorkersPage from "./pages/WorkersPage";
@@ -54,6 +57,7 @@ function AppRoutes() {
         <Route path="workers" element={<WorkersPage />} />
         <Route path="profile" element={<ProfilePage />} />
         <Route path="settings" element={<SettingsPage />} />
+        <Route path="chaine" element={<ChannelPage />} />
         <Route path=":jobId" element={<JobPage />} />
       </Route>
       {/* Edit pages: fullscreen, outside the standard layout */}
@@ -84,11 +88,15 @@ export default function App() {
       <TransmitProvider>
         <TooltipProvider>
           <ToastProvider>
-            <BrowserRouter>
-              <CreatorWorkspaceProvider>
-                <AppRoutes />
-              </CreatorWorkspaceProvider>
-            </BrowserRouter>
+            <BackdropProvider>
+              <ChannelProvider>
+                <BrowserRouter>
+                  <CreatorWorkspaceProvider>
+                    <AppRoutes />
+                  </CreatorWorkspaceProvider>
+                </BrowserRouter>
+              </ChannelProvider>
+            </BackdropProvider>
           </ToastProvider>
         </TooltipProvider>
       </TransmitProvider>

@@ -112,30 +112,75 @@ export interface FacecamRect {
   y: number;
   w: number;
   h: number;
+  /** Size of the stream the rectangle was measured on */
+  ref_w?: number;
+  ref_h?: number;
 }
+
+export interface BrandColors {
+  /** Main brand color: app accent, widget ring, speaker labels */
+  accent: string;
+  /** The word being spoken in subtitles */
+  highlight: string;
+  /** Widget text */
+  dark: string;
+  /** Logo background */
+  light: string;
+}
+
+export type WidgetTiming = "start" | "always" | "end";
+export type SubtitleStyle = "bold" | "karaoke" | "minimal";
 
 export interface BrandKit {
   twitch_login: string | null;
-  colors: { primary: string; secondary: string };
-  /** false = the streamer has no webcam, null = not set up yet */
+  colors: BrandColors;
+  /** Swatches detected on the logo and banner */
+  palette: string[];
+  palette_source: string | null;
+  /** false = the streamer has no webcam, null = not confirmed yet */
   facecam: FacecamRect | false | null;
+  widget: { enabled: boolean; timing: WidgetTiming };
+  subtitles: { style: SubtitleStyle };
+}
+
+export type BrandKitPatch = Partial<Omit<BrandKit, "colors" | "widget">> & {
+  colors?: Partial<BrandColors>;
+  widget?: Partial<BrandKit["widget"]>;
+};
+
+async function jsonOrThrow<T>(res: Response, fallback: string): Promise<T> {
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json.error ?? fallback);
+  return json as T;
 }
 
 export async function getBrandKit(): Promise<BrandKit> {
-  const res = await fetch(`${BASE}/brand-kit`);
-  if (!res.ok) throw new Error("Failed to load brand kit");
-  return res.json();
+  return jsonOrThrow(await fetch(`${BASE}/brand-kit`), "Failed to load brand kit");
 }
 
-export async function updateBrandKit(patch: Partial<BrandKit>): Promise<BrandKit> {
+export async function updateBrandKit(patch: BrandKitPatch): Promise<BrandKit> {
   const res = await fetch(`${BASE}/brand-kit`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(patch),
   });
-  const json = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(json.error ?? "Failed to save brand kit");
-  return json;
+  return jsonOrThrow(res, "Failed to save brand kit");
+}
+
+/** Detect the brand colors on the channel's logo and banner (saved in the kit) */
+export async function detectBrandColors(): Promise<BrandKit> {
+  return jsonOrThrow(await fetch(`${BASE}/brand-kit/detect-colors`, { method: "POST" }), "Failed to detect colors");
+}
+
+export interface DetectedFacecam {
+  facecam: FacecamRect | null;
+  /** Clip the webcam was found on, to show it to the streamer */
+  frame: { job_id: string; clip_filename: string };
+}
+
+/** Find the webcam on the latest analysis (not saved until confirmed) */
+export async function detectBrandFacecam(): Promise<DetectedFacecam> {
+  return jsonOrThrow(await fetch(`${BASE}/brand-kit/detect-facecam`, { method: "POST" }), "Failed to detect the webcam");
 }
 
 export interface TwitchVod {
@@ -143,25 +188,59 @@ export interface TwitchVod {
   title: string;
   duration_seconds: number;
   published_at: string;
+  view_count: number;
+  /** 640x360 */
   thumbnail_url: string | null;
+  /** 1280x720 */
+  thumbnail_large_url: string | null;
   game: string | null;
   url: string;
   /** Existing analysis of this VOD, if any */
-  job: { id: string; status: string; clip_count: number } | null;
+  job: { id: string; status: string; progress: string | null; clip_count: number } | null;
 }
 
 export interface TwitchChannel {
   login: string;
   display_name: string;
   avatar_url: string | null;
+  banner_url: string | null;
+  description: string | null;
+  followers: number | null;
+  primary_color: string | null;
   vods: TwitchVod[];
 }
 
 export async function getTwitchChannel(): Promise<TwitchChannel | null> {
-  const res = await fetch(`${BASE}/twitch/channel`);
-  const json = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(json.error ?? "Failed to load Twitch channel");
+  const json = await jsonOrThrow<{ channel: TwitchChannel | null }>(await fetch(`${BASE}/twitch/channel`), "Failed to load Twitch channel");
   return json.channel ?? null;
+}
+
+/** Seek-preview sprite sheets of a VOD: `count` frames, one every `interval` s */
+export interface TwitchStoryboard {
+  images: string[];
+  cols: number;
+  rows: number;
+  count: number;
+  width: number;
+  height: number;
+  interval: number;
+}
+
+export async function getStoryboard(vodId: string): Promise<TwitchStoryboard | null> {
+  const json = await jsonOrThrow<{ storyboard: TwitchStoryboard | null }>(
+    await fetch(`${BASE}/twitch/vods/${encodeURIComponent(vodId)}/storyboard`),
+    "Failed to load the storyboard",
+  );
+  return json.storyboard;
+}
+
+/** Still frame of a clip (extracted and cached by the API) */
+export function clipThumbUrl(jobId: string, filename: string, opts: { width?: 480 | 1280; time?: number } = {}): string {
+  const params = new URLSearchParams();
+  if (opts.width) params.set("w", String(opts.width));
+  if (opts.time !== undefined) params.set("t", opts.time.toFixed(1));
+  const query = params.toString();
+  return `${BASE}/clips/${encodeURIComponent(jobId)}/${encodeURIComponent(filename)}/thumb${query ? `?${query}` : ""}`;
 }
 
 // ── Data interfaces ─────────────────────────────────────────────────────────

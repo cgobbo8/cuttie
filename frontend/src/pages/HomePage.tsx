@@ -1,327 +1,450 @@
-import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useState, type CSSProperties, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router";
 import { useTranslation } from "react-i18next";
-import { AlertCircle, ArrowRight, CheckCircle2, Clock3, Link2, Loader2, Play, Sparkles } from "lucide-react";
+import { ArrowRight, Check, ExternalLink, Link2, Loader2, Sparkles } from "lucide-react";
 import {
-  getTwitchChannel,
+  clipThumbUrl,
   listJobs,
   submitVod,
+  type HotPoint,
+  type JobResponse,
   type JobSummary,
-  type TwitchChannel,
   type TwitchVod,
 } from "../lib/api";
+import { useChannel } from "../lib/ChannelContext";
+import { useLatestMoments } from "../lib/useLatestMoment";
 import { useToast } from "../components/Toast";
+import Storyboard from "../components/Storyboard";
+import SignaturePreview from "../components/SignaturePreview";
+import { ACTIVE_STATUSES, analysisProgress, clock, hoursMinutes, liveDate, sampleSubtitle, shortDate, splitVodTitle } from "../lib/format";
 
-const ACTIVE = new Set(["PENDING", "DOWNLOADING_AUDIO", "DOWNLOADING_CHAT", "ANALYZING_AUDIO", "ANALYZING_CHAT", "SCORING", "ANALYZING_CLIPS", "CLIPPING", "LLM_ANALYSIS"]);
+const HERO_HEIGHT = 700;
 
-/** Pipeline steps in order, with rough durations (minutes) measured on a 5 h VOD */
-const STEPS = [
-  { status: "DOWNLOADING_AUDIO", minutes: 1 },
-  { status: "ANALYZING_AUDIO", minutes: 1 },
-  { status: "SCORING", minutes: 0.2 },
-  { status: "ANALYZING_CLIPS", minutes: 3 },
-  { status: "CLIPPING", minutes: 1 },
-];
-
-function stepIndex(status: string): number {
-  if (status === "DOWNLOADING_CHAT") return 0;
-  if (status === "ANALYZING_CHAT") return 1;
-  const i = STEPS.findIndex((s) => s.status === status);
-  return i === -1 ? 0 : i;
-}
-
-function formatDuration(seconds: number): string {
-  const h = Math.floor(seconds / 3600);
-  const m = Math.round((seconds % 3600) / 60);
-  return h ? `${h} h ${String(m).padStart(2, "0")}` : `${m} min`;
-}
-
-function vodIdFromUrl(url: string): string | null {
-  return url.match(/videos\/(\d+)/)?.[1] ?? null;
-}
-
-function useRelativeDate() {
-  const { i18n } = useTranslation();
-  return useMemo(() => {
-    const rtf = new Intl.RelativeTimeFormat(i18n.language, { numeric: "auto" });
-    return (iso: string) => {
-      const days = Math.round((new Date(iso).getTime() - Date.now()) / 86_400_000);
-      if (days > -1) {
-        const hours = Math.round((new Date(iso).getTime() - Date.now()) / 3_600_000);
-        return rtf.format(hours, "hour");
-      }
-      return days > -7 ? rtf.format(days, "day") : new Date(iso).toLocaleDateString(i18n.language, { day: "numeric", month: "short" });
-    };
-  }, [i18n.language]);
-}
-
-// ── In-progress analysis ────────────────────────────────────────────────────
-
-function ProgressCard({ job, thumbnail }: { job: JobSummary; thumbnail?: string | null }) {
+function useAnalyze() {
   const { t } = useTranslation();
-  const current = stepIndex(job.status);
-  const remaining = STEPS.slice(current).reduce((sum, s) => sum + s.minutes, 0);
-  const percent = Math.max(4, Math.round((STEPS.slice(0, current).reduce((s, x) => s + x.minutes, 0) / STEPS.reduce((s, x) => s + x.minutes, 0)) * 100));
+  const toast = useToast();
+  const { refreshChannel } = useChannel();
+  const [busy, setBusy] = useState<string | null>(null);
+
+  const analyze = useCallback(
+    async (url: string, key: string) => {
+      setBusy(key);
+      try {
+        await submitVod(url);
+        toast.success(t("start.analysisStarted"));
+        await refreshChannel();
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : t("analyze.submitError"));
+      } finally {
+        setBusy(null);
+      }
+    },
+    [refreshChannel, t, toast],
+  );
+  return { analyze, busy };
+}
+
+// ── Hero: the latest live ──────────────────────────────────────────────────
+
+function Hero({ vod, busy, onAnalyze }: { vod: TwitchVod; busy: boolean; onAnalyze: () => void }) {
+  const { t, i18n } = useTranslation();
+  const { tag, title } = splitVodTitle(vod.title);
+  const job = vod.job;
+  const running = job && ACTIVE_STATUSES.has(job.status);
+  const progress = running ? analysisProgress(job.status, job.progress) : null;
+  const isNew = Date.now() - new Date(vod.published_at).getTime() < 2 * 86_400_000;
 
   return (
-    <Link to={`/${job.job_id}`} className="glass rounded-[24px] p-4 flex gap-4 items-center hover:bg-white/[0.04] transition-colors">
-      <div className="w-36 aspect-video rounded-[14px] overflow-hidden bg-white/[0.04] shrink-0">
-        {thumbnail && <img src={thumbnail} alt="" className="w-full h-full object-cover" />}
+    <div className="glass-strong rounded-[20px] w-[560px] max-w-full px-7 pt-[26px] pb-6 animate-rise">
+      <div className="flex flex-wrap items-center gap-2.5 text-[13px] text-ink-2">
+        {job?.status === "DONE" ? (
+          <span className="chip chip-accent">
+            <Check className="w-3.5 h-3.5" strokeWidth={3} /> {t("start.momentsFound", { count: job.clip_count })}
+          </span>
+        ) : running ? (
+          <span className="chip chip-accent">
+            <Loader2 className="w-3.5 h-3.5 animate-spin" /> {t("start.analyzing")}
+          </span>
+        ) : job?.status === "ERROR" ? (
+          <span className="chip chip-danger">{t("start.failed")}</span>
+        ) : isNew ? (
+          <span className="chip chip-accent">
+            <span className="w-1.5 h-1.5 rounded-full bg-accent" /> {t("start.newLive")}
+          </span>
+        ) : null}
+        <span>{liveDate(vod.published_at, i18n.language)}</span>
       </div>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 text-[13px] text-brand-2">
-          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-          {t(`jobStatus.${job.status}`)}
-          <span className="text-zinc-500">· {t("analyze.remaining", { minutes: Math.max(1, Math.round(remaining)) })}</span>
-        </div>
-        <p className="text-[15px] font-medium text-white truncate mt-1">{job.custom_title || job.vod_title || t("home.untitledVod")}</p>
-        <div className="mt-3 h-1.5 rounded-full bg-white/[0.07] overflow-hidden">
-          <div className="h-full rounded-full bg-brand transition-[width] duration-700" style={{ width: `${percent}%` }} />
-        </div>
-        <div className="mt-2 flex gap-3 text-[12px] text-zinc-500">
-          {STEPS.map((s, i) => (
-            <span key={s.status} className={i < current ? "text-zinc-300" : i === current ? "text-white" : ""}>
-              {i < current ? "✓ " : ""}
-              {t(`analyze.steps.${s.status}`)}
-            </span>
-          ))}
-        </div>
+
+      <h1 className="mt-4 text-[48px] leading-[1.02] tracking-[-0.035em] font-[650] text-white [text-wrap:balance]">{title}</h1>
+
+      <div className="mt-3.5 flex flex-wrap items-center gap-2 text-[13.5px] text-ink-2">
+        <span className="tabular-nums">{hoursMinutes(vod.duration_seconds)}</span>
+        {vod.game && (
+          <>
+            <span aria-hidden className="opacity-50">·</span>
+            <span>{vod.game}</span>
+          </>
+        )}
+        {tag && <span className="chip chip-neutral h-[22px] font-[550]">{tag}</span>}
       </div>
-    </Link>
+
+      {progress && (
+        <div className="mt-5">
+          <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
+            <div className="h-full rounded-full bg-accent shadow-[0_0_12px_var(--color-accent-glow)] transition-[width] duration-700" style={{ width: `${progress.percent}%` }} />
+          </div>
+          <p className="mt-2 text-[12.5px] text-ink-3">
+            {t(`jobStatus.${job!.status}`)} · {t("start.minutesLeft", { minutes: progress.minutesLeft })}
+          </p>
+        </div>
+      )}
+
+      <div className="mt-6 flex flex-wrap gap-2.5">
+        {job && job.status !== "ERROR" ? (
+          <Link to={`/${job.id}`} className="btn btn-primary btn-lg">
+            {job.status === "DONE" ? t("start.sortMoments") : t("start.seeAnalysis")}
+            <ArrowRight className="w-4 h-4" strokeWidth={2.2} />
+          </Link>
+        ) : (
+          <button onClick={onAnalyze} disabled={busy} className="btn btn-primary btn-lg">
+            {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+            {job?.status === "ERROR" ? t("start.retry") : t("start.findMoments")}
+          </button>
+        )}
+        <a href={vod.url} target="_blank" rel="noreferrer" className="btn btn-glass btn-lg">
+          {t("start.viewOnTwitch")}
+          <ExternalLink className="w-[15px] h-[15px]" />
+        </a>
+      </div>
+      {!job && <p className="mt-3.5 text-[12.5px] text-ink-3">{t("start.estimate")}</p>}
+    </div>
   );
 }
 
-// ── VOD card ────────────────────────────────────────────────────────────────
+// ── Recent lives ───────────────────────────────────────────────────────────
 
-function VodCard({ vod, index, busy, onAnalyze }: { vod: TwitchVod; index: number; busy: boolean; onAnalyze: () => void }) {
-  const { t } = useTranslation();
-  const relative = useRelativeDate();
+function LiveCard({ vod, index, busy, onAnalyze }: { vod: TwitchVod; index: number; busy: boolean; onAnalyze: () => void }) {
+  const { t, i18n } = useTranslation();
+  const navigate = useNavigate();
+  const { title } = splitVodTitle(vod.title);
   const job = vod.job;
-  const running = job && ACTIVE.has(job.status);
+  const running = job && ACTIVE_STATUSES.has(job.status);
+  const progress = running ? analysisProgress(job.status, job.progress) : null;
+  const open = job && job.status !== "ERROR" ? () => navigate(`/${job.id}`) : null;
 
   return (
-    <article className="group glass rounded-[24px] overflow-hidden animate-rise flex flex-col" style={{ "--i": index } as CSSProperties}>
-      <div className="relative aspect-video overflow-hidden bg-white/[0.03]">
+    <article className="group flex flex-col gap-2.5 animate-rise" style={{ "--i": index } as CSSProperties}>
+      <div
+        className={`relative aspect-video rounded-[14px] overflow-hidden border border-white/[0.08] bg-white/[0.04] transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:-translate-y-[3px] ${open ? "cursor-pointer" : ""}`}
+        onClick={open ?? undefined}
+      >
         {vod.thumbnail_url ? (
-          <img src={vod.thumbnail_url} alt="" loading="lazy" className="w-full h-full object-cover transition-transform duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:scale-[1.04]" />
+          <img src={vod.thumbnail_url} alt="" loading="lazy" className="w-full h-full object-cover" />
         ) : (
-          <div className="w-full h-full grid place-items-center text-[12px] text-zinc-500">{t("analyze.processing")}</div>
+          <div className="w-full h-full grid place-items-center px-4 text-center text-[12px] text-ink-3">{t("start.processing")}</div>
         )}
-        <span className="absolute bottom-2.5 right-2.5 px-2 py-0.5 rounded-full bg-black/55 backdrop-blur-md text-[12px] font-medium text-white tabular-nums">
-          {formatDuration(vod.duration_seconds)}
+        {running && <div className="absolute inset-0 bg-black/35" />}
+
+        <span className="absolute top-2 left-2 chip glass-chip text-white">
+          {job?.status === "DONE" ? (
+            <>
+              <span className="w-1.5 h-1.5 rounded-full bg-accent" /> {t("start.momentsToSort", { count: job.clip_count })}
+            </>
+          ) : running ? (
+            <>
+              {t("start.analyzing")} · <span className="mono">{progress!.percent} %</span>
+            </>
+          ) : job?.status === "ERROR" ? (
+            <span className="text-red-300">{t("start.failed")}</span>
+          ) : (
+            <span className="text-ink-2 font-[550]">{t("start.toAnalyze")}</span>
+          )}
         </span>
-        {job?.status === "DONE" && (
-          <span className="absolute top-2.5 left-2.5 flex items-center gap-1 px-2 py-0.5 rounded-full bg-black/55 backdrop-blur-md text-[12px] text-brand-2">
-            <CheckCircle2 className="w-3.5 h-3.5" /> {t("analyze.clipCount", { count: job.clip_count })}
+
+        {!running && (
+          <span className="mono absolute bottom-2 right-2 h-5 px-1.5 rounded-[5px] flex items-center bg-black/70 text-[11px] text-white">
+            {clock(vod.duration_seconds)}
           </span>
         )}
-      </div>
-      <div className="p-4 flex flex-col flex-1">
-        <h3 className="text-[15px] font-medium leading-snug text-white line-clamp-2">{vod.title}</h3>
-        <p className="mt-1 text-[13px] text-zinc-400">
-          {relative(vod.published_at)}
-          {vod.game ? ` · ${vod.game}` : ""}
-        </p>
-        <div className="mt-auto pt-4">
-          {job && job.status === "DONE" ? (
-            <Link to={`/${job.id}`} className="btn btn-glass btn-sm">
-              {t("analyze.openClips")} <ArrowRight className="w-3.5 h-3.5" />
-            </Link>
-          ) : running ? (
-            <Link to={`/${job.id}`} className="btn btn-glass btn-sm">
-              <Loader2 className="w-3.5 h-3.5 animate-spin" /> {t("analyze.inProgress")}
-            </Link>
-          ) : (
+        {progress && (
+          <div className="absolute inset-x-0 bottom-0 h-1 bg-white/20">
+            <div className="h-full bg-accent shadow-[0_0_12px_var(--color-accent-glow)] transition-[width] duration-700" style={{ width: `${progress.percent}%` }} />
+          </div>
+        )}
+
+        {(!job || job.status === "ERROR") && vod.thumbnail_url && (
+          <div className="absolute inset-0 grid place-items-center bg-black/40 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
             <button onClick={onAnalyze} disabled={busy} className="btn btn-primary btn-sm">
               {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-              {job?.status === "ERROR" ? t("analyze.retry") : t("analyze.analyze")}
+              {job ? t("start.retry") : t("start.analyze")}
             </button>
+          </div>
+        )}
+      </div>
+      <div>
+        <h3 className="text-[14.5px] font-[550] leading-snug tracking-[-0.01em] text-white line-clamp-2">
+          {open ? (
+            <Link to={`/${job!.id}`} className="hover:underline underline-offset-2">
+              {title}
+            </Link>
+          ) : (
+            title
           )}
+        </h3>
+        <p className="mt-0.5 text-[12.5px] text-ink-3">
+          {shortDate(vod.published_at, i18n.language)} ·{" "}
+          {progress ? t("start.minutesLeft", { minutes: progress.minutesLeft }) : t("start.views", { count: vod.view_count })}
+        </p>
+      </div>
+    </article>
+  );
+}
+
+function PasteLink() {
+  const { t } = useTranslation();
+  const { analyze, busy } = useAnalyze();
+  const [open, setOpen] = useState(false);
+  const [url, setUrl] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    if (!/twitch\.tv\/videos\/\d+/.test(url)) {
+      setError(t("analyze.invalidUrl"));
+      return;
+    }
+    analyze(url.trim(), "url").then(() => {
+      setUrl("");
+      setOpen(false);
+    });
+  };
+
+  if (!open) {
+    return (
+      <button onClick={() => setOpen(true)} className="btn btn-glass btn-sm">
+        <Link2 className="w-[15px] h-[15px]" /> {t("start.pasteLink")}
+      </button>
+    );
+  }
+  return (
+    <form onSubmit={submit} className="flex flex-col items-end gap-1">
+      <div className="glass flex items-center gap-2 pl-3 pr-1 h-10 rounded-[11px] w-[420px] max-w-[80vw]">
+        <Link2 className="w-[15px] h-[15px] text-ink-3 shrink-0" />
+        <input
+          autoFocus
+          value={url}
+          onChange={(e) => {
+            setUrl(e.target.value);
+            setError(null);
+          }}
+          onKeyDown={(e) => e.key === "Escape" && setOpen(false)}
+          placeholder={t("start.pastePlaceholder")}
+          aria-label={t("start.pasteLink")}
+          className="flex-1 min-w-0 bg-transparent text-[13.5px] text-white placeholder:text-ink-4 outline-none"
+        />
+        <button type="submit" disabled={busy === "url"} className="btn btn-primary btn-sm">
+          {busy === "url" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+          {t("start.analyze")}
+        </button>
+      </div>
+      {error && <p className="text-[12.5px] text-red-300">{error}</p>}
+    </form>
+  );
+}
+
+// ── Resume + template ──────────────────────────────────────────────────────
+
+function ResumeCard({ job, hotPoints }: { job: JobResponse; hotPoints: HotPoint[] }) {
+  const { t } = useTranslation();
+  const { title } = splitVodTitle(job.custom_title || job.vod_title);
+  const top = hotPoints.slice(0, 5);
+  const more = hotPoints.length - 4;
+
+  return (
+    <article className="glass rounded-[18px] p-[18px] flex flex-wrap gap-[22px] flex-[2_1_600px] min-w-0">
+      <div className="grid grid-cols-[2fr_1fr_1fr] grid-rows-2 gap-2 h-[196px] flex-[1_1_380px] min-w-0">
+        {top.map((hp, i) => (
+          <div key={hp.clip_filename} className={`relative overflow-hidden bg-white/5 ${i === 0 ? "row-span-2 rounded-[11px]" : "rounded-[9px]"}`}>
+            <img src={clipThumbUrl(job.job_id, hp.clip_filename!)} alt="" loading="lazy" className="w-full h-full object-cover" />
+            {i === 0 && hp.final_score !== null && (
+              <span className="mono absolute top-2 left-2 chip bg-accent text-accent-ink h-[22px] px-[7px]">{Math.round(hp.final_score * 100)}</span>
+            )}
+            {i === 4 && more > 0 && (
+              <div className="absolute inset-0 grid place-items-center bg-black/55 text-[13px] font-semibold text-white">+{more}</div>
+            )}
+          </div>
+        ))}
+      </div>
+      <div className="flex-[1_1_260px] min-w-0 flex flex-col">
+        <div className="text-[12.5px] font-medium text-ink-3">{t("start.resume")}</div>
+        <h3 className="mt-1.5 text-[22px] font-semibold tracking-[-0.025em] leading-[1.15] text-white">{title}</h3>
+        <p className="mt-2 text-[13.5px] leading-relaxed text-ink-2">
+          {t("start.resumeText", { count: hotPoints.length, best: hotPoints[0]?.clip_name ?? "" })}
+        </p>
+        <div className="mt-auto pt-4">
+          <div className="flex gap-1">
+            <span className="flex-1 h-1 rounded-full bg-accent" />
+            <span className="flex-1 h-1 rounded-full bg-white/30" />
+            <span className="flex-1 h-1 rounded-full bg-white/10" />
+            <span className="flex-1 h-1 rounded-full bg-white/10" />
+          </div>
+          <div className="mt-3.5 flex flex-wrap items-center justify-between gap-3">
+            <span className="text-[12.5px] text-ink-3">{t("start.step", { n: 2, name: t("start.stepChoose") })}</span>
+            <Link to={`/${job.job_id}`} className="btn btn-primary">
+              {t("start.sortMoments")} <ArrowRight className="w-[15px] h-[15px]" strokeWidth={2.2} />
+            </Link>
+          </div>
         </div>
       </div>
     </article>
   );
 }
 
-function VodSkeleton() {
+function TemplateCard({ job, best }: { job: JobResponse | null; best: HotPoint | null }) {
+  const { t } = useTranslation();
+  const { kit, channel } = useChannel();
+  if (!kit) return null;
+  const subtitle = sampleSubtitle(best?.llm?.transcript);
+
   return (
-    <div className="glass rounded-[24px] overflow-hidden">
-      <div className="aspect-video skeleton" />
-      <div className="p-4 space-y-2">
-        <div className="h-4 rounded-full skeleton w-4/5" />
-        <div className="h-3 rounded-full skeleton w-2/5" />
-        <div className="h-8 rounded-full skeleton w-28 mt-4" />
+    <article className="glass rounded-[18px] p-[18px] flex gap-[18px] items-center flex-[1_1_320px] min-w-0">
+      <SignaturePreview
+        className="w-[112px] flex-none rounded-[12px] border border-white/10 shadow-[0_20px_40px_-20px_rgba(0,0,0,0.8)]"
+        frameUrl={job && best?.clip_filename ? clipThumbUrl(job.job_id, best.clip_filename) : null}
+        facecam={kit.facecam}
+        colors={kit.colors}
+        avatarUrl={channel?.avatar_url ?? null}
+        login={channel?.login ?? kit.twitch_login}
+        lines={subtitle.lines}
+        highlight={subtitle.highlight}
+        subtitleStyle={kit.subtitles.style}
+        showWidget={kit.widget.enabled}
+      />
+      <div className="min-w-0">
+        <div className="text-[12.5px] font-medium text-ink-3">{t("start.yourTemplate")}</div>
+        <div className="mt-1 text-[20px] font-semibold tracking-[-0.02em] text-white">{t("start.signature")}</div>
+        <p className="mt-1.5 text-[13px] leading-relaxed text-ink-2">
+          {kit.facecam === null ? t("start.confirmCam") : t("start.signatureDesc")}
+        </p>
+        <Link to="/chaine" className="btn btn-glass btn-sm mt-3.5">
+          {t("start.tuneBrand")}
+        </Link>
       </div>
-    </div>
+    </article>
   );
 }
 
-// ── Page ────────────────────────────────────────────────────────────────────
+// ── Page ───────────────────────────────────────────────────────────────────
 
 export default function HomePage() {
   const { t } = useTranslation();
-  const navigate = useNavigate();
-  const toast = useToast();
-  const showError = toast.error;
-  const relative = useRelativeDate();
-
-  const [channel, setChannel] = useState<TwitchChannel | null | undefined>(undefined);
-  const [channelError, setChannelError] = useState<string | null>(null);
+  const { channel, channelError, refreshChannel } = useChannel();
+  const { analyze, busy } = useAnalyze();
   const [jobs, setJobs] = useState<JobSummary[] | null>(null);
-  const [url, setUrl] = useState("");
-  const [urlError, setUrlError] = useState<string | null>(null);
-  const [busy, setBusy] = useState<string | null>(null);
 
   const loadJobs = useCallback(() => {
-    listJobs({ per_page: 8 })
+    listJobs({ per_page: 12 })
       .then((page) => setJobs(page.data))
       .catch(() => setJobs([]));
   }, []);
+  useEffect(loadJobs, [loadJobs]);
 
-  useEffect(() => {
-    getTwitchChannel()
-      .then(setChannel)
-      .catch((err: Error) => {
-        setChannel(null);
-        setChannelError(err.message);
-      });
-    loadJobs();
-  }, [loadJobs]);
+  // The latest finished analysis, to pick up where the streamer left off
+  const resume = useLatestMoments(jobs?.find((j) => j.status === "DONE")?.job_id);
 
-  // Refresh while an analysis is running
-  const hasActive = jobs?.some((j) => ACTIVE.has(j.status)) ?? false;
+  // Keep progress fresh while something is being analyzed
+  const hasActive =
+    (channel?.vods.some((v) => v.job && ACTIVE_STATUSES.has(v.job.status)) ?? false) ||
+    (jobs?.some((j) => ACTIVE_STATUSES.has(j.status)) ?? false);
   useEffect(() => {
     if (!hasActive) return;
-    const id = setInterval(loadJobs, 4000);
-    return () => clearInterval(id);
-  }, [hasActive, loadJobs]);
+    const id = window.setInterval(() => {
+      refreshChannel();
+      loadJobs();
+    }, 4000);
+    return () => window.clearInterval(id);
+  }, [hasActive, refreshChannel, loadJobs]);
 
-  const analyze = async (vodUrl: string, key: string) => {
-    setBusy(key);
-    try {
-      const { job_id } = await submitVod(vodUrl);
-      navigate(`/${job_id}`);
-    } catch (err) {
-      showError(err instanceof Error ? err.message : t("analyze.submitError"));
-      setBusy(null);
-    }
-  };
+  const [latest, ...others] = channel?.vods ?? [];
+  const heroImage = latest?.thumbnail_large_url ?? latest?.thumbnail_url ?? channel?.banner_url ?? null;
+  const best = resume?.hotPoints[0] ?? null;
 
-  const submitUrl = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!/twitch\.tv\/videos\/\d+/.test(url)) {
-      setUrlError(t("analyze.invalidUrl"));
-      return;
-    }
-    analyze(url.trim(), "url");
-  };
-
-  const thumbnailByVod = useMemo(() => {
-    const map = new Map<string, string | null>();
-    channel?.vods.forEach((v) => map.set(v.id, v.thumbnail_url));
-    return map;
-  }, [channel]);
-
-  const active = jobs?.filter((j) => ACTIVE.has(j.status)) ?? [];
-  const recent = jobs?.filter((j) => !ACTIVE.has(j.status)).slice(0, 6) ?? [];
-  const hour = new Date().getHours();
+  const otherActive = useMemo(() => {
+    const vodJobIds = new Set(channel?.vods.map((v) => v.job?.id).filter(Boolean));
+    return (jobs ?? []).filter((j) => ACTIVE_STATUSES.has(j.status) && !vodJobIds.has(j.job_id));
+  }, [channel, jobs]);
 
   return (
-    <div className="space-y-10 pb-10">
-      <header className="animate-rise">
-        <p className="text-[15px] text-zinc-400">
-          {t(hour < 18 && hour >= 5 ? "analyze.hello" : "analyze.evening", { name: channel?.display_name ?? "" })}
-        </p>
-        <h1 className="title-large mt-1">{t("analyze.title")}</h1>
-        <p className="mt-2 text-[15px] text-zinc-400 max-w-xl">{t("analyze.subtitle")}</p>
-      </header>
-
-      {active.length > 0 && (
-        <section className="space-y-3">
-          {active.map((job) => (
-            <ProgressCard key={job.job_id} job={job} thumbnail={thumbnailByVod.get(vodIdFromUrl(job.url) ?? "")} />
-          ))}
-        </section>
+    <div className="relative">
+      {/* Hero image: sharp at the top, fading into the blurred backdrop */}
+      {heroImage && (
+        <div
+          className="absolute inset-x-0 top-0 overflow-hidden pointer-events-none [mask-image:linear-gradient(180deg,#000_52%,transparent_100%)]"
+          style={{ height: HERO_HEIGHT }}
+        >
+          <img src={heroImage} alt="" className="w-full h-full object-cover object-[50%_30%]" />
+          <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(11,11,12,0.72)_0%,rgba(11,11,12,0.28)_42%,rgba(11,11,12,0)_68%)]" />
+          <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(11,11,12,0.5)_0%,rgba(11,11,12,0)_20%)]" />
+        </div>
       )}
 
-      <section>
-        <div className="flex items-center gap-3 mb-4">
-          {channel?.avatar_url && <img src={channel.avatar_url} alt="" className="w-7 h-7 rounded-[9px]" />}
-          <h2 className="text-[20px] font-semibold tracking-[-0.02em] text-white">{t("analyze.latestVods")}</h2>
-        </div>
+      <div className="relative max-w-[1320px] mx-auto px-8 pb-14">
+        <section className="pt-[230px]">
+          {channel === undefined ? (
+            <div className="glass-strong rounded-[20px] w-[560px] max-w-full h-[300px] skeleton" />
+          ) : latest ? (
+            <>
+              <Hero vod={latest} busy={busy === latest.id} onAnalyze={() => analyze(latest.url, latest.id)} />
+              <Storyboard className="mt-[18px]" vodId={latest.id} durationSeconds={latest.duration_seconds} />
+            </>
+          ) : (
+            <div className="glass-strong rounded-[20px] w-[560px] max-w-full p-7">
+              <h1 className="title-large">{t("start.noChannelTitle")}</h1>
+              <p className="mt-2 text-[14.5px] text-ink-2">{channelError ? t("start.twitchError") : t("start.noChannelText")}</p>
+              <div className="mt-5 flex flex-wrap gap-2.5">
+                <Link to="/chaine" className="btn btn-primary btn-lg">{t("start.setChannel")}</Link>
+                <PasteLink />
+              </div>
+            </div>
+          )}
+        </section>
 
-        {channel === undefined ? (
-          <div className="grid gap-4 grid-cols-[repeat(auto-fill,minmax(250px,1fr))]">
-            {Array.from({ length: 4 }, (_, i) => <VodSkeleton key={i} />)}
-          </div>
-        ) : channel && channel.vods.length > 0 ? (
-          <div className="grid gap-4 grid-cols-[repeat(auto-fill,minmax(250px,1fr))]">
-            {channel.vods.slice(0, 8).map((vod, i) => (
-              <VodCard key={vod.id} vod={vod} index={i} busy={busy === vod.id} onAnalyze={() => analyze(vod.url, vod.id)} />
-            ))}
-          </div>
-        ) : (
-          <div className="glass rounded-[24px] p-6 flex items-center gap-3 text-[14px] text-zinc-300">
-            <AlertCircle className="w-5 h-5 text-zinc-400 shrink-0" />
-            {channelError ? t("analyze.twitchError") : t("analyze.noChannel")}
-          </div>
-        )}
-      </section>
-
-      <section>
-        <form onSubmit={submitUrl} className="glass rounded-[24px] p-2 pl-5 flex items-center gap-3">
-          <Link2 className="w-4 h-4 text-zinc-500 shrink-0" />
-          <input
-            value={url}
-            onChange={(e) => {
-              setUrl(e.target.value);
-              setUrlError(null);
-            }}
-            placeholder={t("analyze.urlPlaceholder")}
-            className="flex-1 min-w-0 bg-transparent text-[15px] text-white placeholder:text-zinc-500 outline-none h-10"
-          />
-          <button type="submit" disabled={busy === "url"} className="btn btn-glass">
-            {busy === "url" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
-            {t("analyze.analyze")}
-          </button>
-        </form>
-        {urlError && <p className="mt-2 ml-5 text-[13px] text-red-400">{urlError}</p>}
-      </section>
-
-      {recent.length > 0 && (
-        <section>
-          <div className="flex items-baseline justify-between mb-4">
-            <h2 className="text-[20px] font-semibold tracking-[-0.02em] text-white">{t("analyze.recentAnalyses")}</h2>
-            <Link to="/projects" className="text-[14px] text-zinc-400 hover:text-white transition-colors">
-              {t("analyze.seeAll")}
-            </Link>
-          </div>
-          <div className="glass rounded-[24px] divide-y divide-white/[0.06] overflow-hidden">
-            {recent.map((job) => {
-              const thumb = thumbnailByVod.get(vodIdFromUrl(job.url) ?? "");
+        {otherActive.length > 0 && (
+          <section className="mt-6 flex flex-col gap-2">
+            {otherActive.map((job) => {
+              const p = analysisProgress(job.status);
               return (
-                <Link key={job.job_id} to={`/${job.job_id}`} className="flex items-center gap-4 p-3 pr-5 hover:bg-white/[0.04] transition-colors">
-                  <div className="w-24 aspect-video rounded-[12px] overflow-hidden bg-white/[0.05] shrink-0">
-                    {thumb && <img src={thumb} alt="" loading="lazy" className="w-full h-full object-cover" />}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[14px] font-medium text-white truncate">{job.custom_title || job.vod_title || t("home.untitledVod")}</p>
-                    <p className="text-[13px] text-zinc-500 mt-0.5 flex items-center gap-1.5">
-                      <Clock3 className="w-3.5 h-3.5" /> {relative(job.created_at)}
-                      {job.vod_duration_seconds ? ` · ${formatDuration(job.vod_duration_seconds)}` : ""}
-                    </p>
-                  </div>
-                  {job.status === "ERROR" ? (
-                    <span className="text-[12px] px-2.5 py-1 rounded-full bg-red-500/10 text-red-300">{t("status.error")}</span>
-                  ) : (
-                    <ArrowRight className="w-4 h-4 text-zinc-500" />
-                  )}
+                <Link key={job.job_id} to={`/${job.job_id}`} className="glass rounded-[14px] px-4 py-3 flex items-center gap-4 hover:bg-white/[0.06] transition-colors">
+                  <Loader2 className="w-4 h-4 animate-spin text-accent" />
+                  <span className="flex-1 min-w-0 truncate text-[14px] text-white">{splitVodTitle(job.vod_title).title || job.url}</span>
+                  <span className="mono text-[12.5px] text-ink-3">{p.percent} %</span>
                 </Link>
               );
             })}
-          </div>
-        </section>
-      )}
+          </section>
+        )}
+
+        {others.length > 0 && (
+          <section className="mt-11">
+            <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
+              <h2 className="text-[20px] font-semibold tracking-[-0.02em] text-white">{t("start.yourLives")}</h2>
+              <PasteLink />
+            </div>
+            <div className="grid gap-[18px] grid-cols-[repeat(auto-fill,minmax(220px,1fr))]">
+              {others.slice(0, 10).map((vod, i) => (
+                <LiveCard key={vod.id} vod={vod} index={i} busy={busy === vod.id} onAnalyze={() => analyze(vod.url, vod.id)} />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {(resume || channel) && (
+          <section className="mt-11 flex flex-wrap gap-[18px]">
+            {resume && resume.hotPoints.length > 0 && <ResumeCard job={resume.job} hotPoints={resume.hotPoints} />}
+            <TemplateCard job={resume?.job ?? null} best={best} />
+          </section>
+        )}
+      </div>
     </div>
   );
 }

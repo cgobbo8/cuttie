@@ -1,127 +1,125 @@
 @import "tailwindcss";
 @import "@fontsource-variable/geist";
+@import "@fontsource-variable/geist-mono";
+
+/*
+ * Cuttie design system — "the content behind the glass".
+ * Glass panels sit on top of the streamer's own imagery (live thumbnails,
+ * clip frames, banner), blurred by <AppBackdrop>. Neutral graphite + off-white,
+ * one accent color: the streamer's brand color (brand kit).
+ */
+
+@theme static {
+  /* Accent: overridden at runtime from the brand kit (lib/color.ts) */
+  --color-accent: #3dbe8b;
+  /* Text on accent fills (dark or light depending on the accent) */
+  --color-accent-ink: #07140e;
+  --color-accent-soft: color-mix(in oklab, var(--color-accent) 17%, transparent);
+  --color-accent-line: color-mix(in oklab, var(--color-accent) 50%, transparent);
+  --color-accent-glow: color-mix(in oklab, var(--color-accent) 55%, transparent);
+}
 
 @theme {
   /* ─── Typography ─────────────────────────────────────────── */
-  /* Geist is bundled so the app looks the same on macOS and Windows */
+  /* Bundled so the app looks the same on macOS and Windows */
   --font-sans: "Geist Variable", -apple-system, BlinkMacSystemFont, "Segoe UI Variable", system-ui, sans-serif;
+  --font-mono: "Geist Mono Variable", ui-monospace, "SF Mono", "Cascadia Mono", monospace;
 
-  /* ─── Brand (streamer DA) ────────────────────────────────── */
-  /* Overridden at runtime from the brand kit (document.documentElement) */
-  --color-brand: #8b7bff;
-  --color-brand-2: #4fbf73;
+  /* Older pages still use the brand names */
+  --color-brand: var(--color-accent);
+  --color-brand-2: var(--color-accent);
+
+  /* ─── Neutrals ───────────────────────────────────────────── */
+  --color-ground: #0b0b0c;
+  /* Text and primary actions */
+  --color-ink: #f5f5f2;
+  --color-ink-2: rgba(245, 245, 242, 0.68);
+  --color-ink-3: rgba(245, 245, 242, 0.52);
+  --color-ink-4: rgba(245, 245, 242, 0.36);
+  --color-line: rgba(255, 255, 255, 0.08);
+  --color-line-strong: rgba(255, 255, 255, 0.14);
 
   /* ─── Background levels ──────────────────────────────────── */
-  /* Base app background (near-black, slightly cool) */
-  --color-bg-base: #07070a;
-  /* Elevated panel backgrounds: modals, dropdowns, tooltips (zinc-900) */
-  --color-bg-panel: #18181b;
-  /* Editor workspace background (zinc-950 variant) */
-  --color-bg-editor: #09090b;
+  --color-bg-base: #0b0b0c;
+  /* Elevated panel backgrounds: modals, dropdowns, tooltips */
+  --color-bg-panel: #161618;
+  /* Editor workspace background */
+  --color-bg-editor: #09090a;
 
-  /* ─── Surface (glass card system) ───────────────────────── */
-  /* Used by .surface and .surface-static */
+  /* ─── Surface (used by older pages) ──────────────────────── */
   --color-surface: rgba(255, 255, 255, 0.045);
   --color-surface-hover: rgba(255, 255, 255, 0.075);
-  /* Input/field background (slightly lighter than surface) */
-  --color-surface-input: rgba(255, 255, 255, 0.04);
-  /* Button/control resting state */
+  --color-surface-input: rgba(0, 0, 0, 0.25);
   --color-surface-control: rgba(255, 255, 255, 0.06);
-  /* Button/control hover state */
   --color-surface-control-hover: rgba(255, 255, 255, 0.10);
-  /* Active / pressed state */
   --color-surface-active: rgba(255, 255, 255, 0.08);
-  /* Subtle highlight used on table rows and list items */
   --color-surface-subtle: rgba(255, 255, 255, 0.02);
-  /* Faint fill for skeleton / progress track */
   --color-surface-muted: rgba(255, 255, 255, 0.03);
 
   /* ─── Borders ────────────────────────────────────────────── */
-  /* Default card / section border */
   --color-border: rgba(255, 255, 255, 0.09);
   --color-border-hover: rgba(255, 255, 255, 0.16);
-  /* Subtle divider inside panels and between rows */
   --color-border-subtle: rgba(255, 255, 255, 0.06);
-  /* Focus ring on inputs */
   --color-border-focus: rgba(255, 255, 255, 0.20);
 
-  /* ─── Text scale (maps to zinc Tailwind scale) ───────────── */
+  /* ─── Text scale (older pages) ───────────────────────────── */
   --color-text-primary: #ffffff;
-  --color-text-secondary: #e4e4e7;   /* zinc-200 */
-  --color-text-tertiary: #d4d4d8;    /* zinc-300 */
-  --color-text-muted: #a1a1aa;       /* zinc-400 */
-  --color-text-subtle: #71717a;      /* zinc-500 */
-  --color-text-faint: #52525b;       /* zinc-600 */
-  --color-text-disabled: #3f3f46;    /* zinc-700 */
-  --color-text-placeholder: #52525b; /* zinc-600 — used in inputs */
+  --color-text-secondary: #e4e4e7;
+  --color-text-tertiary: #d4d4d8;
+  --color-text-muted: #a1a1aa;
+  --color-text-subtle: #71717a;
+  --color-text-faint: #52525b;
+  --color-text-disabled: #3f3f46;
+  --color-text-placeholder: #52525b;
 
   /* ─── Semantic colors ────────────────────────────────────── */
-  /* Primary accent (emerald) — success, done, CTAs */
-  --color-primary: #10b981;          /* emerald-500 */
-  --color-primary-light: #34d399;    /* emerald-400 */
+  --color-primary: #10b981;
+  --color-primary-light: #34d399;
   --color-primary-bg: rgba(16, 185, 129, 0.08);
   --color-primary-border: rgba(16, 185, 129, 0.15);
 
-  /* Danger (red) — errors, destructive actions */
-  --color-danger: #ef4444;           /* red-500 */
-  --color-danger-light: #f87171;     /* red-400 */
+  --color-danger: #ef4444;
+  --color-danger-light: #f87171;
   --color-danger-bg: rgba(239, 68, 68, 0.08);
   --color-danger-border: rgba(239, 68, 68, 0.15);
-  /* Deeper danger bg for hover states */
   --color-danger-bg-hover: rgba(239, 68, 68, 0.20);
 
-  /* Warning (amber) — warnings, in-progress indicators */
-  --color-warning: #f59e0b;          /* amber-500 */
-  --color-warning-light: #fbbf24;    /* amber-400 */
+  --color-warning: #f59e0b;
+  --color-warning-light: #fbbf24;
   --color-warning-bg: rgba(245, 158, 11, 0.08);
 
-  /* Info / chat (blue) — chat dots on timeline, info states */
-  --color-info: #3b82f6;             /* blue-500 */
-  --color-info-light: #60a5fa;       /* blue-400 */
+  --color-info: #3b82f6;
+  --color-info-light: #60a5fa;
   --color-info-bg: rgba(59, 130, 246, 0.10);
   --color-info-border: rgba(59, 130, 246, 0.30);
 
-  /* Orange — "out" animation category badge */
-  --color-accent-orange: #f97316;    /* orange-500 */
-  --color-accent-orange-light: #fb923c; /* orange-400 */
+  --color-accent-orange: #f97316;
+  --color-accent-orange-light: #fb923c;
   --color-accent-orange-bg: rgba(249, 115, 22, 0.10);
 
   /* ─── Shadows ────────────────────────────────────────────── */
-  /* Floating elements: modals, toasts, dropdowns */
   --shadow-float: 0 25px 50px -12px rgba(0, 0, 0, 0.8);
-  /* Elevated panels: tooltips, popovers */
   --shadow-elevated: 0 20px 25px -5px rgba(0, 0, 0, 0.6), 0 8px 10px -6px rgba(0, 0, 0, 0.4);
 
-  /* ─── Border radius ──────────────────────────────────────── */
-  /* Cards, modals, large panels (iOS-like continuous corners) */
-  --radius-card: 1.25rem;    /* 20px */
-  /* Buttons, inputs, standard controls */
-  --radius-control: 0.75rem; /* 12px */
-  /* Small controls: badges, mini-buttons, select */
-  --radius-sm: 0.375rem;     /* 6px  — rounded-md */
-  /* Micro elements: scrollbar thumb, tiny badges */
-  --radius-xs: 0.25rem;      /* 4px  — rounded */
+  /* ─── Radii: tight inside, larger outside ────────────────── */
+  --radius-chip: 6px;
+  --radius-control: 10px;
+  --radius-tile: 14px;
+  --radius-panel: 18px;
+  --radius-sheet: 22px;
+  /* Older pages */
+  --radius-card: 18px;
 
-  /* ─── Transition timings ─────────────────────────────────── */
-  /* Default for color/bg transitions (used everywhere as transition-colors) */
+  /* ─── Motion ─────────────────────────────────────────────── */
   --duration-fast: 150ms;
-  /* Used for progress bars and position animations */
   --duration-base: 200ms;
-  /* Used for progress bar width and clip animations */
   --duration-slow: 350ms;
-  /* Modal / clip-enter animation */
   --ease-spring: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 body {
-  background-color: var(--color-bg-base);
-  /* Ambient brand glows: glass surfaces need something to blur */
-  background-image:
-    radial-gradient(60rem 38rem at 8% -12%, color-mix(in oklab, var(--color-brand) 26%, transparent), transparent 62%),
-    radial-gradient(48rem 34rem at 104% 4%, color-mix(in oklab, var(--color-brand-2) 14%, transparent), transparent 60%),
-    radial-gradient(70rem 46rem at 55% 125%, color-mix(in oklab, var(--color-brand) 16%, transparent), transparent 62%);
-  background-attachment: fixed;
-  color: #e4e4e7;
+  background-color: var(--color-ground);
+  color: var(--color-ink);
   font-family: var(--font-sans);
   font-feature-settings: "ss01", "cv11";
   -webkit-font-smoothing: antialiased;
@@ -134,41 +132,76 @@ body::after {
   inset: 0;
   pointer-events: none;
   z-index: 1000;
-  opacity: 0.035;
+  opacity: 0.04;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
-/* ─── Liquid glass ─────────────────────────────────────────── */
-/* Panel: blurred backdrop, bright top edge (refraction), soft dark drop */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--color-ink);
+  outline-offset: 2px;
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+/* ─── Glass ────────────────────────────────────────────────── */
+/* Panels: tinted graphite, blurred backdrop, bright top edge */
 .glass {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.075), rgba(255, 255, 255, 0.03));
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(16, 16, 18, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.12),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.02),
-    0 24px 60px -28px rgba(0, 0, 0, 0.75);
-  backdrop-filter: blur(28px) saturate(170%);
-  -webkit-backdrop-filter: blur(28px) saturate(170%);
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 30px 60px -30px rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(30px) saturate(160%);
+  -webkit-backdrop-filter: blur(30px) saturate(160%);
 }
 
+/* Hero cards and dialogs: thinner tint, stronger blur, more depth */
 .glass-strong {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.11), rgba(255, 255, 255, 0.05));
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(16, 16, 18, 0.42);
+  border: 1px solid rgba(255, 255, 255, 0.11);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.16),
-    0 30px 70px -30px rgba(0, 0, 0, 0.8);
-  backdrop-filter: blur(36px) saturate(180%);
-  -webkit-backdrop-filter: blur(36px) saturate(180%);
+    inset 0 1px 0 rgba(255, 255, 255, 0.13),
+    0 40px 80px -40px rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(36px) saturate(170%);
+  -webkit-backdrop-filter: blur(36px) saturate(170%);
 }
 
-/* Surface card (legacy name, now glass) */
+/* Top bar */
+.glass-bar {
+  background: rgba(16, 16, 18, 0.42);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.10),
+    0 20px 40px -24px rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(30px) saturate(170%);
+  -webkit-backdrop-filter: blur(30px) saturate(170%);
+}
+
+/* Small labels floating over images and video */
+.glass-chip {
+  background: rgba(12, 12, 13, 0.62);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+/* Blocks inside a glass panel (no extra blur) */
+.inset {
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+/* Older pages: same glass, softer */
 .surface,
 .surface-static {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.025));
+  background: rgba(16, 16, 18, 0.46);
   border: 1px solid var(--color-border);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07);
-  backdrop-filter: blur(20px) saturate(160%);
-  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
 }
 
 .surface {
@@ -179,82 +212,218 @@ body::after {
 }
 
 .surface:hover {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.04));
+  background: rgba(26, 26, 28, 0.55);
   border-color: var(--color-border-hover);
 }
 
-/* ─── Buttons (pills) ──────────────────────────────────────── */
+/* ─── Buttons ──────────────────────────────────────────────── */
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
   height: 2.5rem;
-  padding: 0 1.125rem;
-  border-radius: 9999px;
+  padding: 0 1rem;
+  border-radius: 11px;
   font-size: 0.875rem;
-  font-weight: 550;
+  font-weight: 600;
   letter-spacing: -0.01em;
   white-space: nowrap;
+  cursor: pointer;
   transition:
     background 180ms var(--ease-spring),
+    color 180ms var(--ease-spring),
     transform 180ms var(--ease-spring),
     box-shadow 180ms var(--ease-spring),
     opacity 180ms;
 }
 .btn:active {
-  transform: scale(0.97);
+  transform: scale(0.98);
 }
-.btn:disabled {
+.btn:disabled,
+.btn[aria-disabled="true"] {
   opacity: 0.45;
   pointer-events: none;
 }
-.btn:focus-visible {
-  outline: 2px solid color-mix(in oklab, var(--color-brand) 70%, white);
-  outline-offset: 2px;
-}
+/* Off-white: the main action of a screen */
 .btn-primary {
-  color: #fff;
-  background: linear-gradient(180deg, color-mix(in oklab, var(--color-brand) 92%, white), var(--color-brand));
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.28),
-    0 10px 30px -10px color-mix(in oklab, var(--color-brand) 70%, transparent);
+  color: var(--color-ground);
+  background: var(--color-ink);
+  box-shadow: 0 14px 30px -14px rgba(255, 255, 255, 0.4);
 }
 .btn-primary:hover {
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.32),
-    0 14px 36px -10px color-mix(in oklab, var(--color-brand) 85%, transparent);
+  background: #ffffff;
+  transform: translateY(-1px);
 }
 .btn-glass {
-  color: #f4f4f5;
+  color: var(--color-ink);
   background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(20px) saturate(160%);
-  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.10);
 }
 .btn-glass:hover {
   background: rgba(255, 255, 255, 0.13);
 }
+.btn-accent {
+  color: var(--color-accent-ink);
+  background: var(--color-accent);
+  box-shadow: 0 12px 30px -14px var(--color-accent-glow);
+}
+.btn-accent:hover {
+  transform: translateY(-1px);
+}
+.btn-ghost {
+  color: var(--color-ink-2);
+  background: transparent;
+}
+.btn-ghost:hover {
+  color: var(--color-ink);
+  background: rgba(255, 255, 255, 0.07);
+}
+.btn-danger {
+  color: #fecaca;
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+.btn-danger:hover {
+  background: rgba(239, 68, 68, 0.2);
+}
 .btn-sm {
   height: 2rem;
-  padding: 0 0.875rem;
+  padding: 0 0.75rem;
+  border-radius: 9px;
   font-size: 0.8125rem;
 }
 .btn-lg {
-  height: 3rem;
-  padding: 0 1.5rem;
+  height: 2.875rem;
+  padding: 0 1.25rem;
+  border-radius: 12px;
   font-size: 0.9375rem;
 }
+.btn-icon {
+  width: 2.375rem;
+  height: 2.375rem;
+  padding: 0;
+  border-radius: 10px;
+}
 
-/* Large iOS-style title */
+/* ─── Chips ────────────────────────────────────────────────── */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 9px;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.chip-accent {
+  color: var(--color-accent);
+  background: var(--color-accent-soft);
+}
+.chip-neutral {
+  color: var(--color-ink);
+  background: rgba(255, 255, 255, 0.1);
+}
+.chip-danger {
+  color: #fca5a5;
+  background: rgba(239, 68, 68, 0.14);
+}
+
+/* ─── Segmented control ────────────────────────────────────── */
+.seg {
+  display: inline-flex;
+  padding: 3px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+}
+.seg > button {
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 7px;
+  font-size: 12.5px;
+  color: var(--color-ink-2);
+  transition: background 150ms, color 150ms;
+}
+.seg > button:hover {
+  color: var(--color-ink);
+}
+.seg > button[aria-pressed="true"] {
+  color: #ffffff;
+  font-weight: 550;
+  background: rgba(255, 255, 255, 0.16);
+}
+
+/* ─── Switch ───────────────────────────────────────────────── */
+.switch {
+  flex: none;
+  display: inline-flex;
+  width: 42px;
+  height: 26px;
+  padding: 3px;
+  border-radius: 13px;
+  background: rgba(255, 255, 255, 0.16);
+  transition: background 180ms var(--ease-spring);
+}
+.switch > span {
+  width: 20px;
+  height: 20px;
+  border-radius: 10px;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  transition: transform 220ms var(--ease-spring);
+}
+.switch[aria-checked="true"] {
+  background: var(--color-accent);
+}
+.switch[aria-checked="true"] > span {
+  transform: translateX(16px);
+}
+
+/* Keyboard hint */
+kbd {
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 5px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  background: rgba(0, 0, 0, 0.18);
+  border: 1px solid rgba(0, 0, 0, 0.12);
+}
+
+/* Large title */
 .title-large {
-  font-size: 2.125rem;
-  line-height: 1.1;
-  font-weight: 700;
-  letter-spacing: -0.03em;
-  color: #fff;
+  font-size: 2.25rem;
+  line-height: 1.06;
+  font-weight: 650;
+  letter-spacing: -0.035em;
+  color: var(--color-ink);
   text-wrap: balance;
+}
+
+/* Clip subtitles inside a preview sized with container units (cqw) */
+.clip-text {
+  font-family: "Luckiest Guy", system-ui, sans-serif;
+  text-transform: uppercase;
+  line-height: 1.1;
+  text-shadow:
+    0 0.35cqw 0 #000, 0.35cqw 0 0 #000, -0.35cqw 0 0 #000, 0 -0.35cqw 0 #000,
+    0.25cqw 0.25cqw 0 #000, -0.25cqw -0.25cqw 0 #000, 0.25cqw -0.25cqw 0 #000, -0.25cqw 0.25cqw 0 #000,
+    0 0.8cqw 1.6cqw rgba(0, 0, 0, 0.55);
+}
+
+/* Subtitle font for clip previews (loaded from Google Fonts in index.html) */
+.font-clip {
+  font-family: "Luckiest Guy", system-ui, sans-serif;
+  text-transform: uppercase;
+  text-shadow:
+    0 3px 0 #000, 3px 0 0 #000, -3px 0 0 #000, 0 -3px 0 #000,
+    2px 2px 0 #000, -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000,
+    0 8px 18px rgba(0, 0, 0, 0.55);
 }
 
 /* Staggered entry for lists (set --i on each child) */

@@ -48,7 +48,10 @@ router
         // Brand kit (streamer DA) + their Twitch channel
         router.get('/brand-kit', [() => import('#controllers/brand_controller'), 'show'])
         router.put('/brand-kit', [() => import('#controllers/brand_controller'), 'update'])
+        router.post('/brand-kit/detect-colors', [() => import('#controllers/brand_controller'), 'detectColors'])
+        router.post('/brand-kit/detect-facecam', [() => import('#controllers/brand_controller'), 'detectFacecam'])
         router.get('/twitch/channel', [() => import('#controllers/brand_controller'), 'channel'])
+        router.get('/twitch/vods/:id/storyboard', [() => import('#controllers/brand_controller'), 'storyboard'])
 
         // Local app: settings (API keys) + diagnostics
         router.get('/settings', [() => import('#controllers/app_controller'), 'showSettings'])
@@ -75,6 +78,7 @@ router
 
         // Clips
         router.get('/clips/:jobId/:filename/edit-env', [() => import('#controllers/clips_controller'), 'editEnv'])
+        router.get('/clips/:jobId/:filename/thumb', [() => import('#controllers/clips_controller'), 'thumb'])
         router.get('/clips/:jobId/:filename', [() => import('#controllers/clips_controller'), 'show'])
 
         // Assets

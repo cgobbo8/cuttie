@@ -24,6 +24,8 @@ _model: YOLO | None = None
 SAMPLE_POSITIONS = [0.2, 0.35, 0.5, 0.65, 0.8]
 MIN_CONFIDENCE = 0.4
 CLUSTER_DISTANCE_RATIO = 0.15
+# Edge maps for overlay snapping are computed at 1/EDGE_SCALE resolution
+EDGE_SCALE = 2
 
 # YOLOv8 pose keypoint indices for face
 KP_NOSE = 0
@@ -78,10 +80,14 @@ def _face_bbox_from_keypoints(
     return x, y, size, size
 
 
-def _collect_detections(clip_paths: list[str]) -> tuple[list[Detection], int, int]:
-    """Detect persons + face keypoints on sampled frames from multiple clips."""
+def _collect_detections(clip_paths: list[str]) -> tuple[list[Detection], int, int, list[np.ndarray]]:
+    """Detect persons + face keypoints on sampled frames from multiple clips.
+
+    Also returns the sampled frames (grayscale, downscaled) for overlay snapping.
+    """
     model = _get_model()
     detections: list[Detection] = []
+    gray_frames: list[np.ndarray] = []
     frame_w = frame_h = 0
 
     for clip_idx, clip_path in enumerate(clip_paths):
@@ -98,6 +104,8 @@ def _collect_detections(clip_paths: list[str]) -> tuple[list[Detection], int, in
             ret, frame = cap.read()
             if not ret:
                 continue
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            gray_frames.append(cv2.resize(gray, (frame_w // EDGE_SCALE, frame_h // EDGE_SCALE), interpolation=cv2.INTER_AREA))
             results = model(frame, conf=MIN_CONFIDENCE, verbose=False)
 
             for i, box in enumerate(results[0].boxes):
@@ -116,7 +124,118 @@ def _collect_detections(clip_paths: list[str]) -> tuple[list[Detection], int, in
 
         cap.release()
 
-    return detections, frame_w, frame_h
+    return detections, frame_w, frame_h, gray_frames
+
+
+def _static_edges(frames: list[np.ndarray]) -> tuple[np.ndarray, np.ndarray]:
+    """Horizontal / vertical gradient magnitudes present in (nearly) every frame.
+
+    The webcam overlay's borders sit at the same place in every frame of every
+    clip, while game content moves: a low percentile across frames keeps the
+    former and wipes out the latter.
+    """
+    gx = np.stack([np.abs(cv2.Sobel(f, cv2.CV_32F, 1, 0, ksize=3)) for f in frames])
+    gy = np.stack([np.abs(cv2.Sobel(f, cv2.CV_32F, 0, 1, ksize=3)) for f in frames])
+    q = 25 if len(frames) >= 8 else 0
+    return np.percentile(gx, q, axis=0), np.percentile(gy, q, axis=0)
+
+
+def _strongest_line(profile: np.ndarray, lo: float, hi: float) -> int | None:
+    """Index of the strongest line in profile[lo:hi], if it clearly stands out."""
+    # Skip the outer pixels: Sobel's border handling creates fake edges there
+    lo, hi = max(2, int(lo)), min(len(profile) - 2, int(hi))
+    if hi - lo < 3:
+        return None
+    seg = profile[lo:hi]
+    i = int(np.argmax(seg))
+    if seg[i] < 10 or seg[i] < 3.0 * (float(np.median(seg)) + 1.0):
+        return None
+    return lo + i
+
+
+def _scan_border(moving: np.ndarray, start: int, step: int, limit: int, threshold: float) -> int:
+    """Walk from `start` (inside the cam) until the content starts moving like
+    game footage; returns the first moving index, or the frame edge if none."""
+    i = start
+    for _ in range(limit):
+        if i < 0 or i >= len(moving):
+            break
+        if moving[i] > threshold:
+            return i
+        i += step
+    return min(max(i, 0), len(moving))
+
+
+def _snap_to_overlay(
+    frames: list[np.ndarray], box: tuple[int, int, int, int], frame_w: int, frame_h: int,
+) -> tuple[int, int, int, int]:
+    """Grow the person box to the webcam overlay's actual borders.
+
+    The pose model frames the person (hair to shoulders), not the overlay: on a
+    top-right cam the box typically starts ~90 px below the frame edge.
+
+    Frames come from several clips, so game footage changes a lot from one to
+    the next while the streamer's room stays put. From each side of the person
+    box we walk outwards until pixels start changing like game footage (that's
+    the overlay border), or hit the frame edge (the cam touches it). The border
+    is then refined to the nearest static edge for pixel precision.
+    """
+    if len(frames) < 3:
+        return box
+    stack = np.stack(frames).astype(np.float32)
+    # Median deviation rather than std: the streamer's head passing over a spot
+    # in a few frames must not make their room look like game footage
+    moving = np.median(np.abs(stack - np.median(stack, axis=0)), axis=0)
+    gx, gy = _static_edges(frames)
+    H, W = moving.shape
+    s = frame_w / W
+    x, y, w, h = (v / s for v in box)
+
+    # How much game footage typically moves: everything far from the person
+    far = np.ones((H, W), dtype=bool)
+    far[int(max(0, y - h)):int(min(H, y + 2 * h)), int(max(0, x - w)):int(min(W, x + 2 * w))] = False
+    game_level = float(np.median(moving[far])) if far.any() else float(np.median(moving))
+    threshold = 0.5 * game_level
+
+    # Profiles across the box's inner band (rounded corners and the person's own
+    # motion at the edges would blur the transition)
+    c0, c1 = int(max(0, x + 0.2 * w)), int(min(W, x + 0.8 * w))
+    r0, r1 = int(max(0, y + 0.2 * h)), int(min(H, y + 0.8 * h))
+    row_moving = moving[:, c0:c1].mean(axis=1)
+    col_moving = moving[r0:r1, :].mean(axis=0)
+    row_edges = gy[:, c0:c1].mean(axis=1)
+    col_edges = gx[r0:r1, :].mean(axis=0)
+
+    def refine(edges: np.ndarray, coarse: int, at_edge: bool) -> int:
+        if at_edge:
+            return coarse
+        line = _strongest_line(edges, coarse - 8, coarse + 9)
+        return line if line is not None else coarse
+
+    lim_x, lim_y = int(0.9 * w), int(0.9 * h)
+    left = _scan_border(col_moving, int(x), -1, lim_x, threshold)
+    right = _scan_border(col_moving, int(x + w), 1, lim_x, threshold)
+    top = _scan_border(row_moving, int(y), -1, lim_y, threshold)
+    bottom = _scan_border(row_moving, int(y + h), 1, lim_y, threshold)
+
+    # The moving pixel is outside the cam: the border sits just inside it
+    left = refine(col_edges, left + 1, left <= 0) if left > 0 else 0
+    right = refine(col_edges, right, right >= W) if right < W else W
+    top = refine(row_edges, top + 1, top <= 0) if top > 0 else 0
+    bottom = refine(row_edges, bottom, bottom >= H) if bottom < H else H
+    # A border a few pixels from the frame edge is the frame edge (encoder noise)
+    snap_x, snap_y = max(2, W // 100), max(2, H // 100)
+    left = 0 if left <= snap_x else left
+    top = 0 if top <= snap_y else top
+    right = W if right >= W - snap_x else right
+    bottom = H if bottom >= H - snap_y else bottom
+
+    nx, ny = round(left * s), round(top * s)
+    nw, nh = round((right - left) * s), round((bottom - top) * s)
+    # Only accept a plausible overlay: it must still contain most of the person
+    if nw < 0.6 * box[2] or nh < 0.6 * box[3] or nw * nh > 0.6 * frame_w * frame_h:
+        return box
+    return nx, ny, nw, nh
 
 
 def _cluster_detections(
@@ -202,7 +321,7 @@ def detect_facecam(clip_path: str, extra_clips: list[str] | None = None) -> dict
     if extra_clips:
         all_clips.extend(extra_clips)
 
-    detections, frame_w, frame_h = _collect_detections(all_clips)
+    detections, frame_w, frame_h, gray_frames = _collect_detections(all_clips)
 
     if not detections:
         logger.info("No face detected in any clip")
@@ -238,8 +357,11 @@ def detect_facecam(clip_path: str, extra_clips: list[str] | None = None) -> dict
     w = min(frame_w - x, w)
     h = min(frame_h - y, h)
 
+    person = (x, y, w, h)
+    x, y, w, h = _snap_to_overlay(gray_frames, person, frame_w, frame_h)
+
     logger.info(
-        f"Facecam region: ({x},{y}) {w}x{h} "
+        f"Facecam region: ({x},{y}) {w}x{h} (person box {person}) "
         f"[{len(best)} dets across {n_clips}/{len(all_clips)} clips]"
     )
 

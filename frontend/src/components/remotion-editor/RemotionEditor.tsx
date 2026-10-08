@@ -21,7 +21,7 @@ import WidgetLibraryPanel from "../editor/WidgetLibraryPanel";
 import { buildDefaultProps, type WidgetDefinition } from "../editor/widgets/registry";
 import { useAccess } from "../../lib/useAccess";
 import { useChannel } from "../../lib/ChannelContext";
-import { buildTemplate } from "../../lib/templates";
+import { buildTemplate } from "../../lib/builtinTemplates";
 import { Permissions } from "../../lib/permissions";
 
 interface Props {

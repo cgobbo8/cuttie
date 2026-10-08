@@ -21,7 +21,8 @@ import {
   type WidgetShow,
   type WidgetTimingKind,
 } from "../../lib/templateSpec";
-import { buildTemplate, TEMPLATE_IDS, type TemplateContext, type TemplateId } from "../../lib/templates";
+import { TEMPLATE_IDS, type TemplateContext, type TemplateId } from "../../lib/templates";
+import { buildTemplate } from "../../lib/builtinTemplates";
 import { KIT_WIDGETS, type KitWidget } from "../editor/widgets/kit";
 import TemplateSketch from "../montage/TemplateSketch";
 import { usePlayerFrame } from "./Scrubber";

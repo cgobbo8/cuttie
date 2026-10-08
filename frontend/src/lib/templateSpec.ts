@@ -8,24 +8,7 @@
 import type { BrandColors } from "./api";
 import type { AnimationType, EasingPreset, Layer, LayerAnimation } from "./editorTypes";
 import { fontFamily, type FontId } from "./fonts";
-import {
-  base,
-  blurredBackground,
-  buildTemplate,
-  gameRegion,
-  H,
-  NATIVE_LOOKS,
-  shape,
-  stableIds,
-  uid,
-  video,
-  W,
-  type CustomTemplate,
-  type Rect,
-  type TemplateContext,
-  type TemplateId,
-  type TemplateLook,
-} from "./templates";
+import { base, blurredBackground, gameRegion, H, shape, stableIds, uid, video, W, type Rect, type TemplateContext, type TemplateId } from "./templates";
 import { kitWidget, type KitWidgetId } from "../components/editor/widgets/kit";
 
 export interface Box {
@@ -216,108 +199,7 @@ export function resolveColor(ref: ColorRef, colors: BrandColors): string {
   }
 }
 
-const toBox = (t: { x: number; y: number; width: number; height: number }): Box => ({ x: t.x, y: t.y, w: t.width, h: t.height });
 const toTransform = (b: Box) => ({ x: Math.round(b.x), y: Math.round(b.y), width: Math.round(b.w), height: Math.round(b.h) });
-
-/* ── From a built-in layout ───────────────────────────────── */
-
-/** A frame where the webcam sits top-right, to read the layouts' webcam spot */
-const LAYOUT_CTX: TemplateContext = {
-  src: "",
-  backgroundSrc: "",
-  frameW: 1920,
-  frameH: 1080,
-  facecam: { x: 1518, y: 0, w: 402, h: 446 },
-  words: [],
-  startAt: 0,
-  endAt: 60,
-  colors: { accent: "#010101", highlight: "#020202", dark: "#030303", light: "#040404" },
-  subtitleStyle: "bold",
-  widget: { enabled: true, timing: "start" },
-  login: "streamer",
-  avatarUrl: null,
-  hook: "hook",
-};
-
-const DEFAULT_HOOK = { visible: false, box: { x: 40, y: 150, w: 1000, h: 230 }, style: "outline" as const, font: "luckiest" as FontId, size: 86 };
-
-/**
- * One of the 6 layouts (with an optional look) as editable elements. The
- * subtitles start from the channel's subtitle style, the widget from its timing.
- */
-export function specFromLayout(
-  layoutId: TemplateId,
-  options: { look?: TemplateLook; subtitleStyle?: "bold" | "karaoke" | "minimal"; widgetTiming?: WidgetTimingKind; id?: string; name?: string } = {},
-): TemplateSpec {
-  const look = options.look ?? NATIVE_LOOKS[layoutId];
-  const layers = buildTemplate(layoutId, LAYOUT_CTX, look);
-  const byName = (...names: string[]) => layers.find((l) => names.includes(l.name));
-
-  const game = byName("Jeu")!;
-  const cam = byName("Webcam");
-  const camFrame = byName("Cadre de la cam", "Anneau de la cam");
-  const subs = byName("Sous-titres")!;
-  const hookText = byName("Accroche");
-  const hookBox = byName("Fond de l'accroche");
-  const widget = byName("Widget de chaîne");
-  const style = options.subtitleStyle ?? "bold";
-  const minimal = style === "minimal";
-
-  const frameOf = (layer: Layer | undefined, frame: Layer | undefined): FrameStyle => ({
-    radius: layer?.style.borderRadius ?? 0,
-    border: frame && layer ? Math.round((frame.transform.width - layer.transform.width) / 2) : 0,
-    borderColor: frame?.shape?.backgroundColor === LAYOUT_CTX.colors.accent ? "accent" : "white",
-    shadow: false,
-  });
-
-  return {
-    version: 2,
-    id: options.id ?? newSpecId(),
-    name: options.name ?? "",
-    base: layoutId,
-    background: {
-      kind: look.background === "blur" ? "blur" : look.background,
-      color: "dark",
-      dim: 0.42,
-    },
-    game: { box: toBox(game.transform), frame: { radius: game.style.borderRadius, border: 0, borderColor: "white", shadow: false } },
-    cam: {
-      visible: !!cam,
-      box: cam ? toBox(cam.transform) : { x: 240, y: 150, w: 600, h: 666 },
-      frame: cam ? frameOf(cam, camFrame) : { radius: 44, border: 6, borderColor: "white", shadow: false },
-    },
-    subtitles: {
-      box: toBox(subs.transform),
-      font: minimal ? "geist" : "luckiest",
-      size: subs.subtitle!.fontSize,
-      color: "white",
-      highlight: style === "karaoke" ? "highlight" : "none",
-      uppercase: !minimal,
-      stroke: !minimal,
-      boxed: minimal,
-      speakers: !!subs.subtitle!.showSpeaker,
-    },
-    hook: hookText
-      ? {
-          visible: true,
-          box: toBox((hookBox ?? hookText).transform),
-          style: hookBox ? "box" : "outline",
-          font: hookBox ? "geist" : "luckiest",
-          size: hookText.text!.fontSize,
-        }
-      : DEFAULT_HOOK,
-    widgets: widget
-      ? [{ id: newWidgetId(), kind: "channel-pill", box: toBox(widget.transform), timing: options.widgetTiming ?? "start", fields: {} }]
-      : [],
-  };
-}
-
-/** Templates saved by the first version of the editor (a layout + a look) */
-export function upgradeTemplate(t: TemplateSpec | CustomTemplate): TemplateSpec {
-  if ((t as TemplateSpec).version === 2) return t as TemplateSpec;
-  const old = t as CustomTemplate;
-  return specFromLayout(old.base, { look: old.look, id: old.id, name: old.name });
-}
 
 export function newSpecId(): string {
   return `custom-${randomHex(6)}`;
@@ -663,8 +545,9 @@ export function dragBox(
     const grow = Math.max(1, MIN_SIZE / w, MIN_SIZE / h);
     w *= fit * grow;
     h *= fit * grow;
+    // An edge handle grows the other way around the middle: the bottom one widens on both sides
     box = {
-      x: handle.includes("w") ? right - w : left,
+      x: handle.includes("w") ? right - w : handle === "n" || handle === "s" ? start.x + (start.w - w) / 2 : left,
       y: handle.includes("n") ? bottom - h : handle === "e" || handle === "w" ? start.y + (start.h - h) / 2 : top,
       w,
       h,

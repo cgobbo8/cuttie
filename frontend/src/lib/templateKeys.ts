@@ -4,8 +4,9 @@
  */
 import type { BrandKit } from "./api";
 import type { Layer } from "./editorTypes";
-import { buildTemplate, HAS_HOOK, NEEDS_WEBCAM, TEMPLATE_IDS, type TemplateContext, type TemplateId } from "./templates";
-import { buildFromSpec, upgradeTemplate, type TemplateSpec } from "./templateSpec";
+import { HAS_HOOK, NEEDS_WEBCAM, TEMPLATE_IDS, type TemplateContext, type TemplateId } from "./templates";
+import { buildFromSpec, type TemplateSpec } from "./templateSpec";
+import { buildTemplate, upgradeTemplate } from "./builtinTemplates";
 
 export type TemplateKey = string;
 

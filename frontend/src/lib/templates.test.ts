@@ -1,5 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { buildTemplate, coverCrop, gameRegion, NATIVE_LOOKS, suggestTemplate, TEMPLATE_IDS, type TemplateContext, type TemplateLook } from "./templates";
+import { coverCrop, gameRegion, suggestTemplate, TEMPLATE_IDS, type TemplateContext, type TemplateLook } from "./templates";
+import { buildTemplate } from "./builtinTemplates";
+
+/** A first-version template with nothing changed */
+const LOOK: TemplateLook = {
+  camSize: "m",
+  camShape: "rounded",
+  camBorder: "white",
+  background: "blur",
+  subtitlePosition: "auto",
+  subtitleSize: "m",
+  widgetPosition: "auto",
+  hook: "on",
+};
 
 const ctx: TemplateContext = {
   src: "/api/clips/job/clip.mp4",
@@ -51,13 +64,16 @@ describe("templates", () => {
     const cam = layers.find((l) => l.type === "facecam")!;
     expect(cam.video!.crop!.x).toBeGreaterThanOrEqual(1518);
     expect(layers.find((l) => l.type === "subtitles")!.subtitle!.activeColor).toBe("#F7C502");
-    // Widget in at the start, out after ~3 s
-    expect(layers.find((l) => l.type === "widget")!.animations!.map((a) => a.type)).toEqual(["slideInBottom", "fadeOut"]);
+    // Widget pops in at the start (with an overshoot), shrinks away after ~3 s
+    expect(layers.find((l) => l.type === "widget")!.animations!.map((a) => [a.type, a.easing])).toEqual([
+      ["scaleIn", "back"],
+      ["scaleOut", "easeIn.power3"],
+    ]);
   });
 
   it("times the widget from the trimmed start (renders keep clip time)", () => {
     const anims = buildTemplate("signature", { ...ctx, startAt: 12, endAt: 50 }).find((l) => l.type === "widget")!.animations!;
-    expect(anims[0].time).toBeCloseTo(12.25);
+    expect(anims[0].time).toBeCloseTo(12.3);
     const end = buildTemplate("signature", { ...ctx, startAt: 12, endAt: 50, widget: { enabled: true, timing: "end" } }).find((l) => l.type === "widget")!;
     expect(end.animations![0].time).toBeCloseTo(46.5);
   });
@@ -82,14 +98,14 @@ describe("templates", () => {
   });
 
   describe("adjusted looks", () => {
-    const look = (patch: Partial<TemplateLook>, id: keyof typeof NATIVE_LOOKS = "signature") => ({ ...NATIVE_LOOKS[id], ...patch });
+    const look = (patch: Partial<TemplateLook>) => ({ ...LOOK, ...patch });
 
     it("rounds the webcam into a circle with a ring in the channel color", () => {
       const layers = buildTemplate("signature", ctx, look({ camShape: "circle", camBorder: "accent" }));
       const webcam = layers.find((l) => l.type === "facecam")!;
       expect(webcam.transform.width).toBe(webcam.transform.height);
       expect(webcam.style.borderRadius).toBe(webcam.transform.width / 2);
-      const ring = layers.find((l) => l.name === "Anneau de la cam")!;
+      const ring = layers.find((l) => l.name === "Webcam · contour")!;
       expect(ring.shape!.shapeType).toBe("circle");
       expect(ring.shape!.backgroundColor).toBe("#42BF85");
       // The crop follows the new (square) box
@@ -102,7 +118,7 @@ describe("templates", () => {
       const t = big.find((l) => l.type === "facecam")!.transform;
       expect(t.width).toBeGreaterThan(native.width);
       expect(t.x + t.width / 2).toBeCloseTo(native.x + native.width / 2, 0);
-      expect(big.some((l) => l.name === "Cadre de la cam")).toBe(false);
+      expect(big.some((l) => l.name === "Webcam · contour")).toBe(false);
     });
 
     it("swaps the blurred clip for a plain or tinted background", () => {
@@ -120,12 +136,12 @@ describe("templates", () => {
       expect(subs.transform.y + subs.transform.height / 2).toBe(420);
       expect(subs.subtitle!.fontSize).toBe(Math.round(90 * 1.2));
       expect(layers.some((l) => l.type === "widget")).toBe(false);
-      const top = buildTemplate("reaction", ctx, look({ widgetPosition: "top" }, "reaction")).find((l) => l.type === "widget")!;
+      const top = buildTemplate("reaction", ctx, look({ widgetPosition: "top" })).find((l) => l.type === "widget")!;
       expect(top.transform.y).toBe(152);
     });
 
     it("can hide the hook line", () => {
-      expect(buildTemplate("accroche", ctx, look({ hook: "off" }, "accroche")).some((l) => l.type === "text")).toBe(false);
+      expect(buildTemplate("accroche", ctx, look({ hook: "off" })).some((l) => l.type === "text")).toBe(false);
     });
 
     it("keeps every combination inside the canvas", () => {
@@ -133,7 +149,7 @@ describe("templates", () => {
         for (const camSize of ["s", "l"] as const) {
           for (const camShape of ["rounded", "circle"] as const) {
             for (const subtitlePosition of ["top", "bottom"] as const) {
-              const layers = buildTemplate(id, ctx, look({ camSize, camShape, subtitlePosition }, id));
+              const layers = buildTemplate(id, ctx, look({ camSize, camShape, subtitlePosition }));
               for (const l of layers) {
                 expect(l.transform.x).toBeGreaterThanOrEqual(0);
                 expect(l.transform.y).toBeGreaterThanOrEqual(0);
@@ -149,7 +165,7 @@ describe("templates", () => {
 
   it("keeps layer ids across rebuilds so the preview doesn't reload its videos", () => {
     const a = buildTemplate("signature", ctx).map((l) => l.id);
-    const b = buildTemplate("signature", { ...ctx, hook: "autre" }, { ...NATIVE_LOOKS.signature, camShape: "circle" }).map((l) => l.id);
+    const b = buildTemplate("signature", { ...ctx, hook: "autre" }, { ...LOOK, camShape: "circle" }).map((l) => l.id);
     expect(new Set(a).size).toBe(a.length);
     expect(b).toEqual(a);
   });

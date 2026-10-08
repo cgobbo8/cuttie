@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { buildTemplate, NATIVE_LOOKS, type TemplateContext } from "./templates";
-import { buildFromSpec, dragBox, specFromLayout, upgradeTemplate } from "./templateSpec";
+import type { TemplateContext } from "./templates";
+import { buildFromSpec, dragBox } from "./templateSpec";
+import { buildTemplate, specFromLayout, upgradeTemplate } from "./builtinTemplates";
 
 const ctx: TemplateContext = {
   src: "/api/clips/job/clip.mp4",
@@ -134,7 +135,8 @@ describe("element templates", () => {
   });
 
   it("upgrades templates saved by the first version of the editor", () => {
-    const spec = upgradeTemplate({ id: "custom-abcd1234", name: "Cam ronde", base: "signature", look: { ...NATIVE_LOOKS.signature, camShape: "circle" } });
+    const look = { camSize: "m", camShape: "circle", camBorder: "white", background: "blur", subtitlePosition: "auto", subtitleSize: "m", widgetPosition: "auto", hook: "on" } as const;
+    const spec = upgradeTemplate({ id: "custom-abcd1234", name: "Cam ronde", base: "signature", look });
     expect(spec).toMatchObject({ version: 2, id: "custom-abcd1234", name: "Cam ronde", base: "signature" });
     expect(spec.cam.box.w).toBe(spec.cam.box.h);
   });
@@ -168,6 +170,16 @@ describe("dragging on the frame", () => {
     const kept = dragBox(box, "se", 100, 10, [], { keepRatio: true }).box;
     expect(kept.w / kept.h).toBeCloseTo(400 / 300, 2);
     expect(dragBox(box, "nw", 1000, 1000, []).box.w).toBe(40);
+  });
+
+  it("keeps the shape from an edge handle, growing around the middle", () => {
+    // Shift + bottom handle: taller and wider on both sides, the top stays
+    const down = dragBox(box, "s", 0, 60, [], { keepRatio: true, snap: false }).box;
+    expect(down).toEqual({ x: 60, y: 100, w: 480, h: 360 });
+    expect(down.x + down.w / 2).toBe(box.x + box.w / 2);
+    // Shift + right handle: wider and taller on both sides, the left stays
+    const right = dragBox(box, "e", 80, 0, [], { keepRatio: true, snap: false }).box;
+    expect(right).toEqual({ x: 100, y: 70, w: 480, h: 360 });
   });
 
   it("grows past the frame, e.g. a zoomed-in game", () => {

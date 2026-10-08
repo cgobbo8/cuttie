@@ -19,7 +19,6 @@ import {
   placeWidget,
   restack,
   widgetWindow,
-  specFromLayout,
   type Box,
   type SpecWidget,
   type TemplateSpec,
@@ -27,6 +26,7 @@ import {
 import { TEMPLATE_IDS, type TemplateContext, type TemplateId } from "../lib/templates";
 import { useLatestMoments } from "../lib/useLatestMoment";
 import { kitWidget, type KitWidget } from "../components/editor/widgets/kit";
+import { specFromLayout } from "../lib/builtinTemplates";
 import EditorCanvas, { type CanvasElement } from "../components/template-editor/EditorCanvas";
 import LayerList from "../components/template-editor/LayerList";
 import Scrubber from "../components/template-editor/Scrubber";

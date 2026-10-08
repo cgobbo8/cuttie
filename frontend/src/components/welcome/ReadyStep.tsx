@@ -1,7 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { ArrowRight } from "lucide-react";
-import type { BrandKit, FacecamRect } from "../../lib/api";
-import SignaturePreview from "../SignaturePreview";
+import type { BrandKit } from "../../lib/api";
+import TemplatePreview from "../TemplatePreview";
 
 interface Props {
   kit: BrandKit;
@@ -17,7 +17,6 @@ interface Props {
 /** The end: what their clips will look like, and off to the first analysis */
 export default function ReadyStep({ kit, frameUrl, login, avatarUrl, keysMissing, onAddKeys, onGo }: Props) {
   const { t } = useTranslation();
-  const facecam: FacecamRect | false | null = kit.facecam;
 
   return (
     <div className="flex flex-wrap items-center gap-8">
@@ -40,17 +39,15 @@ export default function ReadyStep({ kit, frameUrl, login, avatarUrl, keysMissing
         </button>
       </div>
       {frameUrl && (
-        <SignaturePreview
+        <TemplatePreview
           className="w-[210px] flex-none rounded-[16px] border border-white/[0.14] shadow-[0_40px_80px_-30px_rgba(0,0,0,0.9)] animate-rise"
+          kit={kit}
+          templateKey="signature"
           frameUrl={frameUrl}
-          facecam={facecam}
-          colors={kit.colors}
           avatarUrl={avatarUrl}
           login={login}
-          lines={[t("welcome.ready.sample").split(" ")]}
-          highlight={[0, 0]}
-          subtitleStyle={kit.subtitles.style}
-          showWidget={kit.widget.enabled}
+          sample={t("welcome.ready.sample").split(" ")}
+          hook={t("templateEditor.sampleHook")}
         />
       )}
     </div>

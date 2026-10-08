@@ -17,9 +17,11 @@ export default function ChannelPill({ props, width, height }: Props) {
   const pad = Math.round(height * 0.125);
   const avatar = height - pad * 2;
   const font = Math.round(height * 0.375);
+  // Centered in its box, or against its left / right edge (a name tag)
+  const justify = props.align === "left" ? "flex-start" : props.align === "right" ? "flex-end" : "center";
 
   return (
-    <div style={{ width, height, display: "flex", alignItems: "center", justifyContent: "center" }}>
+    <div style={{ width, height, display: "flex", alignItems: "center", justifyContent: justify }}>
       <div
         style={{
           height,

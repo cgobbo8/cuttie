@@ -16,6 +16,7 @@ import {
   type EnterId,
   type ExitId,
   type FrameStyle,
+  type HookStyle,
   type SpecWidget,
   type TemplateSpec,
   type WidgetShow,
@@ -216,7 +217,9 @@ export function BackgroundPanel({
         <div className="mt-2.5 flex gap-2 overflow-x-auto pb-1">
           {TEMPLATE_IDS.map((id) => (
             <button key={id} onClick={() => onLayout(id)} className="flex-none flex flex-col items-center gap-1 p-1 rounded-[10px] hover:bg-white/[0.06]">
-              {layoutCtx && <TemplateSketch layers={buildTemplate(id, layoutCtx)} frameUrl={frameUrl} width={52} sample={[]} className="rounded-[7px] border border-white/10" />}
+              {layoutCtx && (
+                <TemplateSketch layers={buildTemplate(id, layoutCtx)} frameUrl={frameUrl} width={52} sample={[]} at={layoutCtx.startAt + 1.5} className="rounded-[7px] border border-white/10" />
+              )}
               <span className="text-[11px] text-ink-2">{t(`montage.template.${id}.name`)}</span>
             </button>
           ))}
@@ -312,6 +315,17 @@ export function SubtitlesPanel({
       <Row label={t("templateEditor.spoken")} hint={t("templateEditor.spokenHint")}>
         <Swatches label={t("templateEditor.spoken")} value={value.highlight} colors={colors} allowNone onChange={(highlight) => onChange({ ...value, highlight }, true)} />
       </Row>
+      <Row label={t("templateEditor.pop")}>
+        <Toggle label={t("templateEditor.pop")} on={!!value.pop} onChange={(pop) => onChange({ ...value, pop }, true)} />
+      </Row>
+      <Row label={t("templateEditor.words")}>
+        <Seg
+          label={t("templateEditor.words")}
+          value={String(value.words ?? 4)}
+          onChange={(words) => onChange({ ...value, words: Number(words) }, true)}
+          options={["1", "2", "3", "4", "5"].map((n) => ({ value: n, label: n }))}
+        />
+      </Row>
       <Row label={t("templateEditor.uppercase")}>
         <Toggle label={t("templateEditor.uppercase")} on={value.uppercase} onChange={(uppercase) => onChange({ ...value, uppercase }, true)} />
       </Row>
@@ -328,8 +342,20 @@ export function SubtitlesPanel({
   );
 }
 
+/** Fonts made for sentences on a box (the others are display caps, for outlined text) */
+const SENTENCE_FONTS: FontId[] = ["poppins", "montserrat", "geist", "archivo"];
+
+/** A font that suits the hook style: display caps outlined, a sentence font on a box */
+function hookFont(style: HookStyle, font: FontId): FontId {
+  if (style === "outline") return font === "geist" || font === "poppins" ? "anton" : font;
+  return SENTENCE_FONTS.includes(font) ? font : "poppins";
+}
+
+type HookUntil = "short" | "half" | "all";
+
 export function HookPanel({ value, onChange, onReset }: { value: TemplateSpec["hook"]; onChange: (v: TemplateSpec["hook"], done?: boolean) => void; onReset: () => void }) {
   const { t } = useTranslation();
+  const until: HookUntil = value.until === undefined || value.until === null ? "all" : value.until === "half" ? "half" : "short";
   return (
     <>
       <PanelHead title={t("templateEditor.el.hook")}>
@@ -343,10 +369,23 @@ export function HookPanel({ value, onChange, onReset }: { value: TemplateSpec["h
         <Seg
           label={t("templateEditor.hookStyle")}
           value={value.style}
-          onChange={(style) => onChange({ ...value, style, font: style === "box" ? "geist" : value.font === "geist" ? "luckiest" : value.font }, true)}
+          onChange={(style) => onChange({ ...value, style, font: hookFont(style, value.font) }, true)}
           options={[
             { value: "outline", label: t("templateEditor.hookOutline") },
             { value: "box", label: t("templateEditor.hookBox") },
+            { value: "brand", label: t("templateEditor.hookBrand") },
+          ]}
+        />
+      </Row>
+      <Row label={t("templateEditor.hookUntil")} hint={t("templateEditor.hookUntilHint")}>
+        <Seg<HookUntil>
+          label={t("templateEditor.hookUntil")}
+          value={until}
+          onChange={(u) => onChange({ ...value, until: u === "short" ? 3.5 : u === "half" ? "half" : null }, true)}
+          options={[
+            { value: "short", label: t("templateEditor.hookUntilShort") },
+            { value: "half", label: t("templateEditor.hookUntilHalf") },
+            { value: "all", label: t("templateEditor.hookUntilAll") },
           ]}
         />
       </Row>

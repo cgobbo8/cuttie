@@ -7,7 +7,7 @@ import { useBackdrop } from "../lib/BackdropContext";
 import { useChannel } from "../lib/ChannelContext";
 import { useLatestMoments } from "../lib/useLatestMoment";
 import { useToast } from "../components/Toast";
-import SignaturePreview from "../components/SignaturePreview";
+import TemplatePreview, { useDefaultTemplate } from "../components/TemplatePreview";
 import TemplateSketch from "../components/montage/TemplateSketch";
 import type { TemplateContext } from "../lib/templates";
 import { customTemplates } from "../lib/templateKeys";
@@ -126,6 +126,7 @@ export default function ChannelPage() {
         ? brandFrameUrl
         : null;
   const subtitle = sampleSubtitle(best?.llm?.transcript);
+  const defaultTemplate = useDefaultTemplate(kit);
   const brandCam = kit?.facecam && typeof kit.facecam === "object" ? kit.facecam : null;
   const customs = customTemplates(kit);
   const sketchContext: TemplateContext | null = kit
@@ -344,6 +345,7 @@ export default function ChannelPage() {
                       frameUrl={frame(480)}
                       width={72}
                       sample={[]}
+                      at={1.5}
                       className="rounded-[10px] border border-white/10 transition-transform group-hover/tpl:-translate-y-0.5"
                     />
                     <span className="w-full text-center text-[12px] font-[550] text-white truncate">{tpl.name}</span>
@@ -358,19 +360,19 @@ export default function ChannelPage() {
         <aside className="glass rounded-[20px] p-[18px] flex-[0_1_330px] min-w-0 lg:sticky lg:top-[96px]">
           <div className="flex items-center justify-between gap-2.5">
             <h2 className="text-[16px] font-semibold tracking-[-0.01em] text-white">{t("brand.preview")}</h2>
-            <span className="text-[12.5px] text-ink-3">{t("brand.previewTemplate")}</span>
+            <span className="text-[12.5px] text-ink-3 truncate">{t("brand.previewTemplate", { name: defaultTemplate.name })}</span>
           </div>
-          <SignaturePreview
+          <TemplatePreview
             className="mt-3.5 w-full rounded-[14px] border border-white/10 shadow-[0_30px_60px_-30px_rgba(0,0,0,0.9)]"
+            kit={kit}
+            templateKey={defaultTemplate.key}
             frameUrl={frame(1280)}
-            facecam={kit.facecam}
-            colors={kit.colors}
             avatarUrl={channel?.avatar_url ?? null}
             login={channel?.login ?? kit.twitch_login}
-            lines={subtitle.lines}
-            highlight={subtitle.highlight}
-            subtitleStyle={kit.subtitles.style}
-            showWidget={kit.widget.enabled}
+            displayName={channel?.display_name}
+            followers={channel?.followers}
+            sample={subtitle.lines.flat()}
+            hook={best?.llm?.hook || best?.clip_name || t("templateEditor.sampleHook")}
           />
           {!frame(1280) && latest !== undefined && <p className="mt-3 text-[12.5px] text-ink-3">{t("brand.previewNeedsAnalysis")}</p>}
           <p className="mt-3 text-[12.5px] leading-relaxed text-ink-3">{t("brand.camEveryLive")}</p>

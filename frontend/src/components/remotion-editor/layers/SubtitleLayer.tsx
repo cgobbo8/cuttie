@@ -25,6 +25,14 @@ function chunkWords(words: SubtitleWord[], maxWords = 4, maxDuration = 3.0, spli
   return chunks;
 }
 
+/** Spoken word "pop": grows fast, then settles a little bigger while it's said (the words get a bit more room, see wordSpacing) */
+function popScale(sinceStart: number): number {
+  if (sinceStart < 0) return 1;
+  if (sinceStart < 0.08) return 1 + 0.2 * (sinceStart / 0.08);
+  if (sinceStart < 0.22) return 1.2 - 0.08 * ((sinceStart - 0.08) / 0.14);
+  return 1.12;
+}
+
 function tintWhite(hex: string, strength = 0.15): string {
   const r = parseInt(hex.slice(1, 3), 16);
   const g = parseInt(hex.slice(3, 5), 16);
@@ -75,8 +83,8 @@ export default function SubtitleLayer({ layer }: Props) {
   const highlightColor = tintWhite(baseColor);
 
   const chunks = useMemo(
-    () => chunkWords(subtitle.words, 4, 3.0, showSpeaker),
-    [subtitle.words, showSpeaker],
+    () => chunkWords(subtitle.words, subtitle.maxWords ?? 4, 3.0, showSpeaker),
+    [subtitle.words, subtitle.maxWords, showSpeaker],
   );
   const fallback = useMemo(
     () => showSpeaker ? buildFallbackMap(subtitle.words, baseColor) : new Map(),
@@ -113,6 +121,7 @@ export default function SubtitleLayer({ layer }: Props) {
           margin: 0,
           textShadow: subtitle.boxed ? undefined : subtitle.noStroke ? "0 3px 12px rgba(0,0,0,0.75)" : "2px 3px 5px rgba(0,0,0,0.6)",
           wordBreak: "break-word",
+          ...(subtitle.pop ? { wordSpacing: "0.18em" } : {}),
           ...(subtitle.boxed
             ? {
                 display: "inline-block",
@@ -143,9 +152,13 @@ export default function SubtitleLayer({ layer }: Props) {
               } else {
                 color = isFilled ? highlightColor : baseColor;
               }
+              const speaking = currentTime >= word.start && currentTime <= word.end + 0.05;
+              const scale = subtitle.pop && speaking ? popScale(currentTime - word.start) : 1;
               return (
-                <span key={`${word.start}-${i}`} style={{ color }}>
-                  {subtitle.uppercase ? word.word.toUpperCase() : word.word}
+                <span key={`${word.start}-${i}`}>
+                  <span style={{ color, ...(subtitle.pop ? { display: "inline-block", transform: `scale(${scale})`, transformOrigin: "50% 70%" } : {}) }}>
+                    {subtitle.uppercase ? word.word.toUpperCase() : word.word}
+                  </span>
                   {i < visible.length - 1 ? " " : ""}
                 </span>
               );

@@ -32,7 +32,7 @@ export type WidgetTiming = 'start' | 'always' | 'end'
 export type SubtitleStyle = 'bold' | 'karaoke' | 'minimal'
 
 /** Allowed values of a custom template (mirrors frontend/src/lib/templates.ts) */
-export const TEMPLATE_BASES = ['signature', 'plein', 'reaction', 'discussion', 'sanscam', 'accroche'] as const
+export const TEMPLATE_BASES = ['empile', 'signature', 'reaction', 'discussion', 'plein', 'accroche', 'sanscam'] as const
 const LOOK_VALUES = {
   camSize: ['s', 'm', 'l'],
   camShape: ['rounded', 'circle'],
@@ -147,13 +147,16 @@ function parseSpec(item: Json): TemplateSpec {
       stroke: bool(subs.stroke),
       boxed: bool(subs.boxed),
       speakers: bool(subs.speakers),
+      ...(subs.pop !== undefined ? { pop: bool(subs.pop) } : {}),
+      ...(subs.words !== undefined ? { words: Math.round(num(subs.words, 1, 8)) } : {}),
     },
     hook: {
       visible: bool(hook.visible),
       box: box(hook.box),
-      style: oneOf(hook.style, ['outline', 'box']),
+      style: oneOf(hook.style, ['outline', 'box', 'brand']),
       font: oneOf(hook.font, FONT_IDS),
       size: num(hook.size, 20, 240),
+      ...(hook.until !== undefined ? { until: hookUntil(hook.until) } : {}),
     },
     widgets: widgets.map((w: unknown) => {
       check(isObject(w) && typeof w.id === 'string' && /^w-[a-z0-9-]{2,24}$/.test(w.id))
@@ -178,6 +181,12 @@ function parseSpec(item: Json): TemplateSpec {
     }),
     ...(item.order !== undefined ? { order: order(item.order, widgets) } : {}),
   }
+}
+
+/** How long the hook line stays: seconds from the first frame, half the clip, or the whole clip (null) */
+function hookUntil(v: unknown) {
+  if (v === null || v === 'half') return v
+  return num(v, 0.5, 600)
 }
 
 /** When a widget comes in and goes (seconds from the start / end of the clip, or after it came in) */

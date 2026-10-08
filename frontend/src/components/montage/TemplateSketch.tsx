@@ -1,4 +1,5 @@
 import type { CSSProperties } from "react";
+import { evaluateAnimations } from "../../lib/animations";
 import { BOX_SHADOW_PRESETS, type Layer } from "../../lib/editorTypes";
 import ChannelPill from "../editor/widgets/ChannelPill";
 import { kitWidget } from "../editor/widgets/kit";
@@ -11,6 +12,8 @@ interface Props {
   width: number;
   /** A few words to show in the subtitle layer */
   sample: string[];
+  /** Clip time to show (layers not on screen then are left out); unset: every layer */
+  at?: number;
   className?: string;
 }
 
@@ -20,7 +23,7 @@ function rgba(hex: string, alpha: number): string {
 }
 
 /** Cheap still of a template: same layers as the render, a frame instead of the video */
-export default function TemplateSketch({ layers, frameUrl, width, sample, className = "" }: Props) {
+export default function TemplateSketch({ layers, frameUrl, width, sample, at, className = "" }: Props) {
   const k = width / 1080;
 
   const content = (layer: Layer) => {
@@ -71,17 +74,29 @@ export default function TemplateSketch({ layers, frameUrl, width, sample, classN
               color: sub.boxed ? "#fff" : sub.customColor,
               WebkitTextStroke: sub.boxed || sub.noStroke ? undefined : `${Math.max(2, sub.fontSize / 25)}px black`,
               paintOrder: "stroke fill",
+              ...(sub.pop ? { wordSpacing: "0.18em" } : {}),
               ...(sub.boxed
                 ? { display: "inline-block", padding: `${sub.fontSize * 0.22}px ${sub.fontSize * 0.45}px`, borderRadius: sub.fontSize * 0.35, background: "rgba(0,0,0,0.58)" }
                 : {}),
             }}
           >
-            {sample.map((word, i) => (
-              <span key={i} style={sub.activeColor && i === sample.length - 1 ? { color: sub.activeColor } : sub.activeColor ? { color: sub.restColor } : undefined}>
-                {i > 0 ? " " : ""}
-                {word}
-              </span>
-            ))}
+            {sample.slice(0, sub.maxWords ?? sample.length).map((word, i, shown) => {
+              // The last word is the one being said: in the karaoke color, popping
+              const spoken = i === shown.length - 1;
+              return (
+                <span key={i}>
+                  {i > 0 ? " " : ""}
+                  <span
+                    style={{
+                      ...(sub.activeColor ? { color: spoken ? sub.activeColor : sub.restColor } : {}),
+                      ...(sub.pop && spoken ? { display: "inline-block", transform: "scale(1.12)", transformOrigin: "50% 70%" } : {}),
+                    }}
+                  >
+                    {word}
+                  </span>
+                </span>
+              );
+            })}
           </p>
         </div>
       );
@@ -109,7 +124,7 @@ export default function TemplateSketch({ layers, frameUrl, width, sample, classN
               textTransform: text.uppercase ? "uppercase" : undefined,
               lineHeight: text.lineHeight,
               width: "100%",
-              WebkitTextStroke: text.color === "#FFFFFF" ? "3px black" : undefined,
+              WebkitTextStroke: text.stroke ? `${Math.max(2, Math.round(text.fontSize / 18))}px black` : undefined,
               paintOrder: "stroke fill",
             }}
           >
@@ -125,7 +140,7 @@ export default function TemplateSketch({ layers, frameUrl, width, sample, classN
     <div className={`relative overflow-hidden bg-black ${className}`} style={{ width, height: (width * 16) / 9 }}>
       <div style={{ position: "absolute", left: 0, top: 0, width: 1080, height: 1920, transform: `scale(${k})`, transformOrigin: "0 0" }}>
         {layers
-          .filter((l) => l.visible)
+          .filter((l) => l.visible && (at === undefined || evaluateAnimations(l, at, Infinity).opacity > 0.05))
           .map((layer) => (
             <div
               key={layer.id}

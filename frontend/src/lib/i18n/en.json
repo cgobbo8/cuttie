@@ -578,8 +578,6 @@
     "step": "Step {{n}} of 4 · {{name}}",
     "stepChoose": "Choose",
     "yourTemplate": "Your template",
-    "signature": "Signature",
-    "signatureDesc": "Your cam on top, the game in the middle, your widget at the start of each clip.",
     "confirmCam": "Confirm your webcam in My channel so it shows at the top of your clips.",
     "tuneBrand": "Tune my branding",
     "noChannelTitle": "What's your Twitch channel?",
@@ -625,19 +623,19 @@
       "end": "At the end"
     },
     "subtitles": "Subtitles",
-    "subtitlesHint": "Big in the middle of the clip, Luckiest Guy font",
+    "subtitlesHint": "Each Cuttie template has its own font: pick the style here.",
     "subStyle": {
       "bold": "Big and white",
       "karaoke": "Karaoke",
       "minimal": "Subtle"
     },
     "preview": "Preview",
-    "previewTemplate": "Signature template",
+    "previewTemplate": "{{name}} template",
     "previewNeedsAnalysis": "The preview will use a frame from your first analysis.",
     "camEveryLive": "Your webcam is checked again on every stream. If it moves, you can adjust it in Edit.",
     "myTemplates": "My templates",
     "myTemplatesHint": "Your own layouts, ready in Edit.",
-    "noTemplates": "No custom template yet. Start from one of the 6 layouts and adjust it.",
+    "noTemplates": "No custom template yet. Start from one of Cuttie's layouts and adjust it.",
     "createTemplate": "Create a template"
   },
   "project": {
@@ -707,35 +705,39 @@
     "suggested": "Suggested",
     "needsWebcam": "This template needs a webcam",
     "template": {
+      "empile": {
+        "name": "Stacked",
+        "desc": "Your cam on top, the game below: the most watched format"
+      },
       "signature": {
         "name": "Signature",
-        "desc": "Your cam on top, the game in the middle, blurred background"
-      },
-      "plein": {
-        "name": "Full screen",
-        "desc": "The game full size, your cam as an overlay"
+        "desc": "Cam and game as cards on the blurred clip, in your colors"
       },
       "reaction": {
         "name": "Reaction",
-        "desc": "Your face big, for the laughing fits"
+        "desc": "Your face big, for laughing fits and rage"
       },
       "discussion": {
-        "name": "Conversation",
-        "desc": "Who's talking, in color, for RP dialogue"
+        "name": "RP talk",
+        "desc": "Who's talking, in color, one sentence at a time"
+      },
+      "plein": {
+        "name": "Action",
+        "desc": "The game full screen, your cam in a circle: fails, clutches"
+      },
+      "accroche": {
+        "name": "Cinema",
+        "desc": "The whole game picture, your cam in a card above"
       },
       "sanscam": {
         "name": "No cam",
-        "desc": "Just the game, with a hook line"
-      },
-      "accroche": {
-        "name": "Hook",
-        "desc": "A line at the top to stop the scroll"
+        "desc": "Just the game, the hook line for the first half"
       }
     },
     "clipOf": "Clip {{n}} of {{total}}",
     "settings": "Clip settings",
     "hook": "Hook",
-    "hookHint": "Shown at the top of the clip.",
+    "hookHint": "The cover: on screen from the clip's first frame.",
     "noHook": "This template doesn't show a hook.",
     "camFraming": "Webcam framing",
     "adjust": "Adjust",
@@ -1029,9 +1031,17 @@
     "boxed": "On a dark box",
     "speakers": "One color per person",
     "speakersHint": "For group conversations (voice chat, RP).",
+    "words": "Words at a time",
+    "pop": "Spoken word pops",
     "hookStyle": "Style",
     "hookOutline": "Outline",
     "hookBox": "Banner",
+    "hookBrand": "Your color",
+    "hookUntil": "On screen",
+    "hookUntilShort": "3.5 s",
+    "hookUntilHalf": "Half",
+    "hookUntilAll": "Whole clip",
+    "hookUntilHint": "From the first frame: it's the clip's cover.",
     "addWidget": "Add a widget",
     "addWidgetHint": "They use your logo, name and colors. Add as many as you like.",
     "removeWidget": "Remove the widget",

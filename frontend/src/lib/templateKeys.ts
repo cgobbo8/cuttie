@@ -23,6 +23,12 @@ export function findCustom(key: TemplateKey, customs: TemplateSpec[]): TemplateS
   return customs.find((t) => t.id === key);
 }
 
+/** The template new projects start with: the one starred, else Signature */
+export function defaultTemplateKey(kit: BrandKit | null | undefined, customs: TemplateSpec[]): TemplateKey {
+  const key = kit?.default_template;
+  return key && (isBuiltIn(key) || findCustom(key, customs)) ? key : "signature";
+}
+
 /** The layout behind a key (unknown keys, e.g. a deleted template, fall back to Signature) */
 export function baseOf(key: TemplateKey, customs: TemplateSpec[]): TemplateId {
   return findCustom(key, customs)?.base ?? (isBuiltIn(key) ? key : "signature");

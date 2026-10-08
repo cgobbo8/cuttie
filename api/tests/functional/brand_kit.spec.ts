@@ -179,6 +179,23 @@ test.group('Brand kit | element templates', (group) => {
     assert.deepEqual(saved.body().templates[0], rich)
   })
 
+  test('keeps the timed hook line, the popping word and the words per line (Empilé)', async ({ client, assert }) => {
+    const user = await makeUser()
+    const stacked = {
+      ...spec,
+      id: 'custom-5e6f7a8b',
+      base: 'empile',
+      subtitles: { ...spec.subtitles, font: 'anton', pop: true, words: 3 },
+      hook: { ...spec.hook, visible: true, style: 'brand', until: 3.5 },
+    }
+    const half = { ...stacked, id: 'custom-6f7a8b9c', hook: { ...stacked.hook, style: 'box', until: 'half' } }
+    const always = { ...stacked, id: 'custom-7a8b9c0d', hook: { ...stacked.hook, until: null } }
+    const saved = await client.put('/api/brand-kit').loginAs(user).json({ templates: [stacked, half, always], default_template: 'empile' })
+    saved.assertStatus(200)
+    assert.deepEqual(saved.body().templates, [stacked, half, always])
+    assert.equal(saved.body().default_template, 'empile')
+  })
+
   test('rejects broken element templates', async ({ client }) => {
     const user = await makeUser()
     const broken = [
@@ -192,6 +209,11 @@ test.group('Brand kit | element templates', (group) => {
       { ...spec, order: ['game', 'widget:w-nope'] },
       { ...spec, game: { ...spec.game, frame: { ...frame, borderColor: 'javascript:alert(1)' } } },
       { ...spec, widgets: [{ ...spec.widgets[0], fields: { text: 'x'.repeat(200) } }] },
+      { ...spec, hook: { ...spec.hook, style: 'neon' } },
+      { ...spec, hook: { ...spec.hook, until: 'forever' } },
+      { ...spec, hook: { ...spec.hook, until: -2 } },
+      { ...spec, subtitles: { ...spec.subtitles, words: 40 } },
+      { ...spec, subtitles: { ...spec.subtitles, pop: 'yes' } },
     ]
     for (const template of broken) {
       ;(await client.put('/api/brand-kit').loginAs(user).json({ templates: [template] })).assertStatus(400)

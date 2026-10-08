@@ -7,15 +7,16 @@
 import type { BrandColors, SubtitleStyle, WidgetTiming } from "./api";
 import { DEFAULT_STYLE, type Layer, type LayerTransform, type SubtitleWord } from "./editorTypes";
 
-export type TemplateId = "signature" | "plein" | "reaction" | "discussion" | "sanscam" | "accroche";
+/** Ids kept from the first layouts: "plein" is shown as Action, "accroche" as Cinéma */
+export type TemplateId = "empile" | "signature" | "reaction" | "discussion" | "plein" | "accroche" | "sanscam";
 
-export const TEMPLATE_IDS: TemplateId[] = ["signature", "plein", "reaction", "discussion", "sanscam", "accroche"];
+export const TEMPLATE_IDS: TemplateId[] = ["empile", "signature", "reaction", "discussion", "plein", "accroche", "sanscam"];
 
 /** Templates built around the webcam */
-export const NEEDS_WEBCAM: TemplateId[] = ["reaction", "discussion"];
+export const NEEDS_WEBCAM: TemplateId[] = ["empile", "reaction", "discussion"];
 
-/** Templates that show the hook line at the top */
-export const HAS_HOOK: TemplateId[] = ["sanscam", "accroche"];
+/** Templates that show the hook line (all of them: it's the clip's cover) */
+export const HAS_HOOK: TemplateId[] = [...TEMPLATE_IDS];
 
 export interface Rect {
   x: number;
@@ -138,11 +139,16 @@ export function stableIds(layers: Layer[]): Layer[] {
   return layers.map((l) => (l.id.startsWith("tpl-") ? l : { ...l, id: `tpl-${l.name.normalize("NFD").replace(/[^\w]+/g, "-").toLowerCase()}` }));
 }
 
-/** A sensible template for a moment, from what happens in it */
-export function suggestTemplate(category: string | undefined, hasWebcam: boolean, excitement = 0, speech = 0): TemplateId {
+/**
+ * A sensible template for a moment, from what happens in it. `camWidth`: the
+ * stream's webcam width in clip pixels; enlarged more than twice to fill the
+ * frame's width, it gets soft, so small webcams go in a card instead.
+ */
+export function suggestTemplate(category: string | undefined, hasWebcam: boolean, excitement = 0, speech = 0, camWidth = 0): TemplateId {
   if (!hasWebcam) return "sanscam";
-  if (category === "storytelling" || category === "awkward" || speech >= 0.7) return "discussion";
-  if (category === "reaction" || category === "emotional" || excitement >= 0.9) return "reaction";
+  const bigCam = camWidth * 2 >= W;
+  if (category === "storytelling" || category === "awkward" || speech >= 0.7) return bigCam ? "discussion" : "accroche";
+  if (category === "reaction" || category === "emotional" || excitement >= 0.9) return bigCam ? "reaction" : "signature";
   if (category === "fail" || category === "clutch" || category === "skill") return "plein";
-  return "signature";
+  return bigCam ? "empile" : "signature";
 }

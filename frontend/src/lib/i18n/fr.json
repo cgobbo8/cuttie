@@ -578,8 +578,6 @@
     "step": "Étape {{n}} sur 4 · {{name}}",
     "stepChoose": "Choisir",
     "yourTemplate": "Ton modèle",
-    "signature": "Signature",
-    "signatureDesc": "Ta cam en haut, le jeu au centre, ton widget au début de chaque clip.",
     "confirmCam": "Confirme ta webcam dans Ma chaîne pour qu'elle apparaisse en haut de tes clips.",
     "tuneBrand": "Régler ma DA",
     "noChannelTitle": "Quelle est ta chaîne Twitch ?",
@@ -625,19 +623,19 @@
       "end": "À la fin"
     },
     "subtitles": "Sous-titres",
-    "subtitlesHint": "En gros au milieu du clip, police Luckiest Guy",
+    "subtitlesHint": "Chaque modèle Cuttie a sa police : ici tu choisis le style.",
     "subStyle": {
       "bold": "Gros et blanc",
       "karaoke": "Karaoké",
       "minimal": "Discret"
     },
     "preview": "Aperçu",
-    "previewTemplate": "Modèle Signature",
+    "previewTemplate": "Modèle {{name}}",
     "previewNeedsAnalysis": "L'aperçu utilisera une image de ta première analyse.",
     "camEveryLive": "Ta webcam est revérifiée à chaque live. Si elle bouge, tu peux l'ajuster dans Monter.",
     "myTemplates": "Mes modèles",
     "myTemplatesHint": "Tes mises en page à toi, prêtes dans Monter.",
-    "noTemplates": "Pas encore de modèle perso. Pars d'une des 6 mises en page et ajuste-la.",
+    "noTemplates": "Pas encore de modèle perso. Pars d'une des mises en page de Cuttie et ajuste-la.",
     "createTemplate": "Créer un modèle"
   },
   "project": {
@@ -707,35 +705,39 @@
     "suggested": "Conseillé ici",
     "needsWebcam": "Il faut une webcam pour ce modèle",
     "template": {
+      "empile": {
+        "name": "Empilé",
+        "desc": "Ta cam en haut, le jeu en dessous : le format le plus vu"
+      },
       "signature": {
         "name": "Signature",
-        "desc": "Ta cam en haut, le jeu au centre, fond flouté"
-      },
-      "plein": {
-        "name": "Plein écran",
-        "desc": "Le jeu en grand, ta cam en incrustation"
+        "desc": "Ta cam et le jeu en cartes sur le clip flouté, à tes couleurs"
       },
       "reaction": {
         "name": "Réaction",
-        "desc": "Ta tête en grand, pour les fous rires"
+        "desc": "Ta tête en grand, pour les fous rires et les rages"
       },
       "discussion": {
-        "name": "Discussion",
-        "desc": "Qui parle, en couleur, pour les dialogues RP"
+        "name": "Discussion RP",
+        "desc": "Qui parle, en couleur, une phrase à la fois"
+      },
+      "plein": {
+        "name": "Action",
+        "desc": "Le jeu plein écran, ta cam en rond : fails, clutchs"
+      },
+      "accroche": {
+        "name": "Cinéma",
+        "desc": "Toute l'image du jeu, ta cam en carte au-dessus"
       },
       "sanscam": {
         "name": "Sans cam",
-        "desc": "Juste le jeu, avec une phrase qui accroche"
-      },
-      "accroche": {
-        "name": "Accroche",
-        "desc": "Une phrase en haut pour retenir le scroll"
+        "desc": "Juste le jeu, l'accroche pendant la première moitié"
       }
     },
     "clipOf": "Clip {{n}} sur {{total}}",
     "settings": "Réglages du clip",
     "hook": "Accroche",
-    "hookHint": "Affichée en haut du clip.",
+    "hookHint": "En couverture : visible dès la première image du clip.",
     "noHook": "Ce modèle n'affiche pas d'accroche.",
     "camFraming": "Cadrage de la cam",
     "adjust": "Ajuster",
@@ -1029,9 +1031,17 @@
     "boxed": "Sur un fond sombre",
     "speakers": "Une couleur par personne",
     "speakersHint": "Pour les discussions à plusieurs (vocal, RP).",
+    "words": "Mots à la fois",
+    "pop": "Le mot prononcé grossit",
     "hookStyle": "Style",
     "hookOutline": "Contour",
     "hookBox": "Bandeau",
+    "hookBrand": "Ta couleur",
+    "hookUntil": "Visible",
+    "hookUntilShort": "3,5 s",
+    "hookUntilHalf": "La moitié",
+    "hookUntilAll": "Tout le clip",
+    "hookUntilHint": "Dès la première image : c'est la couverture du clip.",
     "addWidget": "Ajouter un widget",
     "addWidgetHint": "Ils prennent ton logo, ton nom et tes couleurs. Mets-en autant que tu veux.",
     "removeWidget": "Retirer le widget",

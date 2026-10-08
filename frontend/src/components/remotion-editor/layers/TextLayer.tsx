@@ -34,6 +34,9 @@ export default function TextLayer({ layer }: Props) {
           width: "100%",
           wordBreak: "break-word",
           whiteSpace: "pre-wrap",
+          ...(text.stroke
+            ? { WebkitTextStroke: `${Math.max(2, Math.round(text.fontSize / 18))}px black`, paintOrder: "stroke fill", textShadow: "0 4px 14px rgba(0,0,0,0.55)" }
+            : {}),
         }}
       >
         {text.content || "Texte"}

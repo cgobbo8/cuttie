@@ -10,6 +10,7 @@ import type { AnimationType, EasingPreset, Layer, LayerAnimation } from "./edito
 import { fontFamily, type FontId } from "./fonts";
 import { base, blurredBackground, gameRegion, H, shape, stableIds, uid, video, W, type Rect, type TemplateContext, type TemplateId } from "./templates";
 import { kitWidget, type KitWidgetId } from "../components/editor/widgets/kit";
+import { inkOn } from "../components/editor/widgets/kit/shared";
 
 export interface Box {
   x: number;
@@ -157,8 +158,21 @@ export interface TemplateSpec {
     boxed: boolean;
     /** One color per speaker */
     speakers: boolean;
+    /** The spoken word pops a little bigger (older templates: off) */
+    pop?: boolean;
+    /** Words on screen at a time (older templates: 4) */
+    words?: number;
   };
-  hook: { visible: boolean; box: Box; style: "outline" | "box"; font: FontId; size: number };
+  hook: {
+    visible: boolean;
+    box: Box;
+    /** White letters with a black outline, dark text on a white box, or white text on the channel color */
+    style: HookStyle;
+    font: FontId;
+    size: number;
+    /** On screen from the first frame (the cover) until: seconds, half the clip, or null = the whole clip */
+    until?: number | "half" | null;
+  };
   widgets: SpecWidget[];
   /** Stacking, bottom to top: "game", "cam", "subtitles", "hook", "widget:<id>" (the background stays under everything) */
   order?: string[];
@@ -182,6 +196,8 @@ export function restack(spec: TemplateSpec, key: string, to: "up" | "down" | "fr
   order.splice(index, 0, key);
   return order;
 }
+
+export type HookStyle = "outline" | "box" | "brand";
 
 export const BRAND_COLOR_REFS = ["white", "accent", "highlight", "dark", "light"] as const;
 
@@ -254,26 +270,43 @@ function subtitleLayer(ctx: TemplateContext, s: TemplateSpec["subtitles"]): Laye
     ...(s.highlight !== "none" && !s.speakers ? { activeColor: resolveColor(s.highlight, ctx.colors), restColor: color } : {}),
     ...(s.boxed ? { boxed: true } : {}),
     ...(s.stroke ? {} : { noStroke: true }),
+    ...(s.pop ? { pop: true } : {}),
+    ...(s.words ? { maxWords: s.words } : {}),
   };
   return layer;
+}
+
+/** When the hook line goes (it's on screen from the first frame: the clip's cover) */
+export function hookLeavesAt(h: TemplateSpec["hook"], startAt: number, endAt: number): number | null {
+  if (h.until === undefined || h.until === null) return null;
+  const at = h.until === "half" ? startAt + (endAt - startAt) / 2 : startAt + h.until;
+  return Math.min(at, endAt);
 }
 
 function hookLayers(ctx: TemplateContext, h: TemplateSpec["hook"]): Layer[] {
   const t = toTransform(h.box);
   const layers: Layer[] = [];
+  const boxed = h.style === "box" || h.style === "brand";
   if (h.style === "box") layers.push(shape("Fond de l'accroche", t, "#FFFFFF", 1, 30, "soft"));
-  const textLayer = base("Accroche", "text", h.style === "box" ? { x: t.x + 30, y: t.y + 10, width: t.width - 60, height: t.height - 20 } : t);
+  if (h.style === "brand") layers.push(shape("Fond de l'accroche", t, ctx.colors.accent, 0.94, 26, "soft"));
+  const textLayer = base("Accroche", "text", boxed ? { x: t.x + 30, y: t.y + 10, width: t.width - 60, height: t.height - 20 } : t);
   textLayer.text = {
     content: ctx.hook,
     fontFamily: `"${fontFamily(h.font)}", system-ui, sans-serif`,
     fontSize: Math.round(h.size),
-    color: h.style === "box" ? "#0C0C0E" : "#FFFFFF",
+    color: h.style === "box" ? "#0C0C0E" : h.style === "brand" ? inkOn(ctx.colors.accent) : "#FFFFFF",
     fontWeight: "bold",
     textAlign: "center",
-    uppercase: h.style !== "box",
-    lineHeight: h.style === "box" ? 1.18 : 1.08,
+    uppercase: h.style === "outline",
+    lineHeight: boxed ? 1.18 : 1.08,
+    ...(h.style === "outline" ? { stroke: true } : {}),
   };
   layers.push(textLayer);
+  // No entrance: it's the cover. Fades out when its time is up
+  const leaveAt = hookLeavesAt(h, ctx.startAt, ctx.endAt);
+  if (leaveAt !== null) {
+    for (const layer of layers) layer.animations = [{ id: uid("anim"), type: "fadeOut", time: Math.max(0, leaveAt), duration: 0.3, easing: "easeIn" }];
+  }
   return layers;
 }
 
@@ -361,10 +394,13 @@ export type ZoneId = "top" | "bottom" | "right";
  * at the top, description / username / sound at the bottom, like-comment-share
  * buttons on the right. Text and brand elements should stay out of them.
  */
+export const SAFE_TOP = 200;
+export const SAFE_BOTTOM = 1440;
+
 export const COVERED_ZONES: { id: ZoneId; box: Box }[] = [
-  { id: "top", box: { x: 0, y: 0, w: 1080, h: 140 } },
-  { id: "bottom", box: { x: 0, y: 1500, w: 1080, h: 420 } },
-  { id: "right", box: { x: 930, y: 760, w: 150, h: 740 } },
+  { id: "top", box: { x: 0, y: 0, w: 1080, h: SAFE_TOP } },
+  { id: "bottom", box: { x: 0, y: SAFE_BOTTOM, w: 1080, h: 1920 - SAFE_BOTTOM } },
+  { id: "right", box: { x: 930, y: 760, w: 150, h: SAFE_BOTTOM - 760 } },
 ];
 
 function overlap(a: Box, b: Box): number {
@@ -401,7 +437,7 @@ export function placeWidget(spec: TemplateSpec, box: Box, timing: WidgetTimingKi
     if (free(b)) return b;
     for (let d = 10; d < H; d += 10) {
       for (const y of [b.y - d, b.y + d]) {
-        if (y < 140 || y + b.h > 1500) continue;
+        if (y < SAFE_TOP || y + b.h > SAFE_BOTTOM) continue;
         if (free({ ...b, y })) return { ...b, y };
       }
     }
@@ -412,7 +448,7 @@ export function placeWidget(spec: TemplateSpec, box: Box, timing: WidgetTimingKi
   // A crowded frame: the visible height where it hides the least of the rest
   let best = box;
   let bestCost = Infinity;
-  for (let y = 140; y + box.h <= 1500; y += 10) {
+  for (let y = SAFE_TOP; y + box.h <= SAFE_BOTTOM; y += 10) {
     const b = { ...box, y };
     const cost = taken.reduce((sum, o) => sum + overlap(b, o), 0) + (coveredBy(b).length ? box.w * box.h : 0) + Math.abs(y - box.y);
     if (cost < bestCost) [best, bestCost] = [b, cost];
@@ -443,7 +479,7 @@ const clamp = (v: number, min: number, max: number) => Math.min(Math.max(v, min)
 function snapLines(others: Box[]): { x: number[]; y: number[] } {
   // Frame edges, margins, center, and the edges of the zones the apps cover
   const x = [0, 40, W / 2, W - 40, W, 930];
-  const y = [0, 40, H / 2, H - 40, H, 140, 1500];
+  const y = [0, 40, H / 2, H - 40, H, SAFE_TOP, SAFE_BOTTOM];
   for (const b of others) {
     x.push(b.x, b.x + b.w / 2, b.x + b.w);
     y.push(b.y, b.y + b.h / 2, b.y + b.h);

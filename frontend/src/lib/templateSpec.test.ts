@@ -28,17 +28,30 @@ const named = (layers: ReturnType<typeof buildTemplate>, name: string) => layers
 describe("element templates", () => {
   it("reads a layout's elements", () => {
     const spec = specFromLayout("signature");
-    expect(spec.cam.box).toEqual({ x: 250, y: 150, w: 580, h: 640 });
-    expect(spec.cam.frame).toMatchObject({ radius: 44, border: 6, borderColor: "white" });
-    expect(spec.game.box).toEqual({ x: 40, y: 852, w: 1000, h: 660 });
-    expect(spec.subtitles).toMatchObject({ font: "luckiest", size: 90, uppercase: true, highlight: "none" });
+    expect(spec.cam.box).toEqual({ x: 230, y: 210, w: 620, h: 560 });
+    expect(spec.cam.frame).toMatchObject({ radius: 48, border: 6, borderColor: "accent", shadow: true });
+    expect(spec.game.box).toEqual({ x: 40, y: 830, w: 1000, h: 563 });
+    expect(spec.subtitles).toMatchObject({ font: "montserrat", size: 64, uppercase: true, highlight: "none", pop: true, words: 3 });
+    expect(spec.hook).toMatchObject({ visible: true, style: "brand", until: 3.5 });
     expect(spec.widgets).toHaveLength(1);
-    expect(spec.widgets[0]).toMatchObject({ kind: "channel-pill", box: { x: 190, y: 748, w: 700, h: 84 } });
+    expect(spec.widgets[0]).toMatchObject({ kind: "channel-pill", box: { x: 240, y: 740, w: 600, h: 60 }, enter: "pop" });
+
+    // Webcam on top, full width; the pill is a name tag, a follow button comes at the end
+    const stacked = specFromLayout("empile");
+    expect(stacked.cam.box).toEqual({ x: 0, y: 0, w: 1080, h: 740 });
+    expect(stacked.subtitles).toMatchObject({ font: "anton", uppercase: true, words: 3 });
+    expect(stacked.widgets.map((w) => [w.kind, w.timing])).toEqual([
+      ["channel-pill", "start"],
+      ["follow-button", "end"],
+    ]);
+    expect(stacked.widgets[0].fields).toEqual({ align: "left" });
+    // ...unless the channel's widget already comes at the end
+    expect(specFromLayout("empile", { widgetTiming: "end" }).widgets.map((w) => w.kind)).toEqual(["channel-pill"]);
 
     const discussion = specFromLayout("discussion");
-    expect(discussion.cam.frame).toMatchObject({ radius: 165, border: 10, borderColor: "accent" });
-    expect(discussion.subtitles.speakers).toBe(true);
+    expect(discussion.subtitles).toMatchObject({ speakers: true, uppercase: false, highlight: "none" });
     expect(specFromLayout("signature", { subtitleStyle: "karaoke" }).subtitles.highlight).toBe("highlight");
+    expect(specFromLayout("signature", { subtitleStyle: "minimal" }).subtitles).toMatchObject({ font: "geist", boxed: true, pop: false });
   });
 
   it("draws a layout the same way as the built-in template", () => {
@@ -53,7 +66,50 @@ describe("element templates", () => {
     const spec = specFromLayout("signature");
     const layers = buildFromSpec(spec, { ...ctx, facecam: null });
     expect(layers.some((l) => l.type === "facecam")).toBe(false);
-    expect(named(layers, "Jeu")).toEqual({ x: 40, y: 852, width: 1000, height: 660 });
+    expect(named(layers, "Jeu")).toEqual({ x: 40, y: 830, width: 1000, height: 563 });
+  });
+
+  it("rearranges the built-in layouts on clips without webcam", () => {
+    // Stacked layouts fall back on "Sans cam", with their own lettering
+    const stacked = buildTemplate("empile", { ...ctx, facecam: null });
+    expect(stacked.some((l) => l.type === "facecam")).toBe(false);
+    expect(named(stacked, "Jeu")).toEqual({ x: 0, y: 240, width: 1080, height: 1350 });
+    expect(stacked.find((l) => l.type === "subtitles")!.subtitle!.fontFamily).toBe("Anton");
+    // Signature moves its game card up
+    expect(named(buildTemplate("signature", { ...ctx, facecam: null }), "Jeu").y).toBeLessThan(830);
+  });
+
+  it("shows the hook line from the first frame, then fades it out", () => {
+    const hookOf = (layers: ReturnType<typeof buildTemplate>) => layers.find((l) => l.name === "Accroche")!;
+    const clip = { ...ctx, startAt: 10, endAt: 50 };
+    // A cover: on screen at the first frame, gone 3.5 s later
+    const hook = hookOf(buildTemplate("plein", clip));
+    expect(hook.animations).toEqual([expect.objectContaining({ type: "fadeOut", time: 13.5 })]);
+    expect(hook.text).toMatchObject({ uppercase: true, stroke: true, fontFamily: '"Anton", system-ui, sans-serif' });
+    // On a white box: dark sentence-case text, no outline
+    expect(hookOf(buildTemplate("empile", clip)).text).toMatchObject({ color: "#0C0C0E", uppercase: false });
+    expect(hookOf(buildTemplate("empile", clip)).text!.stroke).toBeUndefined();
+    // "Sans cam" keeps it for half the clip; on a box, in the channel color with readable text
+    expect(hookOf(buildTemplate("sanscam", clip)).animations![0].time).toBe(30);
+    const brand = buildTemplate("signature", { ...clip, colors: { ...ctx.colors, accent: "#FFE14D" } });
+    expect(brand.find((l) => l.name === "Fond de l'accroche")!.shape!.backgroundColor).toBe("#FFE14D");
+    expect(hookOf(brand).text!.color).toBe("#0C0C0E");
+    // Kept the whole clip
+    const spec = specFromLayout("signature");
+    spec.hook.until = null;
+    expect(hookOf(buildFromSpec(spec, clip)).animations).toBeUndefined();
+  });
+
+  it("shows a few words at a time, the spoken one popping", () => {
+    const subs = buildTemplate("reaction", ctx).find((l) => l.type === "subtitles")!.subtitle!;
+    expect(subs).toMatchObject({ maxWords: 2, pop: true });
+    // Older templates: 4 words, no pop
+    const spec = specFromLayout("signature");
+    delete spec.subtitles.words;
+    delete spec.subtitles.pop;
+    const old = buildFromSpec(spec, ctx).find((l) => l.type === "subtitles")!.subtitle!;
+    expect(old.maxWords).toBeUndefined();
+    expect(old.pop).toBeUndefined();
   });
 
   it("styles subtitles, frames and backgrounds", () => {
@@ -208,13 +264,14 @@ describe("what the apps cover", () => {
 
   it("drops a new widget on a free spot near its usual one", async () => {
     const { placeWidget } = await import("./templateSpec");
-    const spec = specFromLayout("signature");
+    const signature = specFromLayout("signature");
+    const spec = { ...signature, hook: { ...signature.hook, visible: false } };
     // Its usual spot is under the subtitles: it moves up, above them, clear of the webcam
     const socials = placeWidget(spec, { x: 250, y: 1140, w: 500, h: 320 }, "end");
     expect(socials.y + socials.h).toBeLessThanOrEqual(spec.subtitles.box.y);
     expect(socials.y).toBeGreaterThanOrEqual(spec.cam.box.y + spec.cam.box.h);
     // A free spot stays as is
-    expect(placeWidget(spec, { x: 60, y: 170, w: 190, h: 190 }, "start")).toEqual({ x: 60, y: 170, w: 190, h: 190 });
+    expect(placeWidget(spec, { x: 60, y: 1000, w: 160, h: 160 }, "start")).toEqual({ x: 60, y: 1000, w: 160, h: 160 });
     // Two widgets on screen together don't stack; one at the start and one at the end can share a spot
     spec.widgets.push({ id: "w-a", kind: "handle", box: { x: 140, y: 900, w: 700, h: 84 }, timing: "start", fields: {} });
     const handle = placeWidget(spec, { x: 140, y: 900, w: 700, h: 84 }, "start");
@@ -229,8 +286,9 @@ describe("what the apps cover", () => {
 
   it("shows the hook line where it hides neither the webcam nor the subtitles", async () => {
     const { placeWidget } = await import("./templateSpec");
-    const spec = specFromLayout("signature");
-    const hook = placeWidget(spec, spec.hook.box, "always");
+    const signature = specFromLayout("signature");
+    const spec = { ...signature, hook: { ...signature.hook, visible: false } };
+    const hook = placeWidget(spec, { x: 40, y: 860, w: 1000, h: 140 }, "always");
     // Too wide next to the buttons: narrowed to the safe column, under the webcam and its pill, above the subtitles
     expect(hook).toMatchObject({ x: 150, w: 780 });
     expect(hook.y).toBeGreaterThanOrEqual(spec.widgets[0].box.y + spec.widgets[0].box.h);
@@ -238,7 +296,7 @@ describe("what the apps cover", () => {
     // Where the layout leaves room at the top, it stays there
     const sanscam = specFromLayout("sanscam");
     const hidden = { ...sanscam, hook: { ...sanscam.hook, visible: false } };
-    expect(placeWidget(hidden, sanscam.hook.box, "always")).toEqual({ x: 40, y: 150, w: 1000, h: 230 });
+    expect(placeWidget(hidden, sanscam.hook.box, "always")).toEqual({ x: 100, y: 280, w: 880, h: 160 });
   });
 
   it("keeps the text, webcam and brand of every layout in the visible part", async () => {
@@ -246,11 +304,14 @@ describe("what the apps cover", () => {
     const { TEMPLATE_IDS } = await import("./templates");
     for (const id of TEMPLATE_IDS) {
       for (const facecam of [ctx.facecam, null]) {
-        // The game may run under the apps' interface, the rest may not
-        const layers = buildTemplate(id, { ...ctx, facecam }).filter((l) => l.type !== "gameplay" && !l.locked && l.name !== "Assombrir");
+        // The game (and its seam) may run under the apps' interface, the rest may not
+        const layers = buildTemplate(id, { ...ctx, facecam }).filter((l) => !l.name.startsWith("Jeu") && !l.locked && l.name !== "Assombrir");
         for (const l of layers) {
           const t = l.transform;
-          expect(coveredBy({ x: t.x, y: t.y, w: t.width, h: t.height }), `${id} ${facecam ? "cam" : "no cam"} ${l.name}`).toEqual([]);
+          const zones = coveredBy({ x: t.x, y: t.y, w: t.width, h: t.height });
+          // A webcam filling the top of the frame runs under the tabs: the face sits lower
+          const fullWidthCam = l.type === "facecam" && t.y === 0 && t.width === 1080;
+          expect(fullWidthCam ? zones.filter((z) => z !== "top") : zones, `${id} ${facecam ? "cam" : "no cam"} ${l.name}`).toEqual([]);
         }
       }
     }

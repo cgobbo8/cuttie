@@ -61,6 +61,10 @@ export interface SubtitleData {
   boxed?: boolean;
   /** No black outline around the letters (a soft shadow instead) */
   noStroke?: boolean;
+  /** The word being spoken pops a little bigger */
+  pop?: boolean;
+  /** Words on screen at a time (default 4) */
+  maxWords?: number;
 }
 
 /** Distinct colors assigned to speakers when showSpeaker is enabled.
@@ -170,6 +174,8 @@ export interface TextData {
   textAlign: "left" | "center" | "right";
   uppercase: boolean;
   lineHeight: number;     // multiplier (1.0 = tight, 1.5 = normal)
+  /** Black outline around the letters, readable over any video */
+  stroke?: boolean;
 }
 
 export interface WidgetData {

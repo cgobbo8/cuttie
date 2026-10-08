@@ -52,7 +52,10 @@ describe("templates", () => {
       expect(subs.subtitle!.words).toHaveLength(1);
       const widget = layers.find((l) => l.type === "widget");
       expect(widget?.widget?.props.login).toBe("falkarst");
-      for (const l of layers.filter((l) => !l.locked)) {
+      // Every layout shows the hook line (the clip's cover)
+      expect(layers.some((l) => l.name === "Accroche")).toBe(true);
+      // The game may run past the edges (Empilé draws its seam that way), not the rest
+      for (const l of layers.filter((l) => !l.locked && !l.name.startsWith("Jeu"))) {
         expect(l.transform.x).toBeGreaterThanOrEqual(0);
         expect(l.transform.y + l.transform.height).toBeLessThanOrEqual(1920);
       }
@@ -90,11 +93,18 @@ describe("templates", () => {
   });
 
   it("suggests a template from what happens in the moment", () => {
-    expect(suggestTemplate("fail", true)).toBe("plein");
-    expect(suggestTemplate("storytelling", true)).toBe("discussion");
-    expect(suggestTemplate("fun", true, 1)).toBe("reaction");
+    // A webcam big enough to fill the frame's width
+    const big = 640;
+    expect(suggestTemplate("fail", true, 0, 0, big)).toBe("plein");
+    expect(suggestTemplate("storytelling", true, 0, 0, big)).toBe("discussion");
+    expect(suggestTemplate("fun", true, 1, 0, big)).toBe("reaction");
     expect(suggestTemplate("fun", false)).toBe("sanscam");
-    expect(suggestTemplate("fun", true, 0.5, 0.2)).toBe("signature");
+    expect(suggestTemplate("fun", true, 0.5, 0.2, big)).toBe("empile");
+    // A small one (402 px, enlarged 2.7 times at full width) goes in a card
+    expect(suggestTemplate("storytelling", true, 0, 0, 402)).toBe("accroche");
+    expect(suggestTemplate("fun", true, 1, 0, 402)).toBe("signature");
+    expect(suggestTemplate("fun", true, 0.5, 0.2, 402)).toBe("signature");
+    expect(suggestTemplate("clutch", true, 0, 0, 402)).toBe("plein");
   });
 
   describe("adjusted looks", () => {
@@ -134,10 +144,10 @@ describe("templates", () => {
       const layers = buildTemplate("signature", ctx, look({ subtitlePosition: "top", subtitleSize: "l", widgetPosition: "none" }));
       const subs = layers.find((l) => l.type === "subtitles")!;
       expect(subs.transform.y + subs.transform.height / 2).toBe(420);
-      expect(subs.subtitle!.fontSize).toBe(Math.round(90 * 1.2));
+      expect(subs.subtitle!.fontSize).toBe(Math.round(64 * 1.2));
       expect(layers.some((l) => l.type === "widget")).toBe(false);
       const top = buildTemplate("reaction", ctx, look({ widgetPosition: "top" })).find((l) => l.type === "widget")!;
-      expect(top.transform.y).toBe(152);
+      expect(top.transform.y).toBe(216);
     });
 
     it("can hide the hook line", () => {
@@ -150,7 +160,7 @@ describe("templates", () => {
           for (const camShape of ["rounded", "circle"] as const) {
             for (const subtitlePosition of ["top", "bottom"] as const) {
               const layers = buildTemplate(id, ctx, look({ camSize, camShape, subtitlePosition }));
-              for (const l of layers) {
+              for (const l of layers.filter((l) => !l.name.startsWith("Jeu"))) {
                 expect(l.transform.x).toBeGreaterThanOrEqual(0);
                 expect(l.transform.y).toBeGreaterThanOrEqual(0);
                 expect(l.transform.x + l.transform.width).toBeLessThanOrEqual(1080);

@@ -19,7 +19,7 @@ import { useBackdrop } from "../lib/BackdropContext";
 import { useChannel } from "../lib/ChannelContext";
 import { buildMoments, type Moment } from "../lib/moments";
 import { suggestTemplate, type TemplateContext } from "../lib/templates";
-import { buildAny, customTemplates, findCustom, isBuiltIn, needsWebcam, showsHook, type TemplateKey } from "../lib/templateKeys";
+import { buildAny, customTemplates, defaultTemplateKey, findCustom, isBuiltIn, needsWebcam, showsHook, type TemplateKey } from "../lib/templateKeys";
 import { clipTemplateContext } from "../lib/templateContext";
 import CuttieComposition from "../components/remotion-editor/CuttieComposition";
 import TemplateSketch from "../components/montage/TemplateSketch";
@@ -118,8 +118,7 @@ export default function MontagePage() {
 
   /** A template that still exists (a deleted one gives way to the default) */
   const known = useCallback((key: TemplateKey | null | undefined): key is TemplateKey => !!key && (isBuiltIn(key) || !!findCustom(key, customs)), [customs]);
-  /** The template new projects start with: the one starred, else Signature */
-  const defaultKey: TemplateKey = known(kit?.default_template) ? kit!.default_template! : "signature";
+  const defaultKey = defaultTemplateKey(kit, customs);
   const projectTemplate = known(prefs.template) ? prefs.template : defaultKey;
 
   const templateFor = useCallback(
@@ -139,7 +138,7 @@ export default function MontagePage() {
   const contextFor = useCallback(
     (m: Moment, env: EditEnvironment | undefined): TemplateContext | null => {
       if (!kit || !jobId) return null;
-      return clipTemplateContext({
+      const clip = clipTemplateContext({
         jobId,
         filename: m.filename,
         env,
@@ -151,8 +150,10 @@ export default function MontagePage() {
         endAt: m.trim?.[1] ?? m.duration,
         hook: prefs.hooks[m.filename] ?? (m.hp.llm?.hook || m.hp.clip_name),
       });
+      // For the brand widgets (follower count, channel name, game)
+      return { ...clip, displayName: channel?.display_name ?? null, followers: channel?.followers ?? null, game: job?.vod_game ?? null };
     },
-    [camFor, channel, jobId, kit, prefs.hooks],
+    [camFor, channel, job, jobId, kit, prefs.hooks],
   );
 
   const env = current ? envs[current.filename] : undefined;
@@ -160,10 +161,11 @@ export default function MontagePage() {
   const template = current ? templateFor(current) : projectTemplate;
   const customTemplate = findCustom(template, customs);
   const layers = useMemo(() => (ctx ? buildAny(template, ctx, customs) : []), [ctx, template, customs]);
-  const hasWebcam = !!(current && camFor(current, env));
+  const clipCam = current ? camFor(current, env) : null;
+  const hasWebcam = !!clipCam;
   const cam = env?.cam;
   const suggested = current
-    ? suggestTemplate(current.hp.llm?.category, hasWebcam, current.hp.signals?.vocal_excitement, current.hp.signals?.speech_presence)
+    ? suggestTemplate(current.hp.llm?.category, hasWebcam, current.hp.signals?.vocal_excitement, current.hp.signals?.speech_presence, clipCam?.w)
     : null;
 
   const pickTemplate = (key: TemplateKey) => {
@@ -331,6 +333,7 @@ export default function MontagePage() {
                   frameUrl={clipThumbUrl(jobId, current.filename)}
                   width={58}
                   sample={sample}
+                  at={ctx.startAt + 1.5}
                   className="flex-none rounded-[9px] border border-white/10"
                 />
               ) : (
@@ -363,6 +366,7 @@ export default function MontagePage() {
                 durationInFrames={durationInFrames}
                 inFrame={inFrame}
                 outFrame={outFrame}
+                initialFrame={inFrame}
                 controls
                 loop
                 clickToPlay
@@ -393,6 +397,7 @@ export default function MontagePage() {
                     frameUrl={clipThumbUrl(jobId, m.filename)}
                     width={40}
                     sample={[]}
+                    at={ctx.startAt + 1.5}
                     className="rounded-[7px]"
                   />
                 ) : (

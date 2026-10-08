@@ -578,8 +578,6 @@
     "step": "Paso {{n}} de 4 · {{name}}",
     "stepChoose": "Elegir",
     "yourTemplate": "Tu plantilla",
-    "signature": "Signature",
-    "signatureDesc": "Tu cámara arriba, el juego en el centro, tu widget al inicio de cada clip.",
     "confirmCam": "Confirma tu webcam en Mi canal para que aparezca arriba en tus clips.",
     "tuneBrand": "Ajustar mi estilo",
     "noChannelTitle": "¿Cuál es tu canal de Twitch?",
@@ -625,19 +623,19 @@
       "end": "Al final"
     },
     "subtitles": "Subtítulos",
-    "subtitlesHint": "Grandes en el centro del clip, fuente Luckiest Guy",
+    "subtitlesHint": "Cada plantilla de Cuttie tiene una fuente propia: aquí eliges el estilo.",
     "subStyle": {
       "bold": "Grande y blanco",
       "karaoke": "Karaoke",
       "minimal": "Discreto"
     },
     "preview": "Vista previa",
-    "previewTemplate": "Plantilla Signature",
+    "previewTemplate": "Plantilla {{name}}",
     "previewNeedsAnalysis": "La vista previa usará una imagen de tu primer análisis.",
     "camEveryLive": "Tu webcam se vuelve a comprobar en cada directo. Si se mueve, puedes ajustarla en Montar.",
     "myTemplates": "Mis plantillas",
     "myTemplatesHint": "Tus propios diseños, listos en Montar.",
-    "noTemplates": "Todavía no hay plantillas propias. Parte de uno de los 6 diseños y ajústalo.",
+    "noTemplates": "Todavía no hay plantillas propias. Parte de uno de los diseños de Cuttie y ajústalo.",
     "createTemplate": "Crear una plantilla"
   },
   "project": {
@@ -707,35 +705,39 @@
     "suggested": "Recomendada",
     "needsWebcam": "Esta plantilla necesita una webcam",
     "template": {
+      "empile": {
+        "name": "Apilado",
+        "desc": "Tu cámara arriba, el juego debajo: el formato más visto"
+      },
       "signature": {
         "name": "Signature",
-        "desc": "Tu cámara arriba, el juego en el centro, fondo desenfocado"
-      },
-      "plein": {
-        "name": "Pantalla completa",
-        "desc": "El juego en grande, tu cámara incrustada"
+        "desc": "Cámara y juego en tarjetas sobre el clip desenfocado, con tus colores"
       },
       "reaction": {
         "name": "Reacción",
-        "desc": "Tu cara en grande, para los ataques de risa"
+        "desc": "Tu cara en grande, para las risas y los enfados"
       },
       "discussion": {
-        "name": "Conversación",
-        "desc": "Quién habla, en color, para los diálogos RP"
+        "name": "Diálogo RP",
+        "desc": "Quién habla, en color, una frase a la vez"
+      },
+      "plein": {
+        "name": "Acción",
+        "desc": "El juego a pantalla completa, tu cámara en círculo: fails, clutches"
+      },
+      "accroche": {
+        "name": "Cine",
+        "desc": "Toda la imagen del juego, tu cámara en una tarjeta encima"
       },
       "sanscam": {
         "name": "Sin cámara",
-        "desc": "Solo el juego, con una frase gancho"
-      },
-      "accroche": {
-        "name": "Gancho",
-        "desc": "Una frase arriba para frenar el scroll"
+        "desc": "Solo el juego, el gancho durante la primera mitad"
       }
     },
     "clipOf": "Clip {{n}} de {{total}}",
     "settings": "Ajustes del clip",
     "hook": "Gancho",
-    "hookHint": "Se muestra arriba del clip.",
+    "hookHint": "La portada: visible desde la primera imagen del clip.",
     "noHook": "Esta plantilla no muestra gancho.",
     "camFraming": "Encuadre de la cámara",
     "adjust": "Ajustar",
@@ -1029,9 +1031,17 @@
     "boxed": "Sobre fondo oscuro",
     "speakers": "Un color por persona",
     "speakersHint": "Para conversaciones en grupo (chat de voz, RP).",
+    "words": "Palabras a la vez",
+    "pop": "La palabra dicha crece",
     "hookStyle": "Estilo",
     "hookOutline": "Contorno",
     "hookBox": "Banda",
+    "hookBrand": "Tu color",
+    "hookUntil": "Visible",
+    "hookUntilShort": "3,5 s",
+    "hookUntilHalf": "La mitad",
+    "hookUntilAll": "Todo el clip",
+    "hookUntilHint": "Desde la primera imagen: es la portada del clip.",
     "addWidget": "Añadir un widget",
     "addWidgetHint": "Usan tu logo, tu nombre y tus colores. Pon todos los que quieras.",
     "removeWidget": "Quitar el widget",

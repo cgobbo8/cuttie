@@ -15,7 +15,7 @@ import { useChannel } from "../lib/ChannelContext";
 import { useLatestMoments } from "../lib/useLatestMoment";
 import { useToast } from "../components/Toast";
 import Storyboard from "../components/Storyboard";
-import SignaturePreview from "../components/SignaturePreview";
+import TemplatePreview, { useDefaultTemplate } from "../components/TemplatePreview";
 import { ACTIVE_STATUSES, analysisProgress, clock, hoursMinutes, liveDate, sampleSubtitle, shortDate, splitVodTitle } from "../lib/format";
 
 const HERO_HEIGHT = 700;
@@ -303,29 +303,28 @@ function ResumeCard({ job, hotPoints }: { job: JobResponse; hotPoints: HotPoint[
 function TemplateCard({ job, best }: { job: JobResponse | null; best: HotPoint | null }) {
   const { t } = useTranslation();
   const { kit, channel } = useChannel();
+  const template = useDefaultTemplate(kit);
   if (!kit) return null;
   const subtitle = sampleSubtitle(best?.llm?.transcript);
 
   return (
     <article className="glass rounded-[18px] p-[18px] flex gap-[18px] items-center flex-[1_1_320px] min-w-0">
-      <SignaturePreview
+      <TemplatePreview
         className="w-[112px] flex-none rounded-[12px] border border-white/10 shadow-[0_20px_40px_-20px_rgba(0,0,0,0.8)]"
+        kit={kit}
+        templateKey={template.key}
         frameUrl={job && best?.clip_filename ? clipThumbUrl(job.job_id, best.clip_filename) : null}
-        facecam={kit.facecam}
-        colors={kit.colors}
         avatarUrl={channel?.avatar_url ?? null}
         login={channel?.login ?? kit.twitch_login}
-        lines={subtitle.lines}
-        highlight={subtitle.highlight}
-        subtitleStyle={kit.subtitles.style}
-        showWidget={kit.widget.enabled}
+        displayName={channel?.display_name}
+        followers={channel?.followers}
+        sample={subtitle.lines.flat()}
+        hook={best?.llm?.hook || best?.clip_name || t("templateEditor.sampleHook")}
       />
       <div className="min-w-0">
         <div className="text-[12.5px] font-medium text-ink-3">{t("start.yourTemplate")}</div>
-        <div className="mt-1 text-[20px] font-semibold tracking-[-0.02em] text-white">{t("start.signature")}</div>
-        <p className="mt-1.5 text-[13px] leading-relaxed text-ink-2">
-          {kit.facecam === null ? t("start.confirmCam") : t("start.signatureDesc")}
-        </p>
+        <div className="mt-1 text-[20px] font-semibold tracking-[-0.02em] text-white truncate">{template.name}</div>
+        <p className="mt-1.5 text-[13px] leading-relaxed text-ink-2">{kit.facecam === null ? t("start.confirmCam") : template.desc}</p>
         <Link to="/chaine" className="btn btn-glass btn-sm mt-3.5">
           {t("start.tuneBrand")}
         </Link>

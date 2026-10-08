@@ -656,5 +656,126 @@
     "preview": "Vista previa",
     "previewTemplate": "Plantilla Signature",
     "previewNeedsAnalysis": "La vista previa usará una imagen de tu primer análisis."
+  },
+  "project": {
+    "steps": "Pasos del proyecto",
+    "step": {
+      "analyze": "Análisis",
+      "choose": "Elegir",
+      "edit": "Montar",
+      "export": "Exportar"
+    },
+    "keptCount_one": "{{count}} guardado",
+    "keptCount_other": "{{count}} guardados",
+    "liveSummary": "Resumen del directo",
+    "timeline": "Los momentos en el directo",
+    "play": "Reproducir",
+    "pause": "Pausa",
+    "mute": "Silenciar",
+    "unmute": "Activar sonido",
+    "fullscreen": "Pantalla completa",
+    "start": "Inicio",
+    "end": "Fin",
+    "trimStart": "Inicio del clip",
+    "trimEnd": "Fin del clip",
+    "trimHint": "Arrastra los tiradores para cortar el inicio o el final",
+    "duplicateHint": "Mismo pasaje que el momento #{{rank}}",
+    "pass": "Descartar",
+    "passed": "Descartado",
+    "keep": "Guardar",
+    "kept": "Guardado",
+    "momentsCount_one": "{{count}} momento",
+    "momentsCount_other": "{{count}} momentos",
+    "filter": "Filtrar",
+    "filters": {
+      "all": "Todos",
+      "todo": "Por ordenar",
+      "kept": "Guardados"
+    },
+    "samePassage": "Mismo pasaje que #{{rank}}",
+    "emptyFilter": "Nada por aquí todavía.",
+    "clipsKept_one": "clip guardado",
+    "clipsKept_other": "clips guardados",
+    "toEdit": "Pasar al montaje",
+    "keepToContinue": "Guarda al menos un momento",
+    "rename": "Renombrar el momento",
+    "renamed": "Momento renombrado",
+    "signal": {
+      "voice": "Voz fuerte",
+      "excitement": "Emoción",
+      "chat": "Reacción del chat"
+    },
+    "why": "Por qué este momento",
+    "advancedEditor": "Editor avanzado",
+    "downloadRaw": "Clip original",
+    "deleteClip": "Eliminar"
+  },
+  "montage": {
+    "title": "Viste tus clips",
+    "subtitle_one": "Elige una plantilla, la aplicamos a tu clip guardado.",
+    "subtitle_other": "Elige una plantilla, la aplicamos a tus {{count}} clips guardados. Puedes cambiarla clip a clip.",
+    "templates": "Plantillas",
+    "inYourColors": "con los colores de tu canal",
+    "yourStyle": "Tu estilo",
+    "suggested": "Recomendada",
+    "needsWebcam": "Esta plantilla necesita una webcam",
+    "template": {
+      "signature": {
+        "name": "Signature",
+        "desc": "Tu cámara arriba, el juego en el centro, fondo desenfocado"
+      },
+      "plein": {
+        "name": "Pantalla completa",
+        "desc": "El juego en grande, tu cámara incrustada"
+      },
+      "reaction": {
+        "name": "Reacción",
+        "desc": "Tu cara en grande, para los ataques de risa"
+      },
+      "discussion": {
+        "name": "Conversación",
+        "desc": "Quién habla, en color, para los diálogos RP"
+      },
+      "sanscam": {
+        "name": "Sin cámara",
+        "desc": "Solo el juego, con una frase gancho"
+      },
+      "accroche": {
+        "name": "Gancho",
+        "desc": "Una frase arriba para frenar el scroll"
+      }
+    },
+    "clipOf": "Clip {{n}} de {{total}}",
+    "settings": "Ajustes del clip",
+    "hook": "Gancho",
+    "hookHint": "Se muestra arriba del clip.",
+    "noHook": "Esta plantilla no muestra gancho.",
+    "camFraming": "Encuadre de la cámara",
+    "camFound": "Encontrada automáticamente",
+    "camNone": "Sin webcam en este directo",
+    "adjust": "Ajustar",
+    "applyAll": "Misma plantilla para todos",
+    "applyAllHint": "Si no, la plantilla solo cambia este clip",
+    "export_one": "Exportar el clip",
+    "export_other": "Exportar los {{count}} clips",
+    "sending": "Enviando {{done}} / {{total}}…",
+    "exportFailed": "No se pudo iniciar la exportación",
+    "advancedEditor": "Abrir el editor avanzado (capas)",
+    "nothingKept": "Todavía no has guardado ningún momento. Elige primero los momentos.",
+    "backToChoose": "Elegir los momentos"
+  },
+  "exportStep": {
+    "title": "Tus clips están listos",
+    "titleBusy": "Tus clips están en camino",
+    "readyCount": "{{ready}} de {{total}} listos",
+    "keepOpen": "Puedes seguir usando Cuttie",
+    "ready": "Listo",
+    "failed": "Error",
+    "queued": "En cola",
+    "rendering": "Renderizando",
+    "download": "Descargar",
+    "play": "Ver el clip",
+    "empty": "Nada que exportar todavía.",
+    "toEdit": "Ir al montaje"
   }
 }

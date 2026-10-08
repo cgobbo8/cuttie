@@ -6,6 +6,7 @@ import { promisify } from 'node:util'
 import Job from '#models/job'
 import { getPresignedUrl, storagePath } from '#services/storage'
 import { loadJobSharedData, resolveEditEnv } from '#services/edit_env_resolver'
+import { ensureBackground } from '#services/clip_variants'
 
 const execFileAsync = promisify(execFile)
 
@@ -141,6 +142,24 @@ export default class ClipsController {
     }
     response.header('Cache-Control', 'private, max-age=86400')
     return response.download(thumbPath)
+  }
+
+  // GET /api/clips/:jobId/:filename/background — blurred 9:16 backdrop (templates)
+  async background({ params, response, auth }: HttpContext) {
+    const safeJobId = params.jobId.replace(/[^a-zA-Z0-9_-]/g, '')
+    if (!(await verifyJobOwnership(safeJobId, auth))) {
+      return response.notFound({ error: 'clip not found' })
+    }
+    const safeFilename = path.basename(params.filename)
+    if (!safeFilename.endsWith('.mp4') || !existsSync(storagePath(`clips/${safeJobId}/${safeFilename}`))) {
+      return response.notFound({ error: 'clip not found' })
+    }
+    try {
+      const key = await ensureBackground(safeJobId, safeFilename)
+      return response.redirect(await getPresignedUrl(key))
+    } catch {
+      return response.unprocessableEntity({ error: 'background failed' })
+    }
   }
 
   // GET /api/clips/:jobId/:filename

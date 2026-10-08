@@ -11,6 +11,7 @@ import { execSync } from 'node:child_process'
 import path from 'node:path'
 import type { Layer } from '../../remotion/editorTypes.js'
 import { getPresignedUrl, uploadFile } from '#services/storage'
+import { BACKGROUND_SIZE, ensureBackground } from '#services/clip_variants'
 import { CLIPS_DIR } from '#services/data_paths'
 
 // Cached bundle — auto-invalidates when remotion/ source files change
@@ -185,6 +186,20 @@ export async function renderClip(opts: RenderOptions): Promise<{ sizeMb: number 
   // Enrich layers: replace video src with presigned S3 URL, resolve asset URLs
   const enrichedLayers: Layer[] = await Promise.all(
     layers.map(async (layer) => {
+      // Template backdrop → the pre-blurred 9:16 version of the clip
+      if (layer.type === 'gameplay' && layer.video?.background) {
+        const key = await ensureBackground(jobId, clipFilename)
+        return {
+          ...layer,
+          video: {
+            ...layer.video,
+            src: await getPresignedUrl(key, 3600),
+            nativeWidth: BACKGROUND_SIZE.width,
+            nativeHeight: BACKGROUND_SIZE.height,
+          },
+        }
+      }
+
       // Video layers (gameplay, facecam) → presigned clip URL
       if ((layer.type === 'gameplay' || layer.type === 'facecam') && layer.video) {
         return {

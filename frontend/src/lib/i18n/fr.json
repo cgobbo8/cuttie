@@ -656,5 +656,126 @@
     "preview": "Aperçu",
     "previewTemplate": "Modèle Signature",
     "previewNeedsAnalysis": "L'aperçu utilisera une image de ta première analyse."
+  },
+  "project": {
+    "steps": "Étapes du projet",
+    "step": {
+      "analyze": "Analyse",
+      "choose": "Choisir",
+      "edit": "Monter",
+      "export": "Exporter"
+    },
+    "keptCount_one": "{{count}} gardé",
+    "keptCount_other": "{{count}} gardés",
+    "liveSummary": "Résumé du live",
+    "timeline": "Les moments dans le live",
+    "play": "Lecture",
+    "pause": "Pause",
+    "mute": "Couper le son",
+    "unmute": "Remettre le son",
+    "fullscreen": "Plein écran",
+    "start": "Début",
+    "end": "Fin",
+    "trimStart": "Début du clip",
+    "trimEnd": "Fin du clip",
+    "trimHint": "Tire les poignées pour couper le début ou la fin",
+    "duplicateHint": "Même passage que le moment #{{rank}}",
+    "pass": "Passer",
+    "passed": "Passé",
+    "keep": "Garder",
+    "kept": "Gardé",
+    "momentsCount_one": "{{count}} moment",
+    "momentsCount_other": "{{count}} moments",
+    "filter": "Filtrer",
+    "filters": {
+      "all": "Tous",
+      "todo": "À trier",
+      "kept": "Gardés"
+    },
+    "samePassage": "Même passage que #{{rank}}",
+    "emptyFilter": "Rien ici pour l'instant.",
+    "clipsKept_one": "clip gardé",
+    "clipsKept_other": "clips gardés",
+    "toEdit": "Passer au montage",
+    "keepToContinue": "Garde au moins un moment",
+    "rename": "Renommer le moment",
+    "renamed": "Moment renommé",
+    "signal": {
+      "voice": "Voix forte",
+      "excitement": "Excitation",
+      "chat": "Réaction du chat"
+    },
+    "why": "Pourquoi ce moment",
+    "advancedEditor": "Éditeur avancé",
+    "downloadRaw": "Clip brut",
+    "deleteClip": "Supprimer"
+  },
+  "montage": {
+    "title": "Habille tes clips",
+    "subtitle_one": "Choisis un modèle, on l'applique à ton clip gardé.",
+    "subtitle_other": "Choisis un modèle, on l'applique à tes {{count}} clips gardés. Tu peux changer clip par clip.",
+    "templates": "Modèles",
+    "inYourColors": "aux couleurs de ta chaîne",
+    "yourStyle": "Ta DA",
+    "suggested": "Conseillé ici",
+    "needsWebcam": "Il faut une webcam pour ce modèle",
+    "template": {
+      "signature": {
+        "name": "Signature",
+        "desc": "Ta cam en haut, le jeu au centre, fond flouté"
+      },
+      "plein": {
+        "name": "Plein écran",
+        "desc": "Le jeu en grand, ta cam en incrustation"
+      },
+      "reaction": {
+        "name": "Réaction",
+        "desc": "Ta tête en grand, pour les fous rires"
+      },
+      "discussion": {
+        "name": "Discussion",
+        "desc": "Qui parle, en couleur, pour les dialogues RP"
+      },
+      "sanscam": {
+        "name": "Sans cam",
+        "desc": "Juste le jeu, avec une phrase qui accroche"
+      },
+      "accroche": {
+        "name": "Accroche",
+        "desc": "Une phrase en haut pour retenir le scroll"
+      }
+    },
+    "clipOf": "Clip {{n}} sur {{total}}",
+    "settings": "Réglages du clip",
+    "hook": "Accroche",
+    "hookHint": "Affichée en haut du clip.",
+    "noHook": "Ce modèle n'affiche pas d'accroche.",
+    "camFraming": "Cadrage de la cam",
+    "camFound": "Repérée automatiquement",
+    "camNone": "Pas de webcam sur ce live",
+    "adjust": "Ajuster",
+    "applyAll": "Même modèle pour tous",
+    "applyAllHint": "Sinon, le modèle change seulement ce clip",
+    "export_one": "Exporter le clip",
+    "export_other": "Exporter les {{count}} clips",
+    "sending": "Envoi {{done}} / {{total}}…",
+    "exportFailed": "L'export n'a pas pu démarrer",
+    "advancedEditor": "Ouvrir l'éditeur avancé (calques)",
+    "nothingKept": "Aucun moment gardé pour l'instant. Choisis d'abord les moments à garder.",
+    "backToChoose": "Choisir les moments"
+  },
+  "exportStep": {
+    "title": "Tes clips sont prêts",
+    "titleBusy": "Tes clips arrivent",
+    "readyCount": "{{ready}} sur {{total}} prêts",
+    "keepOpen": "Tu peux continuer à utiliser Cuttie",
+    "ready": "Prêt",
+    "failed": "Échec",
+    "queued": "En file",
+    "rendering": "Rendu en cours",
+    "download": "Télécharger",
+    "play": "Lire le clip",
+    "empty": "Rien à exporter pour l'instant.",
+    "toEdit": "Aller au montage"
   }
 }

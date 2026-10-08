@@ -30,4 +30,16 @@ export default class Job extends JobSchema {
     consume: (value) => (typeof value === 'string' ? JSON.parse(value) : value),
   })
   declare vodContext: any | null
+
+  /** Per clip filename: kept / passed, and trim bounds in clip seconds */
+  @column({
+    prepare: (value) => (value !== null && value !== undefined ? JSON.stringify(value) : null),
+    consume: (value) => (typeof value === 'string' ? JSON.parse(value) : value),
+  })
+  declare selection: Record<string, ClipSelection> | null
+}
+
+export interface ClipSelection {
+  state?: 'kept' | 'passed'
+  trim?: [number, number]
 }

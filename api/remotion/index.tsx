@@ -12,6 +12,15 @@ fontFace.load().then((ff) => {
   document.fonts.add(ff);
 });
 
+// Geist for the channel widget and the "discreet" subtitles
+const geist = new FontFace("Geist Variable", `url(${staticFile("fonts/Geist-Variable.woff2")})`, {
+  style: "normal",
+  weight: "100 900",
+});
+geist.load().then((ff) => {
+  document.fonts.add(ff);
+});
+
 const defaultLayers: CuttieCompositionProps["layers"] = [];
 
 export const RemotionRoot: React.FC = () => {

@@ -656,5 +656,126 @@
     "preview": "Preview",
     "previewTemplate": "Signature template",
     "previewNeedsAnalysis": "The preview will use a frame from your first analysis."
+  },
+  "project": {
+    "steps": "Project steps",
+    "step": {
+      "analyze": "Analyze",
+      "choose": "Choose",
+      "edit": "Edit",
+      "export": "Export"
+    },
+    "keptCount_one": "{{count}} kept",
+    "keptCount_other": "{{count}} kept",
+    "liveSummary": "Stream summary",
+    "timeline": "The moments in the stream",
+    "play": "Play",
+    "pause": "Pause",
+    "mute": "Mute",
+    "unmute": "Unmute",
+    "fullscreen": "Fullscreen",
+    "start": "Start",
+    "end": "End",
+    "trimStart": "Clip start",
+    "trimEnd": "Clip end",
+    "trimHint": "Drag the handles to cut the start or the end",
+    "duplicateHint": "Same passage as moment #{{rank}}",
+    "pass": "Pass",
+    "passed": "Passed",
+    "keep": "Keep",
+    "kept": "Kept",
+    "momentsCount_one": "{{count}} moment",
+    "momentsCount_other": "{{count}} moments",
+    "filter": "Filter",
+    "filters": {
+      "all": "All",
+      "todo": "To sort",
+      "kept": "Kept"
+    },
+    "samePassage": "Same passage as #{{rank}}",
+    "emptyFilter": "Nothing here yet.",
+    "clipsKept_one": "clip kept",
+    "clipsKept_other": "clips kept",
+    "toEdit": "Go to editing",
+    "keepToContinue": "Keep at least one moment",
+    "rename": "Rename the moment",
+    "renamed": "Moment renamed",
+    "signal": {
+      "voice": "Loud voice",
+      "excitement": "Excitement",
+      "chat": "Chat reaction"
+    },
+    "why": "Why this moment",
+    "advancedEditor": "Advanced editor",
+    "downloadRaw": "Raw clip",
+    "deleteClip": "Delete"
+  },
+  "montage": {
+    "title": "Dress up your clips",
+    "subtitle_one": "Pick a template, we apply it to your kept clip.",
+    "subtitle_other": "Pick a template, we apply it to your {{count}} kept clips. You can change it clip by clip.",
+    "templates": "Templates",
+    "inYourColors": "in your channel's colors",
+    "yourStyle": "Your style",
+    "suggested": "Suggested",
+    "needsWebcam": "This template needs a webcam",
+    "template": {
+      "signature": {
+        "name": "Signature",
+        "desc": "Your cam on top, the game in the middle, blurred background"
+      },
+      "plein": {
+        "name": "Full screen",
+        "desc": "The game full size, your cam as an overlay"
+      },
+      "reaction": {
+        "name": "Reaction",
+        "desc": "Your face big, for the laughing fits"
+      },
+      "discussion": {
+        "name": "Conversation",
+        "desc": "Who's talking, in color, for RP dialogue"
+      },
+      "sanscam": {
+        "name": "No cam",
+        "desc": "Just the game, with a hook line"
+      },
+      "accroche": {
+        "name": "Hook",
+        "desc": "A line at the top to stop the scroll"
+      }
+    },
+    "clipOf": "Clip {{n}} of {{total}}",
+    "settings": "Clip settings",
+    "hook": "Hook",
+    "hookHint": "Shown at the top of the clip.",
+    "noHook": "This template doesn't show a hook.",
+    "camFraming": "Webcam framing",
+    "camFound": "Found automatically",
+    "camNone": "No webcam on this stream",
+    "adjust": "Adjust",
+    "applyAll": "Same template for all",
+    "applyAllHint": "Otherwise the template only changes this clip",
+    "export_one": "Export the clip",
+    "export_other": "Export the {{count}} clips",
+    "sending": "Sending {{done}} / {{total}}…",
+    "exportFailed": "The export couldn't start",
+    "advancedEditor": "Open the advanced editor (layers)",
+    "nothingKept": "No moment kept yet. Choose the moments to keep first.",
+    "backToChoose": "Choose the moments"
+  },
+  "exportStep": {
+    "title": "Your clips are ready",
+    "titleBusy": "Your clips are on their way",
+    "readyCount": "{{ready}} of {{total}} ready",
+    "keepOpen": "You can keep using Cuttie",
+    "ready": "Ready",
+    "failed": "Failed",
+    "queued": "Queued",
+    "rendering": "Rendering",
+    "download": "Download",
+    "play": "Play the clip",
+    "empty": "Nothing to export yet.",
+    "toEdit": "Go to editing"
   }
 }

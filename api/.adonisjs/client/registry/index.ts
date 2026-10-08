@@ -174,6 +174,12 @@ const routes = {
     tokens: [{"old":"/api/jobs/:id","type":0,"val":"api","end":""},{"old":"/api/jobs/:id","type":0,"val":"jobs","end":""},{"old":"/api/jobs/:id","type":1,"val":"id","end":""}],
     types: placeholder as Registry['jobs.update']['types'],
   },
+  'jobs.update_selection': {
+    methods: ["PATCH"],
+    pattern: '/api/jobs/:id/selection',
+    tokens: [{"old":"/api/jobs/:id/selection","type":0,"val":"api","end":""},{"old":"/api/jobs/:id/selection","type":0,"val":"jobs","end":""},{"old":"/api/jobs/:id/selection","type":1,"val":"id","end":""},{"old":"/api/jobs/:id/selection","type":0,"val":"selection","end":""}],
+    types: placeholder as Registry['jobs.update_selection']['types'],
+  },
   'jobs.retry': {
     methods: ["POST"],
     pattern: '/api/jobs/:id/retry',
@@ -215,6 +221,12 @@ const routes = {
     pattern: '/api/clips/:jobId/:filename/thumb',
     tokens: [{"old":"/api/clips/:jobId/:filename/thumb","type":0,"val":"api","end":""},{"old":"/api/clips/:jobId/:filename/thumb","type":0,"val":"clips","end":""},{"old":"/api/clips/:jobId/:filename/thumb","type":1,"val":"jobId","end":""},{"old":"/api/clips/:jobId/:filename/thumb","type":1,"val":"filename","end":""},{"old":"/api/clips/:jobId/:filename/thumb","type":0,"val":"thumb","end":""}],
     types: placeholder as Registry['clips.thumb']['types'],
+  },
+  'clips.background': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/clips/:jobId/:filename/background',
+    tokens: [{"old":"/api/clips/:jobId/:filename/background","type":0,"val":"api","end":""},{"old":"/api/clips/:jobId/:filename/background","type":0,"val":"clips","end":""},{"old":"/api/clips/:jobId/:filename/background","type":1,"val":"jobId","end":""},{"old":"/api/clips/:jobId/:filename/background","type":1,"val":"filename","end":""},{"old":"/api/clips/:jobId/:filename/background","type":0,"val":"background","end":""}],
+    types: placeholder as Registry['clips.background']['types'],
   },
   'clips.show': {
     methods: ["GET","HEAD"],

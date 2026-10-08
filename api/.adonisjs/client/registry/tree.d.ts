@@ -51,6 +51,7 @@ export interface ApiDefinition {
     index: typeof routes['jobs.index']
     show: typeof routes['jobs.show']
     update: typeof routes['jobs.update']
+    updateSelection: typeof routes['jobs.update_selection']
     retry: typeof routes['jobs.retry']
     destroy: typeof routes['jobs.destroy']
     destroyClip: typeof routes['jobs.destroy_clip']
@@ -68,6 +69,7 @@ export interface ApiDefinition {
   clips: {
     editEnv: typeof routes['clips.edit_env']
     thumb: typeof routes['clips.thumb']
+    background: typeof routes['clips.background']
     show: typeof routes['clips.show']
   }
   assets: {

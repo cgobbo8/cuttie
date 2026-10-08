@@ -343,6 +343,18 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/jobs_controller').default['update']>>>
     }
   }
+  'jobs.update_selection': {
+    methods: ["PATCH"]
+    pattern: '/api/jobs/:id/selection'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { id: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/jobs_controller').default['updateSelection']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/jobs_controller').default['updateSelection']>>>
+    }
+  }
   'jobs.retry': {
     methods: ["POST"]
     pattern: '/api/jobs/:id/retry'
@@ -425,6 +437,18 @@ export interface Registry {
       query: {}
       response: ExtractResponse<Awaited<ReturnType<import('#controllers/clips_controller').default['thumb']>>>
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/clips_controller').default['thumb']>>>
+    }
+  }
+  'clips.background': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/clips/:jobId/:filename/background'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue, ParamValue]
+      params: { jobId: ParamValue; filename: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/clips_controller').default['background']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/clips_controller').default['background']>>>
     }
   }
   'clips.show': {

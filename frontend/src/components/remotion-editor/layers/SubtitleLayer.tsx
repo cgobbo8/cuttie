@@ -107,12 +107,20 @@ export default function SubtitleLayer({ layer }: Props) {
           fontSize: subtitle.fontSize,
           fontWeight: 700,
           textTransform: subtitle.uppercase ? "uppercase" : "none",
-          WebkitTextStroke: `${Math.max(2, subtitle.fontSize / 25)}px black`,
+          WebkitTextStroke: subtitle.boxed ? undefined : `${Math.max(2, subtitle.fontSize / 25)}px black`,
           paintOrder: "stroke fill",
           lineHeight: 1.2,
           margin: 0,
-          textShadow: "2px 3px 5px rgba(0,0,0,0.6)",
+          textShadow: subtitle.boxed ? undefined : "2px 3px 5px rgba(0,0,0,0.6)",
           wordBreak: "break-word",
+          ...(subtitle.boxed
+            ? {
+                display: "inline-block",
+                padding: `${Math.round(subtitle.fontSize * 0.22)}px ${Math.round(subtitle.fontSize * 0.45)}px`,
+                borderRadius: Math.round(subtitle.fontSize * 0.35),
+                background: "rgba(0,0,0,0.58)",
+              }
+            : {}),
         }}
       >
         {showPlaceholder ? (
@@ -121,12 +129,16 @@ export default function SubtitleLayer({ layer }: Props) {
           </span>
         ) : (
           activeChunk!
-            .filter((word) => word.start <= currentTime + 0.2)
+            // Karaoke shows the whole line and moves the color; otherwise words appear as they're said
+            .filter((word) => subtitle.activeColor || word.start <= currentTime + 0.2)
             .map((word, i, visible) => {
               const isFilled = currentTime >= word.start;
               let color: string;
               const spk = showSpeaker ? getSpeakerStyle(word.speaker, subtitle.speakerStyles, fallback) : null;
-              if (spk) {
+              if (subtitle.activeColor && !spk) {
+                const speaking = currentTime >= word.start && currentTime <= word.end + 0.05;
+                color = speaking ? subtitle.activeColor : subtitle.restColor ?? "#FFFFFF";
+              } else if (spk) {
                 color = isFilled ? spk.color : spk.bgColor;
               } else {
                 color = isFilled ? highlightColor : baseColor;

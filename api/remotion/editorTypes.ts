@@ -28,6 +28,8 @@ export interface VideoLayerData {
   /** Native video dimensions — resolved server-side for crop calculation */
   nativeWidth?: number;
   nativeHeight?: number;
+  /** Template backdrop: src is the clip's blurred 9:16 version */
+  background?: boolean;
 }
 
 export interface SubtitleWord {
@@ -52,6 +54,11 @@ export interface SubtitleData {
   uppercase: boolean;
   showSpeaker: boolean;
   speakerStyles?: Record<string, SpeakerStyle>;
+  /** Karaoke: color of the word being spoken (others use restColor) */
+  activeColor?: string;
+  restColor?: string;
+  /** Small text on a dark rounded box ("discreet" style) */
+  boxed?: boolean;
 }
 
 export const SPEAKER_COLORS: string[] = [

@@ -2,7 +2,7 @@ import type { HttpContext } from '@adonisjs/core/http'
 import { randomUUID } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
 import path from 'node:path'
-import Job from '#models/job'
+import Job, { type ClipSelection } from '#models/job'
 import db from '@adonisjs/lucid/services/db'
 import { clipDir } from '#services/data_paths'
 import { deleteObject, storagePath } from '#services/storage'
@@ -228,6 +228,43 @@ export default class JobsController {
     await job.save()
 
     return { custom_title: customTitle }
+  }
+
+  // PATCH /api/jobs/:id/selection — keep / pass a clip, set its trim
+  async updateSelection({ params, request, response, auth }: HttpContext) {
+    const user = auth.getUserOrFail()
+    const job = await Job.find(params.id)
+    if (!job || job.userId !== user.id) return response.notFound({ error: 'job not found' })
+
+    const body = request.body() as { clip_filename?: string; state?: string | null; trim?: unknown }
+    const filename = typeof body.clip_filename === 'string' ? path.basename(body.clip_filename) : ''
+    const known = (job.hotPoints ?? []).some((hp: any) => hp.clip_filename === filename)
+    if (!filename || !known) return response.badRequest({ error: 'unknown clip' })
+
+    const current: ClipSelection = { ...(job.selection?.[filename] ?? {}) }
+    if (body.state !== undefined) {
+      if (body.state === null) delete current.state
+      else if (body.state === 'kept' || body.state === 'passed') current.state = body.state
+      else return response.badRequest({ error: 'state must be kept, passed or null' })
+    }
+    if (body.trim !== undefined) {
+      if (body.trim === null) {
+        delete current.trim
+      } else {
+        const [start, end] = Array.isArray(body.trim) ? body.trim.map(Number) : []
+        if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end - start < 1) {
+          return response.badRequest({ error: 'trim must be [start, end] in seconds, at least 1 s long' })
+        }
+        current.trim = [Math.round(start * 10) / 10, Math.round(end * 10) / 10]
+      }
+    }
+
+    const selection = { ...(job.selection ?? {}) }
+    if (Object.keys(current).length > 0) selection[filename] = current
+    else delete selection[filename]
+    job.selection = selection
+    await job.save()
+    return { selection }
   }
 
   // POST /api/jobs/:id/retry

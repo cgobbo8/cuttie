@@ -70,6 +70,7 @@ router
         router.get('/jobs', [() => import('#controllers/jobs_controller'), 'index'])
         router.get('/jobs/:id', [() => import('#controllers/jobs_controller'), 'show'])
         router.patch('/jobs/:id', [() => import('#controllers/jobs_controller'), 'update'])
+        router.patch('/jobs/:id/selection', [() => import('#controllers/jobs_controller'), 'updateSelection'])
         router.post('/jobs/:id/retry', [() => import('#controllers/jobs_controller'), 'retry'])
         router.delete('/jobs/:id', [() => import('#controllers/jobs_controller'), 'destroy'])
         router.delete('/jobs/:id/clips/:clipFilename', [() => import('#controllers/jobs_controller'), 'destroyClip'])
@@ -79,6 +80,7 @@ router
         // Clips
         router.get('/clips/:jobId/:filename/edit-env', [() => import('#controllers/clips_controller'), 'editEnv'])
         router.get('/clips/:jobId/:filename/thumb', [() => import('#controllers/clips_controller'), 'thumb'])
+        router.get('/clips/:jobId/:filename/background', [() => import('#controllers/clips_controller'), 'background'])
         router.get('/clips/:jobId/:filename', [() => import('#controllers/clips_controller'), 'show'])
 
         // Assets

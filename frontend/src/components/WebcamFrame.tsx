@@ -29,8 +29,6 @@ export default function WebcamFrame({ frameUrl, rect, editing = false, onChange,
     const box = boxRef.current.getBoundingClientRect();
     const scale = refW / box.width;
     const start = { x: e.clientX, y: e.clientY, rect };
-    const target = e.currentTarget as HTMLElement;
-    target.setPointerCapture(e.pointerId);
 
     const move = (ev: PointerEvent) => {
       const dx = (ev.clientX - start.x) * scale;
@@ -55,14 +53,15 @@ export default function WebcamFrame({ frameUrl, rect, editing = false, onChange,
       }
       onChange({ ...start.rect, x: Math.round(x), y: Math.round(y), w: Math.round(w), h: Math.round(h) });
     };
+    // Listen on the window so the drag survives leaving the frame
     const up = () => {
-      target.removeEventListener("pointermove", move);
-      target.removeEventListener("pointerup", up);
-      target.removeEventListener("pointercancel", up);
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", up);
     };
-    target.addEventListener("pointermove", move);
-    target.addEventListener("pointerup", up);
-    target.addEventListener("pointercancel", up);
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", up);
   };
 
   return (

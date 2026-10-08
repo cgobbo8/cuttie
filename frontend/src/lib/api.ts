@@ -234,6 +234,11 @@ export async function getStoryboard(vodId: string): Promise<TwitchStoryboard | n
   return json.storyboard;
 }
 
+/** The clip cropped to 9:16, small and blurred: backdrop of the vertical templates */
+export function clipBackgroundUrl(jobId: string, filename: string): string {
+  return `${BASE}/clips/${encodeURIComponent(jobId)}/${encodeURIComponent(filename)}/background`;
+}
+
 /** Still frame of a clip (extracted and cached by the API) */
 export function clipThumbUrl(jobId: string, filename: string, opts: { width?: 480 | 1280; time?: number } = {}): string {
   const params = new URLSearchParams();
@@ -283,6 +288,9 @@ export interface HotPoint {
   vertical_filename: string | null;
   clip_name: string;
   clip_source: "auto" | "manual" | "detected";
+  /** Bounds of the clip in the VOD (seconds) */
+  clip_start?: number;
+  clip_end?: number;
   llm: LlmAnalysis | null;
   chat_mood: string | null;
   chat_message_count: number | null;
@@ -342,6 +350,14 @@ export interface JobResponse {
   stream_date: string | null;
   step_timings: Record<string, StepTiming> | null;
   vod_context: VodContext | null;
+  /** The streamer's choices per clip filename */
+  selection: Record<string, ClipSelection>;
+}
+
+export interface ClipSelection {
+  state?: "kept" | "passed";
+  /** Trim bounds in clip seconds */
+  trim?: [number, number];
 }
 
 export interface JobSummary {
@@ -391,6 +407,7 @@ interface ServerJobResponse {
   streamDate?: string | null;
   stepTimings?: Record<string, StepTiming> | null;
   vodContext?: VodContext | null;
+  selection?: Record<string, ClipSelection> | null;
 }
 
 interface ServerHotPoint {
@@ -435,6 +452,7 @@ function mapJobResponse(raw: ServerJobResponse): JobResponse {
     stream_date: raw.streamDate ?? null,
     step_timings: raw.stepTimings ?? null,
     vod_context: raw.vodContext ?? null,
+    selection: raw.selection ?? {},
   };
 }
 
@@ -644,6 +662,21 @@ export async function renameJob(jobId: string, customTitle: string): Promise<{ c
   });
   if (!res.ok) throw new Error("Failed to rename job");
   return res.json();
+}
+
+/** Keep / pass a clip, or set its trim (null clears) */
+export async function updateSelection(
+  jobId: string,
+  clipFilename: string,
+  patch: { state?: ClipSelection["state"] | null; trim?: [number, number] | null },
+): Promise<Record<string, ClipSelection>> {
+  const res = await fetch(`${BASE}/jobs/${jobId}/selection`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ clip_filename: clipFilename, ...patch }),
+  });
+  const json = await jsonOrThrow<{ selection: Record<string, ClipSelection> }>(res, "Failed to save the choice");
+  return json.selection;
 }
 
 export async function deleteJob(jobId: string): Promise<void> {

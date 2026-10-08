@@ -3,6 +3,7 @@ import type { LayerTransform } from "../../../lib/editorTypes";
 import TwitchSubscribe from "./TwitchSubscribe";
 import SocialFollow from "./SocialFollow";
 import TwitchLiveBanner from "./TwitchLiveBanner";
+import ChannelPill from "./ChannelPill";
 
 /* ── Widget prop schema ──────────────────────────────────── */
 
@@ -48,6 +49,19 @@ export const WIDGET_REGISTRY: Record<string, WidgetDefinition> = {
       { key: "logoUrl", label: "Logo du streamer", type: "image", default: "" },
     ],
     Component: TwitchLiveBanner,
+  },
+  "channel-pill": {
+    id: "channel-pill",
+    name: "Widget de chaîne",
+    description: "Ton logo et twitch.tv/ta-chaîne sur une pastille blanche",
+    defaultTransform: { x: 140, y: 1640, width: 800, height: 96 },
+    propDefs: [
+      { key: "login", label: "Chaîne", type: "text", default: "streamer" },
+      { key: "avatarUrl", label: "Logo", type: "image", default: "" },
+      { key: "darkColor", label: "Couleur du texte", type: "color", default: "#111317" },
+      { key: "lightColor", label: "Fond du logo", type: "color", default: "#F5F5F2" },
+    ],
+    Component: ChannelPill,
   },
   "social-follow": {
     id: "social-follow",

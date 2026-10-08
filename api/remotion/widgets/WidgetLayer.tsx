@@ -4,11 +4,13 @@ import type { Layer } from "../editorTypes";
 import TwitchSubscribe from "./TwitchSubscribe";
 import TwitchLiveBanner from "./TwitchLiveBanner";
 import SocialFollow from "./SocialFollow";
+import ChannelPill from "./ChannelPill";
 
 const WIDGET_COMPONENTS: Record<string, React.FC<{ props: Record<string, unknown>; width: number; height: number; currentTime?: number }>> = {
   "twitch-subscribe": TwitchSubscribe,
   "twitch-live-banner": TwitchLiveBanner,
   "social-follow": SocialFollow,
+  "channel-pill": ChannelPill,
 };
 
 interface Props {

@@ -1,0 +1,143 @@
+import type { CSSProperties } from "react";
+import { BOX_SHADOW_PRESETS, type Layer } from "../../lib/editorTypes";
+import ChannelPill from "../editor/widgets/ChannelPill";
+
+interface Props {
+  layers: Layer[];
+  /** Still frame of the clip, stands in for the video layers */
+  frameUrl: string | null;
+  /** Rendered width in px (the 1080x1920 canvas is scaled down) */
+  width: number;
+  /** A few words to show in the subtitle layer */
+  sample: string[];
+  className?: string;
+}
+
+function rgba(hex: string, alpha: number): string {
+  const n = parseInt(hex.slice(1), 16);
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${alpha})`;
+}
+
+/** Cheap still of a template: same layers as the render, a frame instead of the video */
+export default function TemplateSketch({ layers, frameUrl, width, sample, className = "" }: Props) {
+  const k = width / 1080;
+
+  const content = (layer: Layer) => {
+    const t = layer.transform;
+    if (layer.video?.background && frameUrl) {
+      return <img src={frameUrl} alt="" draggable={false} style={{ width: "100%", height: "100%", objectFit: "cover", filter: "blur(40px)", transform: "scale(1.15)" }} />;
+    }
+    if ((layer.type === "gameplay" || layer.type === "facecam") && layer.video && frameUrl) {
+      const crop = layer.video.crop ?? { x: 0, y: 0, w: layer.video.nativeWidth ?? 1920, h: layer.video.nativeHeight ?? 1080 };
+      const sx = t.width / crop.w;
+      const sy = t.height / crop.h;
+      const style: CSSProperties = {
+        position: "absolute",
+        maxWidth: "none",
+        width: (layer.video.nativeWidth ?? 1920) * sx,
+        height: (layer.video.nativeHeight ?? 1080) * sy,
+        left: -crop.x * sx,
+        top: -crop.y * sy,
+      };
+      return <img src={frameUrl} alt="" draggable={false} style={style} />;
+    }
+    if (layer.type === "shape" && layer.shape) {
+      const shadow = BOX_SHADOW_PRESETS[layer.shape.boxShadowPreset]?.value;
+      return (
+        <div
+          style={{
+            width: "100%",
+            height: "100%",
+            background: rgba(layer.shape.backgroundColor, layer.shape.backgroundAlpha),
+            borderRadius: layer.shape.shapeType === "circle" ? "50%" : layer.style.borderRadius,
+            boxShadow: shadow && shadow !== "none" ? shadow : undefined,
+          }}
+        />
+      );
+    }
+    if (layer.type === "subtitles" && layer.subtitle) {
+      const sub = layer.subtitle;
+      return (
+        <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", textAlign: "center" }}>
+          <p
+            style={{
+              margin: 0,
+              fontFamily: `"${sub.fontFamily}", sans-serif`,
+              fontSize: sub.fontSize,
+              fontWeight: 700,
+              lineHeight: 1.2,
+              textTransform: sub.uppercase ? "uppercase" : "none",
+              color: sub.boxed ? "#fff" : sub.customColor,
+              WebkitTextStroke: sub.boxed ? undefined : `${Math.max(2, sub.fontSize / 25)}px black`,
+              paintOrder: "stroke fill",
+              ...(sub.boxed
+                ? { display: "inline-block", padding: `${sub.fontSize * 0.22}px ${sub.fontSize * 0.45}px`, borderRadius: sub.fontSize * 0.35, background: "rgba(0,0,0,0.58)" }
+                : {}),
+            }}
+          >
+            {sample.map((word, i) => (
+              <span key={i} style={sub.activeColor && i === sample.length - 1 ? { color: sub.activeColor } : sub.activeColor ? { color: sub.restColor } : undefined}>
+                {i > 0 ? " " : ""}
+                {word}
+              </span>
+            ))}
+          </p>
+        </div>
+      );
+    }
+    if (layer.type === "widget" && layer.widget?.widgetId === "channel-pill") {
+      return <ChannelPill props={layer.widget.props} width={t.width} height={t.height} />;
+    }
+    if (layer.type === "text" && layer.text) {
+      const text = layer.text;
+      return (
+        <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", padding: "8px 12px" }}>
+          <span
+            style={{
+              fontFamily: text.fontFamily,
+              fontSize: text.fontSize,
+              fontWeight: text.fontWeight,
+              color: text.color,
+              textAlign: text.textAlign,
+              textTransform: text.uppercase ? "uppercase" : undefined,
+              lineHeight: text.lineHeight,
+              width: "100%",
+              WebkitTextStroke: text.color === "#FFFFFF" ? "3px black" : undefined,
+              paintOrder: "stroke fill",
+            }}
+          >
+            {text.content}
+          </span>
+        </div>
+      );
+    }
+    return null;
+  };
+
+  return (
+    <div className={`relative overflow-hidden bg-black ${className}`} style={{ width, height: (width * 16) / 9 }}>
+      <div style={{ position: "absolute", left: 0, top: 0, width: 1080, height: 1920, transform: `scale(${k})`, transformOrigin: "0 0" }}>
+        {layers
+          .filter((l) => l.visible)
+          .map((layer) => (
+            <div
+              key={layer.id}
+              style={{
+                position: "absolute",
+                left: layer.transform.x,
+                top: layer.transform.y,
+                width: layer.transform.width,
+                height: layer.transform.height,
+                overflow: layer.type === "shape" || layer.type === "widget" ? "visible" : "hidden",
+                borderRadius: layer.type !== "shape" && layer.style.borderRadius > 0 ? layer.style.borderRadius : undefined,
+                filter: layer.style.blur > 0 ? `blur(${layer.style.blur}px)` : undefined,
+                opacity: layer.style.opacity,
+              }}
+            >
+              {content(layer)}
+            </div>
+          ))}
+      </div>
+    </div>
+  );
+}

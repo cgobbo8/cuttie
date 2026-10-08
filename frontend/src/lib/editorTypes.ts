@@ -23,8 +23,13 @@ export const DEFAULT_STYLE: LayerStyle = { opacity: 1, blur: 0, borderRadius: 0,
 
 export interface VideoLayerData {
   src: string;
-  /** Source-resolution crop rect (facecam only) */
+  /** Source-resolution crop rect */
   crop?: { x: number; y: number; w: number; h: number };
+  /** Native video dimensions, for crop maths */
+  nativeWidth?: number;
+  nativeHeight?: number;
+  /** Template backdrop: src is the clip's blurred 9:16 version */
+  background?: boolean;
 }
 
 export interface SubtitleWord {
@@ -49,6 +54,11 @@ export interface SubtitleData {
   uppercase: boolean;
   showSpeaker: boolean;   // per-speaker colored subtitles
   speakerStyles?: Record<string, SpeakerStyle>;  // custom per-speaker colors
+  /** Karaoke: color of the word being spoken (others use restColor) */
+  activeColor?: string;
+  restColor?: string;
+  /** Small text on a dark rounded box ("discreet" style) */
+  boxed?: boolean;
 }
 
 /** Distinct colors assigned to speakers when showSpeaker is enabled.

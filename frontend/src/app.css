@@ -136,9 +136,12 @@ body::after {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
-:where(a, button, input, select, textarea, [tabindex]):focus-visible {
-  outline: 2px solid var(--color-ink);
-  outline-offset: 2px;
+/* In the base layer so utilities (e.g. focus-visible:outline-none) can override it */
+@layer base {
+  :where(a, button, input, select, textarea, [tabindex]):focus-visible {
+    outline: 2px solid var(--color-ink);
+    outline-offset: 2px;
+  }
 }
 
 .mono {
@@ -440,6 +443,38 @@ kbd {
 .animate-rise {
   animation: rise-in 0.5s var(--ease-spring) both;
   animation-delay: calc(var(--i, 0) * 45ms);
+}
+
+/* Welcome wall of lives: tilted, drifting very slowly */
+.wall-drift {
+  transform: rotate(-6deg);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .wall-drift {
+    animation: wall-drift 70s ease-in-out infinite alternate;
+  }
+}
+@keyframes wall-drift {
+  from {
+    transform: rotate(-6deg) translate3d(0, 0, 0);
+  }
+  to {
+    transform: rotate(-6deg) translate3d(-3%, -5%, 0);
+  }
+}
+
+/* A line sweeping a frame while something is being looked for */
+@keyframes scan {
+  from {
+    transform: translateY(-100%);
+  }
+  to {
+    transform: translateY(100%);
+  }
+}
+.scan-line {
+  background: linear-gradient(180deg, transparent 0%, var(--color-accent-soft) 45%, var(--color-accent-line) 50%, transparent 52%);
+  animation: scan 2.4s cubic-bezier(0.45, 0, 0.55, 1) infinite;
 }
 
 /* Progress bar shimmer */

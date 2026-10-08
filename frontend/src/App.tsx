@@ -16,27 +16,38 @@ import ExportsPage from "./pages/ExportsPage";
 import LoginPage from "./pages/LoginPage";
 import ProfilePage from "./pages/ProfilePage";
 import SettingsPage from "./pages/SettingsPage";
-import { SettingsProvider } from "./lib/SettingsContext";
+import { SettingsProvider, useSettings } from "./lib/SettingsContext";
 import { BackdropProvider } from "./lib/BackdropContext";
 import { ChannelProvider } from "./lib/ChannelContext";
 import ChannelPage from "./pages/ChannelPage";
 import GamesPage from "./pages/GamesPage";
 import CreatorsPage from "./pages/CreatorsPage";
 import WorkersPage from "./pages/WorkersPage";
+import WelcomePage from "./pages/WelcomePage";
 import type { ReactNode } from "react";
+
+function Splash() {
+  return (
+    <div className="min-h-dvh flex items-center justify-center bg-ground">
+      <div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+    </div>
+  );
+}
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth();
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#09090b]">
-        <div className="w-5 h-5 border-2 border-zinc-600 border-t-white rounded-full animate-spin" />
-      </div>
-    );
-  }
-
+  if (loading) return <Splash />;
   if (!user) return <Navigate to="/login" replace />;
+  return children;
+}
+
+/** First launch: channel, keys and webcam before anything else */
+function RequireOnboarding({ children }: { children: ReactNode }) {
+  const { settings, loaded } = useSettings();
+
+  if (!loaded) return <Splash />;
+  if (settings && !settings.onboarded) return <Navigate to="/bienvenue" replace />;
   return children;
 }
 
@@ -45,9 +56,19 @@ function AppRoutes() {
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route
+        path="/bienvenue"
         element={
           <ProtectedRoute>
-            <Layout />
+            <WelcomePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        element={
+          <ProtectedRoute>
+            <RequireOnboarding>
+              <Layout />
+            </RequireOnboarding>
           </ProtectedRoute>
         }
       >

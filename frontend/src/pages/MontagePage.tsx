@@ -2,15 +2,17 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { useTranslation } from "react-i18next";
 import { Player } from "@remotion/player";
-import { ArrowLeft, ArrowRight, Layers, Loader2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, Layers, Loader2, ScanFace } from "lucide-react";
 import {
   clipBackgroundUrl,
   clipThumbUrl,
   clipUrl,
   getEditEnvironment,
   getJobStatus,
+  setLiveFacecam,
   startRender,
   type EditEnvironment,
+  type FacecamRect,
   type JobResponse,
   type SubtitleStyle,
   type WidgetTiming,
@@ -29,6 +31,7 @@ import {
 } from "../lib/templates";
 import CuttieComposition from "../components/remotion-editor/CuttieComposition";
 import TemplateSketch from "../components/montage/TemplateSketch";
+import CamSheet from "../components/montage/CamSheet";
 import Stepper from "../components/project/Stepper";
 import { useToast } from "../components/Toast";
 
@@ -42,9 +45,11 @@ interface MontagePrefs {
   perClip: Record<string, TemplateId>;
   hooks: Record<string, string>;
   applyAll: boolean;
+  /** Clips where the cam is shown although nobody was seen in it */
+  camForced: Record<string, boolean>;
 }
 
-const DEFAULT_PREFS: MontagePrefs = { template: "signature", perClip: {}, hooks: {}, applyAll: true };
+const DEFAULT_PREFS: MontagePrefs = { template: "signature", perClip: {}, hooks: {}, applyAll: true, camForced: {} };
 
 function usePrefs(jobId: string | undefined) {
   const key = `cuttie_montage_${jobId}`;
@@ -82,13 +87,14 @@ export default function MontagePage() {
   const toast = useToast();
   const navigate = useNavigate();
   const { jobId } = useParams<{ jobId: string }>();
-  const { kit, channel, saveKit } = useChannel();
+  const { kit, channel, saveKit, reloadKit } = useChannel();
   const [prefs, setPrefs] = usePrefs(jobId);
 
   const [job, setJob] = useState<JobResponse | null>(null);
   const [envs, setEnvs] = useState<Record<string, EditEnvironment>>({});
   const [index, setIndex] = useState(0);
   const [exporting, setExporting] = useState<{ done: number; total: number } | null>(null);
+  const [camSheet, setCamSheet] = useState(false);
 
   useEffect(() => {
     if (!jobId) return;
@@ -119,6 +125,12 @@ export default function MontagePage() {
     [prefs],
   );
 
+  /** The cam for a clip: none when it doesn't show in it, unless the streamer asked for it */
+  const camFor = useCallback(
+    (m: Moment, env: EditEnvironment | undefined) => env?.facecam ?? (prefs.camForced[m.filename] ? env?.cam?.rect ?? null : null),
+    [prefs.camForced],
+  );
+
   const contextFor = useCallback(
     (m: Moment, env: EditEnvironment | undefined): TemplateContext | null => {
       if (!kit || !jobId) return null;
@@ -127,7 +139,7 @@ export default function MontagePage() {
         backgroundSrc: clipBackgroundUrl(jobId, m.filename),
         frameW: env?.clip_width ?? 1920,
         frameH: env?.clip_height ?? 1080,
-        facecam: env?.facecam ?? null,
+        facecam: camFor(m, env),
         words: env?.words ?? [],
         startAt: m.trim?.[0] ?? 0,
         endAt: m.trim?.[1] ?? m.duration,
@@ -139,14 +151,15 @@ export default function MontagePage() {
         hook: prefs.hooks[m.filename] ?? m.hp.clip_name,
       };
     },
-    [channel, jobId, kit, prefs.hooks],
+    [camFor, channel, jobId, kit, prefs.hooks],
   );
 
   const env = current ? envs[current.filename] : undefined;
   const ctx = current ? contextFor(current, env) : null;
   const template = current ? templateFor(current) : prefs.template;
   const layers = useMemo(() => (ctx ? buildTemplate(template, ctx) : []), [ctx, template]);
-  const hasWebcam = !!env?.facecam;
+  const hasWebcam = !!(current && camFor(current, env));
+  const cam = env?.cam;
   const suggested = current
     ? suggestTemplate(current.hp.llm?.category, hasWebcam, current.hp.signals?.vocal_excitement, current.hp.signals?.speech_presence)
     : null;
@@ -155,6 +168,20 @@ export default function MontagePage() {
     if (!current) return;
     if (prefs.applyAll) setPrefs({ template: id, perClip: {} });
     else setPrefs({ perClip: { ...prefs.perClip, [current.filename]: id } });
+  };
+
+  const saveLiveCam = async (facecam: FacecamRect | false | null, remember: boolean) => {
+    if (!jobId) return;
+    try {
+      await setLiveFacecam(jobId, facecam, remember);
+      // Every clip of the live uses the new framing
+      setEnvs({});
+      setCamSheet(false);
+      if (remember) await reloadKit();
+      toast.success(t(remember ? "montage.cam.savedEverywhere" : "montage.cam.saved"));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t("brand.saveError"));
+    }
   };
 
   const saveBrand = async (patch: Parameters<typeof saveKit>[0]) => {
@@ -304,6 +331,15 @@ export default function MontagePage() {
 
         {/* Stage */}
         <div className="flex-[1_1_440px] min-w-0 flex flex-col items-center gap-3.5">
+          {cam?.moved && (
+            <div className="glass flex items-center gap-3 w-[396px] max-w-full p-3 pl-3.5 rounded-[14px] animate-rise">
+              <ScanFace className="w-[18px] h-[18px] text-accent flex-none" />
+              <p className="flex-1 min-w-0 text-[12.5px] leading-snug text-ink-2">{t("montage.cam.movedNotice")}</p>
+              <button onClick={() => setCamSheet(true)} className="btn btn-glass btn-sm flex-none">
+                {t("montage.cam.check")}
+              </button>
+            </div>
+          )}
           <div className="relative w-[396px] max-w-full aspect-[9/16] rounded-[24px] overflow-hidden border border-white/[0.14] shadow-[0_50px_100px_-40px_rgba(0,0,0,0.9)] bg-black">
             {env ? (
               <Player
@@ -404,12 +440,41 @@ export default function MontagePage() {
                 </div>
               </div>
             )}
-            <div className="flex items-center gap-3 py-3 border-b border-white/[0.06]">
-              <div className="flex-1 min-w-0">
-                <div className="text-[13.5px] font-[550] text-white">{t("montage.camFraming")}</div>
-                <div className="text-[12px] text-ink-3">{hasWebcam ? t("montage.camFound") : t("montage.camNone")}</div>
+            <div className="py-3 border-b border-white/[0.06]">
+              <div className="flex items-center gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="text-[13.5px] font-[550] text-white">{t("montage.camFraming")}</div>
+                  <div className="text-[12px] text-ink-3">
+                    {!cam?.rect
+                      ? t("montage.cam.none")
+                      : cam.source === "live"
+                        ? t("montage.cam.manual")
+                        : cam.moved
+                          ? t("montage.cam.moved")
+                          : cam.source === "brand"
+                            ? t("montage.cam.usual")
+                            : t("montage.cam.found")}
+                  </div>
+                </div>
+                <button onClick={() => setCamSheet(true)} disabled={!env} className="btn btn-glass btn-sm">
+                  {t("montage.adjust")}
+                </button>
               </div>
-              <Link to="/chaine" className="btn btn-glass btn-sm">{t("montage.adjust")}</Link>
+              {cam?.rect && !cam.visible && current && (
+                <div className="mt-2.5 flex items-center gap-3 p-2.5 pl-3 rounded-[11px] inset">
+                  <span className="flex-1 min-w-0 text-[12px] leading-snug text-ink-2">{t("montage.cam.hiddenHere")}</span>
+                  <button
+                    role="switch"
+                    aria-checked={!!prefs.camForced[current.filename]}
+                    aria-label={t("montage.cam.showAnyway")}
+                    title={t("montage.cam.showAnyway")}
+                    onClick={() => setPrefs({ camForced: { ...prefs.camForced, [current.filename]: !prefs.camForced[current.filename] } })}
+                    className="switch flex-none"
+                  >
+                    <span />
+                  </button>
+                </div>
+              )}
             </div>
             <div className="flex items-center gap-3 py-3">
               <div className="flex-1 min-w-0">
@@ -438,6 +503,18 @@ export default function MontagePage() {
           </button>
         </aside>
       </section>
+
+      {camSheet && env && (
+        <CamSheet
+          frameUrl={clipThumbUrl(jobId, current.filename, { width: 1280 })}
+          clipW={env.clip_width}
+          clipH={env.clip_height}
+          initial={cam?.rect ?? null}
+          manual={cam?.source === "live"}
+          onSave={saveLiveCam}
+          onClose={() => setCamSheet(false)}
+        />
+      )}
     </div>
   );
 }

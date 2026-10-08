@@ -59,6 +59,8 @@ export type ApiKeyName = "groq_api_key" | "openrouter_api_key" | "openai_api_key
 
 export interface AppSettings {
   keys: Record<ApiKeyName, { configured: boolean; preview: string | null }>;
+  /** First launch done (channel, keys, webcam) */
+  onboarded: boolean;
 }
 
 export async function getSettings(): Promise<AppSettings> {
@@ -76,6 +78,28 @@ export async function updateSettings(keys: Partial<Record<ApiKeyName, string>>):
   });
   if (!res.ok) throw new Error("Failed to save settings");
   return res.json();
+}
+
+/** Mark the first launch as done */
+export async function setOnboarded(onboarded: boolean): Promise<AppSettings> {
+  const res = await fetch(`${BASE}/settings`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ onboarded }),
+  });
+  return jsonOrThrow(res, "Failed to save settings");
+}
+
+export type KeyCheck = { ok: true } | { ok: false; reason: "missing" | "invalid" | "unreachable" };
+
+/** Ask the provider whether a saved key works */
+export async function verifyApiKey(name: "groq_api_key" | "openrouter_api_key"): Promise<KeyCheck> {
+  const res = await fetch(`${BASE}/settings/verify`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name }),
+  });
+  return jsonOrThrow(res, "Failed to check the key");
 }
 
 export interface WorkerDiagnostics {
@@ -137,8 +161,13 @@ export interface BrandKit {
   /** Swatches detected on the logo and banner */
   palette: string[];
   palette_source: string | null;
-  /** false = the streamer has no webcam, null = not confirmed yet */
+  /**
+   * Where the webcam usually sits (false = no webcam, null = not confirmed
+   * yet). Every analysis checks it again on its own clips.
+   */
   facecam: FacecamRect | false | null;
+  /** Storage key of the live frame the webcam was confirmed on */
+  facecam_frame: string | null;
   widget: { enabled: boolean; timing: WidgetTiming };
   subtitles: { style: SubtitleStyle };
 }
@@ -174,11 +203,17 @@ export async function detectBrandColors(): Promise<BrandKit> {
 
 export interface DetectedFacecam {
   facecam: FacecamRect | null;
-  /** Clip the webcam was found on, to show it to the streamer */
-  frame: { job_id: string; clip_filename: string };
+  /** Frame of the live the webcam was looked for on */
+  frame_url: string;
+  /** Storage key of that frame, to save with the confirmed webcam */
+  frame_key: string | null;
+  vod: { id: string; title: string } | null;
 }
 
-/** Find the webcam on the latest analysis (not saved until confirmed) */
+/** The live frame the brand kit's webcam was confirmed on (404 when none) */
+export const brandFrameUrl = `${BASE}/brand-kit/frame`;
+
+/** Find the webcam on the latest live (not saved until confirmed) */
 export async function detectBrandFacecam(): Promise<DetectedFacecam> {
   return jsonOrThrow(await fetch(`${BASE}/brand-kit/detect-facecam`, { method: "POST" }), "Failed to detect the webcam");
 }
@@ -208,6 +243,23 @@ export interface TwitchChannel {
   followers: number | null;
   primary_color: string | null;
   vods: TwitchVod[];
+}
+
+/** A channel as Twitch shows it, before it is saved (no analyses linked) */
+export type LookedUpChannel = Omit<TwitchChannel, "vods"> & { vods: Omit<TwitchVod, "job">[] };
+
+/** A channel's public info, without saving it (first launch) */
+export async function lookupChannel(login: string): Promise<LookedUpChannel | null> {
+  const json = await jsonOrThrow<{ channel: LookedUpChannel | null }>(
+    await fetch(`${BASE}/twitch/lookup?login=${encodeURIComponent(login)}`),
+    "Twitch ne répond pas",
+  );
+  return json.channel;
+}
+
+/** The colors of a channel's logo and banner, without saving them */
+export async function lookupChannelColors(login: string): Promise<{ palette: string[]; roles: BrandColors }> {
+  return jsonOrThrow(await fetch(`${BASE}/twitch/lookup/colors?login=${encodeURIComponent(login)}`), "Couleurs indisponibles");
 }
 
 export async function getTwitchChannel(): Promise<TwitchChannel | null> {
@@ -772,7 +824,17 @@ export async function getClipWords(jobId: string, filename: string): Promise<Tra
 export interface EditEnvironment {
   clip_width: number;
   clip_height: number;
+  /** Webcam for this clip: null when there is none or it doesn't show in this clip */
   facecam: { x: number; y: number; w: number; h: number } | null;
+  /** This live's webcam: set by hand ("live"), the usual one ("brand") or found on its clips ("detected") */
+  cam?: {
+    rect: { x: number; y: number; w: number; h: number } | null;
+    source: "live" | "brand" | "detected" | null;
+    /** Not where it usually is on this live */
+    moved: boolean;
+    /** Somebody is in the cam in this clip */
+    visible: boolean;
+  };
   dominant_color: { r: number; g: number; b: number } | null;
   game_crop: { x: number; y: number; w: number; h: number };
   layout: {
@@ -788,6 +850,16 @@ export interface EditEnvironment {
   };
   words: TranscriptWord[];
   chat_messages: { author: string; text: string; timestamp: number }[];
+}
+
+/** Webcam framing for one live: a rectangle, false (no cam on this live) or null (automatic) */
+export async function setLiveFacecam(jobId: string, facecam: FacecamRect | false | null, remember = false): Promise<void> {
+  const res = await fetch(`${BASE}/jobs/${encodeURIComponent(jobId)}/facecam`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ facecam, remember }),
+  });
+  await jsonOrThrow(res, "Failed to save the webcam");
 }
 
 export async function getEditEnvironment(jobId: string, clipFilename: string): Promise<EditEnvironment> {

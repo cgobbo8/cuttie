@@ -25,6 +25,8 @@ interface ChannelContextValue {
   /** Reload the channel (and the analyses linked to its lives) */
   refreshChannel: () => Promise<void>;
   saveKit: (patch: BrandKitPatch) => Promise<BrandKit>;
+  /** Reload the kit after the API changed it (e.g. a webcam kept as the usual one) */
+  reloadKit: () => Promise<void>;
   redetectColors: () => Promise<BrandKit>;
 }
 
@@ -36,6 +38,7 @@ const ChannelContext = createContext<ChannelContextValue>({
   saveKit: async () => {
     throw new Error("ChannelProvider missing");
   },
+  reloadKit: async () => {},
   redetectColors: async () => {
     throw new Error("ChannelProvider missing");
   },
@@ -91,6 +94,10 @@ export function ChannelProvider({ children }: { children: ReactNode }) {
     return next;
   }, [refreshChannel]);
 
+  const reloadKit = useCallback(async () => {
+    setKit(await getBrandKit());
+  }, []);
+
   const redetectColors = useCallback(async () => {
     const next = await detectBrandColors();
     setKit(next);
@@ -98,7 +105,7 @@ export function ChannelProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <ChannelContext.Provider value={{ kit, channel, channelError, refreshChannel, saveKit, redetectColors }}>
+    <ChannelContext.Provider value={{ kit, channel, channelError, refreshChannel, saveKit, reloadKit, redetectColors }}>
       {children}
     </ChannelContext.Provider>
   );

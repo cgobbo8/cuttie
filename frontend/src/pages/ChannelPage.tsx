@@ -1,20 +1,12 @@
-import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useRef, useState, type FormEvent, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { Check, Loader2, RefreshCw } from "lucide-react";
-import {
-  clipThumbUrl,
-  detectBrandFacecam,
-  type BrandColors,
-  type FacecamRect,
-  type SubtitleStyle,
-  type WidgetTiming,
-} from "../lib/api";
+import { Loader2, RefreshCw } from "lucide-react";
+import { brandFrameUrl, clipThumbUrl, type BrandColors, type SubtitleStyle, type WidgetTiming } from "../lib/api";
 import { useBackdrop } from "../lib/BackdropContext";
 import { useChannel } from "../lib/ChannelContext";
 import { useLatestMoments } from "../lib/useLatestMoment";
 import { useToast } from "../components/Toast";
 import SignaturePreview from "../components/SignaturePreview";
-import WebcamFrame from "../components/WebcamFrame";
 import { sampleSubtitle } from "../lib/format";
 
 const COLOR_ROLES: (keyof BrandColors)[] = ["accent", "highlight", "dark", "light"];
@@ -120,34 +112,15 @@ export default function ChannelPage() {
 
   const [switching, setSwitching] = useState(false);
   const [redetecting, setRedetecting] = useState(false);
-  // Webcam: what was detected (not saved yet) and the frame it was found on
-  const [detected, setDetected] = useState<FacecamRect | null | undefined>(undefined);
-  const [camFrame, setCamFrame] = useState<string | null>(null);
-  const [camError, setCamError] = useState<string | null>(null);
-  const [editing, setEditing] = useState<FacecamRect | null>(null);
-
   const best = latest?.hotPoints[0] ?? null;
-  const frame = (width: 480 | 1280) => (latest && best?.clip_filename ? clipThumbUrl(latest.job.job_id, best.clip_filename, { width }) : null);
+  // A frame of the latest analysis, else the live frame the webcam was confirmed on
+  const frame = (width: 480 | 1280) =>
+    latest && best?.clip_filename
+      ? clipThumbUrl(latest.job.job_id, best.clip_filename, { width })
+      : kit?.facecam_frame
+        ? brandFrameUrl
+        : null;
   const subtitle = sampleSubtitle(best?.llm?.transcript);
-
-  const detectCam = async () => {
-    setDetected(undefined);
-    setCamError(null);
-    try {
-      const res = await detectBrandFacecam();
-      setDetected(res.facecam);
-      setCamFrame(clipThumbUrl(res.frame.job_id, res.frame.clip_filename, { width: 1280 }));
-    } catch (err) {
-      setDetected(null);
-      setCamError(err instanceof Error ? err.message : String(err));
-    }
-  };
-
-  // Webcam not confirmed yet: look for it right away
-  const needsDetection = kit?.facecam === null;
-  useEffect(() => {
-    if (needsDetection) detectCam();
-  }, [needsDetection]);
 
   const save = async (patch: Parameters<typeof saveKit>[0], message = t("brand.saved")) => {
     try {
@@ -165,10 +138,6 @@ export default function ChannelPage() {
       </div>
     );
   }
-
-  const confirmed = kit.facecam && typeof kit.facecam === "object" ? kit.facecam : null;
-  const shownRect = editing ?? confirmed ?? detected ?? null;
-  const camFrameUrl = camFrame ?? frame(1280);
 
   return (
     <div className="max-w-[1320px] mx-auto px-8 pt-[96px] pb-14">
@@ -324,86 +293,6 @@ export default function ChannelPage() {
               ))}
             </div>
           </Card>
-
-          {/* Webcam */}
-          <Card
-            title={editing ? t("brand.adjust") : confirmed ? t("brand.webcam") : kit.facecam === false ? t("brand.webcamNone") : t("brand.webcamFound")}
-            hint={
-              editing
-                ? t("brand.adjustHint")
-                : confirmed
-                  ? t("brand.webcamHintConfirmed")
-                  : kit.facecam === false
-                    ? t("brand.webcamNoneHint")
-                    : detected === undefined
-                      ? t("brand.webcamSearching")
-                      : detected
-                        ? t("brand.webcamHintFound")
-                        : camError ?? t("brand.webcamNotFound")
-            }
-            action={
-              confirmed && !editing ? (
-                <span className="chip chip-accent">
-                  <Check className="w-3 h-3" strokeWidth={3} /> {t("brand.webcamConfirmed")}
-                </span>
-              ) : detected === undefined && kit.facecam === null ? (
-                <Loader2 className="w-4 h-4 animate-spin text-ink-3" />
-              ) : null
-            }
-          >
-            {kit.facecam !== false && (
-              <WebcamFrame
-                className="mt-4"
-                frameUrl={camFrameUrl}
-                rect={shownRect}
-                editing={!!editing}
-                onChange={setEditing}
-              />
-            )}
-            <div className="mt-3.5 flex flex-wrap gap-2">
-              {editing ? (
-                <>
-                  <button
-                    onClick={async () => {
-                      await save({ facecam: editing });
-                      setEditing(null);
-                    }}
-                    className="btn btn-primary btn-sm"
-                  >
-                    {t("brand.save")}
-                  </button>
-                  <button onClick={() => setEditing(null)} className="btn btn-ghost btn-sm">
-                    {t("brand.cancel")}
-                  </button>
-                </>
-              ) : kit.facecam === false ? (
-                <button onClick={() => save({ facecam: null })} className="btn btn-glass btn-sm">
-                  {t("brand.iHaveCam")}
-                </button>
-              ) : (
-                <>
-                  {!confirmed && detected && (
-                    <button onClick={() => save({ facecam: detected })} className="btn btn-primary btn-sm">
-                      {t("brand.yes")}
-                    </button>
-                  )}
-                  {(confirmed || detected) && (
-                    <button onClick={() => setEditing(confirmed ?? detected!)} className="btn btn-glass btn-sm">
-                      {t("brand.adjust")}
-                    </button>
-                  )}
-                  {confirmed && (
-                    <button onClick={() => save({ facecam: null })} className="btn btn-ghost btn-sm">
-                      {t("brand.redetect")}
-                    </button>
-                  )}
-                  <button onClick={() => save({ facecam: false })} className="btn btn-ghost btn-sm">
-                    {t("brand.noCam")}
-                  </button>
-                </>
-              )}
-            </div>
-          </Card>
         </div>
 
         {/* Live preview of the brand kit */}
@@ -415,7 +304,7 @@ export default function ChannelPage() {
           <SignaturePreview
             className="mt-3.5 w-full rounded-[14px] border border-white/10 shadow-[0_30px_60px_-30px_rgba(0,0,0,0.9)]"
             frameUrl={frame(1280)}
-            facecam={editing ?? (kit.facecam === false ? false : confirmed ?? detected ?? null)}
+            facecam={kit.facecam}
             colors={kit.colors}
             avatarUrl={channel?.avatar_url ?? null}
             login={channel?.login ?? kit.twitch_login}
@@ -424,7 +313,8 @@ export default function ChannelPage() {
             subtitleStyle={kit.subtitles.style}
             showWidget={kit.widget.enabled}
           />
-          {!latest && latest !== undefined && <p className="mt-3 text-[12.5px] text-ink-3">{t("brand.previewNeedsAnalysis")}</p>}
+          {!frame(1280) && latest !== undefined && <p className="mt-3 text-[12.5px] text-ink-3">{t("brand.previewNeedsAnalysis")}</p>}
+          <p className="mt-3 text-[12.5px] leading-relaxed text-ink-3">{t("brand.camEveryLive")}</p>
         </aside>
       </section>
     </div>

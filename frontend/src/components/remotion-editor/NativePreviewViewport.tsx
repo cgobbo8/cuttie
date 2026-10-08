@@ -100,6 +100,17 @@ interface Props {
   onDuration: (d: number) => void;
 }
 
+/** A video showing only `crop` (source pixels) stretched over its w x h box, or the whole frame */
+function croppedVideoStyle(crop: { x: number; y: number; w: number; h: number } | undefined, w: number, h: number): React.CSSProperties {
+  if (!crop) return { width: "100%", height: "100%", objectFit: "fill", display: "block" };
+  return {
+    display: "block",
+    maxWidth: "none",
+    transformOrigin: "0 0",
+    transform: `scale(${w / crop.w}, ${h / crop.h}) translate(${-crop.x}px, ${-crop.y}px)`,
+  };
+}
+
 export default function NativePreviewViewport({
   layers,
   selectedId,
@@ -306,9 +317,10 @@ export default function NativePreviewViewport({
               const isPrimary = !primaryAttached;
               if (isPrimary) primaryAttached = true;
 
+              const boxStyle = { ...baseStyle, overflow: layer.video.crop ? ("hidden" as const) : baseStyle.overflow };
               if (isPrimary) {
                 return (
-                  <div key={layer.id} style={baseStyle}>
+                  <div key={layer.id} style={boxStyle}>
                     <video
                       ref={videoRef}
                       src={layer.video.src}
@@ -317,14 +329,14 @@ export default function NativePreviewViewport({
                       onPause={handlePause}
                       onSeeked={handleSeeked}
                       onLoadedMetadata={handleLoadedMetadata}
-                      style={{ width: "100%", height: "100%", objectFit: "fill", display: "block" }}
+                      style={croppedVideoStyle(layer.video.crop, kfW, kfH)}
                       playsInline
                     />
                   </div>
                 );
               }
               return (
-                <div key={layer.id} style={baseStyle}>
+                <div key={layer.id} style={boxStyle}>
                   <video
                     ref={(el) => {
                       if (el) secondaryRefs.current.set(layer.id, el);
@@ -332,7 +344,7 @@ export default function NativePreviewViewport({
                     }}
                     src={layer.video.src}
                     muted
-                    style={{ width: "100%", height: "100%", objectFit: "fill", display: "block" }}
+                    style={croppedVideoStyle(layer.video.crop, kfW, kfH)}
                     playsInline
                   />
                 </div>
@@ -341,9 +353,6 @@ export default function NativePreviewViewport({
 
             // ── Facecam (always secondary, muted — same src as gameplay) ──
             if (layer.type === "facecam" && layer.video) {
-              const crop = layer.video.crop;
-              const sx = crop ? layer.transform.width / crop.w : 1;
-              const sy = crop ? layer.transform.height / crop.h : 1;
               return (
                 <div key={layer.id} style={{ ...baseStyle, overflow: "hidden" }}>
                   <video
@@ -353,14 +362,7 @@ export default function NativePreviewViewport({
                     }}
                     src={layer.video.src}
                     muted
-                    style={{
-                      display: "block",
-                      maxWidth: "none",
-                      transformOrigin: "0 0",
-                      ...(crop
-                        ? { transform: `scale(${sx}, ${sy}) translate(${-crop.x}px, ${-crop.y}px)` }
-                        : { width: "100%", height: "100%", objectFit: "fill" as const }),
-                    }}
+                    style={croppedVideoStyle(layer.video.crop, kfW, kfH)}
                     playsInline
                   />
                 </div>

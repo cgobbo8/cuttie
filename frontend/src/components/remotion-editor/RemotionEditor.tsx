@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ArrowLeft, Undo2, Redo2, Loader2, Download, Plus, Video, User, MessageSquare, MessagesSquare, ImagePlus, FolderOpen, Square, Circle, SlidersHorizontal, LayoutTemplate, Sparkles, X, Check, Pencil, Type, Flame, FileText, Layers, Bot, Puzzle } from "lucide-react";
-import { clipUrl, getEditEnvironment, startRender, renameClip, uploadAsset, listAssets, assetUrl, type EditEnvironment, type HotPoint, type AssetInfo, type TranscriptWord } from "../../lib/api";
+import { clipBackgroundUrl, clipUrl, getBrandKit, getEditEnvironment, startRender, renameClip, uploadAsset, listAssets, assetUrl, type EditEnvironment, type HotPoint, type AssetInfo, type TranscriptWord } from "../../lib/api";
 import type { Layer, SubtitleData } from "../../lib/editorTypes";
 import { DEFAULT_SUBTITLE_CONFIG } from "../../lib/editorTypes";
 import type { ThemeLayerTemplate } from "../../lib/editorThemes";
@@ -20,6 +20,8 @@ import AiPanel from "../editor/AiPanel";
 import WidgetLibraryPanel from "../editor/WidgetLibraryPanel";
 import { buildDefaultProps, type WidgetDefinition } from "../editor/widgets/registry";
 import { useAccess } from "../../lib/useAccess";
+import { useChannel } from "../../lib/ChannelContext";
+import { buildTemplate } from "../../lib/templates";
 import { Permissions } from "../../lib/permissions";
 
 interface Props {
@@ -52,6 +54,7 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
   } = editor;
 
   const canUseAi = useAccess(Permissions.EDITOR_AI_WRITE);
+  const { channel } = useChannel();
 
   const rawClipUrl = clipUrl(jobId, hotPoint.clip_filename!);
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -507,11 +510,35 @@ export default function RemotionEditor({ jobId, hotPoint, onClose }: Props) {
     defaultAppliedRef.current = true;
     setEditEnvLoading(true);
     fetchDefaultTheme()
-      .then((theme) => {
+      .then(async (theme) => {
         if (theme) return handleApplyTheme(theme.layers);
+        // No saved theme yet: start from the streamer's own template, as in Montage
+        const [kit, env] = await Promise.all([getBrandKit(), getEditEnvironment(jobId, hotPoint.clip_filename!)]);
+        const start = hotPoint.clip_start ?? 0;
+        const end = hotPoint.clip_end ?? start + 60;
+        setLayers(
+          buildTemplate("signature", {
+            src: rawClipUrl,
+            backgroundSrc: clipBackgroundUrl(jobId, hotPoint.clip_filename!),
+            frameW: env.clip_width,
+            frameH: env.clip_height,
+            facecam: env.facecam,
+            words: env.words,
+            startAt: 0,
+            endAt: Math.max(1, end - start),
+            colors: kit.colors,
+            subtitleStyle: kit.subtitles.style,
+            widget: kit.widget,
+            login: channel?.login ?? kit.twitch_login,
+            avatarUrl: channel?.avatar_url ?? null,
+            hook: hotPoint.clip_name,
+          }),
+        );
       })
       .catch(() => {})
       .finally(() => setEditEnvLoading(false));
+    // Once per clip: the channel arriving later must not restart the editor
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hadSavedLayers, handleApplyTheme]);
 
   /* ── Export ──────────────────────────────────────────────── */

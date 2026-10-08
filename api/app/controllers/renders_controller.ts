@@ -1,17 +1,16 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import { randomUUID } from 'node:crypto'
-import { unlinkSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import path from 'node:path'
 import archiver from 'archiver'
 import db from '@adonisjs/lucid/services/db'
 import { renderClip } from '#services/remotion_renderer'
-import { uploadFile, getPresignedDownloadUrl, getPresignedUrl, deleteObject } from '#services/s3'
+import { uploadFile, getPresignedDownloadUrl, deleteObject, storagePath } from '#services/storage'
+import { clipDir } from '#services/data_paths'
 import { enqueueRender } from '#services/render_queue'
 import { loadJobSharedData, resolveEditEnv } from '#services/edit_env_resolver'
 import { resolveThemeForClip, type ThemeLayerTemplate } from '#services/theme_resolver'
 import type { Layer } from '../../remotion/editorTypes.js'
-
-const CLIPS_BASE = path.resolve('../backend/clips')
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -78,7 +77,7 @@ export default class RendersController {
 
     const renderId = randomUUID()
     const outputFilename = `render_${renderId}.mp4`
-    const outputPath = path.join(CLIPS_BASE, jobId, outputFilename)
+    const outputPath = path.join(clipDir(jobId), outputFilename)
 
     const now = new Date().toISOString()
     await db.table('renders').insert({
@@ -156,7 +155,7 @@ export default class RendersController {
       console.log(`[BatchRender] Enqueuing ${clipFilename} (render=${renderId})`)
       enqueueRender(async () => {
         const outputFilename = `render_${renderId}.mp4`
-        const outputPath = path.join(CLIPS_BASE, jobId, outputFilename)
+        const outputPath = path.join(clipDir(jobId), outputFilename)
 
         try {
           console.log(`[BatchRender] Starting ${clipFilename}...`)
@@ -229,11 +228,11 @@ export default class RendersController {
     const row = await getRender(params.renderId)
     if (!row || row.user_id !== user.id) return response.notFound({ error: 'render not found' })
 
-    // Delete S3 object if render was completed
+    // Delete the output file if render was completed
     if (row.output_filename) {
-      const s3Key = `renders/${row.job_id}/${row.output_filename}`
+      const key = `renders/${row.job_id}/${row.output_filename}`
       try {
-        await deleteObject(s3Key)
+        await deleteObject(key)
       } catch {}
     }
 
@@ -250,8 +249,8 @@ export default class RendersController {
     }
 
     const downloadName = row.clip_name ? `${row.clip_name}.mp4` : row.output_filename
-    const s3Key = `renders/${row.job_id}/${row.output_filename}`
-    const presignedUrl = await getPresignedDownloadUrl(s3Key, downloadName)
+    const key = `renders/${row.job_id}/${row.output_filename}`
+    const presignedUrl = await getPresignedDownloadUrl(key, downloadName)
     return response.redirect(presignedUrl)
   }
 
@@ -269,15 +268,10 @@ export default class RendersController {
       return response.notFound({ error: 'no completed renders in this batch' })
     }
 
-    // Fetch presigned URLs for all completed renders
-    const files = await Promise.all(
-      rows.map(async (row: any) => {
-        const s3Key = `renders/${row.job_id}/${row.output_filename}`
-        const url = await getPresignedUrl(s3Key, 3600)
-        const name = row.clip_name ? `${row.clip_name}.mp4` : row.output_filename
-        return { url, name }
-      })
-    )
+    const files = rows.map((row: any) => ({
+      path: storagePath(`renders/${row.job_id}/${row.output_filename}`),
+      name: row.clip_name ? `${row.clip_name}.mp4` : row.output_filename,
+    }))
 
     // Stream ZIP response
     response.header('Content-Type', 'application/zip')
@@ -287,10 +281,7 @@ export default class RendersController {
     archive.pipe(response.response)
 
     for (const file of files) {
-      const res = await fetch(file.url)
-      if (!res.ok) continue
-      const buffer = Buffer.from(await res.arrayBuffer())
-      archive.append(buffer, { name: file.name })
+      if (existsSync(file.path)) archive.file(file.path, { name: file.name })
     }
 
     await archive.finalize()
@@ -337,12 +328,8 @@ async function runRender(opts: {
       },
     })
 
-    // Upload render output to S3
-    const s3Key = `renders/${jobId}/${outputFilename}`
-    await uploadFile(s3Key, outputPath, 'video/mp4')
-
-    // Delete local render file
-    try { unlinkSync(outputPath) } catch {}
+    // Move the render output into storage
+    await uploadFile(`renders/${jobId}/${outputFilename}`, outputPath, 'video/mp4')
 
     await updateRender({
       status: 'done',

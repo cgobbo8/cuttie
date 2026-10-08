@@ -1,9 +1,7 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import Job from '#models/job'
 import db from '@adonisjs/lucid/services/db'
-import redis from '@adonisjs/redis/services/main'
-
-const QUEUE_KEY = 'cuttie:jobs_queue'
+import { cancelJob, flushQueue, getQueue, type WorkerQueue } from '#services/worker_client'
 const ACTIVE_STATUSES = [
   'PENDING',
   'DOWNLOADING_AUDIO',
@@ -23,15 +21,10 @@ export default class WorkersController {
       .whereIn('status', ACTIVE_STATUSES)
       .orderBy('updated_at', 'desc')
 
-    const queueLength = await redis.llen(QUEUE_KEY)
-    const queueRaw = await redis.lrange(QUEUE_KEY, 0, -1)
-    const queueItems = queueRaw.map((raw) => {
-      try {
-        return JSON.parse(raw)
-      } catch {
-        return { raw }
-      }
-    })
+    let workerQueue: WorkerQueue = { current: null, items: [] }
+    try {
+      workerQueue = await getQueue()
+    } catch {}
 
     const activeRenders = await db
       .from('renders')
@@ -62,16 +55,18 @@ export default class WorkersController {
         created_at: r.created_at,
       })),
       queue: {
-        length: queueLength,
-        items: queueItems,
+        length: workerQueue.items.length,
+        items: workerQueue.items,
       },
     }
   }
 
   // POST /api/workers/flush
   async flush({}: HttpContext) {
-    const queueLength = await redis.llen(QUEUE_KEY)
-    await redis.del(QUEUE_KEY)
+    let queueLength = 0
+    try {
+      queueLength = (await flushQueue()).flushed
+    } catch {}
 
     const activeJobs = await Job.query().whereIn('status', ACTIVE_STATUSES)
     for (const job of activeJobs) {
@@ -79,7 +74,7 @@ export default class WorkersController {
       job.error = 'Cancelled by admin'
       job.progress = 'Cancelled'
       await job.save()
-      await redis.setex(`cuttie:cancel:${job.id}`, 3600, '1')
+      await cancelJob(job.id).catch(() => {})
     }
 
     const cancelledRenders = await db
@@ -109,7 +104,7 @@ export default class WorkersController {
     await job.save()
 
     // Signal the Python worker to stop this job
-    await redis.setex(`cuttie:cancel:${job.id}`, 3600, '1')
+    await cancelJob(job.id).catch(() => {})
 
     return { cancelled: true, job_id: job.id }
   }

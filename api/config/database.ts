@@ -1,5 +1,10 @@
-import app from '@adonisjs/core/services/app'
+import { mkdirSync } from 'node:fs'
+import path from 'node:path'
 import { defineConfig } from '@adonisjs/lucid'
+import { DB_PATH } from '#services/data_paths'
+
+// SQLite can't create the file if its folder is missing (fresh data dir)
+mkdirSync(path.dirname(DB_PATH), { recursive: true })
 
 const dbConfig = defineConfig({
   /**
@@ -15,7 +20,7 @@ const dbConfig = defineConfig({
       client: 'better-sqlite3',
 
       connection: {
-        filename: app.makePath('database/db.sqlite3'),
+        filename: DB_PATH,
       },
 
       /**

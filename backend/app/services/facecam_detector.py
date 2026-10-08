@@ -9,10 +9,13 @@ Strategy:
 """
 
 import logging
+import os
 
 import cv2
 import numpy as np
 from ultralytics import YOLO
+
+from app.services.paths import BACKEND_DIR
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +39,7 @@ KP_MIN_CONF = 0.5
 def _get_model() -> YOLO:
     global _model
     if _model is None:
-        _model = YOLO("yolov8n-pose.pt")
+        _model = YOLO(os.path.join(BACKEND_DIR, "yolov8n-pose.pt"))
     return _model
 
 

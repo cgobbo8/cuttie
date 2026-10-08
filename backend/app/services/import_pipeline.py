@@ -1,6 +1,6 @@
 """Mini-pipeline for user-imported clips.
 
-Steps: probe → S3 upload → transcription → DONE.
+Steps: probe → transcription → DONE.
 Reuses existing services. Skips facecam/dominant color (reuses job's existing data).
 Publishes the new hot_point via clip_ready SSE so AdonisJS persists it.
 """
@@ -13,11 +13,10 @@ import time
 from app.models.schemas import HotPoint, LlmAnalysis, SignalBreakdown
 from app.services.clipper import _write_probe_and_upload
 from app.services.db import publish_clip_ready, rename_clip_files, slugify_clip_name, update_job
+from app.services.paths import CLIPS_DIR
 from app.services.subtitle_generator import transcribe_with_words
 
 logger = logging.getLogger(__name__)
-
-CLIPS_DIR = "clips"
 
 
 def _format_timestamp(seconds: float) -> str:
@@ -39,7 +38,7 @@ def run_add_clip_pipeline(job_id: str, clip_filename: str, clip_name: str, rank:
     if not os.path.isfile(clip_path):
         raise FileNotFoundError(f"Imported clip not found: {clip_path}")
 
-    # ── Step 1: Probe + S3 upload ──
+    # ── Step 1: Probe ──
     logger.info(f"[AddClip] Probing {clip_filename}...")
     _write_probe_and_upload(clip_dir, job_id, clip_filename, clip_path)
 
@@ -95,7 +94,7 @@ def run_add_clip_pipeline(job_id: str, clip_filename: str, clip_name: str, rank:
     if clip_name:
         new_filename = slugify_clip_name(clip_name)
         try:
-            from app.services.s3_storage import rename_object
+            from app.services.storage import rename_object
             rename_object(f"clips/{job_id}/{clip_filename}", f"clips/{job_id}/{new_filename}")
             rename_clip_files(job_id, clip_filename, new_filename)
             hot_point.clip_filename = new_filename
@@ -103,7 +102,7 @@ def run_add_clip_pipeline(job_id: str, clip_filename: str, clip_name: str, rank:
         except Exception as e:
             logger.warning(f"[AddClip] Clip rename failed: {e}")
 
-    # Publish via Redis SSE — AdonisJS job_status_bus will persist the hot_point
+    # Publish to the API — its job_status_bus persists the hot_point
     publish_clip_ready(job_id, rank, hot_point)
 
     logger.info(f"[AddClip] Done — {hot_point.clip_filename} added to job {job_id}")

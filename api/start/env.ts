@@ -25,16 +25,18 @@ export default await Env.create(new URL('../', import.meta.url), {
   // Session
   SESSION_DRIVER: Env.schema.enum(['cookie', 'memory', 'database'] as const),
 
-  REDIS_HOST: Env.schema.string({ format: 'host' }),
-  REDIS_PORT: Env.schema.number(),
-  REDIS_PASSWORD: Env.schema.secret.optional(),
+  // Local app: data directory shared with the worker (defaults to <repo>/.data)
+  CUTTIE_DATA_DIR: Env.schema.string.optional(),
 
-  // S3 / Minio
-  S3_ENDPOINT: Env.schema.string(),
-  S3_BUCKET: Env.schema.string(),
-  S3_ACCESS_KEY: Env.schema.string(),
-  S3_SECRET_KEY: Env.schema.string(),
-  S3_REGION: Env.schema.string.optional(),
+  // Python worker (loopback HTTP) + shared secret for worker <-> API calls
+  WORKER_URL: Env.schema.string.optional(),
+  CUTTIE_INTERNAL_SECRET: Env.schema.string.optional(),
+
+  // Sign in automatically as the local user (desktop app, single user). Default: true
+  CUTTIE_AUTO_LOGIN: Env.schema.boolean.optional(),
+
+  // Built frontend (frontend/dist) to serve from the API — set in the packaged app
+  FRONTEND_DIST: Env.schema.string.optional(),
 
   // Frontend URL (for OAuth redirects)
   FRONTEND_URL: Env.schema.string.optional(),

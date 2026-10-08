@@ -12,11 +12,14 @@ Key insight: on Twitch streams, the "Speech" class dominates. What matters is:
 """
 
 import logging
+import os
+from pathlib import Path
 
 import librosa
 import numpy as np
 
 from app.services.device import get_device
+from app.services.downloads import download_if_missing
 
 logger = logging.getLogger(__name__)
 
@@ -56,17 +59,30 @@ _GAME_AUDIO_CLASSES = {
 
 _model = None
 
+# panns_inference fetches these with `wget` at import time, which fails on Windows,
+# so we download them ourselves to the paths it expects.
+_PANNS_DIR = os.path.join(str(Path.home()), "panns_data")
+_LABELS_URL = "http://storage.googleapis.com/us_audioset/youtube_corpus/v1/csv/class_labels_indices.csv"
+_CHECKPOINT_URL = "https://zenodo.org/record/3987831/files/Cnn14_mAP%3D0.431.pth?download=1"
+_CHECKPOINT_PATH = os.path.join(_PANNS_DIR, "Cnn14_mAP=0.431.pth")
+
+
+def _ensure_panns_files() -> None:
+    download_if_missing(_LABELS_URL, os.path.join(_PANNS_DIR, "class_labels_indices.csv"))
+    download_if_missing(_CHECKPOINT_URL, _CHECKPOINT_PATH, min_bytes=300_000_000)
+
 
 def _get_model():
     global _model
     if _model is None:
+        _ensure_panns_files()
         from panns_inference import AudioTagging
 
         device = get_device()
         logger.info(f"Loading PANNs CNN14 model on {device}...")
 
         # Load on CPU first (PANNs only supports cpu/cuda natively)
-        at = AudioTagging(checkpoint_path=None, device="cpu")
+        at = AudioTagging(checkpoint_path=_CHECKPOINT_PATH, device="cpu")
 
         # Move model to MPS/CUDA if available
         if device.type != "cpu":

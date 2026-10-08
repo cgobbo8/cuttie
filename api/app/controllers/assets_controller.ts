@@ -1,7 +1,7 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import { randomBytes } from 'node:crypto'
 import path from 'node:path'
-import { uploadFile, getPresignedUrl, listObjects } from '#services/s3'
+import { uploadFile, getPresignedUrl, listObjects } from '#services/storage'
 import app from '@adonisjs/core/services/app'
 
 export default class AssetsController {
@@ -29,17 +29,13 @@ export default class AssetsController {
     const assetId = randomBytes(6).toString('hex')
     const filename = `${assetId}${ext}`
 
-    // Move to temp, upload to S3, delete local
+    // Move to temp, then into storage
     const tmpDir = app.tmpPath('uploads')
     await file.move(tmpDir, { name: filename, overwrite: true })
     const tmpPath = path.join(tmpDir, filename)
 
     const contentType = file.headers['content-type'] ?? 'application/octet-stream'
     await uploadFile(`assets/${filename}`, tmpPath, contentType)
-
-    // Clean up local temp file
-    const { unlinkSync } = await import('node:fs')
-    try { unlinkSync(tmpPath) } catch {}
 
     return response.created({ id: assetId, filename, url: `/api/assets/${filename}` })
   }

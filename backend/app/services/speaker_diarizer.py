@@ -22,6 +22,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import numpy as np
 import torch
 
+from app.services import paths
 from app.services.device import get_device
 
 logger = logging.getLogger(__name__)
@@ -59,17 +60,41 @@ def _get_classifier():
         return _classifier
 
     from speechbrain.inference.speaker import EncoderClassifier
+    from speechbrain.utils.fetching import LocalStrategy
 
     t0 = time.time()
     _classifier = EncoderClassifier.from_hparams(
         source="speechbrain/spkrec-ecapa-voxceleb",
+        savedir=os.path.join(paths.DATA_DIR, "models", "spkrec-ecapa-voxceleb"),
         run_opts={"device": "cpu"},
+        # Symlinks need admin rights on Windows — copy the files instead
+        local_strategy=LocalStrategy.COPY,
     )
     logger.info(f"ECAPA-TDNN classifier loaded in {time.time()-t0:.1f}s")
     return _classifier
 
 
 # ─── Audio helpers ───────────────────────────────────────────────────────────
+
+def _load_wav(path: str) -> tuple[torch.Tensor, int]:
+    """Load a WAV file as a mono (1, samples) float tensor at 16 kHz.
+
+    Uses soundfile rather than torchaudio.load / pyannote's file decoding, which
+    go through torchcodec and need FFmpeg shared libraries on Windows.
+    """
+    import soundfile as sf
+
+    data, sr = sf.read(path, dtype="float32", always_2d=True)
+    waveform = torch.from_numpy(data.T.copy())
+    if waveform.shape[0] > 1:
+        waveform = waveform.mean(dim=0, keepdim=True)
+    if sr != 16000:
+        import torchaudio
+
+        waveform = torchaudio.functional.resample(waveform, sr, 16000)
+        sr = 16000
+    return waveform, sr
+
 
 def _extract_wav_segment(
     wav_path: str, start: float, end: float, output_path: str,
@@ -104,8 +129,6 @@ def extract_voiceprint(wav_path: str, duration: float = VOICEPRINT_DURATION) -> 
 
     Returns 192-dim ECAPA-TDNN embedding, or None on failure.
     """
-    import torchaudio
-
     t0 = time.time()
     logger.info("Extracting streamer voiceprint from VOD start...")
 
@@ -117,8 +140,9 @@ def extract_voiceprint(wav_path: str, duration: float = VOICEPRINT_DURATION) -> 
             return None
 
         # Diarize reference segment
+        waveform, sr = _load_wav(ref_path)
         pipeline = _get_pipeline()
-        output = pipeline(ref_path)
+        output = pipeline({"waveform": waveform, "sample_rate": sr})
         annotation = getattr(output, "exclusive_speaker_diarization", None)
         if annotation is None:
             annotation = getattr(output, "speaker_diarization", output)
@@ -142,12 +166,7 @@ def extract_voiceprint(wav_path: str, duration: float = VOICEPRINT_DURATION) -> 
             f"{len(speaker_durations)} speakers)"
         )
 
-        # Load audio and extract embedding from dominant speaker's segments
-        waveform, sr = torchaudio.load(ref_path)
-        if sr != 16000:
-            waveform = torchaudio.functional.resample(waveform, sr, 16000)
-            sr = 16000
-
+        # Extract embedding from dominant speaker's segments
         chunks = []
         total = 0.0
         for seg_start, seg_end in speaker_segments[dominant]:
@@ -190,7 +209,17 @@ def _cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
 def diarize_segment(
     seg_wav: str,
 ) -> list[dict]:
-    """Diarize a pre-extracted WAV file.
+    """Diarize a pre-extracted WAV file (see diarize_waveform)."""
+    try:
+        waveform, sr = _load_wav(seg_wav)
+    except Exception as e:
+        logger.warning(f"Could not load {seg_wav} for diarization: {e}")
+        return []
+    return diarize_waveform(waveform, sr)
+
+
+def diarize_waveform(waveform: "torch.Tensor", sr: int) -> list[dict]:
+    """Diarize a mono 16 kHz waveform.
 
     Uses non-exclusive diarization (speaker_diarization) which allows
     overlapping speech — detects more speakers than exclusive mode.
@@ -201,7 +230,7 @@ def diarize_segment(
     """
     try:
         pipeline = _get_pipeline()
-        output = pipeline(seg_wav)
+        output = pipeline({"waveform": waveform, "sample_rate": sr})
         # Non-exclusive: keeps overlapping speech, detects more speakers
         annotation = getattr(output, "speaker_diarization", None)
         if annotation is None:
@@ -217,7 +246,7 @@ def diarize_segment(
         return segments
 
     except Exception as e:
-        logger.warning(f"Diarization failed for {seg_wav}: {e}")
+        logger.warning(f"Diarization failed: {e}")
         return []
 
 
@@ -507,7 +536,7 @@ def diarize_candidates(
     """
     from app.services.clipper import CLIP_HALF_DURATION
 
-    work_dir = os.path.join("diarize_tmp", job_id)
+    work_dir = paths.work_dir("diarize", job_id)
     os.makedirs(work_dir, exist_ok=True)
 
     total = len(candidates)
@@ -518,7 +547,6 @@ def diarize_candidates(
     _get_pipeline()
     _get_classifier()
 
-    import torchaudio
     import threading
 
     transcripts: dict[int, str] = {}
@@ -544,20 +572,15 @@ def diarize_candidates(
                 return idx, plain, words
 
             # 2. Diarize — GPU, needs lock
+            waveform, sr = _load_wav(seg_wav)
             with _gpu_lock:
-                segments = diarize_segment(seg_wav)
+                segments = diarize_waveform(waveform, sr)
 
             if not segments:
                 plain = " ".join(w["word"] for w in words) if words else ""
                 return idx, plain, words
 
             # 3. Identify speakers — CPU only, no lock needed
-            #    Load the WAV for embedding extraction (reuse the same file)
-            waveform, sr = torchaudio.load(seg_wav)
-            if sr != 16000:
-                waveform = torchaudio.functional.resample(waveform, sr, 16000)
-                sr = 16000
-
             speaker_names = identify_speakers(
                 waveform, sr, segments, voiceprint, streamer_name,
             )

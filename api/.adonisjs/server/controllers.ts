@@ -6,6 +6,7 @@
 export const controllers = {
   AccessToken: () => import('#controllers/access_token_controller'),
   AiEditor: () => import('#controllers/ai_editor_controller'),
+  App: () => import('#controllers/app_controller'),
   Assets: () => import('#controllers/assets_controller'),
   AuthMe: () => import('#controllers/auth_me_controller'),
   Clips: () => import('#controllers/clips_controller'),
@@ -13,10 +14,13 @@ export const controllers = {
   Dashboard: () => import('#controllers/dashboard_controller'),
   Games: () => import('#controllers/games_controller'),
   GoogleAuth: () => import('#controllers/google_auth_controller'),
+  Internal: () => import('#controllers/internal_controller'),
   Jobs: () => import('#controllers/jobs_controller'),
   NewAccount: () => import('#controllers/new_account_controller'),
   Profile: () => import('#controllers/profile_controller'),
   Renders: () => import('#controllers/renders_controller'),
+  Spa: () => import('#controllers/spa_controller'),
+  Storage: () => import('#controllers/storage_controller'),
   Themes: () => import('#controllers/themes_controller'),
   Workers: () => import('#controllers/workers_controller'),
 }

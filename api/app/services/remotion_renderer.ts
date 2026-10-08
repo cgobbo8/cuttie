@@ -10,13 +10,14 @@ import { tmpdir } from 'node:os'
 import { execSync } from 'node:child_process'
 import path from 'node:path'
 import type { Layer } from '../../remotion/editorTypes.js'
-import { getPresignedUrl, uploadFile } from '#services/s3'
+import { getPresignedUrl, uploadFile } from '#services/storage'
+import { CLIPS_DIR } from '#services/data_paths'
 
 // Cached bundle — auto-invalidates when remotion/ source files change
 let bundleUrl: string | null = null
 let bundleTimestamp = 0
 const REMOTION_DIR = path.resolve('./remotion')
-const CLIPS_BASE = path.resolve('../backend/clips')
+const CLIPS_BASE = CLIPS_DIR
 
 // Shared browser instance — reused across renders, auto-closes after idle
 let browserInstance: Awaited<ReturnType<typeof openBrowser>> | null = null
@@ -134,7 +135,7 @@ async function convertGifToWebm(
       )
     }
 
-    // Upload to S3
+    // Store the converted file
     await uploadFile(s3Key, webmPath, 'video/webm')
     const presignedUrl = await getPresignedUrl(s3Key, 3600)
 

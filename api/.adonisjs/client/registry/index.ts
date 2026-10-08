@@ -24,6 +24,24 @@ const routes = {
     tokens: [{"old":"/__transmit/unsubscribe","type":0,"val":"__transmit","end":""},{"old":"/__transmit/unsubscribe","type":0,"val":"unsubscribe","end":""}],
     types: placeholder as Registry['unsubscribe']['types'],
   },
+  'app.info': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/app/info',
+    tokens: [{"old":"/api/app/info","type":0,"val":"api","end":""},{"old":"/api/app/info","type":0,"val":"app","end":""},{"old":"/api/app/info","type":0,"val":"info","end":""}],
+    types: placeholder as Registry['app.info']['types'],
+  },
+  'storage.show': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/storage/*',
+    tokens: [{"old":"/api/storage/*","type":0,"val":"api","end":""},{"old":"/api/storage/*","type":0,"val":"storage","end":""},{"old":"/api/storage/*","type":2,"val":"*","end":""}],
+    types: placeholder as Registry['storage.show']['types'],
+  },
+  'internal.worker_events': {
+    methods: ["POST"],
+    pattern: '/api/internal/worker-events',
+    tokens: [{"old":"/api/internal/worker-events","type":0,"val":"api","end":""},{"old":"/api/internal/worker-events","type":0,"val":"internal","end":""},{"old":"/api/internal/worker-events","type":0,"val":"worker-events","end":""}],
+    types: placeholder as Registry['internal.worker_events']['types'],
+  },
   'access_token.store': {
     methods: ["POST"],
     pattern: '/api/auth/login',
@@ -59,6 +77,24 @@ const routes = {
     pattern: '/api/dashboard',
     tokens: [{"old":"/api/dashboard","type":0,"val":"api","end":""},{"old":"/api/dashboard","type":0,"val":"dashboard","end":""}],
     types: placeholder as Registry['dashboard.index']['types'],
+  },
+  'app.show_settings': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/settings',
+    tokens: [{"old":"/api/settings","type":0,"val":"api","end":""},{"old":"/api/settings","type":0,"val":"settings","end":""}],
+    types: placeholder as Registry['app.show_settings']['types'],
+  },
+  'app.update_settings': {
+    methods: ["PUT"],
+    pattern: '/api/settings',
+    tokens: [{"old":"/api/settings","type":0,"val":"api","end":""},{"old":"/api/settings","type":0,"val":"settings","end":""}],
+    types: placeholder as Registry['app.update_settings']['types'],
+  },
+  'app.diagnostics': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/diagnostics',
+    tokens: [{"old":"/api/diagnostics","type":0,"val":"api","end":""},{"old":"/api/diagnostics","type":0,"val":"diagnostics","end":""}],
+    types: placeholder as Registry['app.diagnostics']['types'],
   },
   'games.index': {
     methods: ["GET","HEAD"],
@@ -257,6 +293,18 @@ const routes = {
     pattern: '/api/renders/:renderId',
     tokens: [{"old":"/api/renders/:renderId","type":0,"val":"api","end":""},{"old":"/api/renders/:renderId","type":0,"val":"renders","end":""},{"old":"/api/renders/:renderId","type":1,"val":"renderId","end":""}],
     types: placeholder as Registry['renders.destroy']['types'],
+  },
+  'spa.root': {
+    methods: ["GET","HEAD"],
+    pattern: '/',
+    tokens: [{"old":"/","type":0,"val":"/","end":""}],
+    types: placeholder as Registry['spa.root']['types'],
+  },
+  'spa.fallback': {
+    methods: ["GET","HEAD"],
+    pattern: '/*',
+    tokens: [{"old":"/*","type":2,"val":"*","end":""}],
+    types: placeholder as Registry['spa.fallback']['types'],
   },
 } as const satisfies Record<string, AdonisEndpoint>
 

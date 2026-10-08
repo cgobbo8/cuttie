@@ -1,6 +1,5 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import db from '@adonisjs/lucid/services/db'
-import UserTransformer from '#transformers/user_transformer'
 
 export default class AuthMeController {
   async show({ auth, serialize }: HttpContext) {
@@ -18,7 +17,10 @@ export default class AuthMeController {
 
     return serialize({
       user: {
-        ...UserTransformer.transform(user),
+        id: user.id,
+        fullName: user.fullName,
+        email: user.email,
+        initials: user.initials,
         permissions: permissionRows.map((r) => r.permission),
         quotas: quotaRows.map((r) => ({ key: r.key, limit: r.limit, period: r.period })),
       },

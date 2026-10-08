@@ -14,13 +14,14 @@ import subprocess
 import numpy as np
 
 from app.models.schemas import HotPoint
-from app.services.s3_storage import upload_file as s3_upload
+from app.services.paths import CLIPS_DIR
+from app.services.storage import upload_file as store_file
 
 logger = logging.getLogger(__name__)
 
 
 def _write_probe_and_upload(clip_dir: str, job_id: str, filename: str, filepath: str):
-    """Write probe JSON (ffprobe dimensions/duration) and upload clip to S3."""
+    """Write probe JSON (ffprobe dimensions/duration) and make sure the clip is in storage."""
     rank_str = filename.replace("clip_", "").replace(".mp4", "")
     try:
         result = subprocess.run(
@@ -48,11 +49,10 @@ def _write_probe_and_upload(clip_dir: str, job_id: str, filename: str, filepath:
         logger.warning(f"Failed to write probe for {filename}: {e}")
 
     try:
-        s3_upload(filepath, f"clips/{job_id}/{filename}")
+        store_file(filepath, f"clips/{job_id}/{filename}")
     except Exception as e:
-        logger.error(f"S3 upload failed for {filename}: {e}")
+        logger.error(f"Storing {filename} failed: {e}")
 
-CLIPS_DIR = "clips"
 MAX_CLIPS = 20
 MAX_CLIP_WORKERS = 5
 

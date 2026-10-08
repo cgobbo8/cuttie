@@ -43,6 +43,42 @@ export interface Registry {
       errorResponse: unknown
     }
   }
+  'app.info': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/app/info'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/app_controller').default['info']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/app_controller').default['info']>>>
+    }
+  }
+  'storage.show': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/storage/*'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { '*': ParamValue[] }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/storage_controller').default['show']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/storage_controller').default['show']>>>
+    }
+  }
+  'internal.worker_events': {
+    methods: ["POST"]
+    pattern: '/api/internal/worker-events'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/internal_controller').default['workerEvents']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/internal_controller').default['workerEvents']>>>
+    }
+  }
   'access_token.store': {
     methods: ["POST"]
     pattern: '/api/auth/login'
@@ -113,6 +149,42 @@ export interface Registry {
       query: {}
       response: ExtractResponse<Awaited<ReturnType<import('#controllers/dashboard_controller').default['index']>>>
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/dashboard_controller').default['index']>>>
+    }
+  }
+  'app.show_settings': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/settings'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/app_controller').default['showSettings']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/app_controller').default['showSettings']>>>
+    }
+  }
+  'app.update_settings': {
+    methods: ["PUT"]
+    pattern: '/api/settings'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/app_controller').default['updateSettings']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/app_controller').default['updateSettings']>>>
+    }
+  }
+  'app.diagnostics': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/diagnostics'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/app_controller').default['diagnostics']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/app_controller').default['diagnostics']>>>
     }
   }
   'games.index': {
@@ -509,6 +581,30 @@ export interface Registry {
       query: {}
       response: ExtractResponse<Awaited<ReturnType<import('#controllers/renders_controller').default['destroy']>>>
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/renders_controller').default['destroy']>>>
+    }
+  }
+  'spa.root': {
+    methods: ["GET","HEAD"]
+    pattern: '/'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/spa_controller').default['handle']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/spa_controller').default['handle']>>>
+    }
+  }
+  'spa.fallback': {
+    methods: ["GET","HEAD"]
+    pattern: '/*'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { '*': ParamValue[] }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/spa_controller').default['handle']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/spa_controller').default['handle']>>>
     }
   }
 }

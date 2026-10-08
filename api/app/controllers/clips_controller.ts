@@ -1,7 +1,7 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import path from 'node:path'
 import Job from '#models/job'
-import { getPresignedUrl } from '#services/s3'
+import { getPresignedUrl } from '#services/storage'
 import { loadJobSharedData, resolveEditEnv } from '#services/edit_env_resolver'
 
 // ── Layout constants (mirrors vertical_clipper.py) ───────────────────────────

@@ -11,9 +11,11 @@ import subprocess
 import time as _time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+from app.services.paths import work_dir
+
 logger = logging.getLogger(__name__)
 
-FRAMES_DIR = "frames"
+FRAMES_DIR = work_dir("frames")
 NUM_FRAMES = 6  # Evenly-spaced frames per candidate
 FRAME_WORKERS = 10  # Parallel ffmpeg seeks for remote extraction
 

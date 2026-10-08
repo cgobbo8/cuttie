@@ -1,15 +1,11 @@
 /**
- * JobStatusBus — bridges Redis pub/sub from Python workers to AdonisJS Transmit SSE.
- *
- * Python workers publish updates on `cuttie:job_status:<job_id>`.
- * This service subscribes with a wildcard pattern, persists updates to DB,
- * and broadcasts via @adonisjs/transmit so frontend clients get real-time updates.
+ * JobStatusBus — receives status updates from the Python worker (POSTed to
+ * /api/internal/worker-events), persists them to the DB and broadcasts them via
+ * @adonisjs/transmit so frontend clients get real-time updates.
  */
 
-import env from '#start/env'
 import Job from '#models/job'
 import Creator from '#models/creator'
-import { Redis } from 'ioredis'
 import transmit from '@adonisjs/transmit/services/main'
 
 export interface HotPointData {
@@ -45,47 +41,12 @@ export interface JobStatusUpdate {
 }
 
 class JobStatusBus {
-  private subscriber: Redis | null = null
-
-  start() {
-    if (this.subscriber) return
-
-    this.subscriber = new Redis({
-      host: env.get('REDIS_HOST'),
-      port: env.get('REDIS_PORT'),
-      password: env.get('REDIS_PASSWORD', '') || undefined,
-      lazyConnect: true,
-    })
-
-    this.subscriber.connect().catch((err) => {
-      console.error('[JobStatusBus] Failed to connect to Redis:', err.message)
-    })
-
-    this.subscriber.on('error', (err) => {
-      console.error('[JobStatusBus] Redis error:', err.message)
-    })
-
-    this.subscriber.on('ready', () => {
-      this.subscriber!.psubscribe('cuttie:job_status:*', (err) => {
-        if (err) console.error('[JobStatusBus] psubscribe error:', err.message)
-        else console.log('[JobStatusBus] Subscribed to cuttie:job_status:*')
-      })
-    })
-
-    this.subscriber.on('pmessage', (_pattern: string, channel: string, message: string) => {
-      const jobId = channel.split(':').pop()
-      if (!jobId) return
-
-      try {
-        const update: JobStatusUpdate = JSON.parse(message)
-        transmit.broadcast(`jobs/${jobId}`, update)
-
-        // Persist update to DB
-        this.persistUpdate(update).catch(() => {})
-      } catch (err) {
-        console.error('[JobStatusBus] Failed to parse message:', err)
-      }
-    })
+  /** Handle one update from the worker: broadcast to SSE clients, then persist. */
+  async handle(update: JobStatusUpdate) {
+    if (!update.job_id) return
+    // JSON payload from the worker — structurally broadcastable
+    transmit.broadcast(`jobs/${update.job_id}`, update as unknown as Parameters<typeof transmit.broadcast>[1])
+    await this.persistUpdate(update)
   }
 
   private async persistUpdate(update: JobStatusUpdate) {

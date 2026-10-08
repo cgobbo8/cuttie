@@ -10,10 +10,11 @@ import {
 import { createOpenAI } from '@ai-sdk/openai'
 import { z } from 'zod'
 import env from '#start/env'
+import { getSetting } from '#services/user_settings'
 
 export default class AiEditorController {
   async chat({ request, response }: HttpContext) {
-    const apiKey = env.get('OPENAI_API_KEY')
+    const apiKey = getSetting('openai_api_key') ?? env.get('OPENAI_API_KEY')
     if (!apiKey) {
       return response.status(503).json({ error: 'OpenAI API key not configured' })
     }

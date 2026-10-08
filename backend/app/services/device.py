@@ -31,7 +31,7 @@ def get_device() -> torch.device:
     elif torch.cuda.is_available():
         _device = torch.device("cuda")
         name = torch.cuda.get_device_name(0)
-        vram_gb = torch.cuda.get_device_properties(0).total_mem / 1024**3
+        vram_gb = torch.cuda.get_device_properties(0).total_memory / 1024**3
         logger.info("NVIDIA GPU detected: %s (%.1f GB) — using CUDA", name, vram_gb)
     else:
         _device = torch.device("cpu")

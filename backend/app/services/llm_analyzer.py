@@ -32,10 +32,10 @@ from app.services.frame_extractor import (
     get_vod_direct_url,
 )
 from app.services.openai_client import get_groq_client, get_openrouter_client, LLM_MODEL, WHISPER_MODEL
+from app.services.paths import CLIPS_DIR, work_dir
 
 logger = logging.getLogger(__name__)
 
-CLIPS_DIR = "clips"
 HEURISTIC_WEIGHT = 0.2
 LLM_WEIGHT = 0.8
 MAX_LLM_WORKERS = 5  # Parallel LLM calls (API-bound)
@@ -157,7 +157,7 @@ def _transcribe_candidates(
     raw_segments are Whisper (start, end, text) tuples relative to clip_start_abs.
     words are word-level timestamps for subtitle generation.
     """
-    triage_dir = os.path.join("triage_audio", job_id)
+    triage_dir = work_dir("triage_audio", job_id)
     os.makedirs(triage_dir, exist_ok=True)
 
     total = len(candidates)
@@ -793,7 +793,7 @@ def analyze_candidates(
     pipeline_t0 = _time.time()
 
     # Triage audio directory — shared with _transcribe_candidates for MP3 segments
-    triage_dir = os.path.join("triage_audio", job_id)
+    triage_dir = work_dir("triage_audio", job_id)
 
     # ── Step 1: Get direct VOD URL for frame extraction ──
     logger.info(f"[1/7] Getting direct VOD URL...")
@@ -932,7 +932,7 @@ def analyze_candidates(
         voiceprint = extract_voiceprint(audio_path)
         streamer_name = vod_meta.get("streamer", "Streamer")
 
-        # Persist voiceprint for lazy re-transcription in transcribe_clip.py
+        # Persist voiceprint for lazy re-transcription (clip_tools.transcribe_clip_words)
         if voiceprint is not None:
             vp_dir = os.path.join(CLIPS_DIR, job_id)
             os.makedirs(vp_dir, exist_ok=True)
@@ -1219,7 +1219,7 @@ def analyze_single_clip(
         new_filename = slugify_clip_name(clip_name)
         old_filename = hp.clip_filename
         try:
-            from app.services.s3_storage import rename_object
+            from app.services.storage import rename_object
             rename_object(f"clips/{job_id}/{old_filename}", f"clips/{job_id}/{new_filename}")
             rename_clip_files(job_id, old_filename, new_filename)
             update_hot_point_clip(job_id, clip_index, new_filename)

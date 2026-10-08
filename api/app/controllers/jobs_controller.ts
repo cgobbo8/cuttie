@@ -4,12 +4,21 @@ import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
 import path from 'node:path'
 import Job from '#models/job'
 import db from '@adonisjs/lucid/services/db'
-import redis from '@adonisjs/redis/services/main'
-import jobStatusBus from '#services/job_status_bus'
-import { listObjects, deleteObject } from '#services/s3'
+import { clipDir } from '#services/data_paths'
+import { deleteObject, storagePath } from '#services/storage'
+import { cancelJob, enqueueJob, type WorkerJob } from '#services/worker_client'
 import { createJobValidator } from '#validators/user'
 
-const CLIPS_BASE = path.resolve('../backend/clips')
+/** Hand a job to the worker in the background; mark it failed if the worker never answers. */
+function dispatch(job: WorkerJob) {
+  enqueueJob(job).catch(async (err) => {
+    console.error(`[Jobs] Could not queue job ${job.job_id}:`, err.message)
+    if (job.type === 'add_clip') return
+    await Job.query()
+      .where('id', job.job_id)
+      .update({ status: 'ERROR', error: err.message, updated_at: new Date().toISOString() })
+  })
+}
 
 export default class JobsController {
   // POST /api/analyze
@@ -25,8 +34,7 @@ export default class JobsController {
       userId: user.id,
     })
 
-    // Push to Redis list — Python worker does BRPOP on this
-    await redis.lpush('cuttie:jobs_queue', JSON.stringify({ job_id: job.id, url }))
+    dispatch({ job_id: job.id, url })
 
     return response.created({ job_id: job.id })
   }
@@ -57,10 +65,10 @@ export default class JobsController {
     const nextNum = (existingNums.length > 0 ? Math.max(...existingNums) : 0) + 1
     const clipFilename = `clip_${String(nextNum).padStart(2, '0')}.mp4`
 
-    const clipDir = path.join(CLIPS_BASE, jobId)
-    mkdirSync(clipDir, { recursive: true })
+    const targetDir = clipDir(jobId)
+    mkdirSync(targetDir, { recursive: true })
 
-    await file.move(clipDir, { name: clipFilename })
+    await file.move(targetDir, { name: clipFilename })
 
     if (!file.filePath) {
       return response.internalServerError({ error: 'File upload failed' })
@@ -68,14 +76,14 @@ export default class JobsController {
 
     const clipName = file.clientName.replace(/\.[^.]+$/, '')
 
-    // Push to Redis — worker processes the clip and publishes clip_ready via SSE
-    await redis.lpush('cuttie:jobs_queue', JSON.stringify({
+    // Worker processes the clip and publishes clip_ready via SSE
+    dispatch({
       job_id: jobId,
       type: 'add_clip',
       clip_filename: clipFilename,
       clip_name: clipName,
       rank: nextNum,
-    }))
+    })
 
     return response.created({ clip_filename: clipFilename, clip_name: clipName })
   }
@@ -133,7 +141,7 @@ export default class JobsController {
       const serialized = job.serialize()
       let chatMessageCount: number | null = null
       try {
-        const chatPath = path.join(CLIPS_BASE, job.id, 'chat.json')
+        const chatPath = path.join(clipDir(job.id), 'chat.json')
         if (existsSync(chatPath)) {
           const chat = JSON.parse(readFileSync(chatPath, 'utf-8'))
           chatMessageCount = Array.isArray(chat) ? chat.length : null
@@ -179,7 +187,7 @@ export default class JobsController {
 
     // Enrich hotPoints with chatMessageCount per clip
     if (data.hotPoints?.length) {
-      const chatPath = path.join(CLIPS_BASE, job.id, 'chat.json')
+      const chatPath = path.join(clipDir(job.id), 'chat.json')
       let allChat: { timestamp: number }[] = []
       try {
         if (existsSync(chatPath)) {
@@ -191,7 +199,7 @@ export default class JobsController {
         hp.chat_message_count = 0
         if (!hp.clip_filename || allChat.length === 0) continue
         const clipBase = path.basename(hp.clip_filename, path.extname(hp.clip_filename))
-        const metaPath = path.join(CLIPS_BASE, job.id, `${clipBase}_meta.json`)
+        const metaPath = path.join(clipDir(job.id), `${clipBase}_meta.json`)
         try {
           if (existsSync(metaPath)) {
             const { vod_start, vod_end } = JSON.parse(readFileSync(metaPath, 'utf-8'))
@@ -233,7 +241,7 @@ export default class JobsController {
     job.progress = null
     await job.save()
 
-    await redis.lpush('cuttie:jobs_queue', JSON.stringify({ job_id: job.id, url: job.url, retry: true }))
+    dispatch({ job_id: job.id, url: job.url })
     return { job_id: job.id }
   }
 
@@ -243,33 +251,18 @@ export default class JobsController {
     const job = await Job.find(params.id)
     if (!job || job.userId !== user.id) return response.notFound({ error: 'job not found' })
 
+    // Stop the analysis if it is still queued or running
+    await cancelJob(job.id).catch(() => {})
+
     // Delete related renders from DB
     await db.from('renders').where('job_id', job.id).delete()
 
-    // Delete S3 objects (clips + renders)
-    const prefixes = [`clips/${job.id}/`, `renders/${job.id}/`]
-    for (const prefix of prefixes) {
+    // Delete stored files (clips + sidecars, renders)
+    for (const prefix of [`clips/${job.id}`, `renders/${job.id}`]) {
       try {
-        const keys = await listObjects(prefix)
-        await Promise.all(keys.map((key) => deleteObject(key)))
+        rmSync(storagePath(prefix), { recursive: true, force: true })
       } catch {}
     }
-
-    // Delete local files
-    const localDir = path.join(CLIPS_BASE, job.id)
-    try {
-      if (existsSync(localDir)) {
-        rmSync(localDir, { recursive: true, force: true })
-      }
-    } catch {}
-
-    // Delete local data directory
-    const dataDir = path.resolve('../backend/data', job.id)
-    try {
-      if (existsSync(dataDir)) {
-        rmSync(dataDir, { recursive: true, force: true })
-      }
-    } catch {}
 
     await job.delete()
     return { success: true }
@@ -291,7 +284,7 @@ export default class JobsController {
     job.hotPoints = hotPoints
     await job.save()
 
-    // 2. Delete related renders from DB + S3
+    // 2. Delete related renders from DB + storage
     const renders = await db.from('renders').where('job_id', job.id).where('clip_filename', clipFilename)
     for (const render of renders) {
       if (render.output_filename) {
@@ -302,13 +295,8 @@ export default class JobsController {
       await db.from('renders').where('id', render.id).delete()
     }
 
-    // 3. Delete clip from S3
-    try {
-      await deleteObject(`clips/${job.id}/${clipFilename}`)
-    } catch {}
-
-    // 4. Delete local files (clip + associated JSON files)
-    const localDir = path.join(CLIPS_BASE, job.id)
+    // 3. Delete clip + associated JSON files
+    const localDir = clipDir(job.id)
     const clipBase = path.basename(clipFilename, path.extname(clipFilename))
     const suffixes = ['.mp4', '_meta.json', '_probe.json', '_words.json']
     for (const suffix of suffixes) {

@@ -6,11 +6,16 @@ __pycache__/
 *.egg-info/
 dist/
 
+# Local app data (dev default for CUTTIE_DATA_DIR)
+.data/
+
 # Backend data
+backend/diarize_tmp/
+backend/triage_audio/
 backend/data/
 backend/clips/
 backend/frames/
-backend/cuttie.db
+backend/cuttie.db*
 backend/screenshots/
 
 # API data

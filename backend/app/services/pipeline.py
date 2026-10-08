@@ -17,31 +17,17 @@ from app.services.db import get_job, save_hot_points, update_hot_point_clip, upd
 from app.services.downloader import extract_metadata, download_audio, download_chat
 from app.services.llm_analyzer import analyze_candidates, analyze_hot_points, analyze_single_clip
 from app.services.scorer import compute_scores
+from app.services import job_control
+from app.services.job_control import JobCancelled
+from app.services.paths import clip_dir as job_clip_dir, work_dir
 
 logger = logging.getLogger(__name__)
 
 
-class JobCancelled(Exception):
-    """Raised when a job is cancelled via the admin UI."""
-    pass
-
-
 def check_cancelled(job_id: str) -> None:
-    """Check Redis for cancellation flag and raise if set."""
-    try:
-        import redis as _redis
-        r = _redis.Redis(
-            host=os.getenv("REDIS_HOST", "127.0.0.1"),
-            port=int(os.getenv("REDIS_PORT", "6379")),
-            password=os.getenv("REDIS_PASSWORD") or None,
-        )
-        if r.exists(f"cuttie:cancel:{job_id}"):
-            r.delete(f"cuttie:cancel:{job_id}")
-            raise JobCancelled(f"Job {job_id} cancelled by user")
-    except JobCancelled:
-        raise
-    except Exception:
-        pass  # Redis not available — don't block pipeline
+    """Raise JobCancelled if the API asked the worker to stop this job."""
+    if job_control.consume_cancel(job_id):
+        raise JobCancelled(f"Job {job_id} cancelled by user")
 
 
 class StepTimer:
@@ -170,7 +156,7 @@ def _run_clipping_only(
     If detected_bounds=True, use fixed -2min/+5s bounds for "clip" keyword detections.
     """
     from app.services.db import publish_clip_ready, rename_clip_files, slugify_clip_name
-    from app.services.s3_storage import rename_object
+    from app.services.storage import rename_object
 
     clip_dir = os.path.join(CLIPS_DIR, job_id)
     os.makedirs(clip_dir, exist_ok=True)
@@ -314,7 +300,7 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
 
     If resume_from is set, skip completed steps and resume from that point.
     """
-    output_dir = os.path.join("data", job_id)
+    output_dir = work_dir("audio", job_id)
     timer = StepTimer()
 
     try:
@@ -562,24 +548,14 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
         update_job(job_id, status="ERROR", error=str(e), progress="An error occurred.", step_timings=timer.timings)
 
     finally:
-        # Cleanup temp audio files (but keep clips/)
+        # Cleanup temp audio files (clips stay in storage)
         if os.path.exists(output_dir):
             shutil.rmtree(output_dir, ignore_errors=True)
-
-        # Cleanup local clip MP4s (already uploaded to S3, keep JSON metadata)
-        clip_dir = os.path.join("clips", job_id)
-        if os.path.isdir(clip_dir):
-            for f in os.listdir(clip_dir):
-                if f.endswith(".mp4"):
-                    try:
-                        os.remove(os.path.join(clip_dir, f))
-                    except OSError as e:
-                        logger.debug("Failed to delete temp clip %s: %s", f, e)
 
 
 def _reattach_clips(job_id: str, hot_points: list) -> None:
     """Re-attach clip filenames from disk to in-memory hot points."""
-    clips_dir = os.path.join("clips", job_id)
+    clips_dir = job_clip_dir(job_id)
     if not os.path.isdir(clips_dir):
         return
 

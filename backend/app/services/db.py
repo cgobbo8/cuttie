@@ -7,54 +7,18 @@ import re
 import sqlite3
 import uuid
 from datetime import datetime, timezone
-from typing import Any
 
 from app.models.schemas import HotPoint, JobResponse, JobStatus, LlmAnalysis, SignalBreakdown, StepTiming, VodContext
+from app.services import api_events, paths
 
 logger = logging.getLogger(__name__)
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "cuttie.db")
-
-# ── Optional Redis publisher ──────────────────────────────────────────────────
-# When REDIS_HOST is set, status updates are published so AdonisJS can relay
-# them to SSE clients. Falls back to a no-op if Redis is unavailable.
-
-_redis: Any = None
-_redis_init = False
-
-
-def _get_redis():
-    global _redis, _redis_init
-    if _redis_init:
-        return _redis
-    _redis_init = True
-    host = os.getenv("REDIS_HOST")
-    if not host:
-        return None
-    try:
-        import redis as redis_lib  # type: ignore
-        _redis = redis_lib.Redis(
-            host=host,
-            port=int(os.getenv("REDIS_PORT", "6379")),
-            password=os.getenv("REDIS_PASSWORD") or None,
-            decode_responses=True,
-        )
-        _redis.ping()
-        logger.info("Redis publisher connected at %s", host)
-    except Exception as e:
-        logger.warning("Redis publisher unavailable: %s", e)
-        _redis = None
-    return _redis
+DB_PATH = paths.DB_PATH
 
 
 def _publish_status(job_id: str, payload: dict) -> None:
-    r = _get_redis()
-    if r is None:
-        return
-    try:
-        r.publish(f"cuttie:job_status:{job_id}", json.dumps(payload))
-    except Exception as e:
-        logger.debug("Redis publish failed: %s", e)
+    """Forward a status update to the API, which persists it and relays it over SSE."""
+    api_events.publish(payload)
 
 
 def _get_conn() -> sqlite3.Connection:
@@ -68,6 +32,7 @@ def _get_conn() -> sqlite3.Connection:
 
 def init_db() -> None:
     """Create tables if they don't exist."""
+    paths.ensure_dirs()
     conn = _get_conn()
     conn.executescript("""
         CREATE TABLE IF NOT EXISTS jobs (
@@ -238,7 +203,7 @@ def save_hot_points(job_id: str, hot_points: list[HotPoint]) -> None:
 
 
 def publish_clip_ready(job_id: str, rank: int, hp: HotPoint) -> None:
-    """Publish a single enriched hot point via Redis so SSE clients get it immediately."""
+    """Publish a single enriched hot point so SSE clients get it immediately."""
     _publish_status(job_id, {
         "job_id": job_id,
         "type": "clip_ready",

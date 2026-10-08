@@ -16,15 +16,20 @@ import { Permissions } from '#services/permissions'
 // Register Transmit SSE routes (/__transmit/events, subscribe, unsubscribe)
 transmit.registerRoutes()
 
-router.get('/', () => {
-  return { status: 'ok' }
-})
+const SpaController = () => import('#controllers/spa_controller')
 
 // Rate limit: 5 login attempts per 15 minutes per IP
 const authRateLimit = rateLimit(5, 15 * 60 * 1000)
 
 router
   .group(() => {
+    // ── Local app (public) ──────────────────────────────────────────────────
+    router.get('/app/info', [() => import('#controllers/app_controller'), 'info'])
+    // Signed URLs (see services/storage.ts) — no session needed for <video>/<img>/Remotion
+    router.get('/storage/*', [() => import('#controllers/storage_controller'), 'show'])
+    // Status events pushed by the Python worker (shared-secret auth)
+    router.post('/internal/worker-events', [() => import('#controllers/internal_controller'), 'workerEvents'])
+
     // ── Auth (public, rate-limited) ────────────────────────────────────────
     router.post('/auth/login', [() => import('#controllers/access_token_controller'), 'store']).use(authRateLimit)
     router.get('/auth/google/redirect', [() => import('#controllers/google_auth_controller'), 'redirect'])
@@ -39,6 +44,11 @@ router
 
         // Dashboard
         router.get('/dashboard', [() => import('#controllers/dashboard_controller'), 'index'])
+
+        // Local app: settings (API keys) + diagnostics
+        router.get('/settings', [() => import('#controllers/app_controller'), 'showSettings'])
+        router.put('/settings', [() => import('#controllers/app_controller'), 'updateSettings'])
+        router.get('/diagnostics', [() => import('#controllers/app_controller'), 'diagnostics'])
 
         // Games
         router.get('/games', [() => import('#controllers/games_controller'), 'index'])
@@ -94,3 +104,7 @@ router
       .use(middleware.auth())
   })
   .prefix('/api')
+
+// Built frontend (desktop app): everything that is not an API route
+router.get('/', [SpaController, 'handle']).as('spa.root')
+router.get('*', [SpaController, 'handle']).as('spa.fallback')

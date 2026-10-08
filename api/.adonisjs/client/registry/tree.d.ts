@@ -5,6 +5,18 @@ export interface ApiDefinition {
   eventStream: typeof routes['event_stream']
   subscribe: typeof routes['subscribe']
   unsubscribe: typeof routes['unsubscribe']
+  app: {
+    info: typeof routes['app.info']
+    showSettings: typeof routes['app.show_settings']
+    updateSettings: typeof routes['app.update_settings']
+    diagnostics: typeof routes['app.diagnostics']
+  }
+  storage: {
+    show: typeof routes['storage.show']
+  }
+  internal: {
+    workerEvents: typeof routes['internal.worker_events']
+  }
   accessToken: {
     store: typeof routes['access_token.store']
     destroy: typeof routes['access_token.destroy']
@@ -69,5 +81,9 @@ export interface ApiDefinition {
     flush: typeof routes['workers.flush']
     cancel: typeof routes['workers.cancel']
     cancelRender: typeof routes['workers.cancel_render']
+  }
+  spa: {
+    root: typeof routes['spa.root']
+    fallback: typeof routes['spa.fallback']
   }
 }

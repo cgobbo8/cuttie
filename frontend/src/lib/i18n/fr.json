@@ -616,7 +616,11 @@
     "preview": "Aperçu",
     "previewTemplate": "Modèle Signature",
     "previewNeedsAnalysis": "L'aperçu utilisera une image de ta première analyse.",
-    "camEveryLive": "Ta webcam est revérifiée à chaque live. Si elle bouge, tu peux l'ajuster dans Monter."
+    "camEveryLive": "Ta webcam est revérifiée à chaque live. Si elle bouge, tu peux l'ajuster dans Monter.",
+    "myTemplates": "Mes modèles",
+    "myTemplatesHint": "Tes mises en page à toi, prêtes dans Monter.",
+    "noTemplates": "Pas encore de modèle perso. Pars d'une des 6 mises en page et ajuste-la.",
+    "createTemplate": "Créer un modèle"
   },
   "project": {
     "steps": "Étapes du projet",
@@ -741,7 +745,11 @@
       "cancel": "Annuler",
       "saved": "Cam recadrée pour ce live",
       "savedEverywhere": "Cam recadrée et gardée comme repère"
-    }
+    },
+    "myTemplates": "Mes modèles",
+    "createTemplate": "Créer mon modèle",
+    "editTemplate": "Modifier",
+    "basedOn": "Basé sur {{base}}"
   },
   "exportStep": {
     "title": "Tes clips sont prêts",
@@ -904,5 +912,68 @@
     "emptyHint": "Choisis un live sur l'accueil : Cuttie y trouve les meilleurs moments, prêts à monter.",
     "emptyFiltered": "Aucun projet ne correspond. Essaie une autre recherche ou un autre filtre.",
     "emptyCta": "Choisir un live"
+  },
+  "templateEditor": {
+    "defaultName": "Mon modèle {{n}}",
+    "untitled": "Mon modèle",
+    "name": "Nom du modèle",
+    "subtitle": "Pars d'une mise en page, ajuste-la en quelques clics : l'aperçu suit.",
+    "save": "Enregistrer",
+    "saved": "Modèle enregistré",
+    "saveError": "Impossible d'enregistrer le modèle",
+    "delete": "Supprimer le modèle",
+    "deleteMessage": "« {{name}} » sera supprimé. Les clips déjà exportés ne changent pas.",
+    "deleted": "Modèle supprimé",
+    "advanced": "Mode avancé",
+    "previewOn": "Aperçu sur « {{clip}} »",
+    "previewStill": "Aperçu sur ton dernier live. Lance une analyse pour le voir sur un vrai clip.",
+    "sampleHook": "Le moment le plus fou du live",
+    "sampleWords": "C'EST PARTI",
+    "base": "Mise en page",
+    "baseHint": "Où vont la cam et le jeu. Tes réglages s'appliquent à chacune.",
+    "cam": "Ta cam",
+    "noCamHint": "Pas de cam repérée : elle apparaîtra ici quand il y en a une.",
+    "camSize": "Taille",
+    "camShape": "Forme",
+    "camBorder": "Contour",
+    "size": {
+      "s": "Petite",
+      "m": "Moyenne",
+      "l": "Grande"
+    },
+    "shape": {
+      "rounded": "Arrondie",
+      "circle": "Ronde"
+    },
+    "border": {
+      "white": "Blanc",
+      "accent": "Ta couleur",
+      "none": "Aucun"
+    },
+    "background": "Le fond",
+    "backgroundKind": "Derrière",
+    "fullGame": "Le jeu remplit tout l'écran : pas de fond à choisir.",
+    "bg": {
+      "blur": "Le clip flouté",
+      "dark": "Sombre",
+      "brand": "Ta couleur"
+    },
+    "subtitles": "Les sous-titres",
+    "subtitlesHint": "Le style (Gros et blanc, Karaoké, Discret) se règle dans Monter.",
+    "position": "Position",
+    "textSize": "Taille du texte",
+    "pos": {
+      "auto": "Comme le modèle",
+      "top": "En haut",
+      "middle": "Au milieu",
+      "bottom": "En bas",
+      "hidden": "Masqué"
+    },
+    "widget": "Ton widget de chaîne",
+    "hook": "L'accroche",
+    "hookHint": "La phrase en haut du clip, modifiable clip par clip dans Monter.",
+    "hookShow": "Afficher",
+    "shown": "Oui",
+    "hidden": "Non"
   }
 }

@@ -1,12 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { useTranslation } from "react-i18next";
 import { Player } from "@remotion/player";
-import { ArrowLeft, ArrowRight, Layers, Loader2, ScanFace } from "lucide-react";
+import { ArrowLeft, ArrowRight, Layers, Loader2, Pencil, Plus, ScanFace } from "lucide-react";
 import {
-  clipBackgroundUrl,
   clipThumbUrl,
-  clipUrl,
   getEditEnvironment,
   getJobStatus,
   setLiveFacecam,
@@ -21,14 +19,17 @@ import { useBackdrop } from "../lib/BackdropContext";
 import { useChannel } from "../lib/ChannelContext";
 import { buildMoments, type Moment } from "../lib/moments";
 import {
-  buildTemplate,
-  HAS_HOOK,
+  baseOf,
+  buildAny,
+  findCustom,
   NEEDS_WEBCAM,
+  showsHook,
   suggestTemplate,
   TEMPLATE_IDS,
   type TemplateContext,
-  type TemplateId,
+  type TemplateKey,
 } from "../lib/templates";
+import { clipTemplateContext } from "../lib/templateContext";
 import CuttieComposition from "../components/remotion-editor/CuttieComposition";
 import TemplateSketch from "../components/montage/TemplateSketch";
 import CamSheet from "../components/montage/CamSheet";
@@ -40,9 +41,10 @@ const SUB_STYLES: SubtitleStyle[] = ["bold", "karaoke", "minimal"];
 const TIMINGS: WidgetTiming[] = ["start", "always", "end"];
 
 interface MontagePrefs {
-  template: TemplateId;
+  /** One of the 6 templates, or one of the streamer's own */
+  template: TemplateKey;
   /** Per-clip template when "apply to all" is off */
-  perClip: Record<string, TemplateId>;
+  perClip: Record<string, TemplateKey>;
   hooks: Record<string, string>;
   applyAll: boolean;
   /** Clips where the cam is shown although nobody was seen in it */
@@ -120,8 +122,10 @@ export default function MontagePage() {
 
   useBackdrop(current && jobId ? clipThumbUrl(jobId, current.filename) : null);
 
+  const customs = useMemo(() => kit?.templates ?? [], [kit]);
+
   const templateFor = useCallback(
-    (m: Moment): TemplateId => (prefs.applyAll ? prefs.template : prefs.perClip[m.filename] ?? prefs.template),
+    (m: Moment): TemplateKey => (prefs.applyAll ? prefs.template : prefs.perClip[m.filename] ?? prefs.template),
     [prefs],
   );
 
@@ -134,22 +138,18 @@ export default function MontagePage() {
   const contextFor = useCallback(
     (m: Moment, env: EditEnvironment | undefined): TemplateContext | null => {
       if (!kit || !jobId) return null;
-      return {
-        src: clipUrl(jobId, m.filename),
-        backgroundSrc: clipBackgroundUrl(jobId, m.filename),
-        frameW: env?.clip_width ?? 1920,
-        frameH: env?.clip_height ?? 1080,
-        facecam: camFor(m, env),
-        words: env?.words ?? [],
-        startAt: m.trim?.[0] ?? 0,
-        endAt: m.trim?.[1] ?? m.duration,
-        colors: kit.colors,
-        subtitleStyle: kit.subtitles.style,
-        widget: kit.widget,
+      return clipTemplateContext({
+        jobId,
+        filename: m.filename,
+        env,
+        kit,
         login: channel?.login ?? kit.twitch_login,
         avatarUrl: channel?.avatar_url ?? null,
+        facecam: camFor(m, env),
+        startAt: m.trim?.[0] ?? 0,
+        endAt: m.trim?.[1] ?? m.duration,
         hook: prefs.hooks[m.filename] ?? m.hp.clip_name,
-      };
+      });
     },
     [camFor, channel, jobId, kit, prefs.hooks],
   );
@@ -157,18 +157,37 @@ export default function MontagePage() {
   const env = current ? envs[current.filename] : undefined;
   const ctx = current ? contextFor(current, env) : null;
   const template = current ? templateFor(current) : prefs.template;
-  const layers = useMemo(() => (ctx ? buildTemplate(template, ctx) : []), [ctx, template]);
+  const layers = useMemo(() => (ctx ? buildAny(template, ctx, customs) : []), [ctx, template, customs]);
   const hasWebcam = !!(current && camFor(current, env));
   const cam = env?.cam;
   const suggested = current
     ? suggestTemplate(current.hp.llm?.category, hasWebcam, current.hp.signals?.vocal_excitement, current.hp.signals?.speech_presence)
     : null;
 
-  const pickTemplate = (id: TemplateId) => {
+  const pickTemplate = (key: TemplateKey) => {
     if (!current) return;
-    if (prefs.applyAll) setPrefs({ template: id, perClip: {} });
-    else setPrefs({ perClip: { ...prefs.perClip, [current.filename]: id } });
+    if (prefs.applyAll) setPrefs({ template: key, perClip: {} });
+    else setPrefs({ perClip: { ...prefs.perClip, [current.filename]: key } });
   };
+
+  // Back from the template editor with a new template: pick it
+  const [searchParams, setSearchParams] = useSearchParams();
+  const fromEditor = searchParams.get("template");
+  useEffect(() => {
+    if (!fromEditor || !current || !findCustom(fromEditor, customs)) return;
+    pickTemplate(fromEditor);
+    setSearchParams({}, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fromEditor, current, customs]);
+
+  /** The simple template editor, previewing on the clip on screen */
+  const editorLink = (id: string, base?: string) =>
+    `/modeles/${id}?${new URLSearchParams({
+      ...(base ? { base } : {}),
+      job: jobId ?? "",
+      clip: current?.filename ?? "",
+      back: `/${jobId}/montage`,
+    })}`;
 
   const saveLiveCam = async (facecam: FacecamRect | false | null, remember: boolean) => {
     if (!jobId) return;
@@ -203,7 +222,7 @@ export default function MontagePage() {
         await startRender(
           jobId,
           m.filename,
-          buildTemplate(templateFor(m), clipCtx),
+          buildAny(templateFor(m), clipCtx, customs),
           m.trim ? { trimStart: m.trim[0], trimEnd: m.trim[1] } : undefined,
           m.hp.clip_name,
           { width: 1080, height: 1920, fps: FPS },
@@ -304,7 +323,7 @@ export default function MontagePage() {
                 >
                   {ctx ? (
                     <TemplateSketch
-                      layers={buildTemplate(id, ctx)}
+                      layers={buildAny(id, ctx, customs)}
                       frameUrl={clipThumbUrl(jobId, current.filename)}
                       width={58}
                       sample={sample}
@@ -326,6 +345,56 @@ export default function MontagePage() {
                 </button>
               );
             })}
+
+            {customs.length > 0 && (
+              <div className="px-1.5 pt-3 pb-1 text-[12px] font-[550] text-ink-3">{t("montage.myTemplates")}</div>
+            )}
+            {customs.map((custom) => {
+              const unavailable = NEEDS_WEBCAM.includes(custom.base) && !hasWebcam;
+              const selected = custom.id === template;
+              return (
+                <div key={custom.id} className="relative group/tpl">
+                  <button
+                    onClick={() => pickTemplate(custom.id)}
+                    disabled={unavailable}
+                    aria-pressed={selected}
+                    className={`flex items-center gap-3 w-full p-2 pr-10 rounded-[13px] text-left border transition-colors ${
+                      selected ? "bg-white/10 border-accent shadow-[0_0_0_3px_var(--color-accent-soft)]" : "border-transparent hover:bg-white/[0.06]"
+                    } disabled:opacity-40 disabled:pointer-events-none`}
+                  >
+                    {ctx ? (
+                      <TemplateSketch
+                        layers={buildAny(custom.id, ctx, customs)}
+                        frameUrl={clipThumbUrl(jobId, current.filename)}
+                        width={58}
+                        sample={sample}
+                        className="flex-none rounded-[9px] border border-white/10"
+                      />
+                    ) : (
+                      <span className="w-[58px] h-[103px] rounded-[9px] skeleton flex-none" />
+                    )}
+                    <span className="flex-1 min-w-0 flex flex-col gap-1">
+                      <span className="text-[14px] font-semibold tracking-[-0.01em] text-white truncate">{custom.name}</span>
+                      <span className="text-[12px] leading-snug text-ink-3">
+                        {unavailable ? t("montage.needsWebcam") : t("montage.basedOn", { base: t(`montage.template.${custom.base}.name`) })}
+                      </span>
+                    </span>
+                  </button>
+                  <Link
+                    to={editorLink(custom.id)}
+                    aria-label={`${t("montage.editTemplate")} ${custom.name}`}
+                    title={t("montage.editTemplate")}
+                    className="absolute top-2 right-2 btn btn-ghost btn-icon btn-sm w-8 h-8 opacity-60 group-hover/tpl:opacity-100 focus-visible:opacity-100"
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                  </Link>
+                </div>
+              );
+            })}
+
+            <Link to={editorLink("nouveau", baseOf(template, customs))} className="btn btn-ghost btn-sm justify-start mt-1.5 mx-1">
+              <Plus className="w-4 h-4" /> {t("montage.createTemplate")}
+            </Link>
           </div>
         </aside>
 
@@ -378,7 +447,7 @@ export default function MontagePage() {
               >
                 {ctx ? (
                   <TemplateSketch
-                    layers={buildTemplate(templateFor(m), { ...ctx, words: [], hook: prefs.hooks[m.filename] ?? m.hp.clip_name })}
+                    layers={buildAny(templateFor(m), { ...ctx, words: [], hook: prefs.hooks[m.filename] ?? m.hp.clip_name }, customs)}
                     frameUrl={clipThumbUrl(jobId, m.filename)}
                     width={40}
                     sample={[]}
@@ -402,10 +471,10 @@ export default function MontagePage() {
               id="hook"
               value={prefs.hooks[current.filename] ?? current.hp.clip_name}
               onChange={(e) => setPrefs({ hooks: { ...prefs.hooks, [current.filename]: e.target.value } })}
-              disabled={!HAS_HOOK.includes(template)}
+              disabled={!showsHook(template, customs)}
               className="mt-2.5 w-full h-10 px-3 rounded-[10px] bg-black/30 border border-white/10 text-[13.5px] text-white outline-none focus:border-accent-line disabled:opacity-40"
             />
-            <p className="mt-2 text-[12px] text-ink-3">{HAS_HOOK.includes(template) ? t("montage.hookHint") : t("montage.noHook")}</p>
+            <p className="mt-2 text-[12px] text-ink-3">{showsHook(template, customs) ? t("montage.hookHint") : t("montage.noHook")}</p>
           </div>
 
           <div className="glass rounded-[18px] p-[18px]">

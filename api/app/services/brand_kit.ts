@@ -31,6 +31,52 @@ export interface BrandColors {
 export type WidgetTiming = 'start' | 'always' | 'end'
 export type SubtitleStyle = 'bold' | 'karaoke' | 'minimal'
 
+/** Allowed values of a custom template (mirrors frontend/src/lib/templates.ts) */
+const TEMPLATE_BASES = ['signature', 'plein', 'reaction', 'discussion', 'sanscam', 'accroche'] as const
+const LOOK_VALUES = {
+  camSize: ['s', 'm', 'l'],
+  camShape: ['rounded', 'circle'],
+  camBorder: ['white', 'accent', 'none'],
+  background: ['blur', 'dark', 'brand'],
+  subtitlePosition: ['auto', 'top', 'middle', 'bottom'],
+  subtitleSize: ['s', 'm', 'l'],
+  widgetPosition: ['auto', 'top', 'bottom', 'none'],
+  hook: ['on', 'off'],
+} as const
+
+export type TemplateLook = { [K in keyof typeof LOOK_VALUES]: (typeof LOOK_VALUES)[K][number] }
+
+/** A template made in the simple template editor: a base layout and its adjustments */
+export interface CustomTemplate {
+  id: string
+  name: string
+  base: (typeof TEMPLATE_BASES)[number]
+  look: TemplateLook
+}
+
+const MAX_TEMPLATES = 30
+
+/** Custom templates from a request body, or null when anything is off */
+export function parseCustomTemplates(input: unknown): CustomTemplate[] | null {
+  if (!Array.isArray(input) || input.length > MAX_TEMPLATES) return null
+  const out: CustomTemplate[] = []
+  for (const item of input) {
+    if (!item || typeof item !== 'object') return null
+    const { id, name, base, look } = item as Record<string, any>
+    if (typeof id !== 'string' || !/^custom-[a-z0-9-]{4,40}$/.test(id)) return null
+    if (typeof name !== 'string' || !name.trim() || name.trim().length > 40) return null
+    if (!TEMPLATE_BASES.includes(base)) return null
+    if (!look || typeof look !== 'object') return null
+    const clean: Record<string, string> = {}
+    for (const [key, allowed] of Object.entries(LOOK_VALUES)) {
+      if (!(allowed as readonly string[]).includes(look[key])) return null
+      clean[key] = look[key]
+    }
+    out.push({ id, name: name.trim(), base, look: clean as TemplateLook })
+  }
+  return out
+}
+
 export interface BrandKit {
   twitch_login: string | null
   colors: BrandColors
@@ -47,6 +93,8 @@ export interface BrandKit {
   facecam_frame: string | null
   widget: { enabled: boolean; timing: WidgetTiming }
   subtitles: { style: SubtitleStyle }
+  /** Templates made in the simple template editor */
+  templates: CustomTemplate[]
 }
 
 export const DEFAULT_BRAND_KIT: BrandKit = {
@@ -58,6 +106,7 @@ export const DEFAULT_BRAND_KIT: BrandKit = {
   facecam_frame: null,
   widget: { enabled: true, timing: 'start' },
   subtitles: { style: 'bold' },
+  templates: [],
 }
 
 /** Merge stored data over the defaults, migrating the v1 shape ({ primary, secondary }) */
@@ -73,6 +122,7 @@ function normalize(stored: Record<string, any>): BrandKit {
     ...stored,
     colors: { ...DEFAULT_BRAND_KIT.colors, ...colors },
     palette: Array.isArray(stored.palette) ? stored.palette : [],
+    templates: parseCustomTemplates(stored.templates ?? []) ?? [],
     widget: { ...DEFAULT_BRAND_KIT.widget, ...(stored.widget ?? {}) },
     subtitles: { ...DEFAULT_BRAND_KIT.subtitles, ...(stored.subtitles ?? {}) },
   }

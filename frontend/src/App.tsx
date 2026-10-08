@@ -24,6 +24,7 @@ import GamesPage from "./pages/GamesPage";
 import CreatorsPage from "./pages/CreatorsPage";
 import WorkersPage from "./pages/WorkersPage";
 import WelcomePage from "./pages/WelcomePage";
+import TemplateEditorPage from "./pages/TemplateEditorPage";
 import type { ReactNode } from "react";
 
 function Splash() {
@@ -81,6 +82,7 @@ function AppRoutes() {
         <Route path="profile" element={<ProfilePage />} />
         <Route path="settings" element={<SettingsPage />} />
         <Route path="chaine" element={<ChannelPage />} />
+        <Route path="modeles/:id" element={<TemplateEditorPage />} />
         <Route path=":jobId" element={<ProjectPage />} />
         <Route path=":jobId/montage" element={<MontagePage />} />
         <Route path=":jobId/export" element={<ExportStepPage />} />

@@ -1,12 +1,15 @@
 import { useRef, useState, type FormEvent, type ReactNode } from "react";
+import { Link } from "react-router";
 import { useTranslation } from "react-i18next";
-import { Loader2, RefreshCw } from "lucide-react";
+import { Loader2, Plus, RefreshCw } from "lucide-react";
 import { brandFrameUrl, clipThumbUrl, type BrandColors, type SubtitleStyle, type WidgetTiming } from "../lib/api";
 import { useBackdrop } from "../lib/BackdropContext";
 import { useChannel } from "../lib/ChannelContext";
 import { useLatestMoments } from "../lib/useLatestMoment";
 import { useToast } from "../components/Toast";
 import SignaturePreview from "../components/SignaturePreview";
+import TemplateSketch from "../components/montage/TemplateSketch";
+import { buildTemplate, type TemplateContext } from "../lib/templates";
 import { sampleSubtitle } from "../lib/format";
 
 const COLOR_ROLES: (keyof BrandColors)[] = ["accent", "highlight", "dark", "light"];
@@ -121,6 +124,25 @@ export default function ChannelPage() {
         ? brandFrameUrl
         : null;
   const subtitle = sampleSubtitle(best?.llm?.transcript);
+  const brandCam = kit?.facecam && typeof kit.facecam === "object" ? kit.facecam : null;
+  const sketchContext: TemplateContext | null = kit
+    ? {
+        src: "",
+        backgroundSrc: "",
+        frameW: brandCam?.ref_w ?? 1920,
+        frameH: brandCam?.ref_h ?? 1080,
+        facecam: brandCam,
+        words: [],
+        startAt: 0,
+        endAt: 30,
+        colors: kit.colors,
+        subtitleStyle: kit.subtitles.style,
+        widget: kit.widget,
+        login: channel?.login ?? kit.twitch_login,
+        avatarUrl: channel?.avatar_url ?? null,
+        hook: "",
+      }
+    : null;
 
   const save = async (patch: Parameters<typeof saveKit>[0], message = t("brand.saved")) => {
     try {
@@ -292,6 +314,40 @@ export default function ChannelPage() {
                 </button>
               ))}
             </div>
+          </Card>
+
+          {/* The streamer's own templates */}
+          <Card
+            title={t("brand.myTemplates")}
+            hint={t("brand.myTemplatesHint")}
+            action={
+              <Link to="/modeles/nouveau?back=/chaine" className="btn btn-glass btn-sm">
+                <Plus className="w-3.5 h-3.5" /> {t("brand.createTemplate")}
+              </Link>
+            }
+          >
+            {kit.templates.length === 0 ? (
+              <p className="mt-3 text-[13px] leading-relaxed text-ink-3">{t("brand.noTemplates")}</p>
+            ) : (
+              <div className="mt-4 flex gap-3 overflow-x-auto pb-1">
+                {kit.templates.map((tpl) => (
+                  <Link
+                    key={tpl.id}
+                    to={`/modeles/${tpl.id}?back=/chaine`}
+                    className="flex-none w-[84px] flex flex-col items-center gap-1.5 group/tpl"
+                  >
+                    <TemplateSketch
+                      layers={sketchContext ? buildTemplate(tpl.base, sketchContext, tpl.look) : []}
+                      frameUrl={frame(480)}
+                      width={72}
+                      sample={[]}
+                      className="rounded-[10px] border border-white/10 transition-transform group-hover/tpl:-translate-y-0.5"
+                    />
+                    <span className="w-full text-center text-[12px] font-[550] text-white truncate">{tpl.name}</span>
+                  </Link>
+                ))}
+              </div>
+            )}
           </Card>
         </div>
 

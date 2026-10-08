@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Outlet, useLocation } from "react-router";
 import TopBar from "./TopBar";
 import { AppBackdrop } from "../lib/BackdropContext";
@@ -7,6 +8,11 @@ const FULL_BLEED = new Set(["/", "/chaine"]);
 
 export default function Layout() {
   const { pathname } = useLocation();
+
+  // A new page starts at the top (the router keeps the previous page's scroll)
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [pathname]);
 
   return (
     <div className="relative min-h-dvh">

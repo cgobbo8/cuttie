@@ -616,7 +616,11 @@
     "preview": "Vista previa",
     "previewTemplate": "Plantilla Signature",
     "previewNeedsAnalysis": "La vista previa usará una imagen de tu primer análisis.",
-    "camEveryLive": "Tu webcam se vuelve a comprobar en cada directo. Si se mueve, puedes ajustarla en Montar."
+    "camEveryLive": "Tu webcam se vuelve a comprobar en cada directo. Si se mueve, puedes ajustarla en Montar.",
+    "myTemplates": "Mis plantillas",
+    "myTemplatesHint": "Tus propios diseños, listos en Montar.",
+    "noTemplates": "Todavía no hay plantillas propias. Parte de uno de los 6 diseños y ajústalo.",
+    "createTemplate": "Crear una plantilla"
   },
   "project": {
     "steps": "Pasos del proyecto",
@@ -741,7 +745,11 @@
       "cancel": "Cancelar",
       "saved": "Cámara reencuadrada para este directo",
       "savedEverywhere": "Cámara reencuadrada y guardada como referencia"
-    }
+    },
+    "myTemplates": "Mis plantillas",
+    "createTemplate": "Crear mi plantilla",
+    "editTemplate": "Editar",
+    "basedOn": "Basada en {{base}}"
   },
   "exportStep": {
     "title": "Tus clips están listos",
@@ -904,5 +912,68 @@
     "emptyHint": "Elige un directo en el inicio: Cuttie encuentra los mejores momentos, listos para montar.",
     "emptyFiltered": "Ningún proyecto coincide. Prueba otra búsqueda u otro filtro.",
     "emptyCta": "Elegir un directo"
+  },
+  "templateEditor": {
+    "defaultName": "Mi plantilla {{n}}",
+    "untitled": "Mi plantilla",
+    "name": "Nombre de la plantilla",
+    "subtitle": "Parte de un diseño y ajústalo en unos clics: la vista previa lo sigue.",
+    "save": "Guardar",
+    "saved": "Plantilla guardada",
+    "saveError": "No se pudo guardar la plantilla",
+    "delete": "Eliminar la plantilla",
+    "deleteMessage": "«{{name}}» se eliminará. Los clips ya exportados no cambian.",
+    "deleted": "Plantilla eliminada",
+    "advanced": "Modo avanzado",
+    "previewOn": "Vista previa en «{{clip}}»",
+    "previewStill": "Vista previa con tu último directo. Lanza un análisis para verla en un clip real.",
+    "sampleHook": "El momento más loco del directo",
+    "sampleWords": "ALLÁ VAMOS",
+    "base": "Diseño",
+    "baseHint": "Dónde van la cámara y el juego. Tus ajustes se aplican a cada uno.",
+    "cam": "Tu cámara",
+    "noCamHint": "No se encontró cámara: aparecerá aquí cuando haya una.",
+    "camSize": "Tamaño",
+    "camShape": "Forma",
+    "camBorder": "Contorno",
+    "size": {
+      "s": "Pequeña",
+      "m": "Mediana",
+      "l": "Grande"
+    },
+    "shape": {
+      "rounded": "Redondeada",
+      "circle": "Redonda"
+    },
+    "border": {
+      "white": "Blanco",
+      "accent": "Tu color",
+      "none": "Ninguno"
+    },
+    "background": "El fondo",
+    "backgroundKind": "Detrás",
+    "fullGame": "El juego ocupa toda la pantalla: no hay fondo que elegir.",
+    "bg": {
+      "blur": "El clip desenfocado",
+      "dark": "Oscuro",
+      "brand": "Tu color"
+    },
+    "subtitles": "Los subtítulos",
+    "subtitlesHint": "El estilo (Grande y blanco, Karaoke, Discreto) se ajusta en Montar.",
+    "position": "Posición",
+    "textSize": "Tamaño del texto",
+    "pos": {
+      "auto": "Como el diseño",
+      "top": "Arriba",
+      "middle": "En medio",
+      "bottom": "Abajo",
+      "hidden": "Oculto"
+    },
+    "widget": "Tu widget de canal",
+    "hook": "El gancho",
+    "hookHint": "La frase de arriba del clip, editable clip a clip en Montar.",
+    "hookShow": "Mostrar",
+    "shown": "Sí",
+    "hidden": "No"
   }
 }

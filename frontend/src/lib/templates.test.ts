@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildTemplate, coverCrop, gameRegion, suggestTemplate, TEMPLATE_IDS, type TemplateContext } from "./templates";
+import { buildTemplate, coverCrop, gameRegion, NATIVE_LOOKS, suggestTemplate, TEMPLATE_IDS, type TemplateContext, type TemplateLook } from "./templates";
 
 const ctx: TemplateContext = {
   src: "/api/clips/job/clip.mp4",
@@ -79,5 +79,78 @@ describe("templates", () => {
     expect(suggestTemplate("fun", true, 1)).toBe("reaction");
     expect(suggestTemplate("fun", false)).toBe("sanscam");
     expect(suggestTemplate("fun", true, 0.5, 0.2)).toBe("signature");
+  });
+
+  describe("adjusted looks", () => {
+    const look = (patch: Partial<TemplateLook>, id: keyof typeof NATIVE_LOOKS = "signature") => ({ ...NATIVE_LOOKS[id], ...patch });
+
+    it("rounds the webcam into a circle with a ring in the channel color", () => {
+      const layers = buildTemplate("signature", ctx, look({ camShape: "circle", camBorder: "accent" }));
+      const webcam = layers.find((l) => l.type === "facecam")!;
+      expect(webcam.transform.width).toBe(webcam.transform.height);
+      expect(webcam.style.borderRadius).toBe(webcam.transform.width / 2);
+      const ring = layers.find((l) => l.name === "Anneau de la cam")!;
+      expect(ring.shape!.shapeType).toBe("circle");
+      expect(ring.shape!.backgroundColor).toBe("#42BF85");
+      // The crop follows the new (square) box
+      expect(webcam.video!.crop!.w / webcam.video!.crop!.h).toBeCloseTo(1, 1);
+    });
+
+    it("resizes the webcam around its spot and can drop the frame", () => {
+      const native = buildTemplate("signature", ctx).find((l) => l.type === "facecam")!.transform;
+      const big = buildTemplate("signature", ctx, look({ camSize: "l", camBorder: "none" }));
+      const t = big.find((l) => l.type === "facecam")!.transform;
+      expect(t.width).toBeGreaterThan(native.width);
+      expect(t.x + t.width / 2).toBeCloseTo(native.x + native.width / 2, 0);
+      expect(big.some((l) => l.name === "Cadre de la cam")).toBe(false);
+    });
+
+    it("swaps the blurred clip for a plain or tinted background", () => {
+      const dark = buildTemplate("signature", ctx, look({ background: "dark" }));
+      expect(dark[0].type).toBe("shape");
+      expect(dark[0].shape!.backgroundColor).toBe("#19405A");
+      expect(dark.some((l) => l.video?.background)).toBe(false);
+      const brand = buildTemplate("signature", ctx, look({ background: "brand" }));
+      expect(brand[1].shape!.backgroundColor).toBe("#42BF85");
+    });
+
+    it("moves and resizes the subtitles, moves or hides the widget", () => {
+      const layers = buildTemplate("signature", ctx, look({ subtitlePosition: "top", subtitleSize: "l", widgetPosition: "none" }));
+      const subs = layers.find((l) => l.type === "subtitles")!;
+      expect(subs.transform.y + subs.transform.height / 2).toBe(420);
+      expect(subs.subtitle!.fontSize).toBe(Math.round(96 * 1.2));
+      expect(layers.some((l) => l.type === "widget")).toBe(false);
+      const top = buildTemplate("reaction", ctx, look({ widgetPosition: "top" }, "reaction")).find((l) => l.type === "widget")!;
+      expect(top.transform.y).toBe(62);
+    });
+
+    it("can hide the hook line", () => {
+      expect(buildTemplate("accroche", ctx, look({ hook: "off" }, "accroche")).some((l) => l.type === "text")).toBe(false);
+    });
+
+    it("keeps every combination inside the canvas", () => {
+      for (const id of TEMPLATE_IDS) {
+        for (const camSize of ["s", "l"] as const) {
+          for (const camShape of ["rounded", "circle"] as const) {
+            for (const subtitlePosition of ["top", "bottom"] as const) {
+              const layers = buildTemplate(id, ctx, look({ camSize, camShape, subtitlePosition }, id));
+              for (const l of layers) {
+                expect(l.transform.x).toBeGreaterThanOrEqual(0);
+                expect(l.transform.y).toBeGreaterThanOrEqual(0);
+                expect(l.transform.x + l.transform.width).toBeLessThanOrEqual(1080);
+                expect(l.transform.y + l.transform.height).toBeLessThanOrEqual(1920);
+              }
+            }
+          }
+        }
+      }
+    });
+  });
+
+  it("keeps layer ids across rebuilds so the preview doesn't reload its videos", () => {
+    const a = buildTemplate("signature", ctx).map((l) => l.id);
+    const b = buildTemplate("signature", { ...ctx, hook: "autre" }, { ...NATIVE_LOOKS.signature, camShape: "circle" }).map((l) => l.id);
+    expect(new Set(a).size).toBe(a.length);
+    expect(b).toEqual(a);
   });
 });

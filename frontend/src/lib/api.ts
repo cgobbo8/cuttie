@@ -1,3 +1,5 @@
+import type { CustomTemplate } from "./templates";
+
 const BASE = "/api";
 
 // ── Auth API ────────────────────────────────────────────────────────────────
@@ -170,6 +172,8 @@ export interface BrandKit {
   facecam_frame: string | null;
   widget: { enabled: boolean; timing: WidgetTiming };
   subtitles: { style: SubtitleStyle };
+  /** Templates made in the simple template editor */
+  templates: CustomTemplate[];
 }
 
 export type BrandKitPatch = Partial<Omit<BrandKit, "colors" | "widget">> & {

@@ -128,6 +128,7 @@ cuttie/
         │   ├── ProjectsPage.tsx               # Projets (cartes, ouvre l'etape en cours)
         │   ├── ProjectPage.tsx                # /:jobId — Analyse en direct puis Choisir
         │   ├── MontagePage.tsx                # /:jobId/montage — 6 modeles Remotion, cam par live
+        │   ├── TemplateEditorPage.tsx         # /modeles/:id — editeur de modele simple (mise en page + reglages)
         │   ├── ExportStepPage.tsx             # /:jobId/export — exports du projet
         │   ├── ExportsPage.tsx                # Bibliotheque d'exports par live
         │   ├── SettingsPage.tsx               # Cles API, langue, diagnostic
@@ -155,7 +156,7 @@ cuttie/
             ├── ChannelContext.tsx             # Kit de marque + chaine Twitch, couleur d'accent de l'app
             ├── BackdropContext.tsx            # Image floutee derriere l'app
             ├── TransmitContext.tsx            # SSE Transmit (un uid par flux)
-            ├── templates.ts                   # Les 6 modeles de clips -> calques (Player + rendu serveur)
+            ├── templates.ts                   # 6 mises en page x reglages (look) -> calques ; modeles perso = base + look
             ├── moments.ts / renders.ts / projects.ts  # Logique pure des ecrans (testee)
             ├── editorTypes.ts                 # Types editeur (layers, state)
             ├── editorThemes.ts                # Themes pre-definis
@@ -257,6 +258,7 @@ Checkpoints resumables : CLIPPING, LLM_ANALYSIS.
 - Premier lancement `/bienvenue` (installation sans analyse ni `onboarded` dans settings.json) : chaine Twitch (lives + couleurs du logo), deux cles (verifiees aupres de Groq / OpenRouter), webcam reperee sur le dernier live pendant ce temps.
 - Projet en 4 etapes : Analyse (en direct) -> Choisir (garder / passer / trim) -> Monter (6 modeles a la DA de la chaine) -> Exporter.
 - Design : verre fonce pose sur du contenu floute (vignettes, frames), une seule couleur d'accent = couleur de la chaine.
+- Modeles : les 6 mises en page + les modeles perso du streamer (`brand_kit.templates` : base + reglages cam / fond / sous-titres / widget / accroche), crees dans l'editeur simple ; l'editeur a calques reste le mode avance.
 
 ## Webcam
 

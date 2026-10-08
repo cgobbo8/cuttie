@@ -616,7 +616,11 @@
     "preview": "Preview",
     "previewTemplate": "Signature template",
     "previewNeedsAnalysis": "The preview will use a frame from your first analysis.",
-    "camEveryLive": "Your webcam is checked again on every stream. If it moves, you can adjust it in Edit."
+    "camEveryLive": "Your webcam is checked again on every stream. If it moves, you can adjust it in Edit.",
+    "myTemplates": "My templates",
+    "myTemplatesHint": "Your own layouts, ready in Edit.",
+    "noTemplates": "No custom template yet. Start from one of the 6 layouts and adjust it.",
+    "createTemplate": "Create a template"
   },
   "project": {
     "steps": "Project steps",
@@ -741,7 +745,11 @@
       "cancel": "Cancel",
       "saved": "Cam reframed for this stream",
       "savedEverywhere": "Cam reframed and kept as the reference"
-    }
+    },
+    "myTemplates": "My templates",
+    "createTemplate": "Create my template",
+    "editTemplate": "Edit",
+    "basedOn": "Based on {{base}}"
   },
   "exportStep": {
     "title": "Your clips are ready",
@@ -904,5 +912,68 @@
     "emptyHint": "Pick a stream on the home page: Cuttie finds its best moments, ready to edit.",
     "emptyFiltered": "No project matches. Try another search or filter.",
     "emptyCta": "Pick a stream"
+  },
+  "templateEditor": {
+    "defaultName": "My template {{n}}",
+    "untitled": "My template",
+    "name": "Template name",
+    "subtitle": "Start from a layout, adjust it in a few clicks: the preview follows.",
+    "save": "Save",
+    "saved": "Template saved",
+    "saveError": "Couldn't save the template",
+    "delete": "Delete the template",
+    "deleteMessage": "“{{name}}” will be deleted. Clips already exported don't change.",
+    "deleted": "Template deleted",
+    "advanced": "Advanced mode",
+    "previewOn": "Preview on “{{clip}}”",
+    "previewStill": "Preview on your latest stream. Run an analysis to see it on a real clip.",
+    "sampleHook": "The craziest moment of the stream",
+    "sampleWords": "HERE WE GO",
+    "base": "Layout",
+    "baseHint": "Where the cam and the game go. Your settings apply to each one.",
+    "cam": "Your cam",
+    "noCamHint": "No cam found: it will show here when there is one.",
+    "camSize": "Size",
+    "camShape": "Shape",
+    "camBorder": "Outline",
+    "size": {
+      "s": "Small",
+      "m": "Medium",
+      "l": "Large"
+    },
+    "shape": {
+      "rounded": "Rounded",
+      "circle": "Round"
+    },
+    "border": {
+      "white": "White",
+      "accent": "Your color",
+      "none": "None"
+    },
+    "background": "The background",
+    "backgroundKind": "Behind",
+    "fullGame": "The game fills the whole screen: no background to pick.",
+    "bg": {
+      "blur": "The blurred clip",
+      "dark": "Dark",
+      "brand": "Your color"
+    },
+    "subtitles": "The subtitles",
+    "subtitlesHint": "The style (Bold and white, Karaoke, Subtle) is set in Edit.",
+    "position": "Position",
+    "textSize": "Text size",
+    "pos": {
+      "auto": "Like the layout",
+      "top": "Top",
+      "middle": "Middle",
+      "bottom": "Bottom",
+      "hidden": "Hidden"
+    },
+    "widget": "Your channel widget",
+    "hook": "The hook",
+    "hookHint": "The line at the top of the clip, editable clip by clip in Edit.",
+    "hookShow": "Show",
+    "shown": "Yes",
+    "hidden": "No"
   }
 }

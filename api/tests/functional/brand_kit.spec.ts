@@ -85,6 +85,48 @@ test.group('Brand kit', (group) => {
   })
 })
 
+test.group('Brand kit | custom templates', (group) => {
+  group.each.setup(() => testUtils.db().withGlobalTransaction())
+  group.each.setup(() => {
+    const settings = readSettings()
+    delete settings.brand_kit
+    writeSettings(settings)
+  })
+
+  const look = {
+    camSize: 'l',
+    camShape: 'circle',
+    camBorder: 'accent',
+    background: 'brand',
+    subtitlePosition: 'top',
+    subtitleSize: 'm',
+    widgetPosition: 'none',
+    hook: 'on',
+  }
+
+  test('saves the templates made in the simple editor', async ({ client, assert }) => {
+    const user = await makeUser()
+    const template = { id: 'custom-3f2a9c1e', name: '  Mon modèle  ', base: 'signature', look, extra: 'dropped' }
+    const response = await client.put('/api/brand-kit').loginAs(user).json({ templates: [template] })
+    response.assertStatus(200)
+    assert.deepEqual(response.body().templates, [{ id: 'custom-3f2a9c1e', name: 'Mon modèle', base: 'signature', look }])
+    assert.deepEqual((await client.get('/api/brand-kit').loginAs(user)).body().templates[0].look, look)
+  })
+
+  test('rejects unknown bases and values', async ({ client }) => {
+    const user = await makeUser()
+    const bad = [
+      [{ id: 'custom-3f2a9c1e', name: 'A', base: 'tiktok', look }],
+      [{ id: 'custom-3f2a9c1e', name: 'A', base: 'signature', look: { ...look, camSize: 'xl' } }],
+      [{ id: '../x', name: 'A', base: 'signature', look }],
+      [{ id: 'custom-3f2a9c1e', name: '', base: 'signature', look }],
+    ]
+    for (const templates of bad) {
+      ;(await client.put('/api/brand-kit').loginAs(user).json({ templates })).assertStatus(400)
+    }
+  })
+})
+
 test.group('Brand kit | webcam scaling', () => {
   test('scales the confirmed webcam to the clip size', ({ assert }) => {
     const kit = { ...DEFAULT_BRAND_KIT, facecam: { x: 1518, y: 0, w: 402, h: 446, ref_w: 1920, ref_h: 1080 } }

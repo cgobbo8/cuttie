@@ -160,81 +160,219 @@ function hookText(ctx: TemplateContext, t: LayerTransform, style: "outline" | "b
   return layers;
 }
 
-/** Webcam with a white frame around it */
-function framedCam(ctx: TemplateContext, t: LayerTransform, radius: number, border: number): Layer[] {
-  if (!ctx.facecam) return [];
-  return [
-    shape("Cadre de la cam", { x: t.x - border, y: t.y - border, width: t.width + border * 2, height: t.height + border * 2 }, "#FFFFFF", 1, radius + border),
-    video(ctx, "Webcam", "facecam", ctx.facecam, t, radius),
-  ];
+/** What a streamer can adjust on top of a base template (the simple template editor) */
+export interface TemplateLook {
+  camSize: "s" | "m" | "l";
+  camShape: "rounded" | "circle";
+  camBorder: "white" | "accent" | "none";
+  background: "blur" | "dark" | "brand";
+  /** "auto": where the base template puts them */
+  subtitlePosition: "auto" | "top" | "middle" | "bottom";
+  subtitleSize: "s" | "m" | "l";
+  widgetPosition: "auto" | "top" | "bottom" | "none";
+  /** Only for the templates built around a hook line */
+  hook: "on" | "off";
 }
 
-export function buildTemplate(id: TemplateId, ctx: TemplateContext): Layer[] {
+const LOOK: TemplateLook = {
+  camSize: "m",
+  camShape: "rounded",
+  camBorder: "white",
+  background: "blur",
+  subtitlePosition: "auto",
+  subtitleSize: "m",
+  widgetPosition: "auto",
+  hook: "on",
+};
+
+/** How each base template looks out of the box */
+export const NATIVE_LOOKS: Record<TemplateId, TemplateLook> = {
+  signature: LOOK,
+  plein: LOOK,
+  reaction: { ...LOOK, camBorder: "none" },
+  discussion: { ...LOOK, camShape: "circle", camBorder: "accent" },
+  sanscam: LOOK,
+  accroche: LOOK,
+};
+
+/** A streamer's own template: a base layout and their adjustments */
+export interface CustomTemplate {
+  id: string;
+  name: string;
+  base: TemplateId;
+  look: TemplateLook;
+}
+
+const SIZE = { s: 0.82, m: 1, l: 1.18 } as const;
+const FONT = { s: 0.82, m: 1, l: 1.2 } as const;
+const FULL: LayerTransform = { x: 0, y: 0, width: W, height: H };
+
+function backdrop(ctx: TemplateContext, look: TemplateLook): Layer[] {
+  if (look.background === "blur") return blurredBackground(ctx);
+  const layers = [shape("Fond", FULL, ctx.colors.dark, 1, 0)];
+  if (look.background === "brand") layers.push(shape("Teinte", FULL, ctx.colors.accent, 0.55, 0));
+  for (const l of layers) l.locked = true;
+  return layers;
+}
+
+/** Where the webcam sits in a base template, and its rounded corners / frame width */
+interface CamSpot {
+  box: LayerTransform;
+  radius: number;
+  border: number;
+}
+
+/** The webcam in its spot, resized / reshaped / framed as the look says */
+function cam(ctx: TemplateContext, spot: CamSpot, look: TemplateLook): Layer[] {
+  if (!ctx.facecam) return [];
+  const { box } = spot;
+  const border = look.camBorder === "none" ? 0 : spot.border;
+  // Bigger, but never wider than the frame (the "Reaction" cam is already 1000 px)
+  const scale = Math.min(SIZE[look.camSize], (W - 2 * border) / box.width, (H - 2 * border) / box.height);
+  let w = box.width * scale;
+  let h = box.height * scale;
+  if (look.camShape === "circle") w = h = Math.min(w, h);
+  const x = Math.round(Math.min(Math.max(box.x + (box.width - w) / 2, border), W - w - border));
+  const y = Math.round(Math.min(Math.max(box.y + (box.height - h) / 2, border), H - h - border));
+  const t = { x, y, width: Math.round(w), height: Math.round(h) };
+  const circle = look.camShape === "circle";
+  const radius = circle ? t.width / 2 : spot.radius;
+
+  const layers: Layer[] = [];
+  if (border) {
+    const frame = { x: t.x - border, y: t.y - border, width: t.width + border * 2, height: t.height + border * 2 };
+    layers.push(
+      look.camBorder === "accent"
+        ? shape("Anneau de la cam", frame, ctx.colors.accent, 1, radius + border, "none", circle)
+        : shape("Cadre de la cam", frame, "#FFFFFF", 1, radius + border, "none", circle),
+    );
+  }
+  layers.push(video(ctx, "Webcam", "facecam", ctx.facecam, t, radius));
+  return layers;
+}
+
+const SUBTITLE_CENTER = { top: 420, middle: 960, bottom: 1540 } as const;
+
+function placedSubtitles(ctx: TemplateContext, t: LayerTransform, fontSize: number, look: TemplateLook, speakers = false): Layer {
+  const y = look.subtitlePosition === "auto" ? t.y : SUBTITLE_CENTER[look.subtitlePosition] - t.height / 2;
+  return subtitles(ctx, { ...t, y: Math.round(y) }, Math.round(fontSize * FONT[look.subtitleSize]), speakers);
+}
+
+function placedWidget(ctx: TemplateContext, t: LayerTransform, look: TemplateLook): Layer[] {
+  if (look.widgetPosition === "none") return [];
+  if (look.widgetPosition === "top") return channelWidget(ctx, { x: 140, y: 62, width: 800, height: 82 });
+  if (look.widgetPosition === "bottom") return channelWidget(ctx, { x: 140, y: 1770, width: 800, height: 82 });
+  return channelWidget(ctx, t);
+}
+
+/**
+ * Layer ids from their names (unique within a template): rebuilding after a
+ * setting changes keeps the same React keys, so the preview's videos stay put.
+ */
+function stableIds(layers: Layer[]): Layer[] {
+  return layers.map((l) => ({ ...l, id: `tpl-${l.name.normalize("NFD").replace(/[^\w]+/g, "-").toLowerCase()}` }));
+}
+
+export function buildTemplate(id: TemplateId, ctx: TemplateContext, look: TemplateLook = NATIVE_LOOKS[id]): Layer[] {
+  return stableIds(layout(id, ctx, look));
+}
+
+function layout(id: TemplateId, ctx: TemplateContext, look: TemplateLook): Layer[] {
   const game = gameRegion(ctx);
   const hasCam = !!ctx.facecam;
+  const hook = look.hook === "on";
 
   switch (id) {
     case "signature":
       return [
-        ...blurredBackground(ctx),
-        ...framedCam(ctx, { x: 240, y: 150, width: 600, height: 666 }, 44, 6),
+        ...backdrop(ctx, look),
+        ...cam(ctx, { box: { x: 240, y: 150, width: 600, height: 666 }, radius: 44, border: 6 }, look),
         hasCam
           ? video(ctx, "Jeu", "gameplay", game, { x: 40, y: 868, width: 1000, height: 711 }, 36)
           : video(ctx, "Jeu", "gameplay", game, { x: 0, y: 656, width: W, height: 608 }),
-        subtitles(ctx, { x: 60, y: 1310, width: 960, height: 190 }, 96),
-        ...channelWidget(ctx, { x: 140, y: 1640, width: 800, height: 96 }),
+        placedSubtitles(ctx, { x: 60, y: 1310, width: 960, height: 190 }, 96, look),
+        ...placedWidget(ctx, { x: 140, y: 1640, width: 800, height: 96 }, look),
       ];
 
     case "plein":
+      // The game fills the frame: no backdrop to pick
       return [
-        video(ctx, "Jeu", "gameplay", game, { x: 0, y: 0, width: W, height: H }),
-        ...framedCam(ctx, { x: 52, y: 190, width: 330, height: 366 }, 32, 5),
-        subtitles(ctx, { x: 60, y: 1200, width: 960, height: 190 }, 94),
-        ...channelWidget(ctx, { x: 140, y: 62, width: 800, height: 82 }),
+        video(ctx, "Jeu", "gameplay", game, FULL),
+        ...cam(ctx, { box: { x: 52, y: 190, width: 330, height: 366 }, radius: 32, border: 5 }, look),
+        placedSubtitles(ctx, { x: 60, y: 1200, width: 960, height: 190 }, 94, look),
+        ...placedWidget(ctx, { x: 140, y: 62, width: 800, height: 82 }, look),
       ];
 
     case "reaction":
       return [
-        ...blurredBackground(ctx),
-        ...(hasCam ? [video(ctx, "Webcam", "facecam", ctx.facecam!, { x: 40, y: 56, width: 1000, height: 900 }, 44)] : []),
+        ...backdrop(ctx, look),
+        ...cam(ctx, { box: { x: 40, y: 56, width: 1000, height: 900 }, radius: 44, border: 6 }, look),
         video(ctx, "Jeu", "gameplay", game, { x: 40, y: 1010, width: 1000, height: 711 }, 36),
-        subtitles(ctx, { x: 60, y: 890, width: 960, height: 190 }, 90),
-        ...channelWidget(ctx, { x: 140, y: 1770, width: 800, height: 82 }),
+        placedSubtitles(ctx, { x: 60, y: 890, width: 960, height: 190 }, 90, look),
+        ...placedWidget(ctx, { x: 140, y: 1770, width: 800, height: 82 }, look),
       ];
 
     case "discussion":
       return [
-        ...blurredBackground(ctx),
+        ...backdrop(ctx, look),
         video(ctx, "Jeu", "gameplay", game, { x: 0, y: 330, width: W, height: 1080 }),
-        ...(hasCam
-          ? [
-              shape("Anneau de la cam", { x: 50, y: 186, width: 350, height: 350 }, ctx.colors.accent, 1, 175, "none", true),
-              video(ctx, "Webcam", "facecam", ctx.facecam!, { x: 60, y: 196, width: 330, height: 330 }, 165),
-            ]
-          : []),
-        subtitles(ctx, { x: 60, y: 1460, width: 960, height: 300 }, 82, true),
-        ...channelWidget(ctx, { x: 260, y: 62, width: 800, height: 82 }),
+        ...cam(ctx, { box: { x: 60, y: 196, width: 330, height: 330 }, radius: 40, border: 10 }, look),
+        placedSubtitles(ctx, { x: 60, y: 1460, width: 960, height: 300 }, 82, look, true),
+        ...placedWidget(ctx, { x: 260, y: 62, width: 800, height: 82 }, look),
       ];
 
     case "sanscam":
       return [
-        ...blurredBackground(ctx),
+        ...backdrop(ctx, look),
         video(ctx, "Jeu", "gameplay", game, { x: 0, y: 330, width: W, height: 1350 }),
-        ...hookText(ctx, { x: 40, y: 70, width: 1000, height: 230 }, "outline"),
-        subtitles(ctx, { x: 60, y: 1310, width: 960, height: 190 }, 92),
-        ...channelWidget(ctx, { x: 140, y: 1730, width: 800, height: 82 }),
+        ...(hook ? hookText(ctx, { x: 40, y: 70, width: 1000, height: 230 }, "outline") : []),
+        placedSubtitles(ctx, { x: 60, y: 1310, width: 960, height: 190 }, 92, look),
+        ...placedWidget(ctx, { x: 140, y: 1730, width: 800, height: 82 }, look),
       ];
 
     case "accroche":
       return [
-        ...blurredBackground(ctx),
-        ...hookText(ctx, { x: 80, y: 135, width: 920, height: 240 }, "box"),
+        ...backdrop(ctx, look),
+        ...(hook ? hookText(ctx, { x: 80, y: 135, width: 920, height: 240 }, "box") : []),
         video(ctx, "Jeu", "gameplay", game, { x: 0, y: 470, width: W, height: 768 }),
-        subtitles(ctx, { x: 60, y: 1050, width: 960, height: 190 }, 88),
-        ...framedCam(ctx, { x: 340, y: 1300, width: 400, height: 444 }, 40, 6),
-        ...channelWidget(ctx, { x: 140, y: 1790, width: 800, height: 82 }),
+        placedSubtitles(ctx, { x: 60, y: 1050, width: 960, height: 190 }, 88, look),
+        ...cam(ctx, { box: { x: 340, y: 1300, width: 400, height: 444 }, radius: 40, border: 6 }, look),
+        ...placedWidget(ctx, { x: 140, y: 1790, width: 800, height: 82 }, look),
       ];
   }
+}
+
+/** One of the 6 base templates, or the id of a streamer's own template */
+export type TemplateKey = string;
+
+export function findCustom(key: TemplateKey, customs: CustomTemplate[]): CustomTemplate | undefined {
+  return customs.find((t) => t.id === key);
+}
+
+/** The base layout behind a template key (unknown keys fall back to Signature) */
+export function baseOf(key: TemplateKey, customs: CustomTemplate[]): TemplateId {
+  const custom = findCustom(key, customs);
+  if (custom) return custom.base;
+  return (TEMPLATE_IDS as string[]).includes(key) ? (key as TemplateId) : "signature";
+}
+
+export function lookOf(key: TemplateKey, customs: CustomTemplate[]): TemplateLook {
+  return findCustom(key, customs)?.look ?? NATIVE_LOOKS[baseOf(key, customs)];
+}
+
+/** Layers of any template: one of the 6, or a streamer's own */
+export function buildAny(key: TemplateKey, ctx: TemplateContext, customs: CustomTemplate[]): Layer[] {
+  return buildTemplate(baseOf(key, customs), ctx, lookOf(key, customs));
+}
+
+/** The template shows a hook line (the input in Montage only applies then) */
+export function showsHook(key: TemplateKey, customs: CustomTemplate[]): boolean {
+  return HAS_HOOK.includes(baseOf(key, customs)) && lookOf(key, customs).hook === "on";
+}
+
+export function newTemplateId(): string {
+  const random = Array.from(crypto.getRandomValues(new Uint8Array(6)), (b) => b.toString(16).padStart(2, "0")).join("");
+  return `custom-${random}`;
 }
 
 /** A sensible template for a moment, from what happens in it */

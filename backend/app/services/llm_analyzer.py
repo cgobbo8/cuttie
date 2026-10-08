@@ -26,6 +26,7 @@ from app.models.schemas import HotPoint, KeyMoment, LlmAnalysis, VodContext
 from app.services.clipper import CLIP_HALF_DURATION
 from app.services.db import save_hot_points, update_job
 from app.services.frame_extractor import (
+    FRAMES_DIR,
     NUM_FRAMES,
     extract_frames,
     extract_frames_from_url,
@@ -489,7 +490,8 @@ def _call_unified_llm(
         model=LLM_MODEL,
         messages=[{"role": "user", "content": content_parts}],
         temperature=0.4,
-        max_completion_tokens=2000,
+        # Thinking tokens count toward this limit
+        max_completion_tokens=8000,
     )
     if not is_openrouter:
         kwargs["response_format"] = {"type": "json_object"}
@@ -504,7 +506,11 @@ def _call_unified_llm(
         content = content.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
     logger.debug(f"LLM raw ({finish}, {len(content)} chars): {content[:200]}")
 
-    data = json.loads(content)
+    try:
+        data = json.loads(content)
+    except json.JSONDecodeError:
+        logger.warning(f"Candidate LLM returned invalid JSON (finish_reason={finish}, {len(content)} chars)")
+        raise
     clip_name = data.get("clip_name", "")
 
     # Parse key moments
@@ -720,7 +726,9 @@ def gather_vod_context(
         model=LLM_MODEL,
         messages=[{"role": "user", "content": prompt}],
         temperature=0.3,
-        max_completion_tokens=4000,
+        # Gemini's thinking tokens count toward this limit: 4000 truncated the JSON
+        # (one score per segment) in most runs
+        max_completion_tokens=24000,
     )
     if not is_openrouter:
         kwargs["response_format"] = {"type": "json_object"}
@@ -732,7 +740,14 @@ def gather_vod_context(
     if content.startswith("```"):
         content = content.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
 
-    data = json.loads(content)
+    try:
+        data = json.loads(content)
+    except json.JSONDecodeError:
+        logger.error(
+            f"[{job_id[:8]}] VOD context: invalid JSON (finish_reason={response.choices[0].finish_reason}, "
+            f"{len(content)} chars)"
+        )
+        raise
 
     # Parse VOD context
     raw_ctx = data.get("vod_context", {})
@@ -925,6 +940,13 @@ def analyze_candidates(
                     all_frames[idx] = []
 
     def _run_diarization():
+        # Speaker labels are a bonus (LLM context + subtitle colors): never fail the job for them
+        try:
+            _diarize()
+        except Exception as e:
+            logger.warning(f"[{job_id[:8]}] Diarization unavailable, continuing without speaker labels: {e}")
+
+    def _diarize():
         from app.services.speaker_diarizer import extract_voiceprint, diarize_candidates
         import numpy as np
 
@@ -1123,9 +1145,10 @@ def analyze_candidates(
         for hp in detected_hps:
             logger.info(f"  🎬 {hp.timestamp_display} | \"{hp.llm.summary[:60]}...\"")
 
-    # Cleanup triage audio directory (kept for LLM audio analysis)
+    # Cleanup triage audio (kept for LLM audio analysis) and candidate frames
     if os.path.exists(triage_dir):
         shutil.rmtree(triage_dir, ignore_errors=True)
+    shutil.rmtree(os.path.join(FRAMES_DIR, job_id), ignore_errors=True)
 
     pipeline_elapsed = _time.time() - pipeline_t0
     logger.info(

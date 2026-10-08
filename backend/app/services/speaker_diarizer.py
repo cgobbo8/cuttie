@@ -543,7 +543,8 @@ def diarize_candidates(
     logger.info(f"[{job_id[:8]}] Diarizing {total} candidates...")
     t0 = time.time()
 
-    # Warm up the pipeline (load once before parallel calls)
+    # Warm up the pipeline (load once before parallel calls); raises if the
+    # model can't be loaded — the caller treats diarization as optional
     _get_pipeline()
     _get_classifier()
 

@@ -144,7 +144,7 @@ cuttie/
 ## Pipeline (6 etapes)
 
 ```
-1. DOWNLOADING_AUDIO   -> Metadata + audio 11025Hz mono WAV + chat Twitch GQL (en parallele)
+1. DOWNLOADING_AUDIO   -> Metadata + audio 16 kHz mono WAV + chat Twitch GQL (en parallele)
 2. ANALYZING_AUDIO     -> librosa features (5s/2.5s hop) + PANNs CNN14 classification (en parallele)
 3. ANALYZING_CHAT      -> Sentiment, emotes, burst detection
 4. SCORING             -> Score composite pondere + peak detection -> top 200

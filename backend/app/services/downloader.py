@@ -51,8 +51,11 @@ def extract_metadata(url: str) -> dict:
     }
 
 
+AUDIO_SAMPLE_RATE = 16000  # speech models (Whisper, pyannote) work at 16 kHz
+
+
 def download_audio(url: str, output_dir: str) -> str:
-    """Download audio from a Twitch VOD as WAV, downsampled to 11025Hz mono."""
+    """Download audio from a Twitch VOD as a 16 kHz mono WAV (~120 MB per hour)."""
     import glob
     import threading
     import time
@@ -87,9 +90,11 @@ def download_audio(url: str, output_dir: str) -> str:
                 "preferredcodec": "wav",
             }
         ],
-        "postprocessor_args": {"FFmpegExtractAudio": ["-ar", "11025", "-ac", "1"]},
+        # Keys must be lowercase: yt-dlp ignored "FFmpegExtractAudio" and kept 48 kHz stereo
+        "postprocessor_args": {"ffmpegextractaudio": ["-ar", str(AUDIO_SAMPLE_RATE), "-ac", "1"]},
         "quiet": True,
         "no_warnings": True,
+        "noprogress": True,
         "concurrent_fragment_downloads": 5,  # parallel HLS segment downloads — helps with slow CDNs
     }
 

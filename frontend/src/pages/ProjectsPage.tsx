@@ -1,126 +1,176 @@
-import { useState, useEffect, useCallback, useRef } from "react";
-import { useNavigate, useSearchParams } from "react-router";
-import { listJobs, listGamesAndStreamers, deleteJob, retryJob, type JobSummary, type PaginationMeta, type GameSummary, type StreamerSummary } from "../lib/api";
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
+import { Link, useNavigate } from "react-router";
 import { useTranslation } from "react-i18next";
+import { ArrowRight, Clapperboard, Download, Film, Loader2, RotateCcw, Search, Sparkles, Trash2 } from "lucide-react";
+import {
+  clipThumbUrl,
+  deleteJob,
+  listGamesAndStreamers,
+  listJobs,
+  retryJob,
+  type GameSummary,
+  type JobSummary,
+  type PaginationMeta,
+} from "../lib/api";
+import { useChannel } from "../lib/ChannelContext";
 import { useCreatorWorkspace } from "../lib/CreatorWorkspaceContext";
+import { analysisProgress, dayDate, hoursMinutes, splitVodTitle } from "../lib/format";
+import { projectPath, projectStage, type ProjectStage } from "../lib/projects";
 import ConfirmModal from "../components/ConfirmModal";
 import { useToast } from "../components/Toast";
-import {
-  Search,
-  ArrowUpDown,
-  RotateCcw,
-  Loader2,
-  FolderOpen,
-  Trash2,
-  Gamepad2,
-  Users,
-  MessageSquare,
-  ChevronLeft,
-  ChevronRight,
-  X,
-} from "lucide-react";
 
-type SortKey = "date" | "title" | "status";
-type SortDir = "asc" | "desc";
-type StatusFilter = "" | "done" | "in_progress" | "error";
+type StatusFilter = "" | "in_progress" | "done" | "error";
 
-function formatDate(iso: string, lng: string): string {
-  const locale = lng === "es" ? "es-ES" : lng === "en" ? "en-US" : "fr-FR";
-  const d = new Date(iso);
-  return d.toLocaleDateString(locale, {
-    day: "numeric",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
+const PER_PAGE = 24;
 
-function formatDuration(seconds: number | null): string {
-  if (!seconds) return "-";
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  return h > 0 ? `${h}h${m.toString().padStart(2, "0")}` : `${m}min`;
-}
+function ProjectCard({
+  job,
+  cover,
+  onRetry,
+  onDelete,
+}: {
+  job: JobSummary;
+  cover: string | null;
+  onRetry: (job: JobSummary) => void;
+  onDelete: (job: JobSummary) => void;
+}) {
+  const { t, i18n } = useTranslation();
+  const stage: ProjectStage = projectStage(job);
+  const { tag, title } = splitVodTitle(job.custom_title || job.vod_title);
+  const date = job.stream_date ?? job.created_at;
+  const progress = stage === "analyzing" ? analysisProgress(job.status, job.progress) : null;
 
-function formatNumber(n: number | null): string {
-  if (n == null) return "-";
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
-  return String(n);
-}
+  const stop = (e: MouseEvent, action: () => void) => {
+    e.preventDefault();
+    e.stopPropagation();
+    action();
+  };
 
-function StatusBadge({ status }: { status: string }) {
-  const { t } = useTranslation();
-  if (status === "DONE") {
-    return (
-      <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400">
-        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-        {t("status.done")}
-      </span>
-    );
-  }
-  if (status === "ERROR") {
-    return (
-      <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full bg-red-500/10 text-red-400">
-        <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
-        {t("status.error")}
-      </span>
-    );
-  }
   return (
-    <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full bg-white/[0.06] text-zinc-300">
-      <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 animate-pulse" />
-      {t("status.inProgress")}
-    </span>
+    <Link
+      to={projectPath(job.job_id, stage)}
+      className="group glass rounded-[18px] overflow-hidden flex flex-col transition-[transform,border-color] duration-300 hover:-translate-y-0.5 hover:border-white/[0.16]"
+    >
+      <div className="relative aspect-video overflow-hidden bg-white/[0.04]">
+        {cover ? (
+          <img
+            src={cover}
+            alt=""
+            loading="lazy"
+            className={`w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.04] ${stage === "error" ? "grayscale-[0.6] brightness-[0.6]" : ""}`}
+          />
+        ) : (
+          <div className="w-full h-full skeleton" />
+        )}
+        <div className="absolute inset-0 bg-[linear-gradient(0deg,rgba(11,11,12,0.6)_0%,rgba(11,11,12,0)_45%)]" />
+
+        <span className="absolute top-2.5 left-2.5 chip glass-chip text-white h-[26px] px-2.5 text-[12px]">
+          {stage === "analyzing" ? (
+            <>
+              <Loader2 className="w-3 h-3 animate-spin" /> {t("projects.analyzing", { percent: progress?.percent ?? 0 })}
+            </>
+          ) : stage === "error" ? (
+            <span className="text-[#ff8a7a]">{t("status.error")}</span>
+          ) : (
+            <>
+              <span className="w-1.5 h-1.5 rounded-full bg-accent" /> {t(`projects.stage.${stage}`)}
+            </>
+          )}
+        </span>
+        {job.vod_duration_seconds ? (
+          <span className="absolute bottom-2.5 right-2.5 mono chip glass-chip text-white h-[24px] px-2 text-[11.5px]">
+            {hoursMinutes(job.vod_duration_seconds)}
+          </span>
+        ) : null}
+        <button
+          onClick={(e) => stop(e, () => onDelete(job))}
+          aria-label={t("home.deleteProject")}
+          title={t("home.deleteProject")}
+          className="absolute top-2 right-2 btn btn-icon btn-sm glass-chip text-white/80 hover:text-white opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+        </button>
+        {progress && (
+          <div className="absolute inset-x-0 bottom-0 h-1 bg-white/10">
+            <div className="h-full bg-accent transition-[width] duration-700" style={{ width: `${progress.percent}%` }} />
+          </div>
+        )}
+      </div>
+
+      <div className="flex-1 flex flex-col gap-3 p-4">
+        <div className="min-w-0">
+          <h2 className="text-[16px] leading-snug font-semibold tracking-[-0.01em] text-white line-clamp-2">{title || t("home.untitledVod")}</h2>
+          <p className="mt-1 text-[12.5px] text-ink-3 truncate">{[dayDate(date, i18n.language), job.vod_game, tag].filter(Boolean).join(" · ")}</p>
+        </div>
+
+        {job.status === "DONE" && (
+          <div className="flex flex-wrap gap-x-3.5 gap-y-1 text-[12.5px] text-ink-2">
+            <span className="inline-flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5 text-ink-3" /> {t("projects.moments", { count: job.clip_count })}
+            </span>
+            {job.kept_count > 0 && (
+              <span className="inline-flex items-center gap-1.5">
+                <Film className="w-3.5 h-3.5 text-ink-3" /> {t("projects.kept", { count: job.kept_count })}
+              </span>
+            )}
+            {job.export_count > 0 && (
+              <span className="inline-flex items-center gap-1.5">
+                <Download className="w-3.5 h-3.5 text-ink-3" /> {t("projects.exported", { count: job.export_count })}
+              </span>
+            )}
+          </div>
+        )}
+        {stage === "error" && job.error && <p className="text-[12.5px] leading-snug text-ink-3 line-clamp-2">{job.error}</p>}
+
+        <div className="mt-auto pt-1 flex items-center justify-between gap-3">
+          {stage === "error" ? (
+            <button onClick={(e) => stop(e, () => onRetry(job))} className="btn btn-glass btn-sm">
+              <RotateCcw className="w-3.5 h-3.5" /> {t("projects.next.error")}
+            </button>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 text-[13px] font-[550] text-white">
+              {t(`projects.next.${stage}`)}
+              <ArrowRight className="w-3.5 h-3.5 transition-transform duration-200 group-hover:translate-x-0.5" />
+            </span>
+          )}
+        </div>
+      </div>
+    </Link>
   );
 }
 
+/** Every live analyzed so far, each opening at the step it is at */
 export default function ProjectsPage() {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
   const toast = useToast();
-  const { creator, isAllMode } = useCreatorWorkspace();
+  const { channel } = useChannel();
+  const { creator } = useCreatorWorkspace();
+
   const [jobs, setJobs] = useState<JobSummary[]>([]);
-  const [meta, setMeta] = useState<PaginationMeta>({ total: 0, per_page: 20, current_page: 1, last_page: 1 });
+  const [meta, setMeta] = useState<PaginationMeta>({
+    total: 0,
+    per_page: PER_PAGE,
+    current_page: 1,
+    last_page: 1,
+  });
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("");
-  const [gameFilter, setGameFilter] = useState(searchParams.get("game") || "");
-  const [streamerFilter, setStreamerFilter] = useState(searchParams.get("streamer") || "");
-  const [sortKey, setSortKey] = useState<SortKey>("date");
-  const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [gameFilter, setGameFilter] = useState("");
+  const [games, setGames] = useState<GameSummary[]>([]);
   const [page, setPage] = useState(1);
-
-  // Filter options from games API
-  const [gameOptions, setGameOptions] = useState<GameSummary[]>([]);
-  const [streamerOptions, setStreamerOptions] = useState<StreamerSummary[]>([]);
-
-  useEffect(() => {
-    listGamesAndStreamers(creator?.id)
-      .then(({ games, streamers }) => {
-        setGameOptions(games);
-        setStreamerOptions(streamers);
-      })
-      .catch(() => {});
-  }, [creator?.id]);
-
-  // Sync filters to URL
-  useEffect(() => {
-    const params = new URLSearchParams();
-    if (gameFilter) params.set("game", gameFilter);
-    if (streamerFilter) params.set("streamer", streamerFilter);
-    setSearchParams(params, { replace: true });
-  }, [gameFilter, streamerFilter, setSearchParams]);
-
-  // Delete modal
   const [deleteTarget, setDeleteTarget] = useState<JobSummary | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  // Debounce search
-  const searchTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const [debouncedSearch, setDebouncedSearch] = useState("");
+  useEffect(() => {
+    listGamesAndStreamers(creator?.id)
+      .then(({ games }) => setGames(games))
+      .catch(() => {});
+  }, [creator?.id]);
 
+  const searchTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   useEffect(() => {
     clearTimeout(searchTimer.current);
     searchTimer.current = setTimeout(() => {
@@ -134,11 +184,10 @@ export default function ProjectsPage() {
     try {
       const result = await listJobs({
         page,
-        per_page: 20,
+        per_page: PER_PAGE,
         search: debouncedSearch || undefined,
         status: statusFilter || undefined,
         game: gameFilter || undefined,
-        streamer: streamerFilter || undefined,
         creator_id: creator?.id,
       });
       setJobs(result.data);
@@ -148,68 +197,36 @@ export default function ProjectsPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, debouncedSearch, statusFilter, gameFilter, streamerFilter, creator?.id]);
+  }, [page, debouncedSearch, statusFilter, gameFilter, creator?.id]);
 
   useEffect(() => {
     setLoading(true);
     fetchJobs();
   }, [fetchJobs]);
 
-  // Poll for in-progress jobs
-  const hasInProgress = jobs.some((j) => j.status !== "DONE" && j.status !== "ERROR");
+  // Analyses running: follow their progress
+  const running = jobs.some((j) => j.status !== "DONE" && j.status !== "ERROR");
   useEffect(() => {
-    if (!hasInProgress) return;
+    if (!running) return;
     const interval = setInterval(fetchJobs, 5000);
     return () => clearInterval(interval);
-  }, [hasInProgress, fetchJobs]);
+  }, [running, fetchJobs]);
 
-  const toggleSort = useCallback(
-    (key: SortKey) => {
-      if (sortKey === key) {
-        setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-      } else {
-        setSortKey(key);
-        setSortDir("desc");
-      }
-    },
-    [sortKey],
-  );
+  // The live's own thumbnail while there is no clip yet
+  const vodThumbs = useMemo(() => new Map((channel?.vods ?? []).map((v) => [v.id, v.thumbnail_url])), [channel]);
+  const coverOf = (job: JobSummary) =>
+    job.cover_clip ? clipThumbUrl(job.job_id, job.cover_clip, { width: 480 }) : (job.vod_id && vodThumbs.get(job.vod_id)) || job.streamer_thumbnail;
 
-  // Client-side sort (server returns by date desc, we re-sort locally for title/status)
-  const sorted = [...jobs].sort((a, b) => {
-    const dir = sortDir === "asc" ? 1 : -1;
-    switch (sortKey) {
-      case "date":
-        return dir * (new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-      case "title":
-        return dir * (a.custom_title || a.vod_title || "").localeCompare(b.custom_title || b.vod_title || "");
-      case "status":
-        return dir * a.status.localeCompare(b.status);
-      default:
-        return 0;
+  const retry = async (job: JobSummary) => {
+    try {
+      await retryJob(job.job_id);
+      navigate(`/${job.job_id}`);
+    } catch {
+      toast.error(t("projects.retryError"));
     }
-  });
+  };
 
-  const handleRetry = useCallback(
-    async (e: React.MouseEvent, jobId: string) => {
-      e.stopPropagation();
-      try {
-        await retryJob(jobId);
-        navigate(`/${jobId}`);
-      } catch {}
-    },
-    [navigate],
-  );
-
-  const handleDelete = useCallback(
-    (e: React.MouseEvent, job: JobSummary) => {
-      e.stopPropagation();
-      setDeleteTarget(job);
-    },
-    [],
-  );
-
-  const confirmDelete = useCallback(async () => {
+  const confirmDelete = async () => {
     if (!deleteTarget) return;
     setDeleting(true);
     try {
@@ -222,276 +239,126 @@ export default function ProjectsPage() {
     } finally {
       setDeleting(false);
     }
-  }, [deleteTarget, fetchJobs, toast, t]);
+  };
 
-  const handleStatusFilter = useCallback((f: StatusFilter) => {
-    setStatusFilter(f);
-    setPage(1);
-  }, []);
-
-  const SortButton = ({ label, sortKeyVal }: { label: string; sortKeyVal: SortKey }) => (
-    <button
-      onClick={() => toggleSort(sortKeyVal)}
-      className={`flex items-center gap-1 text-xs font-medium transition-colors ${
-        sortKey === sortKeyVal ? "text-white" : "text-zinc-500 hover:text-zinc-300"
-      }`}
-    >
-      {label}
-      <ArrowUpDown className="w-3 h-3" />
-    </button>
-  );
-
-  const filterBtn = (key: StatusFilter, label: string) => (
-    <button
-      key={key}
-      onClick={() => handleStatusFilter(key)}
-      className={`text-xs px-3 py-1.5 rounded-lg transition-colors ${
-        statusFilter === key
-          ? "bg-white/[0.08] text-white"
-          : "text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04]"
-      }`}
-    >
-      {label}
-    </button>
-  );
+  const filtered = !!(debouncedSearch || statusFilter || gameFilter);
+  const filters: { key: StatusFilter; label: string }[] = [
+    { key: "", label: t("home.all") },
+    { key: "in_progress", label: t("home.inProgress") },
+    { key: "done", label: t("home.completed") },
+    { key: "error", label: t("home.errors") },
+  ];
 
   return (
     <div className="animate-fade-in">
-      {/* Page header */}
-      <div className="flex items-center justify-between mb-6">
+      <header className="flex flex-wrap items-end justify-between gap-5">
         <div>
-          <h1 className="text-xl font-semibold text-white tracking-tight">
-            {t("home.title")}
-          </h1>
-          <p className="text-sm text-zinc-500 mt-0.5">
-            {t("home.analysisCount", { count: meta.total })}
-          </p>
+          <h1 className="title-large">{t("projects.title")}</h1>
+          <p className="mt-1.5 text-[13.5px] text-ink-2">{t("projects.count", { count: meta.total })}</p>
         </div>
-      </div>
-
-      {/* Search + filters */}
-      <div className="flex items-center gap-3 mb-4">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder={t("home.search")}
-            className="w-full pl-10 pr-4 py-2.5 bg-white/[0.03] border border-white/[0.08] rounded-lg text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-white/[0.16] transition-colors"
-          />
-        </div>
-        <div className="flex items-center gap-1">
-          {filterBtn("", t("home.all"))}
-          {filterBtn("done", t("home.completed"))}
-          {filterBtn("in_progress", t("home.inProgress"))}
-          {filterBtn("error", t("home.errors"))}
-        </div>
-      </div>
-
-      {/* Game & streamer filters */}
-      <div className="flex items-center gap-2 mb-4">
-        <div className="relative">
-          <select
-            value={gameFilter}
-            onChange={(e) => { setGameFilter(e.target.value); setPage(1); }}
-            className="appearance-none text-xs pl-3 pr-8 py-1.5 rounded-lg bg-white/[0.03] border border-white/[0.08] text-zinc-300 focus:outline-none focus:border-white/[0.16] transition-colors cursor-pointer"
-          >
-            <option value="">{t("home.allGames")}</option>
-            {gameOptions.map((g) => (
-              <option key={g.game_id || g.name} value={g.name}>{g.name}</option>
-            ))}
-          </select>
-          <Gamepad2 className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-zinc-500 pointer-events-none" />
-        </div>
-        {isAllMode && (
-          <div className="relative">
-            <select
-              value={streamerFilter}
-              onChange={(e) => { setStreamerFilter(e.target.value); setPage(1); }}
-              className="appearance-none text-xs pl-3 pr-8 py-1.5 rounded-lg bg-white/[0.03] border border-white/[0.08] text-zinc-300 focus:outline-none focus:border-white/[0.16] transition-colors cursor-pointer"
-            >
-              <option value="">{t("home.allStreamers")}</option>
-              {streamerOptions.map((s) => (
-                <option key={s.name} value={s.name}>{s.name}</option>
+        {(meta.total > 0 || filtered) && (
+          <div className="flex flex-wrap items-center gap-2.5">
+            <label className="glass flex items-center gap-2 h-10 w-[300px] max-w-full px-3 rounded-[12px] focus-within:border-white/25">
+              <Search className="w-4 h-4 text-ink-3 flex-none" />
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder={t("projects.search")}
+                aria-label={t("projects.search")}
+                className="flex-1 min-w-0 bg-transparent outline-none focus-visible:outline-none text-[13.5px] text-white placeholder:text-ink-4"
+              />
+            </label>
+            {games.length > 1 && (
+              <select
+                value={gameFilter}
+                onChange={(e) => {
+                  setGameFilter(e.target.value);
+                  setPage(1);
+                }}
+                aria-label={t("home.allGames")}
+                className="glass h-10 px-3 rounded-[12px] text-[13.5px] text-white bg-transparent outline-none"
+              >
+                <option value="">{t("home.allGames")}</option>
+                {games.map((g) => (
+                  <option key={g.name} value={g.name}>
+                    {g.name}
+                  </option>
+                ))}
+              </select>
+            )}
+            <div role="group" aria-label={t("projects.filter")} className="seg">
+              {filters.map((f) => (
+                <button
+                  key={f.key}
+                  aria-pressed={statusFilter === f.key}
+                  onClick={() => {
+                    setStatusFilter(f.key);
+                    setPage(1);
+                  }}
+                >
+                  {f.label}
+                </button>
               ))}
-            </select>
-            <Users className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-zinc-500 pointer-events-none" />
+            </div>
           </div>
         )}
-        {(gameFilter || streamerFilter) && (
-          <button
-            onClick={() => { setGameFilter(""); setStreamerFilter(""); setPage(1); }}
-            className="flex items-center gap-1 text-xs text-zinc-500 hover:text-white px-2 py-1.5 rounded-lg hover:bg-white/[0.04] transition-colors"
-          >
-            <X className="w-3 h-3" />
-            {t("home.clearFilters")}
-          </button>
-        )}
-      </div>
+      </header>
 
-      {/* Table */}
-      {loading ? (
-        <div className="flex items-center justify-center py-20">
-          <Loader2 className="w-5 h-5 animate-spin text-zinc-500" />
+      {loading && jobs.length === 0 ? (
+        <div className="mt-7 grid gap-[18px] grid-cols-[repeat(auto-fill,minmax(320px,1fr))]">
+          {Array.from({ length: 6 }, (_, i) => (
+            <div key={i} className="glass rounded-[18px] overflow-hidden">
+              <div className="aspect-video skeleton" />
+              <div className="p-4 space-y-2.5">
+                <div className="h-4 w-3/4 rounded skeleton" />
+                <div className="h-3 w-1/2 rounded skeleton" />
+              </div>
+            </div>
+          ))}
         </div>
-      ) : sorted.length === 0 ? (
-        <div className="text-center py-20">
-          <FolderOpen className="w-8 h-8 text-zinc-700 mx-auto mb-3" />
-          <p className="text-sm text-zinc-500">
-            {debouncedSearch || statusFilter || gameFilter || streamerFilter ? t("common.noResults") : t("home.noProjects")}
-          </p>
-          {!debouncedSearch && !statusFilter && !gameFilter && !streamerFilter && (
-            <p className="text-xs text-zinc-600 mt-1">
-              {t("home.noProjectsHint")}
-            </p>
+      ) : jobs.length === 0 ? (
+        <div className="mt-10 glass rounded-[20px] p-8 max-w-[560px] flex flex-col items-start">
+          <span className="w-11 h-11 rounded-[13px] bg-white/[0.07] grid place-items-center">
+            <Clapperboard className="w-5 h-5 text-ink-2" />
+          </span>
+          <h2 className="mt-4 text-[20px] font-semibold tracking-[-0.02em] text-white">
+            {filtered ? t("common.noResults") : t("projects.emptyTitle")}
+          </h2>
+          <p className="mt-1.5 text-[14px] leading-relaxed text-ink-2">{filtered ? t("projects.emptyFiltered") : t("projects.emptyHint")}</p>
+          {!filtered && (
+            <Link to="/" className="btn btn-primary mt-5">
+              {t("projects.emptyCta")} <ArrowRight className="w-4 h-4" />
+            </Link>
           )}
         </div>
       ) : (
-        <>
-          <div className="surface-static rounded-xl overflow-hidden">
-            {/* Table header */}
-            <div className="grid grid-cols-[1fr_120px_80px_80px_80px_130px_40px] gap-4 px-5 py-3 border-b border-white/[0.06] bg-white/[0.02]">
-              <SortButton label={t("home.colTitle")} sortKeyVal="title" />
-              <SortButton label={t("home.colStatus")} sortKeyVal="status" />
-              <span className="text-xs font-medium text-zinc-500">{t("home.colDuration")}</span>
-              <span className="text-xs font-medium text-zinc-500 flex items-center gap-1">
-                <Users className="w-3 h-3" />
-                {t("home.colViewers")}
-              </span>
-              <span className="text-xs font-medium text-zinc-500 flex items-center gap-1">
-                <MessageSquare className="w-3 h-3" />
-                {t("home.colChat")}
-              </span>
-              <SortButton label={t("home.colDate")} sortKeyVal="date" />
-              <span />
+        <div className="mt-7 grid gap-[18px] grid-cols-[repeat(auto-fill,minmax(320px,1fr))]">
+          {jobs.map((job, i) => (
+            // The entry animation sits on a wrapper: it would freeze the card's hover lift
+            <div key={job.job_id} className="animate-rise grid min-w-0" style={{ ["--i" as string]: i }}>
+              <ProjectCard job={job} cover={coverOf(job)} onRetry={retry} onDelete={setDeleteTarget} />
             </div>
-
-            {/* Rows */}
-            {sorted.map((job) => (
-              <div
-                key={job.job_id}
-                onClick={() => navigate(`/${job.job_id}`)}
-                className="grid grid-cols-[1fr_120px_80px_80px_80px_130px_40px] gap-4 px-5 py-3.5 border-b border-white/[0.04] last:border-b-0 hover:bg-white/[0.03] transition-colors cursor-pointer group"
-              >
-                {/* Title + game + streamer */}
-                <div className="min-w-0 flex items-center gap-3">
-                  {job.streamer_thumbnail ? (
-                    <img
-                      src={job.streamer_thumbnail}
-                      alt={job.streamer || ""}
-                      className="w-8 h-8 rounded-full shrink-0 object-cover"
-                      loading="lazy"
-                    />
-                  ) : (
-                    <div className="w-8 h-8 rounded-full shrink-0 bg-white/[0.06] flex items-center justify-center">
-                      <Users className="w-3.5 h-3.5 text-zinc-600" />
-                    </div>
-                  )}
-                  <div className="min-w-0">
-                  <p className="text-sm text-zinc-300 truncate group-hover:text-white transition-colors">
-                    {job.custom_title || job.vod_title || t("home.untitledVod")}
-                  </p>
-                  <div className="text-[11px] text-zinc-500 flex items-center gap-2 mt-0.5">
-                    {job.streamer && (
-                      <span className="truncate max-w-[140px]">{job.streamer}</span>
-                    )}
-                    {job.vod_game && (
-                      <span className="flex items-center gap-1 shrink-0">
-                        <Gamepad2 className="w-3 h-3" />
-                        <span className="truncate max-w-[160px]">{job.vod_game}</span>
-                      </span>
-                    )}
-                  </div>
-                  </div>
-                </div>
-
-                {/* Status */}
-                <div className="flex items-center">
-                  <StatusBadge status={job.status} />
-                </div>
-
-                {/* Duration */}
-                <div className="flex items-center">
-                  <span className="text-xs text-zinc-500 font-mono">
-                    {formatDuration(job.vod_duration_seconds)}
-                  </span>
-                </div>
-
-                {/* Viewers */}
-                <div className="flex items-center">
-                  <span className="text-xs text-zinc-500 font-mono">
-                    {formatNumber(job.view_count)}
-                  </span>
-                </div>
-
-                {/* Chat messages */}
-                <div className="flex items-center">
-                  <span className="text-xs text-zinc-500 font-mono">
-                    {formatNumber(job.chat_message_count)}
-                  </span>
-                </div>
-
-                {/* Date */}
-                <div className="flex items-center">
-                  <span className="text-xs text-zinc-500">
-                    {formatDate(job.created_at, i18n.language)}
-                  </span>
-                </div>
-
-                {/* Actions */}
-                <div className="flex items-center justify-end">
-                  {job.status === "ERROR" && (
-                    <button
-                      onClick={(e) => handleRetry(e, job.job_id)}
-                      className="p-1.5 text-zinc-500 hover:text-white hover:bg-white/[0.06] rounded-md transition-colors opacity-0 group-hover:opacity-100"
-                      title={t("home.retry")}
-                    >
-                      <RotateCcw className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-                  <button
-                    onClick={(e) => handleDelete(e, job)}
-                    className="p-1.5 text-zinc-600 hover:text-red-400 hover:bg-red-500/10 rounded-md transition-colors opacity-0 group-hover:opacity-100"
-                    title={t("home.deleteProject")}
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Pagination */}
-          {meta.last_page > 1 && (
-            <div className="flex items-center justify-between mt-4 px-1">
-              <span className="text-xs text-zinc-500">
-                {t("home.page", { current: meta.current_page, total: meta.last_page })}
-              </span>
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  disabled={page <= 1}
-                  className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/[0.06] transition-colors disabled:opacity-30 disabled:pointer-events-none"
-                >
-                  <ChevronLeft className="w-3.5 h-3.5" />
-                  {t("home.previous")}
-                </button>
-                <button
-                  onClick={() => setPage((p) => Math.min(meta.last_page, p + 1))}
-                  disabled={page >= meta.last_page}
-                  className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/[0.06] transition-colors disabled:opacity-30 disabled:pointer-events-none"
-                >
-                  {t("home.next")}
-                  <ChevronRight className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
-          )}
-        </>
+          ))}
+        </div>
       )}
 
-      {/* Delete confirmation modal */}
+      {meta.last_page > 1 && (
+        <nav className="mt-8 flex items-center justify-center gap-3" aria-label={t("projects.pages")}>
+          <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1} className="btn btn-glass btn-sm">
+            {t("home.previous")}
+          </button>
+          <span className="mono text-[12.5px] text-ink-3">
+            {t("home.page", {
+              current: meta.current_page,
+              total: meta.last_page,
+            })}
+          </span>
+          <button onClick={() => setPage((p) => Math.min(meta.last_page, p + 1))} disabled={page >= meta.last_page} className="btn btn-glass btn-sm">
+            {t("home.next")}
+          </button>
+        </nav>
+      )}
+
       <ConfirmModal
         open={!!deleteTarget}
         title={t("home.deleteProject")}

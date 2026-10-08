@@ -16,7 +16,6 @@ import {
   cancelWorkerRender,
   type WorkersStatus,
   type ActiveJob,
-  type ActiveRender,
 } from "../lib/api";
 import { useTranslation } from "react-i18next";
 import { useToast } from "../components/Toast";

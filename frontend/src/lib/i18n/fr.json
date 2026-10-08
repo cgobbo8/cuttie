@@ -65,20 +65,7 @@
     "noDataHint": "Commence à analyser des VODs pour voir ton dashboard."
   },
   "home": {
-    "title": "Projets",
-    "analysisCount_one": "{{count}} analyse",
-    "analysisCount_other": "{{count}} analyses",
-    "search": "Rechercher par titre, streamer, jeu...",
-    "colTitle": "Titre",
-    "colStatus": "Statut",
-    "colDuration": "Durée",
-    "colViewers": "Viewers",
-    "colChat": "Chat",
-    "colDate": "Date",
     "untitledVod": "VOD sans titre",
-    "noProjects": "Aucun projet",
-    "noProjectsHint": "Utilise le bouton \"Nouveau projet\" pour commencer.",
-    "retry": "Reprendre",
     "all": "Tous",
     "completed": "Terminés",
     "inProgress": "En cours",
@@ -90,14 +77,10 @@
     "page": "Page {{current}} sur {{total}}",
     "previous": "Précédent",
     "next": "Suivant",
-    "allGames": "Tous les jeux",
-    "allStreamers": "Tous les streamers",
-    "clearFilters": "Effacer"
+    "allGames": "Tous les jeux"
   },
   "status": {
-    "done": "Terminé",
-    "error": "Erreur",
-    "inProgress": "En cours"
+    "error": "Erreur"
   },
   "jobStatus": {
     "PENDING": "En attente...",
@@ -215,23 +198,25 @@
   },
   "exports": {
     "title": "Exports",
-    "exportCount_one": "{{count}} export",
-    "exportCount_other": "{{count}} exports",
-    "searchPlaceholder": "Rechercher par nom, VOD, jeu...",
+    "count_one": "{{count}} clip prêt à poster",
+    "count_other": "{{count}} clips prêts à poster",
+    "search": "Chercher un clip, un live",
+    "filter": "Filtrer les exports",
     "all": "Tous",
-    "completed": "Terminés",
-    "inProgress": "En cours",
-    "errors": "Erreurs",
-    "noExports": "Aucun export pour l'instant.",
-    "noExportsHint": "Lance un export depuis l'éditeur pour le voir ici.",
-    "download": "Télécharger",
-    "error": "Erreur",
-    "deleteExport": "Supprimer l'export",
-    "deleteExportMessage": "Cet export sera définitivement supprimé. Cette action est irréversible.",
+    "ready": "Prêts",
+    "running": "En cours",
+    "failed": "Échecs",
+    "clips_one": "{{count}} clip",
+    "clips_other": "{{count}} clips",
+    "openProject": "Ouvrir le projet",
+    "emptyTitle": "Aucun export pour l'instant",
+    "emptyHint": "Monte tes clips dans un projet : ils arrivent ici, prêts à poster.",
+    "emptyFiltered": "Aucun export ne correspond. Essaie une autre recherche ou un autre filtre.",
+    "emptyCta": "Voir mes projets",
+    "delete": "Supprimer l'export",
+    "deleteMessage": "Le fichier de ce clip sera supprimé de ton PC. Tu pourras toujours le réexporter depuis son projet.",
     "deleteSuccess": "Export supprimé",
-    "deleteError": "Erreur lors de la suppression",
-    "batchTitle_one": "Lot — {{count}} clip",
-    "batchTitle_other": "Lot — {{count}} clips"
+    "deleteError": "Impossible de supprimer l'export"
   },
   "editPage": {
     "noClipAvailable": "Aucun clip disponible pour l'édition.",
@@ -484,25 +469,9 @@
   },
   "settings": {
     "title": "Paramètres",
-    "keysTitle": "Clés API",
-    "keysHelp": "Cuttie utilise des services d'IA en ligne pour transcrire et analyser tes VODs. Colle tes clés ici : elles restent sur ton ordinateur.",
-    "groqLabel": "Groq",
-    "groqDesc": "Transcription de la voix (Whisper). Obligatoire.",
-    "openrouterLabel": "OpenRouter",
-    "openrouterDesc": "Analyse des moments forts (Gemini). Obligatoire.",
-    "openaiLabel": "OpenAI",
-    "openaiDesc": "Assistant IA de l'éditeur. Facultatif.",
-    "getKey": "Obtenir une clé",
-    "configured": "Configurée",
-    "missing": "Manquante",
-    "optional": "Facultative",
-    "placeholder": "Colle ta clé ici",
-    "replacePlaceholder": "Nouvelle clé (remplace l'actuelle)",
-    "save": "Enregistrer",
+    "keysTitle": "Tes clés d'IA",
+    "keysHelp": "Cuttie utilise deux services d'IA, payés à l'usage. Tes clés restent sur ton PC, Cuttie les vérifie auprès de chaque service.",
     "remove": "Supprimer",
-    "keySaved": "Clé enregistrée",
-    "keyRemoved": "Clé supprimée",
-    "saveError": "Impossible d'enregistrer la clé",
     "languageTitle": "Langue",
     "diagnosticsTitle": "Diagnostic",
     "diagnosticsHelp": "Vérifie que tout est prêt sur ce PC. En cas de souci, copie le rapport et envoie-le pour qu'on puisse t'aider.",
@@ -528,7 +497,12 @@
       "diskLow": "{{gb}} Go — c'est juste, une VOD peut prendre plusieurs Go",
       "dataDir": "Dossier des données",
       "versions": "Versions"
-    }
+    },
+    "subtitle": "Tes clés d'IA, la langue de l'app et l'état de ton installation.",
+    "openaiRole": "Assistant de l'éditeur avancé (facultatif)",
+    "welcomeTitle": "Réglage de départ",
+    "welcomeHint": "Refais le premier lancement : ta chaîne Twitch, tes clés et ta webcam.",
+    "welcomeCta": "Revoir le réglage"
   },
   "analyze": {
     "hello": "Salut {{name}}",
@@ -898,5 +872,37 @@
       "keysMissing": "Il manque une clé d'IA (ou elle est refusée) : sans elle, l'analyse ne peut pas démarrer.",
       "addKeys": "Ajouter mes clés"
     }
+  },
+  "projects": {
+    "title": "Projets",
+    "count_one": "{{count}} live analysé",
+    "count_other": "{{count}} lives analysés",
+    "search": "Chercher un live, un jeu",
+    "filter": "Filtrer les projets",
+    "pages": "Pages",
+    "analyzing": "Analyse · {{percent}} %",
+    "stage": {
+      "choose": "À trier",
+      "edit": "À monter",
+      "exported": "Exporté"
+    },
+    "moments_one": "{{count}} moment",
+    "moments_other": "{{count}} moments",
+    "kept_one": "{{count}} gardé",
+    "kept_other": "{{count}} gardés",
+    "exported_one": "{{count}} exporté",
+    "exported_other": "{{count}} exportés",
+    "next": {
+      "analyzing": "Suivre l'analyse",
+      "error": "Relancer l'analyse",
+      "choose": "Choisir les moments",
+      "edit": "Monter les clips",
+      "exported": "Voir les exports"
+    },
+    "retryError": "Impossible de relancer l'analyse",
+    "emptyTitle": "Aucun projet pour l'instant",
+    "emptyHint": "Choisis un live sur l'accueil : Cuttie y trouve les meilleurs moments, prêts à monter.",
+    "emptyFiltered": "Aucun projet ne correspond. Essaie une autre recherche ou un autre filtre.",
+    "emptyCta": "Choisir un live"
   }
 }

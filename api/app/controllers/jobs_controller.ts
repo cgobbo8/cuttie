@@ -137,7 +137,23 @@ export default class JobsController {
     const paginated = await query.paginate(page, perPage)
     const rows = paginated.all()
 
-    // Enrich with chat_message_count
+    // Finished exports per project
+    const exportCounts = new Map<string, number>()
+    if (rows.length > 0) {
+      const counts = await db
+        .from('renders')
+        .select('job_id')
+        .count('* as n')
+        .where('status', 'done')
+        .whereIn(
+          'job_id',
+          rows.map((job) => job.id)
+        )
+        .groupBy('job_id')
+      for (const row of counts) exportCounts.set(row.job_id, Number(row.n))
+    }
+
+    // Enrich with chat_message_count and where the project stands
     const data = rows.map((job) => {
       const serialized = job.serialize()
       let chatMessageCount: number | null = null
@@ -164,6 +180,13 @@ export default class JobsController {
         chatMessageCount,
         error: serialized.error,
         createdAt: serialized.createdAt,
+        progress: serialized.progress,
+        vodId: serialized.url?.match(/\/videos\/(\d+)/)?.[1] ?? null,
+        // Best moment first: its frame stands for the project
+        coverClip: (job.hotPoints ?? []).find((hp: any) => hp.clip_filename)?.clip_filename ?? null,
+        clipCount: (job.hotPoints ?? []).filter((hp: any) => hp.clip_filename).length,
+        keptCount: Object.values(job.selection ?? {}).filter((sel) => sel.state === 'kept').length,
+        exportCount: exportCounts.get(job.id) ?? 0,
       }
     })
 

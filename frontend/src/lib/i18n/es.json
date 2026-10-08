@@ -65,20 +65,7 @@
     "noDataHint": "Empieza a analizar VODs para ver tu dashboard."
   },
   "home": {
-    "title": "Proyectos",
-    "analysisCount_one": "{{count}} análisis",
-    "analysisCount_other": "{{count}} análisis",
-    "search": "Buscar por título, streamer, juego...",
-    "colTitle": "Título",
-    "colStatus": "Estado",
-    "colDuration": "Duración",
-    "colViewers": "Viewers",
-    "colChat": "Chat",
-    "colDate": "Fecha",
     "untitledVod": "VOD sin título",
-    "noProjects": "Sin proyectos",
-    "noProjectsHint": "Usa el botón \"Nuevo proyecto\" para comenzar.",
-    "retry": "Reintentar",
     "all": "Todos",
     "completed": "Completados",
     "inProgress": "En curso",
@@ -90,14 +77,10 @@
     "page": "Página {{current}} de {{total}}",
     "previous": "Anterior",
     "next": "Siguiente",
-    "allGames": "Todos los juegos",
-    "allStreamers": "Todos los streamers",
-    "clearFilters": "Borrar"
+    "allGames": "Todos los juegos"
   },
   "status": {
-    "done": "Terminado",
-    "error": "Error",
-    "inProgress": "En curso"
+    "error": "Error"
   },
   "jobStatus": {
     "PENDING": "En espera...",
@@ -215,23 +198,25 @@
   },
   "exports": {
     "title": "Exportaciones",
-    "exportCount_one": "{{count}} exportación",
-    "exportCount_other": "{{count}} exportaciones",
-    "searchPlaceholder": "Buscar por nombre, VOD, juego...",
+    "count_one": "{{count}} clip listo para publicar",
+    "count_other": "{{count}} clips listos para publicar",
+    "search": "Buscar un clip, un directo",
+    "filter": "Filtrar exportaciones",
     "all": "Todos",
-    "completed": "Completados",
-    "inProgress": "En curso",
-    "errors": "Errores",
-    "noExports": "Sin exportaciones por el momento.",
-    "noExportsHint": "Inicia una exportación desde el editor para verla aquí.",
-    "download": "Descargar",
-    "error": "Error",
-    "deleteExport": "Eliminar exportación",
-    "deleteExportMessage": "Esta exportación será eliminada permanentemente. Esta acción es irreversible.",
+    "ready": "Listos",
+    "running": "En curso",
+    "failed": "Fallidos",
+    "clips_one": "{{count}} clip",
+    "clips_other": "{{count}} clips",
+    "openProject": "Abrir el proyecto",
+    "emptyTitle": "Todavía no hay exportaciones",
+    "emptyHint": "Monta tus clips en un proyecto: llegan aquí, listos para publicar.",
+    "emptyFiltered": "Ninguna exportación coincide. Prueba otra búsqueda u otro filtro.",
+    "emptyCta": "Ver mis proyectos",
+    "delete": "Eliminar la exportación",
+    "deleteMessage": "El archivo de este clip se eliminará de tu PC. Siempre podrás volver a exportarlo desde el proyecto.",
     "deleteSuccess": "Exportación eliminada",
-    "deleteError": "Error al eliminar la exportación",
-    "batchTitle_one": "Lote — {{count}} clip",
-    "batchTitle_other": "Lote — {{count}} clips"
+    "deleteError": "No se pudo eliminar la exportación"
   },
   "editPage": {
     "noClipAvailable": "No hay clip disponible para editar.",
@@ -484,25 +469,9 @@
   },
   "settings": {
     "title": "Ajustes",
-    "keysTitle": "Claves API",
-    "keysHelp": "Cuttie usa servicios de IA en línea para transcribir y analizar tus VODs. Pega tus claves aquí: se quedan en este ordenador.",
-    "groqLabel": "Groq",
-    "groqDesc": "Transcripción de voz (Whisper). Obligatoria.",
-    "openrouterLabel": "OpenRouter",
-    "openrouterDesc": "Análisis de momentos destacados (Gemini). Obligatoria.",
-    "openaiLabel": "OpenAI",
-    "openaiDesc": "Asistente IA del editor. Opcional.",
-    "getKey": "Obtener una clave",
-    "configured": "Configurada",
-    "missing": "Falta",
-    "optional": "Opcional",
-    "placeholder": "Pega tu clave aquí",
-    "replacePlaceholder": "Nueva clave (reemplaza la actual)",
-    "save": "Guardar",
+    "keysTitle": "Tus claves de IA",
+    "keysHelp": "Cuttie usa dos servicios de IA, de pago por uso. Tus claves se quedan en tu PC; Cuttie las comprueba con cada servicio.",
     "remove": "Eliminar",
-    "keySaved": "Clave guardada",
-    "keyRemoved": "Clave eliminada",
-    "saveError": "No se pudo guardar la clave",
     "languageTitle": "Idioma",
     "diagnosticsTitle": "Diagnóstico",
     "diagnosticsHelp": "Comprueba que todo está listo en este PC. Si algo falla, copia el informe y envíalo para que podamos ayudarte.",
@@ -528,7 +497,12 @@
       "diskLow": "{{gb}} GB — justo, un VOD puede ocupar varios GB",
       "dataDir": "Carpeta de datos",
       "versions": "Versiones"
-    }
+    },
+    "subtitle": "Tus claves de IA, el idioma de la app y el estado de tu instalación.",
+    "openaiRole": "Asistente del editor avanzado (opcional)",
+    "welcomeTitle": "Configuración inicial",
+    "welcomeHint": "Repite el primer arranque: tu canal de Twitch, tus claves y tu webcam.",
+    "welcomeCta": "Repetir la configuración"
   },
   "analyze": {
     "hello": "Hola {{name}}",
@@ -898,5 +872,37 @@
       "keysMissing": "Falta una clave de IA (o está rechazada): sin ella, el análisis no puede empezar.",
       "addKeys": "Añadir mis claves"
     }
+  },
+  "projects": {
+    "title": "Proyectos",
+    "count_one": "{{count}} directo analizado",
+    "count_other": "{{count}} directos analizados",
+    "search": "Buscar un directo, un juego",
+    "filter": "Filtrar proyectos",
+    "pages": "Páginas",
+    "analyzing": "Analizando · {{percent}} %",
+    "stage": {
+      "choose": "Por elegir",
+      "edit": "Por montar",
+      "exported": "Exportado"
+    },
+    "moments_one": "{{count}} momento",
+    "moments_other": "{{count}} momentos",
+    "kept_one": "{{count}} guardado",
+    "kept_other": "{{count}} guardados",
+    "exported_one": "{{count}} exportado",
+    "exported_other": "{{count}} exportados",
+    "next": {
+      "analyzing": "Seguir el análisis",
+      "error": "Relanzar el análisis",
+      "choose": "Elegir los momentos",
+      "edit": "Montar los clips",
+      "exported": "Ver las exportaciones"
+    },
+    "retryError": "No se pudo relanzar el análisis",
+    "emptyTitle": "Todavía no hay proyectos",
+    "emptyHint": "Elige un directo en el inicio: Cuttie encuentra los mejores momentos, listos para montar.",
+    "emptyFiltered": "Ningún proyecto coincide. Prueba otra búsqueda u otro filtro.",
+    "emptyCta": "Elegir un directo"
   }
 }

@@ -21,10 +21,3 @@ export function parseTwitchLogin(input: string): LoginInput {
   const login = value.replace(/^@/, "").toLowerCase();
   return LOGIN.test(login) ? { kind: "login", login } : { kind: "invalid" };
 }
-
-/** Start of a valid key, per provider */
-export const KEY_PREFIX = { groq_api_key: "gsk_", openrouter_api_key: "sk-or-" } as const;
-
-export function keyLooksRight(name: keyof typeof KEY_PREFIX, value: string): boolean {
-  return value.trim().startsWith(KEY_PREFIX[name]);
-}

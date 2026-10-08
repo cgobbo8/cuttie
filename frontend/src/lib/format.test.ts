@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { analysisProgress, clock, hoursMinutes, splitVodTitle } from "./format";
+import { analysisProgress, clock, dayDate, hoursMinutes, splitVodTitle } from "./format";
 
 describe("format", () => {
   it("pulls the server tag out of a VOD title", () => {
@@ -23,5 +23,12 @@ describe("format", () => {
     expect(clipping.percent).toBeGreaterThan(90);
     expect(clipping.minutesLeft).toBe(1);
     expect(analysisProgress("ANALYZING_CLIPS", "Analyse IA (25/50)").percent).toBeGreaterThan(analysisProgress("ANALYZING_CLIPS").percent);
+  });
+});
+
+describe("dayDate", () => {
+  it("keeps a bare date on its day", () => {
+    expect(dayDate("2026-10-02", "fr-FR")).toBe("Vendredi 2 octobre");
+    expect(dayDate("2026-10-06T18:58:04Z", "fr-FR")).toMatch(/^Mardi 6 octobre$/);
   });
 });

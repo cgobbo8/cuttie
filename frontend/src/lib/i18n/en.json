@@ -65,20 +65,7 @@
     "noDataHint": "Start analyzing VODs to see your dashboard."
   },
   "home": {
-    "title": "Projects",
-    "analysisCount_one": "{{count}} analysis",
-    "analysisCount_other": "{{count}} analyses",
-    "search": "Search by title, streamer, game...",
-    "colTitle": "Title",
-    "colStatus": "Status",
-    "colDuration": "Duration",
-    "colViewers": "Viewers",
-    "colChat": "Chat",
-    "colDate": "Date",
     "untitledVod": "Untitled VOD",
-    "noProjects": "No projects",
-    "noProjectsHint": "Use the \"New project\" button to get started.",
-    "retry": "Retry",
     "all": "All",
     "completed": "Completed",
     "inProgress": "In progress",
@@ -90,14 +77,10 @@
     "page": "Page {{current}} of {{total}}",
     "previous": "Previous",
     "next": "Next",
-    "allGames": "All games",
-    "allStreamers": "All streamers",
-    "clearFilters": "Clear"
+    "allGames": "All games"
   },
   "status": {
-    "done": "Done",
-    "error": "Error",
-    "inProgress": "In progress"
+    "error": "Error"
   },
   "jobStatus": {
     "PENDING": "Waiting...",
@@ -215,23 +198,25 @@
   },
   "exports": {
     "title": "Exports",
-    "exportCount_one": "{{count}} export",
-    "exportCount_other": "{{count}} exports",
-    "searchPlaceholder": "Search by name, VOD, game...",
+    "count_one": "{{count}} clip ready to post",
+    "count_other": "{{count}} clips ready to post",
+    "search": "Search a clip, a stream",
+    "filter": "Filter exports",
     "all": "All",
-    "completed": "Completed",
-    "inProgress": "In progress",
-    "errors": "Errors",
-    "noExports": "No exports yet.",
-    "noExportsHint": "Start an export from the editor to see it here.",
-    "download": "Download",
-    "error": "Error",
-    "deleteExport": "Delete export",
-    "deleteExportMessage": "This export will be permanently deleted. This action cannot be undone.",
+    "ready": "Ready",
+    "running": "In progress",
+    "failed": "Failed",
+    "clips_one": "{{count}} clip",
+    "clips_other": "{{count}} clips",
+    "openProject": "Open the project",
+    "emptyTitle": "No exports yet",
+    "emptyHint": "Edit your clips in a project: they land here, ready to post.",
+    "emptyFiltered": "No export matches. Try another search or filter.",
+    "emptyCta": "See my projects",
+    "delete": "Delete the export",
+    "deleteMessage": "This clip's file will be deleted from your PC. You can always export it again from its project.",
     "deleteSuccess": "Export deleted",
-    "deleteError": "Failed to delete export",
-    "batchTitle_one": "Batch — {{count}} clip",
-    "batchTitle_other": "Batch — {{count}} clips"
+    "deleteError": "Couldn't delete the export"
   },
   "editPage": {
     "noClipAvailable": "No clip available for editing.",
@@ -484,25 +469,9 @@
   },
   "settings": {
     "title": "Settings",
-    "keysTitle": "API keys",
-    "keysHelp": "Cuttie uses online AI services to transcribe and analyze your VODs. Paste your keys here: they stay on this computer.",
-    "groqLabel": "Groq",
-    "groqDesc": "Speech transcription (Whisper). Required.",
-    "openrouterLabel": "OpenRouter",
-    "openrouterDesc": "Highlight analysis (Gemini). Required.",
-    "openaiLabel": "OpenAI",
-    "openaiDesc": "Editor AI assistant. Optional.",
-    "getKey": "Get a key",
-    "configured": "Configured",
-    "missing": "Missing",
-    "optional": "Optional",
-    "placeholder": "Paste your key here",
-    "replacePlaceholder": "New key (replaces the current one)",
-    "save": "Save",
+    "keysTitle": "Your AI keys",
+    "keysHelp": "Cuttie uses two AI services, paid as you go. Your keys stay on your PC; Cuttie checks them with each service.",
     "remove": "Remove",
-    "keySaved": "Key saved",
-    "keyRemoved": "Key removed",
-    "saveError": "Could not save the key",
     "languageTitle": "Language",
     "diagnosticsTitle": "Diagnostics",
     "diagnosticsHelp": "Checks that everything is ready on this PC. If something is wrong, copy the report and send it so we can help.",
@@ -528,7 +497,12 @@
       "diskLow": "{{gb}} GB — tight, a VOD can take several GB",
       "dataDir": "Data folder",
       "versions": "Versions"
-    }
+    },
+    "subtitle": "Your AI keys, the app language and the state of your install.",
+    "openaiRole": "Advanced editor assistant (optional)",
+    "welcomeTitle": "First setup",
+    "welcomeHint": "Go through the first launch again: your Twitch channel, your keys and your webcam.",
+    "welcomeCta": "Run the setup again"
   },
   "analyze": {
     "hello": "Hi {{name}}",
@@ -898,5 +872,37 @@
       "keysMissing": "An AI key is missing (or rejected): analyses can't start without it.",
       "addKeys": "Add my keys"
     }
+  },
+  "projects": {
+    "title": "Projects",
+    "count_one": "{{count}} stream analyzed",
+    "count_other": "{{count}} streams analyzed",
+    "search": "Search a stream, a game",
+    "filter": "Filter projects",
+    "pages": "Pages",
+    "analyzing": "Analyzing · {{percent}}%",
+    "stage": {
+      "choose": "To sort",
+      "edit": "To edit",
+      "exported": "Exported"
+    },
+    "moments_one": "{{count}} moment",
+    "moments_other": "{{count}} moments",
+    "kept_one": "{{count}} kept",
+    "kept_other": "{{count}} kept",
+    "exported_one": "{{count}} exported",
+    "exported_other": "{{count}} exported",
+    "next": {
+      "analyzing": "Follow the analysis",
+      "error": "Run the analysis again",
+      "choose": "Pick the moments",
+      "edit": "Edit the clips",
+      "exported": "See the exports"
+    },
+    "retryError": "Couldn't restart the analysis",
+    "emptyTitle": "No projects yet",
+    "emptyHint": "Pick a stream on the home page: Cuttie finds its best moments, ready to edit.",
+    "emptyFiltered": "No project matches. Try another search or filter.",
+    "emptyCta": "Pick a stream"
   }
 }

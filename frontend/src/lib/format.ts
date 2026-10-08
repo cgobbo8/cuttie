@@ -32,6 +32,14 @@ export function liveDate(iso: string, lang: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
+/** "Vendredi 2 octobre"; a bare "2026-10-02" is that day wherever we are */
+export function dayDate(iso: string, lang: string): string {
+  const bare = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  const d = bare ? new Date(Number(bare[1]), Number(bare[2]) - 1, Number(bare[3])) : new Date(iso);
+  const text = d.toLocaleDateString(lang, { weekday: "long", day: "numeric", month: "long" });
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
 /** "mar. 6 oct." */
 export function shortDate(iso: string, lang: string): string {
   const text = new Date(iso).toLocaleDateString(lang, { weekday: "short", day: "numeric", month: "short" });

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useId, useRef } from "react";
 import { AlertTriangle } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
@@ -11,6 +11,8 @@ interface ConfirmModalProps {
   onConfirm: () => void;
   onCancel: () => void;
   loading?: boolean;
+  /** "danger" (default) for destructive actions */
+  variant?: "danger" | "default";
 }
 
 export default function ConfirmModal({
@@ -22,9 +24,11 @@ export default function ConfirmModal({
   onConfirm,
   onCancel,
   loading,
+  variant = "danger",
 }: ConfirmModalProps) {
   const { t } = useTranslation();
   const cancelRef = useRef<HTMLButtonElement>(null);
+  const id = useId();
 
   useEffect(() => {
     if (open) cancelRef.current?.focus();
@@ -42,33 +46,36 @@ export default function ConfirmModal({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onCancel} />
-      <div className="relative bg-zinc-900 border border-white/[0.08] rounded-xl p-6 w-full max-w-sm shadow-2xl animate-fade-in">
-        <div className="flex items-start gap-3 mb-4">
-          <div className="w-9 h-9 rounded-lg bg-red-500/10 flex items-center justify-center shrink-0">
-            <AlertTriangle className="w-4.5 h-4.5 text-red-400" />
-          </div>
-          <div>
-            <h3 className="text-sm font-semibold text-white">{title}</h3>
-            <p className="text-xs text-zinc-400 mt-1 leading-relaxed">{message}</p>
+    <div className="fixed inset-0 z-50 grid place-items-center p-6">
+      <div className="absolute inset-0 bg-black/55 backdrop-blur-[6px] animate-fade-in" onClick={onCancel} />
+      <div
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby={`${id}-title`}
+        aria-describedby={`${id}-message`}
+        className="relative glass-strong rounded-[20px] p-6 w-full max-w-[400px] animate-rise"
+      >
+        <div className="flex items-start gap-3.5">
+          {variant === "danger" && (
+            <span className="w-10 h-10 rounded-[12px] bg-[rgba(255,90,70,0.12)] grid place-items-center flex-none">
+              <AlertTriangle className="w-[18px] h-[18px] text-[#ff8a7a]" />
+            </span>
+          )}
+          <div className="min-w-0">
+            <h3 id={`${id}-title`} className="text-[16px] font-semibold tracking-[-0.01em] text-white">
+              {title}
+            </h3>
+            <p id={`${id}-message`} className="mt-1 text-[13px] leading-relaxed text-ink-2">
+              {message}
+            </p>
           </div>
         </div>
-        <div className="flex items-center justify-end gap-2">
-          <button
-            ref={cancelRef}
-            onClick={onCancel}
-            disabled={loading}
-            className="text-xs px-3.5 py-2 rounded-lg text-zinc-400 hover:text-white hover:bg-white/[0.06] transition-colors font-medium"
-          >
+        <div className="mt-6 flex items-center justify-end gap-2">
+          <button ref={cancelRef} onClick={onCancel} disabled={loading} className="btn btn-ghost">
             {t("common.cancel")}
           </button>
-          <button
-            onClick={onConfirm}
-            disabled={loading}
-            className="text-xs px-3.5 py-2 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 hover:text-red-300 transition-colors font-medium border border-red-500/20 disabled:opacity-50"
-          >
-            {loading ? (loadingLabel || t("common.loading")) : confirmLabel || t("common.delete")}
+          <button onClick={onConfirm} disabled={loading} className={`btn ${variant === "danger" ? "btn-danger" : "btn-primary"}`}>
+            {loading ? loadingLabel || t("common.loading") : confirmLabel || t("common.delete")}
           </button>
         </div>
       </div>

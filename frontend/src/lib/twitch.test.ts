@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { keyLooksRight, parseTwitchLogin } from "./twitch";
+import { parseTwitchLogin } from "./twitch";
 
 describe("parseTwitchLogin", () => {
   it("reads a login however it is typed or pasted", () => {
@@ -18,13 +18,5 @@ describe("parseTwitchLogin", () => {
     expect(parseTwitchLogin("not a login")).toEqual({ kind: "invalid" });
     expect(parseTwitchLogin("a")).toEqual({ kind: "invalid" });
     expect(parseTwitchLogin("x".repeat(26))).toEqual({ kind: "invalid" });
-  });
-});
-
-describe("keyLooksRight", () => {
-  it("checks the provider's prefix", () => {
-    expect(keyLooksRight("groq_api_key", "gsk_abc")).toBe(true);
-    expect(keyLooksRight("groq_api_key", "sk-or-abc")).toBe(false);
-    expect(keyLooksRight("openrouter_api_key", " sk-or-v1-abc")).toBe(true);
   });
 });

@@ -2,21 +2,21 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { useNavigate } from "react-router";
 import { useTranslation } from "react-i18next";
 import { Scissors } from "lucide-react";
-import { detectBrandFacecam, setOnboarded, verifyApiKey, type FacecamRect } from "../lib/api";
+import { detectBrandFacecam, setOnboarded, type FacecamRect } from "../lib/api";
 import { applyAccent } from "../lib/color";
 import { useChannel } from "../lib/ChannelContext";
 import { useSettings } from "../lib/SettingsContext";
 import { useToast } from "../components/Toast";
 import LiveWall from "../components/welcome/LiveWall";
 import ChannelStep from "../components/welcome/ChannelStep";
-import KeysStep, { KEYS, type KeyState } from "../components/welcome/KeysStep";
+import KeysStep from "../components/welcome/KeysStep";
+import { useKeyChecks } from "../components/KeyField";
 import WebcamStep from "../components/welcome/WebcamStep";
 import ReadyStep from "../components/welcome/ReadyStep";
 import { CamPeek, ChannelPeek, KeysPeek } from "../components/welcome/Peek";
 import type { CamSearch, FoundChannel } from "../components/welcome/shared";
 
 type Step = "channel" | "keys" | "cam" | "ready";
-type KeyName = "groq_api_key" | "openrouter_api_key";
 
 /** Steps around the current one: hidden when the window is too narrow for three cards */
 function Side({ children }: { children: ReactNode }) {
@@ -33,32 +33,16 @@ export default function WelcomePage() {
   const navigate = useNavigate();
   const toast = useToast();
   const { kit, channel, saveKit } = useChannel();
-  const { settings, refresh } = useSettings();
+  const { refresh } = useSettings();
 
   const [step, setStep] = useState<Step>("channel");
   const [found, setFound] = useState<FoundChannel | null>(null);
   const [noChannel, setNoChannel] = useState(false);
   const [camSearch, setCamSearch] = useState<CamSearch>({ status: "idle" });
   const [camDone, setCamDone] = useState(false);
-  const [keyStates, setKeyStates] = useState<Record<KeyName, KeyState>>({ groq_api_key: "idle", openrouter_api_key: "idle" });
   const finished = useRef<Promise<unknown> | null>(null);
 
-  const setKeyState = useCallback((name: KeyName, state: KeyState) => setKeyStates((prev) => ({ ...prev, [name]: state })), []);
-  const keysOk = KEYS.every((k) => settings?.keys[k.name]?.configured && keyStates[k.name] !== "invalid");
-
-  // Keys saved earlier (a previous attempt, a reinstall): check they still work
-  const checkedSaved = useRef(false);
-  useEffect(() => {
-    if (!settings || checkedSaved.current) return;
-    checkedSaved.current = true;
-    for (const { name } of KEYS) {
-      if (!settings.keys[name]?.configured) continue;
-      setKeyState(name, "checking");
-      verifyApiKey(name)
-        .then((check) => setKeyState(name, check.ok ? "valid" : check.reason === "invalid" ? "invalid" : "unreachable"))
-        .catch(() => setKeyState(name, "unreachable"));
-    }
-  }, [settings, setKeyState]);
+  const keys = useKeyChecks();
 
   // The whole screen takes the channel's color as soon as we know it
   const accent = found?.colors?.roles.accent ?? kit?.colors.accent;
@@ -151,7 +135,7 @@ export default function WelcomePage() {
           <div className="h-[380px] rounded-[14px] skeleton" />
         )
       ) : step === "keys" ? (
-        <KeysStep states={keyStates} setKeyState={setKeyState} onContinue={() => setStep(noChannel ? "ready" : "cam")} />
+        <KeysStep stateOf={keys.stateOf} setKeyState={keys.setKeyState} ready={keys.requiredOk} onContinue={() => setStep(noChannel ? "ready" : "cam")} />
       ) : step === "cam" ? (
         <WebcamStep
           search={camSearch}
@@ -168,7 +152,7 @@ export default function WelcomePage() {
             frameUrl={noChannel ? null : camResult?.frame_url ?? latestThumb}
             login={noChannel ? null : found?.channel.login ?? kit.twitch_login}
             avatarUrl={noChannel ? null : found?.channel.avatar_url ?? channel?.avatar_url ?? null}
-            keysMissing={!keysOk}
+            keysMissing={!keys.requiredOk}
             onAddKeys={() => setStep("keys")}
             onGo={go}
           />
@@ -207,7 +191,7 @@ export default function WelcomePage() {
                 active
               ) : (
                 <Side>
-                  <KeysPeek done={step === "cam" && keysOk} states={keyStates} onEdit={() => setStep("keys")} />
+                  <KeysPeek done={step === "cam" && keys.requiredOk} stateOf={keys.stateOf} onEdit={() => setStep("keys")} />
                 </Side>
               )}
               {step === "cam"

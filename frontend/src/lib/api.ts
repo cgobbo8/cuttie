@@ -448,6 +448,14 @@ export interface JobSummary {
   chat_message_count: number | null;
   created_at: string;
   error: string | null;
+  progress: string | null;
+  /** Twitch VOD id, from the url */
+  vod_id: string | null;
+  /** The best moment's clip: its frame stands for the project */
+  cover_clip: string | null;
+  clip_count: number;
+  kept_count: number;
+  export_count: number;
 }
 
 export interface PaginationMeta {
@@ -504,6 +512,12 @@ interface ServerJobSummary {
   chatMessageCount?: number | null;
   createdAt: string;
   error?: string | null;
+  progress?: string | null;
+  vodId?: string | null;
+  coverClip?: string | null;
+  clipCount?: number;
+  keptCount?: number;
+  exportCount?: number;
 }
 
 function mapJobResponse(raw: ServerJobResponse): JobResponse {
@@ -547,6 +561,12 @@ function mapJobSummary(raw: ServerJobSummary): JobSummary {
     chat_message_count: raw.chatMessageCount ?? null,
     created_at: raw.createdAt,
     error: raw.error ?? null,
+    progress: raw.progress ?? null,
+    vod_id: raw.vodId ?? null,
+    cover_clip: raw.coverClip ?? null,
+    clip_count: raw.clipCount ?? 0,
+    kept_count: raw.keptCount ?? 0,
+    export_count: raw.exportCount ?? 0,
   };
 }
 

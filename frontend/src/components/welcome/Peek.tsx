@@ -1,10 +1,10 @@
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Check, Loader2 } from "lucide-react";
-import type { FacecamRect } from "../../lib/api";
+import type { ApiKeyName, FacecamRect } from "../../lib/api";
 import { useSettings } from "../../lib/SettingsContext";
 import WebcamFrame from "../WebcamFrame";
-import { KEYS, type KeyState } from "./KeysStep";
+import { REQUIRED_KEYS, type KeyState } from "../KeyField";
 import type { CamSearch, FoundChannel } from "./shared";
 
 /** A step that is not the current one: smaller, dimmer, clickable when done */
@@ -52,16 +52,16 @@ export function ChannelPeek({ found, onEdit }: { found: FoundChannel | null; onE
   );
 }
 
-export function KeysPeek({ done, states, onEdit }: { done: boolean; states: Record<string, KeyState>; onEdit: () => void }) {
+export function KeysPeek({ done, stateOf, onEdit }: { done: boolean; stateOf: (name: ApiKeyName) => KeyState; onEdit: () => void }) {
   const { t } = useTranslation();
   const { settings } = useSettings();
   return (
     <PeekCard label={t("welcome.keys.label")} title={t("welcome.keys.title")} done={done} onEdit={onEdit}>
       {!done && <p className="mt-2 text-[13px] leading-normal text-ink-3">{t("welcome.keys.lead")}</p>}
       <div className="mt-4 flex flex-col gap-2">
-        {KEYS.map((k) => {
+        {REQUIRED_KEYS.map((k) => {
           const configured = !!settings?.keys[k.name]?.configured;
-          const rejected = configured && states[k.name] === "invalid";
+          const rejected = configured && stateOf(k.name) === "invalid";
           return (
             <div key={k.name} className="flex items-center justify-between gap-2 p-3 rounded-[12px] inset">
               <div className="min-w-0">

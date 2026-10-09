@@ -21,6 +21,7 @@ import { buildMoments, countStates, nextTodo, type MomentState } from "../lib/mo
 import { hoursMinutes, shortDate, splitVodTitle } from "../lib/format";
 import { useToast } from "../components/Toast";
 import ConfirmModal from "../components/ConfirmModal";
+import ProviderFix, { providerNotice } from "../components/ProviderFix";
 import ImportClipModal from "../components/ImportClipModal";
 import AnalysisView from "../components/project/AnalysisView";
 import Stepper from "../components/project/Stepper";
@@ -226,6 +227,8 @@ export default function ProjectPage() {
 
   const { tag, title } = splitVodTitle(job.custom_title || job.vod_title);
   const processing = job.status !== "DONE" && job.status !== "ERROR";
+  // Stopped because the AI provider refuses every call (no credits, refused key)
+  const stopped = job.status === "ERROR" ? providerNotice(job.notices) : undefined;
   const categoryLabel = (category: string | undefined) => (category ? t(`categories.${category}`, { defaultValue: category }) : null);
   const stepLinks = { analyze: `/${jobId}`, choose: `/${jobId}`, edit: `/${jobId}/montage`, export: `/${jobId}/montage` };
 
@@ -308,20 +311,23 @@ export default function ProjectPage() {
             <X className="w-5 h-5 text-red-300" />
           </span>
           <div className="flex-1 min-w-0">
-            <p className="text-[14px] text-red-200">{job.error || t("job.errorOccurred")}</p>
-            <button
-              onClick={async () => {
-                try {
-                  await retryJob(jobId);
-                  setJob((prev) => (prev ? { ...prev, status: "PENDING", error: null } : prev));
-                } catch (err) {
-                  toast.error(err instanceof Error ? err.message : t("job.retryFailed"));
-                }
-              }}
-              className="btn btn-glass btn-sm mt-3"
-            >
-              <RotateCcw className="w-3.5 h-3.5" /> {t("job.retry")}
-            </button>
+            <p className="text-[14px] text-red-200">{stopped ? t(`job.provider.${stopped.reason}`) : job.error || t("job.errorOccurred")}</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {stopped && <ProviderFix notice={stopped} />}
+              <button
+                onClick={async () => {
+                  try {
+                    await retryJob(jobId);
+                    setJob((prev) => (prev ? { ...prev, status: "PENDING", error: null, notices: [] } : prev));
+                  } catch (err) {
+                    toast.error(err instanceof Error ? err.message : t("job.retryFailed"));
+                  }
+                }}
+                className="btn btn-glass btn-sm"
+              >
+                <RotateCcw className="w-3.5 h-3.5" /> {t("job.retry")}
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -7,6 +7,7 @@ import { useSettings } from "../lib/SettingsContext";
 import { LANGUAGE_STORAGE_KEY } from "../lib/i18n";
 import KeyField, { OPTIONAL_KEYS, REQUIRED_KEYS, useKeyChecks } from "../components/KeyField";
 import { useToast } from "../components/Toast";
+import { OPENROUTER_CREDITS_URL } from "../components/ProviderFix";
 
 const LANGUAGES = [
   { code: "fr", labelKey: "profile.french" },
@@ -204,8 +205,23 @@ function DiagnosticsSection() {
               <DiagRow label={t("settings.diag.ytdlp")} level={w.yt_dlp ? "ok" : "error"} value={w.yt_dlp ?? t("settings.diag.notFound")} />
               <DiagRow
                 label={t("settings.diag.keys")}
-                level={w.keys?.openrouter ? "ok" : "error"}
-                value={w.keys?.openrouter ? t(w.keys?.groq ? "settings.diag.keysBoth" : "settings.diag.keysOk") : t("settings.diag.keysMissing")}
+                level={w.keys?.openrouter && (w.openrouter ?? "ok") === "ok" ? "ok" : "error"}
+                value={
+                  !w.keys?.openrouter ? (
+                    t("settings.diag.keysMissing")
+                  ) : w.openrouter === "credits" ? (
+                    <>
+                      {t("settings.diag.openrouterCredits")} ·{" "}
+                      <a href={OPENROUTER_CREDITS_URL} target="_blank" rel="noreferrer" className="underline underline-offset-2 hover:text-white">
+                        {t("job.provider.topUp")}
+                      </a>
+                    </>
+                  ) : w.openrouter === "key" ? (
+                    t("settings.diag.openrouterKey")
+                  ) : (
+                    t(w.keys?.groq ? "settings.diag.keysBoth" : "settings.diag.keysOk")
+                  )
+                }
               />
               {w.transcription?.engine && (
                 <DiagRow

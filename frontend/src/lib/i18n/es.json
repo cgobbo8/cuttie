@@ -105,7 +105,13 @@
     "renamed": "Proyecto renombrado",
     "vodContext": "Contexto de la VOD",
     "vodPhases": "Fases del stream",
-    "vodProtagonists": "Protagonistas"
+    "vodProtagonists": "Protagonistas",
+    "provider": {
+      "credits": "Tus créditos de OpenRouter se han agotado: la IA ya no puede analizar tus directos. Recarga tu cuenta y vuelve a lanzar el análisis.",
+      "key": "OpenRouter rechaza tu clave (o falta): revísala en Ajustes y vuelve a lanzar el análisis.",
+      "topUp": "Recargar mis créditos",
+      "checkKey": "Revisar mi clave"
+    }
   },
   "newProject": {
     "title": "Nuevo proyecto",
@@ -498,7 +504,9 @@
       "dataDir": "Carpeta de datos",
       "versions": "Versiones",
       "keysBoth": "OpenRouter y Groq configuradas",
-      "cpu": "procesador (lento)"
+      "cpu": "procesador (lento)",
+      "openrouterCredits": "Créditos de OpenRouter agotados",
+      "openrouterKey": "Clave de OpenRouter rechazada"
     },
     "subtitle": "Tus claves de IA, el idioma de la app y el estado de tu instalación.",
     "openaiRole": "Asistente del editor avanzado (opcional)",

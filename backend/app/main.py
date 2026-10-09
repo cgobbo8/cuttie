@@ -30,6 +30,7 @@ load_dotenv()
 
 from app.services import job_control, paths, settings  # noqa: E402
 from app.services.db import _get_conn, get_job, init_db, update_job  # noqa: E402
+from app.services.provider_errors import ProviderUnavailable  # noqa: E402
 
 logger = logging.getLogger("worker")
 
@@ -240,6 +241,8 @@ def clip_words(job_id: str, clip_filename: str) -> list[dict]:
         return transcribe_clip_words(_check_job_id(job_id), os.path.basename(clip_filename))
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="clip not found")
+    except ProviderUnavailable as e:
+        raise HTTPException(status_code=402 if e.reason == "credits" else 401, detail=str(e)) from e
 
 
 @app.post("/jobs/{job_id}/facecam", dependencies=[Depends(require_secret)])
@@ -296,6 +299,11 @@ def diagnostics() -> dict:
         "disk_free_gb": round(shutil.disk_usage(paths.DATA_DIR).free / 1e9, 1),
         "busy": jobs.current.job_id if jobs.current else None,
     }
+    # One token to OpenRouter: "credits" (none left) or "key" (refused) stop every analysis
+    if info["keys"]["openrouter"]:
+        from app.services.provider_errors import check_openrouter
+
+        info["openrouter"] = check_openrouter() or "ok"
     try:
         from app.services import transcriber
 

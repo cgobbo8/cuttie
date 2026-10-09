@@ -16,6 +16,7 @@ import { useLatestMoments } from "../lib/useLatestMoment";
 import { useToast } from "../components/Toast";
 import Storyboard from "../components/Storyboard";
 import TemplatePreview, { useDefaultTemplate } from "../components/TemplatePreview";
+import ProviderFix, { providerNotice } from "../components/ProviderFix";
 import { ACTIVE_STATUSES, analysisProgress, clock, hoursMinutes, liveDate, sampleSubtitle, shortDate, splitVodTitle } from "../lib/format";
 
 const HERO_HEIGHT = 700;
@@ -53,6 +54,8 @@ function Hero({ vod, busy, onAnalyze }: { vod: TwitchVod; busy: boolean; onAnaly
   const running = job && ACTIVE_STATUSES.has(job.status);
   const progress = running ? analysisProgress(job.status, job.progress) : null;
   const isNew = Date.now() - new Date(vod.published_at).getTime() < 2 * 86_400_000;
+  // Stopped because the AI provider refuses every call (no credits, refused key)
+  const stopped = job?.status === "ERROR" ? providerNotice(job.notices) : undefined;
 
   return (
     <div className="glass-strong rounded-[20px] w-[560px] max-w-full px-7 pt-[26px] pb-6 animate-rise">
@@ -117,6 +120,12 @@ function Hero({ vod, busy, onAnalyze }: { vod: TwitchVod; busy: boolean; onAnaly
         </a>
       </div>
       {!job && <p className="mt-3.5 text-[12.5px] text-ink-3">{t("start.estimate")}</p>}
+      {job?.status === "ERROR" && (job.error || stopped) && (
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <p className="flex-1 min-w-[220px] text-[13px] leading-snug text-red-200">{stopped ? t(`job.provider.${stopped.reason}`) : job.error}</p>
+          {stopped && <ProviderFix notice={stopped} />}
+        </div>
+      )}
     </div>
   );
 }

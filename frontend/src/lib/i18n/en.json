@@ -105,7 +105,13 @@
     "renamed": "Project renamed",
     "vodContext": "VOD Context",
     "vodPhases": "Stream phases",
-    "vodProtagonists": "Protagonists"
+    "vodProtagonists": "Protagonists",
+    "provider": {
+      "credits": "Your OpenRouter credits have run out: the AI can't analyze your streams anymore. Top up your account, then retry the analysis.",
+      "key": "OpenRouter refuses your key (or it's missing): check it in Settings, then retry the analysis.",
+      "topUp": "Top up my credits",
+      "checkKey": "Check my key"
+    }
   },
   "newProject": {
     "title": "New project",
@@ -498,7 +504,9 @@
       "dataDir": "Data folder",
       "versions": "Versions",
       "keysBoth": "OpenRouter and Groq set",
-      "cpu": "processor (slow)"
+      "cpu": "processor (slow)",
+      "openrouterCredits": "OpenRouter credits used up",
+      "openrouterKey": "OpenRouter key refused"
     },
     "subtitle": "Your AI keys, the app language and the state of your install.",
     "openaiRole": "Advanced editor assistant (optional)",

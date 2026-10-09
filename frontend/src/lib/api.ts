@@ -126,6 +126,8 @@ export interface WorkerDiagnostics {
   ffmpeg?: string | null;
   yt_dlp?: string | null;
   keys?: { groq: boolean; openrouter: boolean };
+  /** OpenRouter answering ("ok"), out of credits, or refusing the key */
+  openrouter?: "ok" | "credits" | "key";
   disk_free_gb?: number;
   busy?: string | null;
   torch?: string;
@@ -259,7 +261,15 @@ export interface TwitchVod {
   game: string | null;
   url: string;
   /** Existing analysis of this VOD, if any */
-  job: { id: string; status: string; progress: string | null; clip_count: number } | null;
+  job: {
+    id: string;
+    status: string;
+    progress: string | null;
+    clip_count: number;
+    /** Why it stopped, when it did */
+    error?: string | null;
+    notices?: JobNotice[];
+  } | null;
 }
 
 export interface TwitchChannel {
@@ -443,11 +453,14 @@ export interface JobResponse {
   notices?: JobNotice[] | null;
 }
 
-/** e.g. segments Whisper could not transcribe (rate limits) */
+/** e.g. segments Whisper could not transcribe (rate limits), or the AI provider refusing every call */
 export interface JobNotice {
-  kind: "transcription" | string;
+  kind: "transcription" | "provider" | string;
   failed?: number;
   total?: number;
+  /** "provider": who refuses and why */
+  provider?: string;
+  reason?: "credits" | "key";
 }
 
 export interface TimelineCandidate {
@@ -532,6 +545,7 @@ interface ServerJobResponse {
   vodContext?: VodContext | null;
   selection?: Record<string, ClipSelection> | null;
   timeline?: JobTimeline | null;
+  notices?: JobNotice[] | null;
 }
 
 interface ServerHotPoint {
@@ -584,6 +598,7 @@ function mapJobResponse(raw: ServerJobResponse): JobResponse {
     vod_context: raw.vodContext ?? null,
     selection: raw.selection ?? {},
     timeline: raw.timeline ?? null,
+    notices: raw.notices ?? null,
   };
 }
 

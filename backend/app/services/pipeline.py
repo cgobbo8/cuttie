@@ -14,9 +14,10 @@ from app.services.audio_classifier import classify_audio
 from app.services.chat_analyzer import analyze_chat, estimate_chat_lag
 from app.services.clipper import CLIPS_DIR, compute_clip_bounds, extract_group, plan_downloads, plan_downloads_detected
 from app.services.frame_extractor import get_vod_direct_url
-from app.services.db import get_job, reset_notices, save_hot_points, update_hot_point_clip, update_job
+from app.services.db import add_notice, get_job, reset_notices, save_hot_points, update_hot_point_clip, update_job
 from app.services.downloader import extract_metadata, download_audio, download_chat
 from app.services.llm_analyzer import analyze_candidates, analyze_hot_points, analyze_single_clip
+from app.services.provider_errors import ProviderUnavailable, check_openrouter
 from app.services.scorer import compute_scores
 from app.services.speaker_diarizer import pick_voice_reference
 from app.services import job_control
@@ -355,6 +356,10 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
 
     try:
         reset_notices(job_id)
+        # Out of credits or a refused key: say so now, before downloading hours of audio
+        refused = check_openrouter()
+        if refused:
+            raise ProviderUnavailable("openrouter", refused)
         job = get_job(job_id) if resume_from else None
         hot_points = list(job.hot_points) if job and job.hot_points else None
         duration = job.vod_duration_seconds if job else 0
@@ -615,6 +620,13 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
         logger.info(f"Pipeline cancelled for {job_id}")
         timer.finish()
         update_job(job_id, status="ERROR", error="Cancelled by user", progress="Cancelled.", step_timings=timer.timings)
+
+    except ProviderUnavailable as e:
+        # Every AI call would fail the same way: stop with what to do (the app links to the fix)
+        logger.error(f"[{job_id[:8]}] {e.provider} refuses the calls ({e.reason}): analysis stopped")
+        timer.finish()
+        add_notice(job_id, "provider", provider=e.provider, reason=e.reason)
+        update_job(job_id, status="ERROR", error=str(e), progress="Analyse arrêtée.", step_timings=timer.timings)
 
     except Exception as e:
         logger.error(f"Pipeline error for {job_id}: {e}", exc_info=True)

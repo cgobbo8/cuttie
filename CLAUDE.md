@@ -114,6 +114,7 @@ cuttie/
 │   │       ├── settings.py                    # lecture settings.json (cles API)
 │   │       ├── clip_tools.py                  # transcription a la demande + cam d'un live (clips) ou d'une VOD
 │   │       ├── openai_client.py               # Clients multi-provider (Groq, OpenRouter)
+│   │       ├── provider_errors.py             # Refus definitifs (credits, cle) -> arret clair de l'analyse
 │   │       └── db.py                          # SQLite persistence (WAL)
 │   ├── assets/fonts/LuckiestGuy-Regular.ttf
 │   └── pyproject.toml
@@ -204,6 +205,8 @@ cuttie/
 ```
 
 Checkpoints resumables : CLIPPING, LLM_ANALYSIS.
+
+Fournisseur qui refuse tout (`provider_errors.py`) : credits OpenRouter epuises (402) ou cle refusee (401) -> l'analyse s'arrete avec un message clair et une notice `provider` (lien « Recharger mes credits » dans l'app), jamais de repli silencieux sur le score heuristique. Verifie aussi au demarrage (1 token) et dans le diagnostic.
 
 ## Scoring
 

@@ -167,6 +167,16 @@ describe('getJobStatus', () => {
     expect(job.hot_points).toBeNull()
   })
 
+  it('keeps why an analysis stopped (notices)', async () => {
+    const notices = [{ kind: 'provider', provider: 'openrouter', reason: 'credits' }]
+    ;(fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ id: 'job-1', status: 'ERROR', error: 'Crédits OpenRouter épuisés', notices }),
+    })
+    const job = await getJobStatus('job-1')
+    expect(job.notices).toEqual(notices)
+  })
+
   it('throws when the response is not ok', async () => {
     ;(fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ ok: false })
 

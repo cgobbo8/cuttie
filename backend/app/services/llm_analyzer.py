@@ -19,6 +19,7 @@ import os
 import re
 import shutil
 import subprocess
+import threading
 import time as _time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -35,6 +36,7 @@ from app.services.frame_extractor import (
 )
 from app.services import transcriber
 from app.services.openai_client import get_openrouter_client, LLM_MODEL
+from app.services.provider_errors import ProviderUnavailable, fatal_reason, stop_if_fatal
 from app.services.scorer import seconds_to_display
 from app.services.paths import CLIPS_DIR, work_dir
 from app.services.transcript_format import format_labeled_transcript
@@ -177,6 +179,8 @@ def _transcribe_audio(
             logger.warning(f"Whisper ({engine}) rate limited, its workers wait {pause:.0f}s (attempt {attempt + 1})")
             gate.defer(pause)
         except Exception as e:
+            if engine == "openrouter":
+                stop_if_fatal(e)
             logger.error(f"Whisper ({engine}) transcription failed: {e}")
             break
 
@@ -255,6 +259,9 @@ def _transcribe_candidates(
                 if done % 10 == 0 or done == total:
                     logger.info(f"Whisper progress: {done}/{total}")
                     update_job(job_id, progress=f"Transcription : {done} sur {total} segments...")
+            except ProviderUnavailable:
+                executor.shutdown(wait=False, cancel_futures=True)
+                raise
             except Exception as e:
                 idx = futures[future]
                 logger.error(f"Whisper failed for candidate {idx}: {e}")
@@ -951,6 +958,7 @@ def analyze_candidates(
             # Save vod_context to DB immediately
             update_job(job_id, vod_context=vod_context)
         except Exception as e:
+            stop_if_fatal(e)
             logger.error(f"[{job_id[:8]}] VOD context gathering failed: {e}")
 
     # ── Step 3c: Blended re-ranking (heuristic + content score) → top KEEP_NORMAL_FOR_LLM ──
@@ -1109,8 +1117,12 @@ def analyze_candidates(
 
     llm_t0 = _time.time()
     candidate_words: dict[int, list[dict]] = {}  # idx -> word-level timestamps for subtitles
+    # Set when OpenRouter refuses for good (no credits, refused key): the other workers stop
+    provider_down = threading.Event()
 
     def _analyze_one(idx: int, hp: HotPoint) -> None:
+        if provider_down.is_set():
+            return
         t0 = _time.time()
         transcript, speech_rate, _, _, whisper_words = transcripts.get(idx, ("", 0.0, 0.0, [], []))
         frames = all_frames.get(idx, [])
@@ -1180,6 +1192,9 @@ def analyze_candidates(
             )
 
         except Exception as e:
+            if fatal_reason(e):
+                provider_down.set()
+                stop_if_fatal(e)
             logger.error(f"LLM analysis failed for candidate {idx} ({hp.timestamp_display}): {e}")
             hp.llm = LlmAnalysis(transcript=transcript, speech_rate=round(speech_rate, 2))
             hp.final_score = round(HEURISTIC_WEIGHT * hp.score, 3)
@@ -1195,6 +1210,9 @@ def analyze_candidates(
             idx = futures[future]
             try:
                 future.result()
+            except ProviderUnavailable:
+                executor.shutdown(wait=False, cancel_futures=True)
+                raise
             except Exception as e:
                 logger.error(f"Unexpected error for candidate {idx}: {e}")
             try:
@@ -1356,6 +1374,7 @@ def analyze_single_clip(
         llm.transcript = transcript
         llm.speech_rate = round(speech_rate, 2)
     except Exception as e:
+        stop_if_fatal(e)
         logger.error(f"Unified analysis failed: {e}")
         llm = LlmAnalysis(transcript=transcript, speech_rate=round(speech_rate, 2))
         clip_name = ""
@@ -1435,6 +1454,9 @@ def analyze_hot_points(
                 future.result()
                 logger.info(f"Clip {done}/{total} done: {hp.timestamp_display}")
                 update_job(job_id, progress=f"Analyse IA : {done} sur {total} clips ({hp.timestamp_display})")
+            except ProviderUnavailable:
+                executor.shutdown(wait=False, cancel_futures=True)
+                raise
             except Exception as e:
                 logger.error(f"Analysis failed for clip at {hp.timestamp_display}: {e}")
 

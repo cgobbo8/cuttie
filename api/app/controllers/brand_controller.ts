@@ -157,7 +157,7 @@ export default class BrandController {
     if (!channel) return { channel: null }
 
     const jobs = await Job.query()
-      .select('id', 'url', 'status', 'progress', 'hot_points', 'created_at')
+      .select('id', 'url', 'status', 'progress', 'error', 'notices', 'hot_points', 'created_at')
       .orderBy('created_at', 'desc')
     const vods = channel.vods.map((vod) => {
       const job = jobs.find((j) => j.url?.includes(`/videos/${vod.id}`))
@@ -168,6 +168,9 @@ export default class BrandController {
               id: job.id,
               status: job.status,
               progress: job.progress,
+              // Why it stopped (e.g. no OpenRouter credits left), for the home page
+              error: job.status === 'ERROR' ? job.error : null,
+              notices: job.notices ?? [],
               clip_count: (job.hotPoints ?? []).filter((h: any) => h.clip_filename).length,
             }
           : null,

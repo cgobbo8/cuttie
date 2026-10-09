@@ -1,0 +1,6 @@
+node_modules/
+stage/
+.cache/
+dist/
+# The root .gitignore drops lockfiles; CI needs this one (npm ci)
+!package-lock.json

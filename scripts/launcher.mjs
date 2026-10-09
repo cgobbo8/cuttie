@@ -55,6 +55,7 @@ async function waitForHealth(url, { timeoutMs, isAlive }) {
  * @param {string} [opts.nodeBin]   node executable for the API (default: current node)
  * @param {string[]} [opts.workerCommand]  command that runs the worker (default: uv run python worker.py)
  * @param {(name: string, line: string) => void} [opts.onLog]
+ * @param {number} [opts.workerTimeoutMs]  how long to wait for the worker before returning anyway
  * @returns {Promise<{ url: string, stop: () => Promise<void>, exited: Promise<string> }>}
  */
 export async function startCuttie({
@@ -64,6 +65,7 @@ export async function startCuttie({
   workerCommand = ["uv", "run", "--no-sync", "python", "worker.py"],
   env: extraEnv = {},
   onLog = (name, line) => console.log(`[${name}] ${line}`),
+  workerTimeoutMs = 180_000,
 }) {
   mkdirSync(dataDir, { recursive: true });
 
@@ -101,7 +103,7 @@ export async function startCuttie({
     return child;
   };
 
-  launch("worker", workerCommand[0], workerCommand.slice(1), {
+  const worker = launch("worker", workerCommand[0], workerCommand.slice(1), {
     cwd: path.join(root, "backend"),
     env: {
       ...shared,
@@ -169,6 +171,16 @@ export async function startCuttie({
   if (!ready) {
     await stop();
     throw new Error("The API did not start");
+  }
+  // The worker takes longer (Python, torch): wait for it too, so the app opens
+  // ready to analyze (still alive but slow: the app tells when it answers)
+  const workerReady = await waitForHealth(`http://127.0.0.1:${workerPort}/health`, {
+    timeoutMs: workerTimeoutMs,
+    isAlive: () => !worker.exited,
+  });
+  if (!workerReady && worker.exited) {
+    await stop();
+    throw new Error("The analysis worker did not start");
   }
 
   return { url: apiUrl, stop, exited };

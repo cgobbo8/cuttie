@@ -1,0 +1,183 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'" />
+    <title>Cuttie</title>
+    <style>
+      :root {
+        --ground: #0b0b0c;
+        --ink: #f5f5f2;
+        --ink-2: rgba(245, 245, 242, 0.68);
+        --ink-3: rgba(245, 245, 242, 0.5);
+        --accent: #3dbe8b;
+        --danger: #f87171;
+      }
+      * {
+        box-sizing: border-box;
+        margin: 0;
+      }
+      html,
+      body {
+        height: 100%;
+      }
+      body {
+        background: radial-gradient(120% 90% at 0% 0%, rgba(61, 190, 139, 0.14), transparent 60%), var(--ground);
+        color: var(--ink);
+        font: 14px/1.45 "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+        display: flex;
+        flex-direction: column;
+        padding: 26px 28px 24px;
+        -webkit-app-region: drag;
+        user-select: none;
+        overflow: hidden;
+      }
+      header {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-weight: 650;
+        font-size: 16px;
+        letter-spacing: -0.02em;
+      }
+      header svg {
+        width: 28px;
+        height: 28px;
+        flex: none;
+      }
+      main {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 6px;
+      }
+      h1 {
+        font-size: 18px;
+        font-weight: 600;
+        letter-spacing: -0.015em;
+        text-wrap: balance;
+      }
+      p {
+        color: var(--ink-3);
+        font-size: 12.5px;
+        min-height: 2.9em;
+        display: -webkit-box;
+        -webkit-line-clamp: 3;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        word-break: break-word;
+        white-space: pre-line;
+      }
+      body.error h1 {
+        color: var(--danger);
+      }
+      .bar {
+        height: 4px;
+        border-radius: 4px;
+        background: rgba(245, 245, 242, 0.08);
+        overflow: hidden;
+      }
+      .bar span {
+        display: block;
+        height: 100%;
+        width: 35%;
+        border-radius: 4px;
+        background: var(--accent);
+        animation: slide 1.4s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+      }
+      @keyframes slide {
+        from {
+          transform: translateX(-100%);
+        }
+        to {
+          transform: translateX(290%);
+        }
+      }
+      .actions {
+        display: none;
+        gap: 8px;
+        justify-content: flex-end;
+        -webkit-app-region: no-drag;
+      }
+      body.error .actions {
+        display: flex;
+      }
+      body.error .bar {
+        display: none;
+      }
+      button {
+        font: inherit;
+        font-size: 13px;
+        font-weight: 550;
+        height: 32px;
+        padding: 0 14px;
+        border-radius: 9px;
+        border: 0;
+        color: var(--ink);
+        background: rgba(245, 245, 242, 0.09);
+        cursor: pointer;
+        transition: background 0.2s;
+      }
+      button:hover {
+        background: rgba(245, 245, 242, 0.15);
+      }
+      button.primary {
+        background: var(--accent);
+        color: #07140e;
+      }
+      button.primary:hover {
+        filter: brightness(1.08);
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .bar span {
+          animation: none;
+          width: 100%;
+          opacity: 0.6;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <svg viewBox="0 0 28 28" aria-hidden="true">
+        <rect width="28" height="28" rx="8" fill="#f5f5f2" />
+        <g transform="translate(6.5 6.5) scale(0.625)" fill="none" stroke="#0b0b0c" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="6" cy="6" r="3" />
+          <path d="M8.12 8.12 12 12" />
+          <path d="M20 4 8.12 15.88" />
+          <circle cx="6" cy="18" r="3" />
+          <path d="M14.8 14.8 20 20" />
+        </g>
+      </svg>
+      Cuttie
+    </header>
+    <main>
+      <h1 id="title"></h1>
+      <p id="detail"></p>
+    </main>
+    <div class="bar"><span></span></div>
+    <div class="actions">
+      <button id="logs"></button>
+      <button id="quit"></button>
+      <button id="retry" class="primary"></button>
+    </div>
+    <script>
+      const desktop = window.cuttieDesktop;
+      const $ = (id) => document.getElementById(id);
+      desktop.onSetupStatus(({ title, detail, error, labels }) => {
+        $("title").textContent = title;
+        $("detail").textContent = detail || "";
+        document.body.classList.toggle("error", !!error);
+        if (labels) {
+          $("logs").textContent = labels.logs;
+          $("quit").textContent = labels.quit;
+          $("retry").textContent = labels.retry;
+        }
+      });
+      $("logs").onclick = () => desktop.openLogs();
+      $("quit").onclick = () => desktop.quit();
+      $("retry").onclick = () => desktop.retrySetup();
+    </script>
+  </body>
+</html>

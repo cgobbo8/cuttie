@@ -102,6 +102,7 @@ cuttie/
 │   │       ├── llm_analyzer.py                # Whisper + frames + LLM unifie (scoring + analyse)
 │   │       ├── transcriber.py                 # Speech-to-text : Groq / OpenRouter / local (mlx-whisper, faster-whisper), mots normalises
 │   │       ├── vod_transcript.py              # Le live entier transcrit en arriere-plan, par morceaux de 10 min (cache transcripts/<job>)
+│   │       ├── presort.py                     # L'IA lit tout le live (transcript + pics du chat) et propose des moments
 │   │       ├── speaker_diarizer.py            # pyannote diarization + ECAPA-TDNN voiceprint
 │   │       ├── clipper.py                     # Extraction clips video
 │   │       ├── facecam_detector.py            # YOLOv8 pose + accroche au cadre de la cam, visages par clip
@@ -189,6 +190,10 @@ cuttie/
                           b. Mot "clip" dit n'importe ou dans le live (15 max, demandes d'abord) ->
                              fenetre des 2 min avant, verifiee par le LLM (vraie demande = clip
                              "detected", garde quel que soit son rang)
+                          b'. Pre-tri par l'IA (presort.py, 1 appel texte ~0,05 $) : lit tout le transcript
+                             (une ligne / ~20 s) + les pics du chat -> jusqu'a 40 moments, fenetres
+                             elargies (-10 s / +20 s, la reaction) ; un candidat qui chevauche prend la
+                             fenetre de l'IA ; 15 des 50 places de l'etape f leur sont reservees
                           c. VOD context gathering (1 appel LLM text-only) :
                              - Lit les 200 transcripts chronologiquement
                              - Produit contexte VOD (narrative, phases, protagonistes, themes)

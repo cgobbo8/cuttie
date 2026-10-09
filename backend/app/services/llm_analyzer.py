@@ -40,6 +40,7 @@ from app.services.provider_errors import ProviderUnavailable, fatal_reason, stop
 from app.services.scorer import seconds_to_display
 from app.services.paths import CLIPS_DIR, work_dir
 from app.services.transcript_format import format_labeled_transcript, format_segments
+from app.services import presort
 from app.services.vod_transcript import VodTranscript
 
 logger = logging.getLogger(__name__)
@@ -50,6 +51,7 @@ MAX_LLM_WORKERS = 12  # Parallel LLM calls (API-bound)
 MAX_WHISPER_WORKERS = 12  # Parallel Whisper calls
 KEEP_TOP_N = 20  # How many candidates to keep after LLM scoring
 KEEP_NORMAL_FOR_LLM = 50  # Top N non-clip candidates that get full LLM analysis (from 100 scored)
+PRESORT_SLOTS = 15  # Of those, kept for the moments the AI found reading the whole live
 
 # Keywords that indicate the streamer wants a clip
 CLIP_KEYWORDS = [
@@ -703,6 +705,16 @@ def _keyword_moments(transcript: VodTranscript) -> list[float]:
     return sorted(t for t, _ in moments[:MAX_KEYWORD_MOMENTS])
 
 
+def _pick_for_llm(ranked: list[int], presort_picks: list[int], keep: int = KEEP_NORMAL_FOR_LLM, slots: int = PRESORT_SLOTS) -> list[int]:
+    """The candidates the LLM watches: the best by blended score, with up to
+    `slots` places kept for the AI's own picks (in its order) when the blended
+    score left them out; spare places go back to the blended order."""
+    top = ranked[: keep - slots] if presort_picks else ranked[:keep]
+    picks = [i for i in presort_picks if i not in top][:slots]
+    rest = [i for i in ranked if i not in top and i not in picks]
+    return top + picks + rest[: max(0, keep - len(top) - len(picks))]
+
+
 def _window_bounds(hp: HotPoint, vod_duration: float) -> tuple[float, float]:
     if hp.clip_start is not None and hp.clip_end is not None:
         return hp.clip_start, hp.clip_end
@@ -1014,6 +1026,54 @@ def analyze_candidates(
         logger.warning(f"[{job_id[:8]}] Whisper could not transcribe {len(failed)}/{len(candidates)} segments")
         add_notice(job_id, "transcription", failed=len(failed), total=len(candidates))
 
+    # ── Step 3a: the AI reads the whole live and points at moments ──
+    # (what's said calmly: the audio peaks miss it)
+    presort_picks: list[int] = []
+    if vod_transcript is not None:
+        update_job(job_id, progress="L'IA lit tout le live...")
+        try:
+            moments = presort.presort(vod_transcript, chat_messages or [], vod_meta, vod_duration, chat_lag=chat_lag or 5.0)
+        except Exception as e:
+            stop_if_fatal(e)
+            logger.warning(f"[{job_id[:8]}] Pre-sort unavailable, heuristic candidates only: {e}")
+            moments = []
+        def _share(i: int, start: float, end: float) -> float:
+            """Part of [start, end] inside candidate i's window."""
+            cs, ce = _window_bounds(hot_points[i], vod_duration)
+            return max(0.0, min(end, ce) - max(start, cs)) / max(1.0, end - start)
+
+        for m in moments:
+            start, end = presort.window(m, vod_duration)
+            # Already checked as a "clip" moment
+            if any(_share(i, start, end) >= 0.8 for i in keyword_at):
+                continue
+            idx = next((i for i in normal_indices if _share(i, m.start, m.end) >= 0.5), None)
+            if idx is None:
+                # Found by reading only: its pre-sort score stands in for the heuristic one
+                hot_points.append(HotPoint(
+                    timestamp_seconds=round((m.start + m.end) / 2, 1),
+                    timestamp_display=seconds_to_display((m.start + m.end) / 2),
+                    score=round(m.score, 3),
+                    signals=SignalBreakdown(),
+                    clip_start=round(start, 1),
+                    clip_end=round(end, 1),
+                ))
+                idx = len(hot_points) - 1
+                candidates.append((idx, hot_points[idx]))
+                normal_indices.append(idx)
+            else:
+                # Already a candidate: its window takes in the AI's (the payoff and the reaction after it)
+                hp = hot_points[idx]
+                cs, ce = _window_bounds(hp, vod_duration)
+                ns, ne = min(cs, start), max(ce, end)
+                if ne - ns > presort.MAX_SECONDS:
+                    ns, ne = start, end
+                hp.clip_start, hp.clip_end = round(ns, 1), round(ne, 1)
+            transcripts[idx] = _from_live_transcript(vod_transcript, hot_points[idx], vod_duration)
+            if idx not in presort_picks:
+                presort_picks.append(idx)
+        logger.info(f"[{job_id[:8]}] Pre-sort: {len(moments)} moments, {sum(1 for i in presort_picks if hot_points[i].signals == SignalBreakdown())} new candidates")
+
     # ── Step 3b: VOD context gathering + content scoring ──
     vod_context: VodContext | None = None
     content_scores: dict[int, float] = {}
@@ -1048,8 +1108,8 @@ def analyze_candidates(
         return blended
 
     normal_candidates_sorted = sorted(normal_indices, key=_blended_pre_score, reverse=True)
-    normal_for_llm = normal_candidates_sorted[:KEEP_NORMAL_FOR_LLM]
-    dropped_early = normal_candidates_sorted[KEEP_NORMAL_FOR_LLM:]
+    normal_for_llm = _pick_for_llm(normal_candidates_sorted, presort_picks)
+    dropped_early = [i for i in normal_candidates_sorted if i not in normal_for_llm]
 
     if dropped_early:
         logger.info(f"Dropping {len(dropped_early)} lowest-scoring normal candidates before LLM")

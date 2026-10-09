@@ -1,11 +1,13 @@
+import { useEffect } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router";
-import { KeyRound, LogOut, Scissors, SlidersHorizontal } from "lucide-react";
+import { Download, KeyRound, LogOut, Scissors, SlidersHorizontal } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import CreatorSelector from "./CreatorSelector";
 import { useAuth } from "../lib/AuthContext";
 import { useChannel } from "../lib/ChannelContext";
 import { useCreatorWorkspace } from "../lib/CreatorWorkspaceContext";
 import { useSettings } from "../lib/SettingsContext";
+import { checkForUpdateSoon, updatePending, useUpdateState } from "../lib/desktop";
 
 const JOB_PATH = /^\/[0-9a-f]{8}-[0-9a-f]{4}-/;
 
@@ -35,6 +37,9 @@ export default function TopBar() {
   const { isAllMode } = useCreatorWorkspace();
   // Desktop app: single local streamer — no account, workspaces or admin pages
   const isLocalApp = appInfo?.mode === "local" && appInfo.auto_login;
+  const update = useUpdateState();
+
+  useEffect(() => checkForUpdateSoon(), []);
 
   const items = [
     { to: "/", label: t("sidebar.home"), active: pathname === "/" },
@@ -71,6 +76,13 @@ export default function TopBar() {
         <Link to="/settings" className="chip h-8 px-3 bg-amber-300/[0.14] text-amber-200 hover:bg-amber-300/[0.22] transition-colors">
           <KeyRound className="w-3.5 h-3.5" />
           {t("keysBanner.short")}
+        </Link>
+      )}
+
+      {updatePending(update) && pathname !== "/settings" && (
+        <Link to="/settings#app" className="chip h-8 px-3 bg-accent-soft text-accent hover:bg-accent/25 transition-colors">
+          <Download className="w-3.5 h-3.5" />
+          {update.phase === "ready" ? t("sidebar.updateReady") : t("sidebar.update")}
         </Link>
       )}
 

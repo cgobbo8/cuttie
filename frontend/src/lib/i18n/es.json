@@ -42,7 +42,9 @@
     "analyses": "Análisis",
     "newAnalysis": "Nuevo análisis",
     "channel": "Mi canal",
-    "navigation": "Navegación principal"
+    "navigation": "Navegación principal",
+    "update": "Actualización",
+    "updateReady": "Reiniciar para actualizar"
   },
   "workspace": {
     "allCreators": "Todos los creadores",
@@ -537,6 +539,32 @@
       "download": "El modelo (1,6 GB) se descarga una vez, en el primer análisis.",
       "saved": "Transcripción: {{engine}}",
       "saveError": "No se pudo guardar esta opción"
+    },
+    "app": {
+      "title": "Aplicación",
+      "hint": "Cuttie se actualiza con un clic. Tus proyectos y ajustes se quedan.",
+      "version": "Cuttie {{version}}",
+      "check": "Buscar actualizaciones",
+      "checking": "Buscando…",
+      "latest": "Cuttie está al día",
+      "dev": "Versión de desarrollo: las actualizaciones llegan por git",
+      "available": "La versión {{version}} está disponible",
+      "notes": "Novedades",
+      "download": "Actualizar",
+      "downloading": "Descargando la versión {{version}}… {{percent}} %",
+      "ready": "La versión {{version}} está lista",
+      "install": "Reiniciar para instalar",
+      "installing": "Instalando… Cuttie se reinicia solo",
+      "failed": "La actualización falló: {{message}}",
+      "retry": "Reintentar",
+      "busyTitle": "Hay un análisis en curso",
+      "busyBody": "Reiniciar ahora lo detiene: podrás relanzarlo desde el proyecto. O espera a que termine, la actualización sigue lista.",
+      "busyConfirm": "Reiniciar de todos modos",
+      "logs": "Abrir los registros",
+      "repair": "Reparar los módulos de análisis",
+      "repairTitle": "¿Reparar los módulos de análisis?",
+      "repairBody": "Cuttie se reinicia y reinstala sus módulos de análisis (unos minutos). Tus proyectos no cambian.",
+      "repairConfirm": "Reparar y reiniciar"
     }
   },
   "analyze": {

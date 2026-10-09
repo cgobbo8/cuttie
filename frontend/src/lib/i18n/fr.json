@@ -42,7 +42,9 @@
     "analyses": "Analyses",
     "newAnalysis": "Nouvelle analyse",
     "channel": "Ma chaîne",
-    "navigation": "Navigation principale"
+    "navigation": "Navigation principale",
+    "update": "Mise à jour",
+    "updateReady": "Redémarrer pour mettre à jour"
   },
   "workspace": {
     "allCreators": "Tous les créateurs",
@@ -537,6 +539,32 @@
       "download": "Le modèle (1,6 Go) se télécharge une fois, à la première analyse.",
       "saved": "Transcription : {{engine}}",
       "saveError": "Impossible d'enregistrer ce choix"
+    },
+    "app": {
+      "title": "Application",
+      "hint": "Cuttie se met à jour en un clic. Tes projets et tes réglages restent là.",
+      "version": "Cuttie {{version}}",
+      "check": "Rechercher une mise à jour",
+      "checking": "Recherche…",
+      "latest": "Cuttie est à jour",
+      "dev": "Version de développement : les mises à jour passent par git",
+      "available": "La version {{version}} est disponible",
+      "notes": "Nouveautés",
+      "download": "Mettre à jour",
+      "downloading": "Téléchargement de la version {{version}}… {{percent}} %",
+      "ready": "La version {{version}} est prête",
+      "install": "Redémarrer pour installer",
+      "installing": "Installation… Cuttie redémarre tout seul",
+      "failed": "La mise à jour a échoué : {{message}}",
+      "retry": "Réessayer",
+      "busyTitle": "Une analyse est en cours",
+      "busyBody": "Redémarrer maintenant l'interrompt : tu pourras la relancer depuis le projet. Ou attends qu'elle finisse, la mise à jour reste prête.",
+      "busyConfirm": "Redémarrer quand même",
+      "logs": "Ouvrir les journaux",
+      "repair": "Réparer les modules d'analyse",
+      "repairTitle": "Réparer les modules d'analyse ?",
+      "repairBody": "Cuttie redémarre et réinstalle ses modules d'analyse (quelques minutes). Tes projets ne bougent pas.",
+      "repairConfirm": "Réparer et redémarrer"
     }
   },
   "analyze": {

@@ -42,7 +42,9 @@
     "analyses": "Analyses",
     "newAnalysis": "New analysis",
     "channel": "My channel",
-    "navigation": "Main navigation"
+    "navigation": "Main navigation",
+    "update": "Update",
+    "updateReady": "Restart to update"
   },
   "workspace": {
     "allCreators": "All creators",
@@ -537,6 +539,32 @@
       "download": "The model (1.6 GB) downloads once, on the first analysis.",
       "saved": "Transcription: {{engine}}",
       "saveError": "Couldn't save this choice"
+    },
+    "app": {
+      "title": "Application",
+      "hint": "Cuttie updates in one click. Your projects and settings stay.",
+      "version": "Cuttie {{version}}",
+      "check": "Check for updates",
+      "checking": "Checking…",
+      "latest": "Cuttie is up to date",
+      "dev": "Development version: updates come through git",
+      "available": "Version {{version}} is available",
+      "notes": "What's new",
+      "download": "Update",
+      "downloading": "Downloading version {{version}}… {{percent}}%",
+      "ready": "Version {{version}} is ready",
+      "install": "Restart to install",
+      "installing": "Installing… Cuttie restarts by itself",
+      "failed": "The update failed: {{message}}",
+      "retry": "Try again",
+      "busyTitle": "An analysis is running",
+      "busyBody": "Restarting now stops it: you can start it again from the project. Or wait for it to finish, the update stays ready.",
+      "busyConfirm": "Restart anyway",
+      "logs": "Open the logs",
+      "repair": "Repair the analysis modules",
+      "repairTitle": "Repair the analysis modules?",
+      "repairBody": "Cuttie restarts and reinstalls its analysis modules (a few minutes). Your projects stay as they are.",
+      "repairConfirm": "Repair and restart"
     }
   },
   "analyze": {

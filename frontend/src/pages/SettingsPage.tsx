@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { Link } from "react-router";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { Link, useLocation } from "react-router";
 import { useTranslation } from "react-i18next";
-import { AlertTriangle, ArrowRight, Check, CheckCircle2, Copy, Globe, KeyRound, Loader2, Mic, RefreshCw, Sparkles, Stethoscope, XCircle } from "lucide-react";
+import { AlertTriangle, AppWindow, ArrowRight, Check, CheckCircle2, Copy, Download, FolderOpen, Globe, KeyRound, Loader2, Mic, RefreshCw, RotateCw, Sparkles, Stethoscope, Wrench, XCircle } from "lucide-react";
 import { getDiagnostics, runLocalTest, updateTranscription, type Diagnostics, type LocalTest, type TranscriptionEngine, type WorkerDiagnostics } from "../lib/api";
+import { desktop, updates, useUpdateState, type DesktopInfo } from "../lib/desktop";
+import ConfirmModal from "../components/ConfirmModal";
 import { useSettings } from "../lib/SettingsContext";
 import { LANGUAGE_STORAGE_KEY } from "../lib/i18n";
 import KeyField, { OPTIONAL_KEYS, REQUIRED_KEYS, useKeyChecks } from "../components/KeyField";
@@ -15,9 +17,9 @@ const LANGUAGES = [
   { code: "es", labelKey: "profile.spanish" },
 ] as const;
 
-function Section({ icon: Icon, title, hint, action, children }: { icon: typeof Globe; title: string; hint?: string; action?: ReactNode; children: ReactNode }) {
+function Section({ id, icon: Icon, title, hint, action, children }: { id?: string; icon: typeof Globe; title: string; hint?: string; action?: ReactNode; children: ReactNode }) {
   return (
-    <section className="glass rounded-[20px] p-6">
+    <section id={id} className="glass rounded-[20px] p-6 scroll-mt-24">
       <div className="flex items-start gap-3.5">
         <span className="w-10 h-10 rounded-[12px] bg-white/[0.07] grid place-items-center flex-none">
           <Icon className="w-[18px] h-[18px] text-ink-2" />
@@ -313,6 +315,187 @@ function DiagnosticsSection() {
   );
 }
 
+// ── Application (the desktop app only) ─────────────────────────────────────
+
+/** Version, one-click update from GitHub, logs and repair of the Python modules */
+function AppSection() {
+  const { t } = useTranslation();
+  const toast = useToast();
+  const update = useUpdateState();
+  const { hash } = useLocation();
+  const [info, setInfo] = useState<DesktopInfo | null>(null);
+  const [confirm, setConfirm] = useState<"busy" | "repair" | null>(null);
+  // Toasts only for what was clicked here (not the quiet check at launch)
+  const clicked = useRef(false);
+  const previous = useRef(update.phase);
+
+  useEffect(() => {
+    desktop
+      ?.info()
+      .then(setInfo)
+      .catch(() => setInfo(null));
+  }, []);
+
+  useEffect(() => {
+    if (hash === "#app") document.getElementById("app")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [hash]);
+
+  // The toast context object changes on every toast, its methods don't
+  const showSuccess = toast.success;
+  const showError = toast.error;
+  useEffect(() => {
+    const was = previous.current;
+    previous.current = update.phase;
+    if (was === update.phase || !clicked.current) return;
+    if (update.phase === "latest") showSuccess(t("settings.app.latest"));
+    if (update.phase === "ready") showSuccess(t("settings.app.ready", { version: update.version }));
+    if (update.phase === "error") showError(t("settings.app.failed", { message: update.message }));
+  }, [update, t, showSuccess, showError]);
+
+  if (!desktop) return null;
+
+  const act = (fn: () => void) => () => {
+    clicked.current = true;
+    fn();
+  };
+  const install = act(async () => {
+    // An analysis running stops with the restart: ask first
+    let busy: string | null = null;
+    try {
+      busy = (await getDiagnostics()).worker?.busy ?? null;
+    } catch {
+      // Worker unreachable: nothing running to lose
+    }
+    if (busy) setConfirm("busy");
+    else updates.install();
+  });
+
+  const version = info ? t("settings.app.version", { version: info.version }) : "";
+  let line: ReactNode = version;
+  let button: ReactNode = (
+    <button onClick={act(updates.check)} className="btn btn-glass btn-sm">
+      <RefreshCw className="w-3.5 h-3.5" /> {t("settings.app.check")}
+    </button>
+  );
+  switch (update.phase) {
+    case "checking":
+      button = (
+        <button disabled className="btn btn-glass btn-sm">
+          <Loader2 className="w-3.5 h-3.5 animate-spin" /> {t("settings.app.checking")}
+        </button>
+      );
+      break;
+    case "latest":
+      line = (
+        <span className="inline-flex items-center gap-1.5">
+          <CheckCircle2 className="w-4 h-4 text-accent" /> {t("settings.app.latest")}
+        </span>
+      );
+      break;
+    case "dev":
+      line = t("settings.app.dev");
+      button = null;
+      break;
+    case "available":
+      line = t("settings.app.available", { version: update.version });
+      button = (
+        <button onClick={act(updates.download)} className="btn btn-primary btn-sm">
+          <Download className="w-3.5 h-3.5" /> {t("settings.app.download")}
+        </button>
+      );
+      break;
+    case "downloading":
+      line = t("settings.app.downloading", { version: update.version, percent: update.percent });
+      button = null;
+      break;
+    case "ready":
+      line = t("settings.app.ready", { version: update.version });
+      button = (
+        <button onClick={install} className="btn btn-primary btn-sm">
+          <RotateCw className="w-3.5 h-3.5" /> {t("settings.app.install")}
+        </button>
+      );
+      break;
+    case "installing":
+      line = (
+        <span className="inline-flex items-center gap-1.5">
+          <Loader2 className="w-4 h-4 animate-spin text-ink-3" /> {t("settings.app.installing")}
+        </span>
+      );
+      button = null;
+      break;
+    case "error":
+      line = <span className="text-[#ff8a7a]">{t("settings.app.failed", { message: update.message })}</span>;
+      button = (
+        <button onClick={act(updates.check)} className="btn btn-glass btn-sm">
+          <RefreshCw className="w-3.5 h-3.5" /> {t("settings.app.retry")}
+        </button>
+      );
+      break;
+  }
+
+  return (
+    <Section id="app" icon={AppWindow} title={t("settings.app.title")} hint={t("settings.app.hint")}>
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex-1 min-w-[240px]">
+          <div className="text-[14px] font-[550] text-white">{line}</div>
+          {line !== version && version && <div className="mt-0.5 mono text-[12px] text-ink-3">{version}</div>}
+        </div>
+        {button}
+      </div>
+
+      {update.phase === "downloading" && (
+        <div className="mt-3 h-1.5 rounded-full bg-white/[0.08] overflow-hidden" role="progressbar" aria-valuenow={update.percent} aria-valuemin={0} aria-valuemax={100}>
+          <div className="h-full rounded-full bg-accent transition-[width] duration-300" style={{ width: `${update.percent}%` }} />
+        </div>
+      )}
+
+      {update.phase === "available" && update.notes && (
+        <div className="mt-3 rounded-[12px] bg-white/[0.04] p-3.5">
+          <div className="text-[12px] font-[550] text-ink-2">{t("settings.app.notes")}</div>
+          <p className="mt-1 max-h-40 overflow-auto whitespace-pre-line text-[12.5px] leading-relaxed text-ink-3">{update.notes}</p>
+        </div>
+      )}
+
+      <div className="mt-4 pt-4 border-t border-white/[0.06] flex flex-wrap gap-1.5">
+        <button onClick={() => desktop?.openLogs()} className="btn btn-ghost btn-sm">
+          <FolderOpen className="w-3.5 h-3.5" /> {t("settings.app.logs")}
+        </button>
+        {info?.packaged && (
+          <button onClick={() => setConfirm("repair")} className="btn btn-ghost btn-sm">
+            <Wrench className="w-3.5 h-3.5" /> {t("settings.app.repair")}
+          </button>
+        )}
+      </div>
+
+      <ConfirmModal
+        open={confirm === "busy"}
+        variant="default"
+        title={t("settings.app.busyTitle")}
+        message={t("settings.app.busyBody")}
+        confirmLabel={t("settings.app.busyConfirm")}
+        onConfirm={() => {
+          setConfirm(null);
+          updates.install();
+        }}
+        onCancel={() => setConfirm(null)}
+      />
+      <ConfirmModal
+        open={confirm === "repair"}
+        variant="default"
+        title={t("settings.app.repairTitle")}
+        message={t("settings.app.repairBody")}
+        confirmLabel={t("settings.app.repairConfirm")}
+        onConfirm={() => {
+          setConfirm(null);
+          desktop?.repairPython();
+        }}
+        onCancel={() => setConfirm(null)}
+      />
+    </Section>
+  );
+}
+
 // ── Page ────────────────────────────────────────────────────────────────────
 
 export default function SettingsPage() {
@@ -358,6 +541,8 @@ export default function SettingsPage() {
         </Section>
 
         <DiagnosticsSection />
+
+        <AppSection />
 
         <Section icon={Sparkles} title={t("settings.welcomeTitle")} hint={t("settings.welcomeHint")}>
           <Link to="/bienvenue" className="btn btn-glass btn-sm">

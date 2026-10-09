@@ -506,7 +506,8 @@
       "keysBoth": "OpenRouter et Groq configurées",
       "cpu": "processeur (lent)",
       "openrouterCredits": "Crédits OpenRouter épuisés",
-      "openrouterKey": "Clé OpenRouter refusée"
+      "openrouterKey": "Clé OpenRouter refusée",
+      "appleChip": "puce Apple"
     },
     "subtitle": "Tes clés d'IA, la langue de l'app et l'état de ton installation.",
     "openaiRole": "Assistant de l'éditeur avancé (facultatif)",
@@ -515,17 +516,18 @@
     "welcomeCta": "Revoir le réglage",
     "transcription": {
       "title": "Transcription",
-      "help": "Ce qui écoute ce qui se dit, pour l'analyse et les sous-titres. Si Groq ou ta carte graphique coince, OpenRouter prend le relais.",
+      "help": "Ce qui écoute tout le live, pour trouver les moments, puis les sous-titres. Si ce PC ou Groq coince, OpenRouter prend le relais.",
       "groq": "Groq",
       "openrouter": "OpenRouter",
       "local": "Sur ce PC",
-      "groqHint": "Le plus rapide : environ 1 s par minute d'audio.",
+      "groqHint": "Très rapide, mais sa version gratuite limite l'audio par heure : un live entier prend du temps.",
       "groqNeedsKey": "Ajoute une clé Groq ci-dessus pour l'utiliser.",
-      "openrouterHint": "Sans clé de plus. Environ 1 centime par heure d'audio, un peu plus lent.",
-      "localGpu": "Gratuit, sur ta carte graphique NVIDIA.",
-      "localCpu": "Gratuit, mais lent ici : pas de carte NVIDIA, à peu près le temps réel.",
-      "localUnknown": "Gratuit, sur ta carte graphique NVIDIA si tu en as une.",
-      "download": "Le modèle (1,5 Go) se télécharge une fois, à la première analyse.",
+      "openrouterHint": "Sans clé de plus. Environ 1 centime par heure de live, quelques minutes pour un live entier.",
+      "localGpu": "Gratuit et rapide, sur ta carte graphique NVIDIA.",
+      "localMlx": "Gratuit et rapide, sur la puce de ton Mac.",
+      "localCpu": "Gratuit, mais lent ici (ni carte NVIDIA ni puce Apple) : à peu près le temps réel.",
+      "localUnknown": "Gratuit, et rapide avec une carte NVIDIA ou une puce Apple.",
+      "download": "Le modèle (1,6 Go) se télécharge une fois, à la première analyse.",
       "saved": "Transcription : {{engine}}",
       "saveError": "Impossible d'enregistrer ce choix"
     }
@@ -701,7 +703,8 @@
     "suggestedTrimHint": "Coupe proposée par l'IA ({{seconds}} s) : élargis-la si tu veux plus de contexte.",
     "backToSuggestedTrim": "Coupe de l'IA",
     "notice": {
-      "transcription": "{{failed}} extraits sur {{total}} n'ont pas pu être transcrits (limite de la clé Groq ?). L'IA les a quand même écoutés ; leurs sous-titres se feront à l'ouverture du clip."
+      "transcription": "{{failed}} extraits sur {{total}} n'ont pas pu être transcrits (limite de la clé Groq ?). L'IA les a quand même écoutés ; leurs sous-titres se feront à l'ouverture du clip.",
+      "live_transcript": "{{failed}} morceaux de 10 minutes sur {{total}} n'ont pas pu être transcrits : les moments de ces passages ont été moins bien repérés."
     }
   },
   "montage": {

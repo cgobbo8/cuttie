@@ -11,7 +11,7 @@ Tourne 100 % en local (cible : app desktop Windows pour un ami streamer) : pas d
 - **Frontend** : React 19, TypeScript 5.9, Tailwind CSS 4, Vite 8, React Router 7
 - **Editor** : Remotion 4 (player + renderer), canvas editor custom
 - **ML/Audio** : librosa (11025 Hz), PANNs CNN14 (AudioSet)
-- **Transcription** : Whisper large-v3 turbo, via Groq (si cle, le plus rapide), OpenRouter ou en local (faster-whisper, GPU NVIDIA) — `transcriber.py`, bascule sur OpenRouter si le moteur choisi coince
+- **Transcription** : Whisper large-v3 turbo, en local quand la machine est rapide (mlx-whisper sur puce Apple, faster-whisper sur NVIDIA), sinon Groq ou OpenRouter — `transcriber.py`, bascule sur OpenRouter si le moteur choisi coince
 - **LLM** : OpenRouter — Gemini 3 Flash Preview (audio + vision + analyse + scoring)
 - **Video** : FFmpeg, OpenCV, yt-dlp
 - **Storage** : disque local `<data dir>/storage/{clips,renders,assets}`, servi par l'API via URLs signees
@@ -100,7 +100,8 @@ cuttie/
 │   │       ├── chat_analyzer.py               # Sentiment chat : vitesse, burst, emotes, mood
 │   │       ├── scorer.py                      # Score composite + peak detection (scipy)
 │   │       ├── llm_analyzer.py                # Whisper + frames + LLM unifie (scoring + analyse)
-│   │       ├── transcriber.py                 # Speech-to-text : Groq / OpenRouter / local (faster-whisper), mots normalises
+│   │       ├── transcriber.py                 # Speech-to-text : Groq / OpenRouter / local (mlx-whisper, faster-whisper), mots normalises
+│   │       ├── vod_transcript.py              # Le live entier transcrit en arriere-plan, par morceaux de 10 min (cache transcripts/<job>)
 │   │       ├── speaker_diarizer.py            # pyannote diarization + ECAPA-TDNN voiceprint
 │   │       ├── clipper.py                     # Extraction clips video
 │   │       ├── facecam_detector.py            # YOLOv8 pose + accroche au cadre de la cam, visages par clip
@@ -176,15 +177,18 @@ cuttie/
 
 ```
 1. DOWNLOADING_AUDIO   -> Metadata + audio 16 kHz mono WAV + chat Twitch GQL (en parallele)
+                          puis transcription du live entier en arriere-plan (morceaux de 10 min,
+                          moteur local si rapide, repli OpenRouter par morceau ; ~11 min pour 5 h sur M1 Max)
 2. ANALYZING_AUDIO     -> librosa features (5s/2.5s hop) + PANNs CNN14 16 kHz (rires, cris, parole ; en parallele)
 3. ANALYZING_CHAT      -> Sentiment, emotes, burst, demandes de clip des viewers ;
                           decalage du chat estime (correlation son/chat, defaut 5 s)
 4. SCORING             -> Score composite pondere + peak detection -> top 200
 5. ANALYZING_CLIPS     -> Pour chaque candidat (sans download video) :
-                          a. Whisper transcription (200 segments audio depuis WAV ; limites de debit
-                             attendues, echecs comptes -> job.notices)
-                          b. Mot "clip" dit en live -> fenetre des 2 min avant, verifiee par le LLM
-                             (vraie demande = clip "detected", garde quel que soit son rang)
+                          a. Texte de chaque candidat lu dans le transcript du live (sinon Whisper
+                             sur les 200 segments ; morceaux rates -> job.notices)
+                          b. Mot "clip" dit n'importe ou dans le live (15 max, demandes d'abord) ->
+                             fenetre des 2 min avant, verifiee par le LLM (vraie demande = clip
+                             "detected", garde quel que soit son rang)
                           c. VOD context gathering (1 appel LLM text-only) :
                              - Lit les 200 transcripts chronologiquement
                              - Produit contexte VOD (narrative, phases, protagonistes, themes)
@@ -201,6 +205,7 @@ cuttie/
 6. CLIPPING            -> yt-dlp video + FFmpeg extraction (bornes dynamiques RMS)
                           uniquement pour les 20 candidats gardes
                           + reperage de la webcam sur les clips (facecam.json v2 : cadre + visages par clip)
+                          + mots des clips gardes transcrits sur leur audio si le live l'a ete sans
 -> DONE
 ```
 

@@ -9,7 +9,8 @@ and dev runs can keep using a folder inside the repo.
             clips/<job_id>/ clip MP4s + sidecars (_meta, _probe, _words, chat.json, ...)
             renders/<job_id>/
             assets/
-        work/               temporary pipeline files (audio, frames, segments)
+        work/               temporary pipeline files (audio, frames, segments), emptied at start
+        transcripts/<job>/  the live transcribed by 10-minute chunks (kept: a retry or a restart resumes)
         worker.sqlite3      worker job state (resume checkpoints)
         settings.json       user settings written by the API (API keys, ...)
 """
@@ -23,6 +24,7 @@ DATA_DIR = os.path.abspath(os.getenv("CUTTIE_DATA_DIR") or os.path.join(REPO_DIR
 STORAGE_DIR = os.path.join(DATA_DIR, "storage")
 CLIPS_DIR = os.path.join(STORAGE_DIR, "clips")
 WORK_DIR = os.path.join(DATA_DIR, "work")
+TRANSCRIPTS_DIR = os.path.join(DATA_DIR, "transcripts")
 DB_PATH = os.path.join(DATA_DIR, "worker.sqlite3")
 SETTINGS_PATH = os.path.join(DATA_DIR, "settings.json")
 
@@ -45,6 +47,11 @@ def clip_dir(job_id: str) -> str:
 def work_dir(*parts: str) -> str:
     """Path inside the temporary work directory (not created)."""
     return os.path.join(WORK_DIR, *parts)
+
+
+def transcript_dir(job_id: str) -> str:
+    """The live transcript's chunks of a job (deleted with the job by the API)."""
+    return os.path.join(TRANSCRIPTS_DIR, job_id)
 
 
 def ensure_dirs() -> None:

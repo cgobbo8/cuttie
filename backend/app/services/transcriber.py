@@ -1,18 +1,26 @@
-"""Speech to text with word timings, through Groq, OpenRouter or this PC.
+"""Speech to text with word timings, through Groq, OpenRouter or this computer.
 
 The "transcription" setting picks the engine:
-- "auto" (default): Groq when a Groq key is set, else OpenRouter
-- "groq": Whisper large-v3 turbo on Groq, the fastest (~1-2 s per minute of audio)
+- "auto" (default): this computer when it is fast at it (Apple chip, NVIDIA
+  GPU), else Groq when a Groq key is set, else OpenRouter
+- "groq": Whisper large-v3 turbo on Groq, the fastest cloud (~1-2 s per minute
+  of audio), but the free tier caps the audio per hour: too little for a whole live
 - "openrouter": the same model through OpenRouter, no extra key (~5-15 s per
   minute, about 0.012 $ per hour of audio)
-- "local": faster-whisper on this PC, free; fast on an NVIDIA GPU, slow on a CPU
+- "local": Whisper large-v3 turbo on this computer, free. Apple chips run it on
+  their GPU (mlx-whisper, ~35x real time on an M1 Max without word timings),
+  NVIDIA GPUs through CTranslate2 (faster-whisper), anything else on the CPU
+  (about real time: too slow for a whole live)
 
-A cloud engine that keeps refusing (rate limits, errors) hands the segment to
-OpenRouter: its key is required for the analysis anyway.
+A cloud engine that keeps refusing (rate limits, errors) or this computer
+failing hands the audio to OpenRouter: its key is required for the analysis
+anyway.
 """
 
+import importlib.util
 import logging
 import os
+import platform
 import sys
 import threading
 from dataclasses import dataclass, field
@@ -26,6 +34,7 @@ ENGINES = ("groq", "openrouter", "local")
 CHOICES = ("auto", *ENGINES)
 CLOUD_MODELS = {"groq": "whisper-large-v3-turbo", "openrouter": "openai/whisper-large-v3-turbo"}
 LOCAL_MODEL = "large-v3-turbo"
+MLX_REPO = "mlx-community/whisper-large-v3-turbo"
 
 
 @dataclass
@@ -61,22 +70,26 @@ def has_key(engine: str) -> bool:
 
 
 def chosen_engine() -> str:
-    """The engine the settings ask for, if it can run; else Groq / OpenRouter."""
+    """The engine the settings ask for, if it can run; else the best one available."""
     choice = settings.get("transcription", default="auto")
     if choice in ENGINES and has_key(choice):
         return choice
+    if local_backend() in ("mlx", "cuda"):
+        return "local"
     return "groq" if has_key("groq") else "openrouter"
 
 
 def fallback_for(engine: str) -> str | None:
-    """Where a segment goes when `engine` can't do it."""
+    """Where audio goes when `engine` can't do it."""
     return "openrouter" if engine != "openrouter" and has_key("openrouter") else None
 
 
-def transcribe(audio_path: str, engine: str) -> Transcript:
-    """Transcribe one file with word timings. Provider errors propagate (rate limits included)."""
+def transcribe(audio_path: str, engine: str, words: bool = True) -> Transcript:
+    """Transcribe one file. `words=False` lets this computer skip word timings
+    (2.5x faster on an Apple chip); cloud engines always give them. Provider
+    errors propagate (rate limits included)."""
     if engine == "local":
-        return _local(audio_path)
+        return _local(audio_path, words)
     client = get_groq_client() if engine == "groq" else get_openrouter_client()
     with open(audio_path, "rb") as f:
         result = client.audio.transcriptions.create(
@@ -86,34 +99,46 @@ def transcribe(audio_path: str, engine: str) -> Transcript:
             timestamp_granularities=["word", "segment"],
         )
     segments = [(s.start, s.end, s.text) for s in (getattr(result, "segments", None) or [])]
-    words = tidy_words([{"word": w.word, "start": w.start, "end": w.end} for w in (getattr(result, "words", None) or [])])
-    return Transcript((result.text or "").strip(), segments, words)
+    word_list = tidy_words([{"word": w.word, "start": w.start, "end": w.end} for w in (getattr(result, "words", None) or [])])
+    return Transcript((result.text or "").strip(), segments, word_list)
 
 
-# ── This PC ──────────────────────────────────────────────────────────────────
+# ── This computer ────────────────────────────────────────────────────────────
 
 _local_model = None
 _load_lock = threading.Lock()
 _run_lock = threading.Lock()  # one transcription at a time on the GPU
+_cuda_failed = False
 
 
 def _cuda_dlls() -> None:
     """On Windows, CTranslate2 loads cuBLAS / cuDNN from the DLL search path:
-    point it at the copies PyTorch (CUDA build) ships, when there are some."""
+    point it at the copies PyTorch (CUDA build) or the nvidia-* wheels ship."""
     if sys.platform != "win32":
         return
+    dirs = []
     try:
         import torch
 
-        lib = os.path.join(os.path.dirname(torch.__file__), "lib")
-        if os.path.isdir(lib):
-            os.add_dll_directory(lib)
-    except Exception as e:  # torch missing or CPU build: the CPU path still works
+        dirs.append(os.path.join(os.path.dirname(torch.__file__), "lib"))
+    except Exception as e:  # torch missing or CPU build: other copies, or the CPU
         logger.debug(f"No CUDA libraries from torch: {e}")
+    for package in ("nvidia.cublas", "nvidia.cudnn"):
+        try:
+            spec = importlib.util.find_spec(package)
+        except (ImportError, ValueError):
+            spec = None
+        for location in (spec.submodule_search_locations or []) if spec else []:
+            dirs.append(os.path.join(location, "bin"))
+    for d in dirs:
+        if os.path.isdir(d):
+            os.add_dll_directory(d)
 
 
 def local_device() -> str:
-    """"cuda" when an NVIDIA GPU is usable, else "cpu"."""
+    """"cuda" when an NVIDIA GPU is usable by CTranslate2, else "cpu"."""
+    if _cuda_failed:
+        return "cpu"
     _cuda_dlls()
     try:
         import ctranslate2
@@ -123,12 +148,33 @@ def local_device() -> str:
         return "cpu"
 
 
+def local_backend() -> str:
+    """How this computer runs Whisper: "mlx" (Apple chip GPU), "cuda" (NVIDIA
+    GPU), or "cpu" (slow)."""
+    if sys.platform == "darwin" and platform.machine() == "arm64" and importlib.util.find_spec("mlx_whisper"):
+        return "mlx"
+    return local_device()
+
+
 def local_model_dir() -> str:
-    return os.path.join(paths.DATA_DIR, "models", "whisper")
+    """Where the local model is (downloaded once, ~1.6 GB)."""
+    name = "whisper-mlx" if local_backend() == "mlx" else "whisper"
+    return os.path.join(paths.DATA_DIR, "models", name)
+
+
+def _mlx_model() -> str:
+    with _load_lock:
+        target = local_model_dir()
+        if not os.path.isfile(os.path.join(target, "config.json")):
+            from huggingface_hub import snapshot_download
+
+            logger.info(f"Downloading Whisper {MLX_REPO} for the Apple chip (once, ~1.6 GB)...")
+            snapshot_download(MLX_REPO, local_dir=target)
+        return target
 
 
 def _get_local_model():
-    global _local_model
+    global _local_model, _cuda_failed
     with _load_lock:
         if _local_model is None:
             from faster_whisper import WhisperModel
@@ -143,11 +189,13 @@ def _get_local_model():
                     download_root=local_model_dir(),
                 )
             except Exception as e:
-                if device == "cpu":
-                    raise
-                # CUDA libraries missing or too old: the CPU still works, slowly
-                logger.warning(f"Whisper on the GPU failed ({e}), using the CPU")
-                _local_model = WhisperModel(LOCAL_MODEL, device="cpu", compute_type="int8", download_root=local_model_dir())
+                if device == "cuda":
+                    # CUDA libraries missing or too old: this audio goes to the
+                    # fallback engine (the CPU would take as long as the audio),
+                    # and "auto" stops picking this computer
+                    logger.warning(f"Whisper on the GPU failed ({e}): falling back, CPU from now on if asked")
+                    _cuda_failed = True
+                raise
         return _local_model
 
 
@@ -162,28 +210,42 @@ def _decode(audio_path: str):
         ["ffmpeg", "-nostdin", "-loglevel", "error", "-i", audio_path, "-f", "f32le", "-ac", "1", "-ar", "16000", "-"],
         check=True,
         capture_output=True,
-        timeout=120,
+        timeout=600,
     ).stdout
     return np.frombuffer(raw, dtype=np.float32)
 
 
-def _local(audio_path: str) -> Transcript:
+def _local(audio_path: str, words: bool = True) -> Transcript:
+    if local_backend() == "mlx":
+        return _local_mlx(audio_path, words)
     model = _get_local_model()
     audio = _decode(audio_path)
     with _run_lock:
-        segments, _info = model.transcribe(
-            audio,
-            word_timestamps=True,
-            vad_filter=True,
-            beam_size=5 if model.model.device == "cuda" else 1,
-        )
+        if model.model.device == "cuda":
+            from faster_whisper import BatchedInferencePipeline
+
+            segments, _info = BatchedInferencePipeline(model=model).transcribe(audio, word_timestamps=words, vad_filter=True, batch_size=16)
+        else:
+            segments, _info = model.transcribe(audio, word_timestamps=words, vad_filter=True, beam_size=1)
         out = Transcript(text="")
         texts = []
-        words = []
+        word_list = []
         for s in segments:
             out.segments.append((float(s.start), float(s.end), s.text))
             texts.append(s.text.strip())
-            words += [{"word": w.word, "start": w.start, "end": w.end} for w in s.words or []]
-    out.words = tidy_words(words)
+            word_list += [{"word": w.word, "start": w.start, "end": w.end} for w in s.words or []]
+    out.words = tidy_words(word_list)
     out.text = " ".join(t for t in texts if t)
     return out
+
+
+def _local_mlx(audio_path: str, words: bool) -> Transcript:
+    import mlx_whisper
+
+    model = _mlx_model()
+    audio = _decode(audio_path)
+    with _run_lock:
+        result = mlx_whisper.transcribe(audio, path_or_hf_repo=model, word_timestamps=words, condition_on_previous_text=False)
+    segments = [(float(s["start"]), float(s["end"]), s["text"]) for s in result.get("segments", [])]
+    word_list = [{"word": w["word"], "start": w["start"], "end": w["end"]} for s in result.get("segments", []) for w in s.get("words", [])]
+    return Transcript(" ".join(t.strip() for _s, _e, t in segments if t.strip()), segments, tidy_words(word_list))

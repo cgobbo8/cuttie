@@ -310,8 +310,8 @@ def diagnostics() -> dict:
         model_dir = transcriber.local_model_dir()
         info["transcription"] = {
             "engine": transcriber.chosen_engine(),
-            # On this PC: fast with an NVIDIA GPU ("cuda"), slow on the CPU
-            "local_device": transcriber.local_device(),
+            # This computer: fast on an Apple chip ("mlx") or an NVIDIA GPU ("cuda"), slow on the CPU
+            "local_device": transcriber.local_backend(),
             "local_model_ready": os.path.isdir(model_dir) and any(os.scandir(model_dir)),
         }
     except Exception as e:

@@ -74,11 +74,13 @@ function TranscriptionSection() {
     {
       id: "local",
       hint: t(
-        local?.local_device === "cuda"
-          ? "settings.transcription.localGpu"
-          : local?.local_device === "cpu"
-            ? "settings.transcription.localCpu"
-            : "settings.transcription.localUnknown",
+        local?.local_device === "mlx"
+          ? "settings.transcription.localMlx"
+          : local?.local_device === "cuda"
+            ? "settings.transcription.localGpu"
+            : local?.local_device === "cpu"
+              ? "settings.transcription.localCpu"
+              : "settings.transcription.localUnknown",
       ),
     },
   ];
@@ -227,7 +229,11 @@ function DiagnosticsSection() {
                 <DiagRow
                   label={t("settings.transcription.title")}
                   level={w.transcription.engine === "local" && w.transcription.local_device === "cpu" ? "warn" : "ok"}
-                  value={`${t(`settings.transcription.${w.transcription.engine}`)}${w.transcription.engine === "local" ? ` · ${w.transcription.local_device === "cuda" ? "NVIDIA" : t("settings.diag.cpu")}` : ""}`}
+                  value={`${t(`settings.transcription.${w.transcription.engine}`)}${
+                    w.transcription.engine === "local"
+                      ? ` · ${w.transcription.local_device === "cuda" ? "NVIDIA" : w.transcription.local_device === "mlx" ? t("settings.diag.appleChip") : t("settings.diag.cpu")}`
+                      : ""
+                  }`}
                 />
               )}
             </>

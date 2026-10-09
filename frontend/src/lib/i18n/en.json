@@ -506,7 +506,8 @@
       "keysBoth": "OpenRouter and Groq set",
       "cpu": "processor (slow)",
       "openrouterCredits": "OpenRouter credits used up",
-      "openrouterKey": "OpenRouter key refused"
+      "openrouterKey": "OpenRouter key refused",
+      "appleChip": "Apple chip"
     },
     "subtitle": "Your AI keys, the app language and the state of your install.",
     "openaiRole": "Advanced editor assistant (optional)",
@@ -515,17 +516,18 @@
     "welcomeCta": "Run the setup again",
     "transcription": {
       "title": "Transcription",
-      "help": "What listens to what's said, for the analysis and the subtitles. If Groq or your graphics card fails, OpenRouter takes over.",
+      "help": "What listens to the whole stream, to find the moments, then for the subtitles. If this computer or Groq gets stuck, OpenRouter takes over.",
       "groq": "Groq",
       "openrouter": "OpenRouter",
       "local": "On this PC",
-      "groqHint": "The fastest: about 1 s per minute of audio.",
+      "groqHint": "Very fast, but its free tier caps audio per hour: a whole stream takes a while.",
       "groqNeedsKey": "Add a Groq key above to use it.",
-      "openrouterHint": "No extra key. About 1 cent per hour of audio, a bit slower.",
-      "localGpu": "Free, on your NVIDIA graphics card.",
-      "localCpu": "Free but slow here: no NVIDIA card, about real time.",
-      "localUnknown": "Free, on your NVIDIA graphics card if you have one.",
-      "download": "The model (1.5 GB) downloads once, on the first analysis.",
+      "openrouterHint": "No extra key. About 1 cent per hour of stream, a few minutes for a whole stream.",
+      "localGpu": "Free and fast, on your NVIDIA graphics card.",
+      "localMlx": "Free and fast, on your Mac's chip.",
+      "localCpu": "Free, but slow here (no NVIDIA card or Apple chip): about real time.",
+      "localUnknown": "Free, and fast with an NVIDIA card or an Apple chip.",
+      "download": "The model (1.6 GB) downloads once, on the first analysis.",
       "saved": "Transcription: {{engine}}",
       "saveError": "Couldn't save this choice"
     }
@@ -701,7 +703,8 @@
     "suggestedTrimHint": "Cut suggested by the AI ({{seconds}} s): widen it if you want more context.",
     "backToSuggestedTrim": "AI cut",
     "notice": {
-      "transcription": "{{failed}} of {{total}} passages could not be transcribed (Groq key limit?). The AI still listened to them; their subtitles will be made when you open the clip."
+      "transcription": "{{failed}} of {{total}} passages could not be transcribed (Groq key limit?). The AI still listened to them; their subtitles will be made when you open the clip.",
+      "live_transcript": "{{failed}} 10-minute chunks out of {{total}} could not be transcribed: moments in those parts were found less reliably."
     }
   },
   "montage": {

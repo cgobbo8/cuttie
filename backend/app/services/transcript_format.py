@@ -45,3 +45,10 @@ def format_labeled_transcript(labeled_words: list[dict]) -> str:
     if current_words:
         flush()
     return "\n".join(lines)
+
+
+def format_segments(segments: list[tuple[float, float, str]]) -> str:
+    """Timestamped lines from Whisper segments, when there are no word timings:
+      [0.0s] Ok, pour la suite de grade.
+    """
+    return "\n".join(f"[{start:.1f}s] {text.strip()}" for start, _end, text in segments if text.strip())

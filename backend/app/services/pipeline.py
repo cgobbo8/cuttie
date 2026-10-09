@@ -18,6 +18,7 @@ from app.services.db import add_notice, get_job, reset_notices, save_hot_points,
 from app.services.downloader import extract_metadata, download_audio, download_chat
 from app.services.llm_analyzer import analyze_candidates, analyze_hot_points, analyze_single_clip
 from app.services.provider_errors import ProviderUnavailable, check_openrouter
+from app.services import vod_transcript
 from app.services.scorer import compute_scores
 from app.services.speaker_diarizer import pick_voice_reference
 from app.services import job_control
@@ -353,6 +354,8 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
     """
     output_dir = work_dir("audio", job_id)
     timer = StepTimer()
+    # The whole live, transcribed in the background while the rest goes on
+    live: vod_transcript.Background | None = None
 
     try:
         reset_notices(job_id)
@@ -423,6 +426,9 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
             audio_size = os.path.getsize(audio_path) / (1024 * 1024) if os.path.isfile(audio_path) else 0
             logger.info(f"[{job_id[:8]}] Download complete: audio={audio_size:.0f}MB, chat={len(chat_messages)} messages")
             check_cancelled(job_id)
+
+            # Transcribe the whole live while the audio and the chat are analyzed
+            live = vod_transcript.Background(job_id, audio_path, duration)
 
             # 3. Analyze audio signals + classify audio events in parallel
             timer.start("ANALYZING_AUDIO")
@@ -497,6 +503,7 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
                 progress=f"Analyse IA de {len(hot_points)} candidats...",
                 step_timings=timer.timings,
             )
+            live_transcript = _wait_for_live_transcript(job_id, live)
             hot_points, detected_hot_points, words_by_hp, _vod_context = analyze_candidates(
                 job_id=job_id,
                 hot_points=hot_points,
@@ -508,6 +515,7 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
                 keep_n=20,
                 chat_lag=chat_lag,
                 voice_reference=pick_voice_reference(classification_features, duration),
+                vod_transcript=live_transcript,
             )
 
         # Step 7: Clipping — download video only for top 20
@@ -582,6 +590,8 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
         # Save word-level subtitles for each clipped hot point
         if words_by_hp:
             _save_words_for_clips(job_id, [*hot_points, *(detected_hot_points or [])], words_by_hp)
+        # Clips still without them (live transcribed without word timings): from their own audio
+        _transcribe_missing_words(job_id, [*(hot_points or []), *(detected_hot_points or [])])
 
         # Where the webcam is on this live, and whether it shows in each clip
         _check_facecam(job_id, [*(hot_points or []), *(detected_hot_points or [])])
@@ -634,9 +644,62 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
         update_job(job_id, status="ERROR", error=str(e), progress="An error occurred.", step_timings=timer.timings)
 
     finally:
+        if live is not None:
+            live.cancel()
         # Cleanup temp audio files (clips stay in storage)
         if os.path.exists(output_dir):
             shutil.rmtree(output_dir, ignore_errors=True)
+
+
+def _wait_for_live_transcript(job_id: str, live: "vod_transcript.Background | None") -> "vod_transcript.VodTranscript | None":
+    """The live transcript, once done (None when there is none: candidates are then
+    transcribed one by one). OpenRouter refusing for good stops the analysis."""
+    if live is None:
+        return None
+
+    def waiting(done: int, total: int) -> None:
+        update_job(job_id, progress=f"Transcription du live : {done} sur {total} morceaux...")
+        check_cancelled(job_id)
+
+    try:
+        transcript = live.result(on_wait=waiting)
+    except (ProviderUnavailable, JobCancelled):
+        raise
+    except Exception as e:
+        logger.warning(f"[{job_id[:8]}] Live transcript unavailable ({e}): candidates transcribed one by one")
+        return None
+    if transcript.failed:
+        add_notice(job_id, "live_transcript", failed=transcript.failed, total=transcript.total)
+    return transcript if transcript.segments else None
+
+
+def _transcribe_missing_words(job_id: str, hot_points: list) -> None:
+    """Word timings for clips that have none yet, from their own audio (the
+    subtitles need them; Montage would otherwise wait on each clip)."""
+    from app.services.clip_tools import transcribe_clip_words
+
+    clip_dir = os.path.join(CLIPS_DIR, job_id)
+    missing = [
+        hp.clip_filename
+        for hp in hot_points
+        if hp.clip_filename and not os.path.isfile(os.path.join(clip_dir, f"{os.path.splitext(hp.clip_filename)[0]}_words.json"))
+    ]
+    if not missing:
+        return
+    update_job(job_id, progress=f"Sous-titres de {len(missing)} clips...")
+    logger.info(f"[{job_id[:8]}] Word timings for {len(missing)} clips from their own audio...")
+
+    def _one(filename: str) -> None:
+        try:
+            transcribe_clip_words(job_id, filename)
+        except ProviderUnavailable:
+            raise
+        except Exception as e:
+            # Montage will try again when the clip is opened
+            logger.warning(f"[{job_id[:8]}] Words for {filename} failed: {e}")
+
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        list(pool.map(_one, missing))
 
 
 def _reattach_clips(job_id: str, hot_points: list) -> None:

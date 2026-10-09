@@ -5,6 +5,7 @@
  *   <DATA_DIR>/storage/{clips,renders,assets}/   files served by /api/storage
  *   <DATA_DIR>/api.sqlite3                       API database
  *   <DATA_DIR>/settings.json                     user settings (API keys, ...)
+ *   <DATA_DIR>/transcripts/<job>/                the live transcribed by the worker, in chunks
  */
 
 import path from 'node:path'
@@ -18,6 +19,7 @@ export const STORAGE_DIR = path.join(DATA_DIR, 'storage')
 export const CLIPS_DIR = path.join(STORAGE_DIR, 'clips')
 export const DB_PATH = path.join(DATA_DIR, 'api.sqlite3')
 export const SETTINGS_PATH = path.join(DATA_DIR, 'settings.json')
+export const TRANSCRIPTS_DIR = path.join(DATA_DIR, 'transcripts')
 
 /** Absolute path of a storage key ("clips/<job>/<file>"), refusing keys that escape storage. */
 export function storagePath(key: string): string {

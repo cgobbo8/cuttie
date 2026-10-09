@@ -136,8 +136,8 @@ export interface WorkerDiagnostics {
   device_error?: string;
   transcription?: {
     engine?: "groq" | "openrouter" | "local";
-    /** Whisper on this PC: "cuda" = NVIDIA GPU (fast), "cpu" (slow) */
-    local_device?: "cuda" | "cpu";
+    /** Whisper on this computer: "mlx" = Apple chip, "cuda" = NVIDIA GPU (both fast), "cpu" (slow) */
+    local_device?: "mlx" | "cuda" | "cpu";
     local_model_ready?: boolean;
     error?: string;
   };

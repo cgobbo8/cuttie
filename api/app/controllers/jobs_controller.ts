@@ -5,7 +5,7 @@ import path from 'node:path'
 import Job, { type ClipSelection } from '#models/job'
 import { parseFacecamRect, saveBrandKit, type FacecamRect } from '#services/brand_kit'
 import db from '@adonisjs/lucid/services/db'
-import { clipDir } from '#services/data_paths'
+import { clipDir, TRANSCRIPTS_DIR } from '#services/data_paths'
 import { deleteObject, storagePath } from '#services/storage'
 import { cancelJob, enqueueJob, type WorkerJob } from '#services/worker_client'
 import { createJobValidator } from '#validators/user'
@@ -348,6 +348,10 @@ export default class JobsController {
       try {
         rmSync(storagePath(prefix), { recursive: true, force: true })
       } catch {}
+    }
+    // ...and the live transcript the worker kept (job ids are UUIDs: no path tricks)
+    if (/^[0-9a-f-]{36}$/i.test(job.id)) {
+      rmSync(path.join(TRANSCRIPTS_DIR, job.id), { recursive: true, force: true })
     }
 
     await job.delete()

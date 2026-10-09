@@ -49,6 +49,7 @@ def engines(tmp_path, monkeypatch):
     audio.write_bytes(b"x")
     state = {"settings": {"groq_api_key": "g", "openrouter_api_key": "o"}, "audio": str(audio)}
     monkeypatch.setattr(transcriber.settings, "get", lambda key, env=None, default="": state["settings"].get(key, default))
+    monkeypatch.setattr(transcriber, "local_backend", lambda: "cpu")
     monkeypatch.setattr(llm_analyzer._time, "sleep", lambda s: None)
     monkeypatch.setattr(llm_analyzer, "_whisper_gates", {e: llm_analyzer._RateGate() for e in transcriber.ENGINES})
 
@@ -70,6 +71,7 @@ def test_whisper_stops_when_openrouter_has_no_credits(engines):
     engines["use"](groq=_status_error(401), openrouter=None)
     text, *_ = llm_analyzer._transcribe_audio(engines["audio"])
     assert text == "ok"
+    assert engines["groq"].calls == 1
     assert engines["openrouter"].calls == 1
 
 

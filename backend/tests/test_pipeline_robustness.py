@@ -60,6 +60,8 @@ def stt(tmp_path, monkeypatch):
     monkeypatch.setattr(transcriber.settings, "get", lambda key, env=None, default="": state["settings"].get(key, default))
     monkeypatch.setattr(transcriber, "get_groq_client", lambda: _client(state["groq"]))
     monkeypatch.setattr(transcriber, "get_openrouter_client", lambda: _client(state["openrouter"]))
+    # A computer that is slow at Whisper (no Apple chip, no NVIDIA GPU): "auto" goes to the cloud
+    monkeypatch.setattr(transcriber, "local_backend", lambda: "cpu")
     monkeypatch.setattr(llm_analyzer._time, "sleep", lambda s: state["waits"].append(s))
     monkeypatch.setattr(llm_analyzer, "_whisper_gates", {e: llm_analyzer._RateGate() for e in transcriber.ENGINES})
     state["audio"] = str(audio)
@@ -74,6 +76,15 @@ def test_picks_groq_with_a_key_else_the_chosen_engine(stt):
     stt["settings"]["transcription"] = "groq"  # no key: can't
     assert transcriber.chosen_engine() == "openrouter"
     stt["settings"]["transcription"] = "auto"
+    assert transcriber.chosen_engine() == "openrouter"
+
+
+def test_auto_runs_on_this_computer_when_it_is_fast(stt, monkeypatch):
+    for backend in ("mlx", "cuda"):
+        monkeypatch.setattr(transcriber, "local_backend", lambda b=backend: b)
+        assert transcriber.chosen_engine() == "local"
+    # Asked for explicitly, the cloud wins
+    stt["settings"]["transcription"] = "openrouter"
     assert transcriber.chosen_engine() == "openrouter"
 
 

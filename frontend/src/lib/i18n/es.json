@@ -506,7 +506,8 @@
       "keysBoth": "OpenRouter y Groq configuradas",
       "cpu": "procesador (lento)",
       "openrouterCredits": "Créditos de OpenRouter agotados",
-      "openrouterKey": "Clave de OpenRouter rechazada"
+      "openrouterKey": "Clave de OpenRouter rechazada",
+      "appleChip": "chip Apple"
     },
     "subtitle": "Tus claves de IA, el idioma de la app y el estado de tu instalación.",
     "openaiRole": "Asistente del editor avanzado (opcional)",
@@ -515,17 +516,18 @@
     "welcomeCta": "Repetir la configuración",
     "transcription": {
       "title": "Transcripción",
-      "help": "Lo que escucha lo que se dice, para el análisis y los subtítulos. Si Groq o tu tarjeta gráfica fallan, OpenRouter toma el relevo.",
+      "help": "Lo que escucha todo el directo, para encontrar los momentos, y luego los subtítulos. Si este PC o Groq se atascan, OpenRouter toma el relevo.",
       "groq": "Groq",
       "openrouter": "OpenRouter",
       "local": "En este PC",
-      "groqHint": "La más rápida: 1 s por minuto de audio aprox.",
+      "groqHint": "Muy rápido, pero la versión gratuita limita el audio por hora: un directo entero tarda.",
       "groqNeedsKey": "Añade una clave de Groq arriba para usarla.",
-      "openrouterHint": "Sin otra clave. 1 céntimo por hora de audio aprox., algo más lenta.",
-      "localGpu": "Gratis, en tu tarjeta gráfica NVIDIA.",
-      "localCpu": "Gratis pero lenta aquí: sin tarjeta NVIDIA, casi en tiempo real.",
-      "localUnknown": "Gratis, en tu tarjeta gráfica NVIDIA si tienes una.",
-      "download": "El modelo (1,5 GB) se descarga una vez, en el primer análisis.",
+      "openrouterHint": "Sin clave extra. Cerca de 1 céntimo por hora de directo, unos minutos para un directo entero.",
+      "localGpu": "Gratis y rápido, en tu tarjeta gráfica NVIDIA.",
+      "localMlx": "Gratis y rápido, en el chip de tu Mac.",
+      "localCpu": "Gratis, pero lento aquí (ni tarjeta NVIDIA ni chip Apple): más o menos el tiempo real.",
+      "localUnknown": "Gratis, y rápido con una tarjeta NVIDIA o un chip Apple.",
+      "download": "El modelo (1,6 GB) se descarga una vez, en el primer análisis.",
       "saved": "Transcripción: {{engine}}",
       "saveError": "No se pudo guardar esta opción"
     }
@@ -701,7 +703,8 @@
     "suggestedTrimHint": "Corte sugerido por la IA ({{seconds}} s): amplíalo si quieres más contexto.",
     "backToSuggestedTrim": "Corte de la IA",
     "notice": {
-      "transcription": "{{failed}} de {{total}} fragmentos no se pudieron transcribir (¿límite de la clave de Groq?). La IA los escuchó igualmente; sus subtítulos se harán al abrir el clip."
+      "transcription": "{{failed}} de {{total}} fragmentos no se pudieron transcribir (¿límite de la clave de Groq?). La IA los escuchó igualmente; sus subtítulos se harán al abrir el clip.",
+      "live_transcript": "{{failed}} fragmentos de 10 minutos de {{total}} no se pudieron transcribir: los momentos de esas partes se detectaron peor."
     }
   },
   "montage": {

@@ -715,11 +715,11 @@
       },
       "reaction": {
         "name": "Reaction",
-        "desc": "Your face big, for laughing fits and rage"
+        "desc": "Your face big, the game in a card below"
       },
       "discussion": {
         "name": "RP talk",
-        "desc": "Who's talking, in color, one sentence at a time"
+        "desc": "The scene on top, the talk and the chat below"
       },
       "plein": {
         "name": "Action",
@@ -727,7 +727,7 @@
       },
       "accroche": {
         "name": "Cinema",
-        "desc": "The whole game picture, your cam in a card above"
+        "desc": "The whole stream picture between two bands, the title above"
       },
       "sanscam": {
         "name": "No cam",
@@ -999,6 +999,7 @@
       "game": "Game",
       "cam": "Cam",
       "subtitles": "Subtitles",
+      "chat": "Chat",
       "hook": "Hook"
     },
     "darken": "Darken",
@@ -1018,6 +1019,8 @@
     "hide": "Hide",
     "show": "Show",
     "camHint": "On clips where nobody is in the cam, it disappears and the rest stays put.",
+    "gameWhole": "Whole stream picture",
+    "gameWholeHint": "Your webcam included, as viewers saw it.",
     "radius": "Corners",
     "makeRound": "Make it round",
     "borderColor": "Outline color",
@@ -1031,6 +1034,10 @@
     "boxed": "On a dark box",
     "speakers": "One color per person",
     "speakersHint": "For group conversations (voice chat, RP).",
+    "chatHint": "Your chat's messages during the clip, as bubbles. No commands (!clip…), bots or links.",
+    "chatCount_one": "{{count}} message in this clip.",
+    "chatCount_other": "{{count}} messages in this clip.",
+    "chatMax": "Messages at once",
     "words": "Words at a time",
     "pop": "Spoken word pops",
     "hookStyle": "Style",

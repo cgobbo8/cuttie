@@ -15,10 +15,13 @@ import type { Layer } from "./editorTypes";
 import type { FontId } from "./fonts";
 import {
   buildFromSpec,
+  DEFAULT_CHAT,
   newSpecId,
   SHOW_PRESETS,
   timingOf,
   type Box,
+  type ChatSpec,
+  type ColorRef,
   type EnterId,
   type ExitId,
   type FrameStyle,
@@ -72,15 +75,21 @@ interface Extra extends BrandWidget {
 /** Where things sit in a layout and how they look (the subtitle style comes from the channel) */
 interface Layout {
   background: TemplateSpec["background"]["kind"];
+  /** For a "color" background */
+  bgColor?: ColorRef;
   /** Darkening over the blurred clip */
   dim: number;
-  game: { box: Box; frame: FrameStyle };
+  game: { box: Box; frame: FrameStyle; whole?: boolean };
   cam: { box: Box; frame: FrameStyle } | null;
   subtitles: Subtitles;
   hook: Hook;
+  /** The Twitch chat, shown when set */
+  chat?: Omit<ChatSpec, "visible">;
   /** The channel's widget, timed by the channel settings */
   brand: BrandWidget | null;
   extras?: Extra[];
+  /** Stacking when it isn't game, cam, chat, subtitles, hook (bottom to top) */
+  order?: string[];
 }
 
 /** A follow button that a cursor clicks, the last seconds of the clip */
@@ -114,25 +123,28 @@ const LAYOUTS: Record<TemplateId, Layout> = {
     brand: { kind: "channel-pill", box: { x: 60, y: 216, w: 640, h: 68 }, enter: "slideLeft", exit: "slideLeft", fields: { align: "left" } },
     extras: [followAtEnd({ x: 290, y: 1200, w: 500, h: 160 })],
   },
-  // RP dialogues: who speaks, in color, a sentence at a time
+  // The game scene on top with a round webcam, the talk below: who speaks, in color, and the chat
   discussion: {
     background: "dark",
     dim: 0.42,
-    cam: { box: { x: 0, y: 0, w: 1080, h: 700 }, frame: frame(0) },
-    game: { box: { x: -12, y: 706, w: 1104, h: 1226 }, frame: frame(0, 6, "accent") },
-    subtitles: { box: { x: 150, y: 620, w: 780, h: 300 }, font: "poppins", size: 66, uppercase: false, words: 5, stroke: true, speakers: true },
-    hook: { box: { x: 100, y: 940, w: 880, h: 150 }, style: "box", font: "poppins", size: 52, until: 3.5 },
-    brand: { kind: "channel-pill", box: { x: 190, y: 1352, w: 700, h: 68 }, enter: "rise", exit: "sink" },
+    game: { box: { x: 0, y: 200, w: 1080, h: 820 }, frame: frame(0) },
+    cam: { box: { x: 40, y: 230, w: 230, h: 230 }, frame: frame(115, 6, "accent", true) },
+    subtitles: { box: { x: 150, y: 1035, w: 780, h: 200 }, font: "poppins", size: 60, uppercase: false, words: 5, stroke: true, speakers: true },
+    hook: { box: { x: 100, y: 870, w: 880, h: 130 }, style: "box", font: "poppins", size: 48, until: 3.5 },
+    chat: { box: { x: 60, y: 1245, w: 760, h: 190 }, size: 40, max: 2 },
+    // Hangs under the webcam
+    brand: { kind: "channel-pill", box: { x: 5, y: 438, w: 300, h: 56 }, enter: "pop", exit: "shrink" },
   },
-  // The face, big, for laughs and rage
+  // The face, big, the game in a card over the bottom of the webcam
   reaction: {
-    background: "dark",
-    dim: 0.42,
-    cam: { box: { x: 0, y: 0, w: 1080, h: 1150 }, frame: frame(0) },
-    game: { box: { x: -12, y: 1156, w: 1104, h: 776 }, frame: frame(0, 6, "accent") },
-    subtitles: { box: { x: 150, y: 1040, w: 780, h: 230 }, font: "anton", size: 100, uppercase: true, words: 2, stroke: true },
-    hook: { box: { x: 100, y: 1286, w: 880, h: 134 }, style: "box", font: "poppins", size: 50, until: 3.5 },
+    background: "blur",
+    dim: 0.5,
+    cam: { box: { x: 0, y: 0, w: 1080, h: 1300 }, frame: frame(0) },
+    game: { box: { x: 150, y: 1040, w: 780, h: 400 }, frame: frame(32, 5, "accent", true) },
+    subtitles: { box: { x: 150, y: 930, w: 780, h: 200 }, font: "anton", size: 100, uppercase: true, words: 2, stroke: true },
+    hook: { box: { x: 170, y: 1290, w: 740, h: 130 }, style: "box", font: "poppins", size: 46, until: 3.5 },
     brand: { kind: "live-badge", box: { x: 60, y: 216, w: 600, h: 76 }, enter: "pop", exit: "shrink" },
+    order: ["cam", "game", "chat", "subtitles", "hook"],
   },
   // The game fills the frame, a round webcam in the corner: fails, clutches
   plein: {
@@ -145,15 +157,16 @@ const LAYOUTS: Record<TemplateId, Layout> = {
     // Hangs under the webcam
     brand: { kind: "channel-pill", box: { x: 30, y: 1360, w: 360, h: 60 }, enter: "pop", exit: "shrink" },
   },
-  // The whole game picture, wide, the webcam in a card above it
+  // The whole stream picture (webcam included) between two black bands, like a film: the title above, the subtitles below
   accroche: {
-    background: "blur",
-    dim: 0.5,
-    cam: { box: { x: 180, y: 210, w: 720, h: 460 }, frame: frame(36, 4, "accent", true) },
-    game: { box: { x: 0, y: 720, w: 1080, h: 608 }, frame: frame(0) },
-    subtitles: { box: { x: 150, y: 1160, w: 780, h: 160 }, font: "poppins", size: 56, uppercase: false, words: 5, stroke: true },
-    hook: { box: { x: 100, y: 750, w: 880, h: 140 }, style: "box", font: "poppins", size: 50, until: 3.5 },
-    brand: { kind: "channel-pill", box: { x: 240, y: 642, w: 600, h: 60 }, enter: "pop", exit: "shrink" },
+    background: "color",
+    bgColor: "#000000",
+    dim: 0,
+    cam: null,
+    game: { box: { x: 0, y: 660, w: 1080, h: 608 }, frame: frame(0), whole: true },
+    subtitles: { box: { x: 150, y: 1290, w: 780, h: 140 }, font: "poppins", size: 50, uppercase: false, words: 5, stroke: false },
+    hook: { box: { x: 60, y: 420, w: 960, h: 210 }, style: "outline", font: "bebas", size: 100, until: null },
+    brand: { kind: "channel-pill", box: { x: 240, y: 290, w: 600, h: 60 }, enter: "pop", exit: "shrink" },
   },
   // Webcam and game as cards on the blurred clip, the channel pill hanging under the webcam
   signature: {
@@ -189,13 +202,11 @@ const WITHOUT_CAM: Partial<Record<TemplateId, Layout>> = {
     hook: { ...LAYOUTS.signature.hook, box: { x: 100, y: 400, w: 880, h: 160 } },
     brand: { kind: "channel-pill", box: { x: 240, y: 1360, w: 600, h: 60 }, enter: "rise", exit: "sink" },
   },
-  accroche: {
-    ...LAYOUTS.accroche,
+  // The pill becomes a name tag on the scene
+  discussion: {
+    ...LAYOUTS.discussion,
     cam: null,
-    game: { box: { x: 0, y: 600, w: 1080, h: 608 }, frame: frame(0) },
-    subtitles: { ...LAYOUTS.accroche.subtitles, box: { x: 150, y: 1040, w: 780, h: 160 } },
-    hook: { ...LAYOUTS.accroche.hook, box: { x: 100, y: 400, w: 880, h: 160 } },
-    brand: { kind: "channel-pill", box: { x: 240, y: 1300, w: 600, h: 60 }, enter: "rise", exit: "sink" },
+    brand: { kind: "channel-pill", box: { x: 40, y: 230, w: 600, h: 64 }, enter: "slideLeft", exit: "slideLeft", fields: { align: "left" } },
   },
   plein: { ...LAYOUTS.plein, cam: null },
 };
@@ -274,12 +285,14 @@ export function builtInSpec(id: TemplateId, o: BuiltInOptions = {}): TemplateSpe
     id: o.id ?? newSpecId(),
     name: o.name ?? "",
     base: id,
-    background: { kind: l.background, color: "dark", dim: l.dim },
-    game: { box: { ...l.game.box }, frame: { ...l.game.frame } },
+    background: { kind: l.background, color: l.bgColor ?? "dark", dim: l.dim },
+    game: { box: { ...l.game.box }, frame: { ...l.game.frame }, ...(l.game.whole ? { whole: true } : {}) },
     cam: l.cam ? { visible: true, box: { ...l.cam.box }, frame: { ...l.cam.frame } } : { visible: false, box: { ...SPARE_CAM.box }, frame: { ...SPARE_CAM.frame } },
+    chat: l.chat ? { visible: true, ...l.chat, box: { ...l.chat.box } } : { ...DEFAULT_CHAT, box: { ...DEFAULT_CHAT.box } },
     subtitles: subtitlesSpec(l.subtitles, o.subtitleStyle ?? "bold"),
     hook: { visible: true, ...l.hook, box: { ...l.hook.box } },
     widgets,
+    ...(l.order ? { order: [...l.order] } : {}),
   };
   return o.look ? applyLook(spec, o.look) : spec;
 }

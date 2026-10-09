@@ -91,6 +91,8 @@ export interface ChatData {
   fontSize: number;
   fontFamily: string;
   showDuration: number;
+  /** "lines": Twitch-like lines (default); "bubbles": each message pops in on its own dark bubble */
+  style?: "lines" | "bubbles";
 }
 
 export interface AssetData {

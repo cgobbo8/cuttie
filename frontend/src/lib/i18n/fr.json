@@ -715,11 +715,11 @@
       },
       "reaction": {
         "name": "Réaction",
-        "desc": "Ta tête en grand, pour les fous rires et les rages"
+        "desc": "Ta tête en grand, le jeu en vignette dessous"
       },
       "discussion": {
         "name": "Discussion RP",
-        "desc": "Qui parle, en couleur, une phrase à la fois"
+        "desc": "La scène en haut, la conversation et le chat dessous"
       },
       "plein": {
         "name": "Action",
@@ -727,7 +727,7 @@
       },
       "accroche": {
         "name": "Cinéma",
-        "desc": "Toute l'image du jeu, ta cam en carte au-dessus"
+        "desc": "Tout l'écran du live entre deux bandes, le titre au-dessus"
       },
       "sanscam": {
         "name": "Sans cam",
@@ -999,6 +999,7 @@
       "game": "Jeu",
       "cam": "Cam",
       "subtitles": "Sous-titres",
+      "chat": "Chat",
       "hook": "Accroche"
     },
     "darken": "Assombrir",
@@ -1018,6 +1019,8 @@
     "hide": "Masquer",
     "show": "Afficher",
     "camHint": "Sur les clips où personne n'est dans la cam, elle disparaît et le reste ne bouge pas.",
+    "gameWhole": "Tout l'écran du live",
+    "gameWholeHint": "Ta cam comprise, comme les viewers l'ont vu.",
     "radius": "Arrondi",
     "makeRound": "La rendre ronde",
     "borderColor": "Couleur du contour",
@@ -1031,6 +1034,10 @@
     "boxed": "Sur un fond sombre",
     "speakers": "Une couleur par personne",
     "speakersHint": "Pour les discussions à plusieurs (vocal, RP).",
+    "chatHint": "Les messages de ton chat pendant le clip, en bulles. Sans les commandes (!clip…), les bots ni les liens.",
+    "chatCount_one": "{{count}} message dans ce clip.",
+    "chatCount_other": "{{count}} messages dans ce clip.",
+    "chatMax": "Messages à la fois",
     "words": "Mots à la fois",
     "pop": "Le mot prononcé grossit",
     "hookStyle": "Style",

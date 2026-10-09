@@ -54,12 +54,44 @@ describe("element templates", () => {
     expect(specFromLayout("signature", { subtitleStyle: "minimal" }).subtitles).toMatchObject({ font: "geist", boxed: true, pop: false });
   });
 
-  it("draws a layout the same way as the built-in template", () => {
-    for (const id of ["signature", "plein", "reaction", "accroche"] as const) {
-      const builtIn = buildTemplate(id, ctx);
-      const fromSpec = buildFromSpec(specFromLayout(id), ctx);
-      for (const name of ["Jeu", "Webcam", "Sous-titres"]) expect(named(fromSpec, name)).toEqual(named(builtIn, name));
-    }
+  it("draws a layout the same way as the built-in template", async () => {
+    const { TEMPLATE_IDS } = await import("./templates");
+    const shape = (layers: ReturnType<typeof buildTemplate>) => layers.map((l) => [l.name, l.transform]);
+    for (const id of TEMPLATE_IDS) expect(shape(buildFromSpec(specFromLayout(id), ctx)), id).toEqual(shape(buildTemplate(id, ctx)));
+  });
+
+  it("shows the Twitch chat in Discussion RP, as bubbles, and keeps it hidden elsewhere", () => {
+    const chat = [
+      { author: "Chiione_", text: "MOI !", timestamp: 9.6 },
+      { author: "Flaytee_", text: "la chance", timestamp: 14.7 },
+    ];
+    const talk = buildTemplate("discussion", { ...ctx, chat }).find((l) => l.type === "chat")!;
+    expect(talk.chat).toMatchObject({ messages: chat, maxVisible: 2, style: "bubbles", fontFamily: "Geist Variable" });
+    expect(talk.transform).toEqual({ x: 60, y: 1245, width: 760, height: 190 });
+    expect(buildTemplate("empile", { ...ctx, chat }).some((l) => l.type === "chat")).toBe(false);
+    // Turned on in another layout: drawn with the rest, between the webcam and the subtitles
+    const spec = specFromLayout("signature");
+    spec.chat = { ...spec.chat!, visible: true };
+    const names = buildFromSpec(spec, { ...ctx, chat }).map((l) => l.name);
+    expect(names.indexOf("Chat")).toBeGreaterThan(names.indexOf("Webcam"));
+    expect(names.indexOf("Chat")).toBeLessThan(names.indexOf("Sous-titres"));
+    // Templates saved before the chat existed have none
+    delete spec.chat;
+    expect(buildFromSpec(spec, { ...ctx, chat }).some((l) => l.type === "chat")).toBe(false);
+  });
+
+  it("films the whole stream picture in Cinéma, and puts the game card over the face cam in Réaction", () => {
+    const cinema = buildTemplate("accroche", ctx);
+    const game = cinema.find((l) => l.name === "Jeu")!;
+    // Webcam included: the crop is the whole 1920x1080 picture (to a pixel or two), no webcam of its own
+    expect(game.video!.crop).toMatchObject({ y: 0, h: 1080 });
+    expect(game.video!.crop!.w).toBeGreaterThanOrEqual(1916);
+    expect(cinema.some((l) => l.type === "facecam")).toBe(false);
+    expect(cinema[0].shape!.backgroundColor).toBe("#000000");
+    // The title stays the whole clip
+    expect(cinema.find((l) => l.name === "Accroche")!.animations).toBeUndefined();
+    const names = buildTemplate("reaction", ctx).map((l) => l.name);
+    expect(names.indexOf("Jeu")).toBeGreaterThan(names.indexOf("Webcam"));
   });
 
   it("drops the webcam on clips without one and keeps the rest in place", () => {
@@ -177,16 +209,16 @@ describe("element templates", () => {
     const { orderOf, restack } = await import("./templateSpec");
     const spec = specFromLayout("signature");
     const pill = `widget:${spec.widgets[0].id}`;
-    expect(orderOf(spec)).toEqual(["game", "cam", "subtitles", "hook", pill]);
+    expect(orderOf(spec)).toEqual(["game", "cam", "chat", "subtitles", "hook", pill]);
     // The game in front of the webcam, the pill behind everything
     spec.order = restack({ ...spec, order: restack(spec, "game", "front") }, pill, "back");
-    expect(orderOf(spec)).toEqual([pill, "cam", "subtitles", "hook", "game"]);
+    expect(orderOf(spec)).toEqual([pill, "cam", "chat", "subtitles", "hook", "game"]);
     const names = buildFromSpec(spec, ctx).map((l) => l.name);
     expect(names.indexOf("Webcam")).toBeLessThan(names.indexOf("Jeu"));
     expect(names.indexOf("Widget channel-pill")).toBeLessThan(names.indexOf("Webcam"));
     expect(names.indexOf("Fond flouté")).toBe(0);
     // Unknown or missing keys are cleaned up, new widgets land on top
-    expect(orderOf({ ...spec, order: ["nope", "cam", "cam"] })).toEqual(["cam", "game", "subtitles", "hook", pill]);
+    expect(orderOf({ ...spec, order: ["nope", "cam", "cam"] })).toEqual(["cam", "game", "chat", "subtitles", "hook", pill]);
     expect(restack(spec, "cam", 0)[0]).toBe("cam");
   });
 

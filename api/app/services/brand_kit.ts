@@ -126,8 +126,9 @@ function frame(f: unknown) {
 }
 
 function parseSpec(item: Json): TemplateSpec {
-  const { background: bg, game, cam, subtitles: subs, hook, widgets } = item
+  const { background: bg, game, cam, chat, subtitles: subs, hook, widgets } = item
   check(isObject(bg) && isObject(game) && isObject(cam) && isObject(subs) && isObject(hook) && Array.isArray(widgets))
+  check(chat === undefined || isObject(chat))
   check(widgets.length <= MAX_WIDGETS)
   return {
     version: 2,
@@ -135,8 +136,11 @@ function parseSpec(item: Json): TemplateSpec {
     name: item.name.trim(),
     base: item.base,
     background: { kind: oneOf(bg.kind, ['blur', 'dark', 'brand', 'color']), color: color(bg.color), dim: num(bg.dim, 0, 0.8) },
-    game: { box: box(game.box), frame: frame(game.frame) },
+    game: { box: box(game.box), frame: frame(game.frame), ...(game.whole !== undefined ? { whole: bool(game.whole) } : {}) },
     cam: { visible: bool(cam.visible), box: box(cam.box), frame: frame(cam.frame) },
+    ...(chat !== undefined
+      ? { chat: { visible: bool(chat.visible), box: box(chat.box), size: num(chat.size, 16, 120), max: Math.round(num(chat.max, 1, 6)) } }
+      : {}),
     subtitles: {
       box: box(subs.box),
       font: oneOf(subs.font, FONT_IDS),
@@ -202,7 +206,7 @@ function show(s: unknown) {
 
 /** Stacking of the elements: known keys only, each once */
 function order(list: unknown, widgets: Json[]) {
-  const keys = ['game', 'cam', 'subtitles', 'hook', ...widgets.map((w) => `widget:${w.id}`)]
+  const keys = ['game', 'cam', 'chat', 'subtitles', 'hook', ...widgets.map((w) => `widget:${w.id}`)]
   check(Array.isArray(list) && list.length <= keys.length)
   check(list.every((k, i) => typeof k === 'string' && keys.includes(k) && list.indexOf(k) === i))
   return list as string[]

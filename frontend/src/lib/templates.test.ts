@@ -99,9 +99,10 @@ describe("templates", () => {
     expect(suggestTemplate("storytelling", true, 0, 0, big)).toBe("discussion");
     expect(suggestTemplate("fun", true, 1, 0, big)).toBe("reaction");
     expect(suggestTemplate("fun", false)).toBe("sanscam");
+    expect(suggestTemplate("storytelling", false)).toBe("accroche");
     expect(suggestTemplate("fun", true, 0.5, 0.2, big)).toBe("empile");
-    // A small one (402 px, enlarged 2.7 times at full width) goes in a card
-    expect(suggestTemplate("storytelling", true, 0, 0, 402)).toBe("accroche");
+    // A small one (402 px, enlarged 2.7 times at full width) goes in a card; the talk layout keeps it small anyway
+    expect(suggestTemplate("storytelling", true, 0, 0, 402)).toBe("discussion");
     expect(suggestTemplate("fun", true, 1, 0, 402)).toBe("signature");
     expect(suggestTemplate("fun", true, 0.5, 0.2, 402)).toBe("signature");
     expect(suggestTemplate("clutch", true, 0, 0, 402)).toBe("plein");

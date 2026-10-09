@@ -142,8 +142,15 @@ export interface TemplateSpec {
   /** The layout it started from */
   base: TemplateId;
   background: { kind: "blur" | "dark" | "brand" | "color"; color: ColorRef; /** Darkening over the blurred clip, 0-0.8 */ dim: number };
-  game: { box: Box; frame: FrameStyle };
+  game: {
+    box: Box;
+    frame: FrameStyle;
+    /** The whole stream picture, webcam included (else the game next to the webcam) */
+    whole?: boolean;
+  };
   cam: { visible: boolean; box: Box; frame: FrameStyle };
+  /** The Twitch chat, message bubbles (older templates: none) */
+  chat?: ChatSpec;
   subtitles: {
     box: Box;
     font: FontId;
@@ -174,11 +181,28 @@ export interface TemplateSpec {
     until?: number | "half" | null;
   };
   widgets: SpecWidget[];
-  /** Stacking, bottom to top: "game", "cam", "subtitles", "hook", "widget:<id>" (the background stays under everything) */
+  /** Stacking, bottom to top: "game", "cam", "chat", "subtitles", "hook", "widget:<id>" (the background stays under everything) */
   order?: string[];
 }
 
-const BASE_ORDER = ["game", "cam", "subtitles", "hook"];
+export interface ChatSpec {
+  visible: boolean;
+  box: Box;
+  /** Text size, frame pixels */
+  size: number;
+  /** Messages on screen at once */
+  max: number;
+}
+
+/** Where the chat goes when a template didn't have one yet */
+export const DEFAULT_CHAT: ChatSpec = { visible: false, box: { x: 60, y: 1150, w: 720, h: 270 }, size: 38, max: 3 };
+
+export const chatOf = (spec: TemplateSpec): ChatSpec => spec.chat ?? { ...DEFAULT_CHAT, box: { ...DEFAULT_CHAT.box } };
+
+/** Seconds a chat message stays */
+const CHAT_SECONDS = 5;
+
+const BASE_ORDER = ["game", "cam", "chat", "subtitles", "hook"];
 
 /** Every element of the template once, bottom to top (new widgets land on top) */
 export function orderOf(spec: TemplateSpec): string[] {
@@ -276,6 +300,12 @@ function subtitleLayer(ctx: TemplateContext, s: TemplateSpec["subtitles"]): Laye
   return layer;
 }
 
+function chatLayer(ctx: TemplateContext, c: ChatSpec): Layer {
+  const layer = base("Chat", "chat", toTransform(c.box));
+  layer.chat = { messages: ctx.chat ?? [], maxVisible: Math.round(c.max), fontSize: Math.round(c.size), fontFamily: fontFamily("geist"), showDuration: CHAT_SECONDS, style: "bubbles" };
+  return layer;
+}
+
 /** When the hook line goes (it's on screen from the first frame: the clip's cover) */
 export function hookLeavesAt(h: TemplateSpec["hook"], startAt: number, endAt: number): number | null {
   if (h.until === undefined || h.until === null) return null;
@@ -370,10 +400,15 @@ export function buildFromSpec(spec: TemplateSpec, ctx: TemplateContext): Layer[]
   }
 
   for (const key of orderOf(spec)) {
-    if (key === "game") layers.push(...framedVideo(ctx, "Jeu", "gameplay", gameRegion(ctx), spec.game.box, spec.game.frame));
+    if (key === "game") {
+      const region = spec.game.whole ? { x: 0, y: 0, w: ctx.frameW, h: ctx.frameH } : gameRegion(ctx);
+      layers.push(...framedVideo(ctx, "Jeu", "gameplay", region, spec.game.box, spec.game.frame));
+    }
     // A clip where nobody is in the webcam: no webcam, the rest stays put
     else if (key === "cam") {
       if (spec.cam.visible && ctx.facecam) layers.push(...framedVideo(ctx, "Webcam", "facecam", ctx.facecam, spec.cam.box, spec.cam.frame));
+    } else if (key === "chat") {
+      if (chatOf(spec).visible) layers.push(chatLayer(ctx, chatOf(spec)));
     } else if (key === "subtitles") layers.push(subtitleLayer(ctx, spec.subtitles));
     else if (key === "hook") {
       if (spec.hook.visible && ctx.hook.trim()) layers.push(...hookLayers(ctx, spec.hook));
@@ -430,6 +465,7 @@ export function placeWidget(spec: TemplateSpec, box: Box, timing: WidgetTimingKi
     spec.subtitles.box,
     ...(spec.cam.visible ? [spec.cam.box] : []),
     ...(spec.hook.visible ? [spec.hook.box] : []),
+    ...(chatOf(spec).visible ? [chatOf(spec).box] : []),
     ...spec.widgets.filter((w) => w.timing === timing || w.timing === "always" || timing === "always").map((w) => w.box),
   ];
   const free = (b: Box) => coveredBy(b).length === 0 && taken.every((o) => overlap(b, o) === 0);
@@ -598,6 +634,7 @@ export function elementBoxes(spec: TemplateSpec): Record<string, Box> {
   const boxes: Record<string, Box> = { game: spec.game.box, subtitles: spec.subtitles.box };
   if (spec.cam.visible) boxes.cam = spec.cam.box;
   if (spec.hook.visible) boxes.hook = spec.hook.box;
+  if (chatOf(spec).visible) boxes.chat = chatOf(spec).box;
   for (const w of spec.widgets) boxes[`widget:${w.id}`] = w.box;
   return boxes;
 }

@@ -196,6 +196,24 @@ test.group('Brand kit | element templates', (group) => {
     assert.equal(saved.body().default_template, 'empile')
   })
 
+  test('keeps the chat element and the whole stream picture (Discussion RP, Cinéma)', async ({ client, assert }) => {
+    const user = await makeUser()
+    const talk = {
+      ...spec,
+      id: 'custom-8b9c0d1e',
+      base: 'discussion',
+      game: { ...spec.game, whole: true },
+      chat: { visible: true, box: { x: 60, y: 1170, w: 760, h: 260 }, size: 38, max: 3 },
+      order: ['cam', 'game', 'chat', 'subtitles', 'hook'],
+    }
+    const saved = await client.put('/api/brand-kit').loginAs(user).json({ templates: [talk] })
+    saved.assertStatus(200)
+    assert.deepEqual(saved.body().templates[0], talk)
+    for (const chat of [{ ...talk.chat, max: 40 }, { ...talk.chat, visible: 'yes' }, { ...talk.chat, box: { x: 5000, y: 0, w: 10, h: 10 } }]) {
+      ;(await client.put('/api/brand-kit').loginAs(user).json({ templates: [{ ...talk, chat }] })).assertStatus(400)
+    }
+  })
+
   test('rejects broken element templates', async ({ client }) => {
     const user = await makeUser()
     const broken = [

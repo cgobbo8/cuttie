@@ -1,11 +1,11 @@
 import { useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { Captions, ChevronDown, ChevronUp, EyeOff, Gamepad2, GripVertical, Image, Sparkles, Type, Webcam } from "lucide-react";
+import { Captions, ChevronDown, ChevronUp, EyeOff, Gamepad2, GripVertical, Image, MessageSquare, Sparkles, Type, Webcam } from "lucide-react";
 
 export interface LayerItem {
   key: string;
   label: string;
-  /** Hidden for now (webcam or hook switched off) */
+  /** Hidden for now (webcam, hook or chat switched off) */
   hidden?: boolean;
 }
 
@@ -27,6 +27,7 @@ function iconOf(key: string) {
   if (key === "cam") return Webcam;
   if (key === "subtitles") return Captions;
   if (key === "hook") return Type;
+  if (key === "chat") return MessageSquare;
   if (key === "background") return Image;
   return Sparkles;
 }

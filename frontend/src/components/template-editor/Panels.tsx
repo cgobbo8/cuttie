@@ -15,6 +15,7 @@ import {
   type ColorRef,
   type EnterId,
   type ExitId,
+  type ChatSpec,
   type FrameStyle,
   type HookStyle,
   type SpecWidget,
@@ -237,6 +238,8 @@ export function FramePanel({
   onFrame,
   onVisible,
   onRound,
+  whole,
+  onWhole,
   onReset,
 }: {
   kind: "cam" | "game";
@@ -246,6 +249,9 @@ export function FramePanel({
   onFrame: (frame: FrameStyle, done?: boolean) => void;
   onVisible?: (visible: boolean) => void;
   onRound?: () => void;
+  /** The game shows the whole stream picture, webcam included */
+  whole?: boolean;
+  onWhole?: (whole: boolean) => void;
   onReset: () => void;
 }) {
   const { t } = useTranslation();
@@ -260,6 +266,11 @@ export function FramePanel({
         <ResetButton onClick={onReset} />
       </PanelHead>
       {kind === "cam" && <p className="text-[12px] leading-snug text-ink-3">{t("templateEditor.camHint")}</p>}
+      {onWhole && (
+        <Row label={t("templateEditor.gameWhole")} hint={t("templateEditor.gameWholeHint")}>
+          <Toggle label={t("templateEditor.gameWhole")} on={!!whole} onChange={onWhole} />
+        </Row>
+      )}
       <Row label={t("templateEditor.radius")}>
         <div className="flex items-center gap-2">
           <Slider label={t("templateEditor.radius")} value={frame.radius} min={0} max={400} onChange={(radius) => onFrame({ ...frame, radius })} onDone={() => onFrame(frame, true)} />
@@ -337,6 +348,45 @@ export function SubtitlesPanel({
       </Row>
       <Row label={t("templateEditor.speakers")} hint={t("templateEditor.speakersHint")}>
         <Toggle label={t("templateEditor.speakers")} on={value.speakers} onChange={(speakers) => onChange({ ...value, speakers }, true)} />
+      </Row>
+    </>
+  );
+}
+
+export function ChatPanel({
+  value,
+  count,
+  onChange,
+  onReset,
+}: {
+  value: ChatSpec;
+  /** Messages in the clip on screen */
+  count: number;
+  onChange: (v: ChatSpec, done?: boolean) => void;
+  onReset: () => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <>
+      <PanelHead title={t("templateEditor.el.chat")}>
+        <button onClick={() => onChange({ ...value, visible: !value.visible }, true)} title={t(value.visible ? "templateEditor.hide" : "templateEditor.show")} className="btn btn-ghost btn-icon btn-sm w-8 h-8">
+          {value.visible ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+        </button>
+        <ResetButton onClick={onReset} />
+      </PanelHead>
+      <p className="text-[12px] leading-snug text-ink-3">
+        {t("templateEditor.chatHint")} {t("templateEditor.chatCount", { count })}
+      </p>
+      <Row label={t("templateEditor.textSize")}>
+        <Slider label={t("templateEditor.textSize")} value={value.size} min={24} max={64} onChange={(size) => onChange({ ...value, size })} onDone={() => onChange(value, true)} />
+      </Row>
+      <Row label={t("templateEditor.chatMax")}>
+        <Seg
+          label={t("templateEditor.chatMax")}
+          value={String(value.max)}
+          onChange={(max) => onChange({ ...value, max: Number(max) }, true)}
+          options={["1", "2", "3", "4", "5"].map((n) => ({ value: n, label: n }))}
+        />
       </Row>
     </>
   );

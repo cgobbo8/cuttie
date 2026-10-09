@@ -17,6 +17,13 @@ interface Props {
   className?: string;
 }
 
+/** Stands in for the chat of a clip without messages */
+const SAMPLE_CHAT = [
+  { author: "viewer42", text: "LUL" },
+  { author: "chat_fan", text: "GG" },
+];
+const SAMPLE_AUTHOR_COLORS = ["#00CED1", "#FFD700"];
+
 function rgba(hex: string, alpha: number): string {
   const n = parseInt(hex.slice(1), 16);
   return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${alpha})`;
@@ -98,6 +105,32 @@ export default function TemplateSketch({ layers, frameUrl, width, sample, at, cl
               );
             })}
           </p>
+        </div>
+      );
+    }
+    if (layer.type === "chat" && layer.chat) {
+      const c = layer.chat;
+      const shown = (c.messages.length ? c.messages : SAMPLE_CHAT).slice(-Math.max(1, Math.min(2, c.maxVisible)));
+      return (
+        <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", justifyContent: "flex-end", alignItems: "flex-start", gap: c.fontSize * 0.32 }}>
+          {shown.map((m, i) => (
+            <div
+              key={i}
+              style={{
+                maxWidth: "100%",
+                padding: `${c.fontSize * 0.3}px ${c.fontSize * 0.55}px`,
+                borderRadius: c.fontSize * 0.7,
+                background: "rgba(20,20,24,0.86)",
+                boxShadow: "inset 0 0 0 2px rgba(255,255,255,0.16)",
+                fontFamily: `"${c.fontFamily}", sans-serif`,
+                fontSize: c.fontSize,
+                lineHeight: 1.25,
+              }}
+            >
+              <span style={{ color: SAMPLE_AUTHOR_COLORS[i % 2], fontWeight: 750 }}>{m.author}</span>
+              <span style={{ color: "#FFFFFF", fontWeight: 550 }}> {m.text}</span>
+            </div>
+          ))}
         </div>
       );
     }

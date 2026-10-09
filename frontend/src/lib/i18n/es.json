@@ -715,11 +715,11 @@
       },
       "reaction": {
         "name": "Reacción",
-        "desc": "Tu cara en grande, para las risas y los enfados"
+        "desc": "Tu cara en grande, el juego en una tarjeta debajo"
       },
       "discussion": {
         "name": "Diálogo RP",
-        "desc": "Quién habla, en color, una frase a la vez"
+        "desc": "La escena arriba, la conversación y el chat debajo"
       },
       "plein": {
         "name": "Acción",
@@ -727,7 +727,7 @@
       },
       "accroche": {
         "name": "Cine",
-        "desc": "Toda la imagen del juego, tu cámara en una tarjeta encima"
+        "desc": "Toda la imagen del directo entre dos bandas, el título encima"
       },
       "sanscam": {
         "name": "Sin cámara",
@@ -999,6 +999,7 @@
       "game": "Juego",
       "cam": "Cámara",
       "subtitles": "Subtítulos",
+      "chat": "Chat",
       "hook": "Gancho"
     },
     "darken": "Oscurecer",
@@ -1018,6 +1019,8 @@
     "hide": "Ocultar",
     "show": "Mostrar",
     "camHint": "En los clips donde nadie aparece en la cámara, desaparece y el resto no se mueve.",
+    "gameWhole": "Toda la imagen del directo",
+    "gameWholeHint": "Con tu cámara incluida, como lo vieron tus espectadores.",
     "radius": "Esquinas",
     "makeRound": "Hacerla redonda",
     "borderColor": "Color del contorno",
@@ -1031,6 +1034,10 @@
     "boxed": "Sobre fondo oscuro",
     "speakers": "Un color por persona",
     "speakersHint": "Para conversaciones en grupo (chat de voz, RP).",
+    "chatHint": "Los mensajes de tu chat durante el clip, en burbujas. Sin comandos (!clip…), bots ni enlaces.",
+    "chatCount_one": "{{count}} mensaje en este clip.",
+    "chatCount_other": "{{count}} mensajes en este clip.",
+    "chatMax": "Mensajes a la vez",
     "words": "Palabras a la vez",
     "pop": "La palabra dicha crece",
     "hookStyle": "Estilo",

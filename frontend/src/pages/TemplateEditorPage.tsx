@@ -11,6 +11,7 @@ import { clipTemplateContext } from "../lib/templateContext";
 import { customTemplates } from "../lib/templateKeys";
 import {
   buildFromSpec,
+  chatOf,
   coveredBy,
   dragBox,
   defaultShow,
@@ -33,6 +34,7 @@ import Scrubber from "../components/template-editor/Scrubber";
 import {
   AddWidgetButton,
   BackgroundPanel,
+  ChatPanel,
   FramePanel,
   HookPanel,
   SubtitlesPanel,
@@ -44,10 +46,11 @@ import { useToast } from "../components/Toast";
 
 const FPS = 30;
 
-/** Read / replace the box of an element ("game", "cam", "subtitles", "hook", "widget:<id>") */
+/** Read / replace the box of an element ("game", "cam", "chat", "subtitles", "hook", "widget:<id>") */
 function boxOf(spec: TemplateSpec, key: string): Box | null {
   if (key === "game") return spec.game.box;
   if (key === "cam") return spec.cam.box;
+  if (key === "chat") return chatOf(spec).box;
   if (key === "subtitles") return spec.subtitles.box;
   if (key === "hook") return spec.hook.box;
   if (key.startsWith("widget:")) return spec.widgets.find((w) => `widget:${w.id}` === key)?.box ?? null;
@@ -57,6 +60,7 @@ function boxOf(spec: TemplateSpec, key: string): Box | null {
 function withBox(spec: TemplateSpec, key: string, box: Box): TemplateSpec {
   if (key === "game") return { ...spec, game: { ...spec.game, box } };
   if (key === "cam") return { ...spec, cam: { ...spec.cam, box } };
+  if (key === "chat") return { ...spec, chat: { ...chatOf(spec), box } };
   if (key === "subtitles") return { ...spec, subtitles: { ...spec.subtitles, box } };
   if (key === "hook") return { ...spec, hook: { ...spec.hook, box } };
   return { ...spec, widgets: spec.widgets.map((w) => (`widget:${w.id}` === key ? { ...w, box } : w)) };
@@ -247,6 +251,7 @@ export default function TemplateEditorPage() {
     ? orderOf(spec).flatMap((key): CanvasElement[] => {
         if (key === "game") return [{ key, label: labelOf(key), box: spec.game.box, checkZones: false }];
         if (key === "cam") return spec.cam.visible ? [{ key, label: labelOf(key), box: spec.cam.box, keepRatio: isRoundCam(spec) }] : [];
+        if (key === "chat") return chatOf(spec).visible ? [{ key, label: labelOf(key), box: chatOf(spec).box }] : [];
         if (key === "subtitles") return [{ key, label: labelOf(key), box: spec.subtitles.box }];
         if (key === "hook") return spec.hook.visible ? [{ key, label: labelOf(key), box: spec.hook.box }] : [];
         const w = spec.widgets.find((x) => `widget:${x.id}` === key);
@@ -316,6 +321,7 @@ export default function TemplateEditorPage() {
         if (selected.startsWith("widget:")) removeWidget(selected);
         else if (selected === "cam") update({ ...spec, cam: { ...spec.cam, visible: false } });
         else if (selected === "hook") update({ ...spec, hook: { ...spec.hook, visible: false } });
+        else if (selected === "chat") update({ ...spec, chat: { ...chatOf(spec), visible: false } });
         else return;
         e.preventDefault();
         setSelected("background");
@@ -556,7 +562,7 @@ export default function TemplateEditorPage() {
             items={orderOf(spec).map((key) => ({
               key,
               label: labelOf(key),
-              hidden: (key === "cam" && !spec.cam.visible) || (key === "hook" && !spec.hook.visible),
+              hidden: (key === "cam" && !spec.cam.visible) || (key === "hook" && !spec.hook.visible) || (key === "chat" && !chatOf(spec).visible),
             }))}
             selected={picking ? null : selected}
             onSelect={select}
@@ -581,6 +587,8 @@ export default function TemplateEditorPage() {
                 kind="game"
                 frame={spec.game.frame}
                 colors={kit.colors}
+                whole={!!spec.game.whole}
+                onWhole={(whole) => update({ ...spec, game: { ...spec.game, whole } })}
                 onFrame={(frame, done) => update({ ...spec, game: { ...spec.game, frame } }, done)}
                 onReset={() => update({ ...spec, game: reference.game })}
               />
@@ -608,6 +616,18 @@ export default function TemplateEditorPage() {
                 colors={kit.colors}
                 onChange={(subtitles, done) => update({ ...spec, subtitles }, done)}
                 onReset={() => update({ ...spec, subtitles: reference.subtitles })}
+              />
+            ) : selected === "chat" ? (
+              <ChatPanel
+                value={chatOf(spec)}
+                count={ctx.chat?.length ?? 0}
+                // Shown again: on a free spot
+                onChange={(chat, done) => update({ ...spec, chat: chat.visible && !chatOf(spec).visible ? { ...chat, box: placeWidget(spec, chat.box, "always") } : chat }, done)}
+                onReset={() => {
+                  const hidden = { ...spec, chat: { ...chatOf(spec), visible: false } };
+                  const ref = chatOf(reference);
+                  update({ ...spec, chat: { ...ref, visible: true, box: ref.visible ? ref.box : placeWidget(hidden, ref.box, "always") } });
+                }}
               />
             ) : selected === "hook" ? (
               <HookPanel

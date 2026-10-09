@@ -5,7 +5,7 @@
  */
 
 import type { BrandColors, SubtitleStyle, WidgetTiming } from "./api";
-import { DEFAULT_STYLE, type Layer, type LayerTransform, type SubtitleWord } from "./editorTypes";
+import { DEFAULT_STYLE, type ChatMessage, type Layer, type LayerTransform, type SubtitleWord } from "./editorTypes";
 
 /** Ids kept from the first layouts: "plein" is shown as Action, "accroche" as Cinéma */
 export type TemplateId = "empile" | "signature" | "reaction" | "discussion" | "plein" | "accroche" | "sanscam";
@@ -13,7 +13,7 @@ export type TemplateId = "empile" | "signature" | "reaction" | "discussion" | "p
 export const TEMPLATE_IDS: TemplateId[] = ["empile", "signature", "reaction", "discussion", "plein", "accroche", "sanscam"];
 
 /** Templates built around the webcam */
-export const NEEDS_WEBCAM: TemplateId[] = ["empile", "reaction", "discussion"];
+export const NEEDS_WEBCAM: TemplateId[] = ["empile", "reaction"];
 
 /** Templates that show the hook line (all of them: it's the clip's cover) */
 export const HAS_HOOK: TemplateId[] = [...TEMPLATE_IDS];
@@ -35,6 +35,8 @@ export interface TemplateContext {
   /** Webcam overlay in clip pixels, null = none */
   facecam: Rect | null;
   words: SubtitleWord[];
+  /** Twitch chat during the clip, clip seconds (commands and bots left out) */
+  chat?: ChatMessage[];
   /** Trimmed range of the clip, in clip seconds (the render keeps clip time) */
   startAt: number;
   endAt: number;
@@ -145,9 +147,11 @@ export function stableIds(layers: Layer[]): Layer[] {
  * frame's width, it gets soft, so small webcams go in a card instead.
  */
 export function suggestTemplate(category: string | undefined, hasWebcam: boolean, excitement = 0, speech = 0, camWidth = 0): TemplateId {
-  if (!hasWebcam) return "sanscam";
+  const talk = category === "storytelling" || category === "awkward" || speech >= 0.7;
+  if (!hasWebcam) return talk ? "accroche" : "sanscam";
   const bigCam = camWidth * 2 >= W;
-  if (category === "storytelling" || category === "awkward" || speech >= 0.7) return bigCam ? "discussion" : "accroche";
+  // The talk layout keeps the webcam small: fine whatever its size
+  if (talk) return "discussion";
   if (category === "reaction" || category === "emotional" || excitement >= 0.9) return bigCam ? "reaction" : "signature";
   if (category === "fail" || category === "clutch" || category === "skill") return "plein";
   return bigCam ? "empile" : "signature";

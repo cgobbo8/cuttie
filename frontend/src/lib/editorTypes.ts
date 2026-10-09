@@ -144,6 +144,8 @@ export interface ChatData {
   fontSize: number;     // canvas px
   fontFamily: string;
   showDuration: number; // seconds a message stays visible
+  /** "lines": Twitch-like lines (default); "bubbles": each message pops in on its own dark bubble */
+  style?: "lines" | "bubbles";
 }
 
 export interface AssetData {

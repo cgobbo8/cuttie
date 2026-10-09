@@ -18,6 +18,8 @@ dependencies = [
     "yt-dlp>=2026.3.17",
     "torch>=2.11.0",
     "torchaudio>=2.11.0",
+    # Pulled by ultralytics; listed so Windows takes the CUDA build with torch (below)
+    "torchvision>=0.26.0",
     "panns-inference>=0.1.1",
     "opencv-python-headless>=4.13.0.92",
     "ultralytics>=8.4.33",
@@ -34,6 +36,22 @@ dev = [
     "pytest-asyncio>=1.3.0",
     "watchdog>=6.0.0",
 ]
+
+# Windows: the CUDA 12.6 builds of PyTorch (PyPI only has CPU ones there), for the
+# NVIDIA GPU; their cuBLAS / cuDNN DLLs also serve faster-whisper (transcriber._cuda_dlls)
+[tool.uv.sources]
+torch = [{ index = "pytorch-cu126", marker = "sys_platform == 'win32'" }]
+torchaudio = [{ index = "pytorch-cu126", marker = "sys_platform == 'win32'" }]
+torchvision = [{ index = "pytorch-cu126", marker = "sys_platform == 'win32'" }]
+
+[tool.uv]
+# Same versions on every platform: torchaudio and torchvision are built for one torch
+constraint-dependencies = ["torch==2.11.0", "torchaudio==2.11.0", "torchvision==0.26.0"]
+
+[[tool.uv.index]]
+name = "pytorch-cu126"
+url = "https://download.pytorch.org/whl/cu126"
+explicit = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

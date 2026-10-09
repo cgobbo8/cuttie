@@ -103,3 +103,16 @@ def test_the_analysis_stops_with_what_to_do(tmp_path, monkeypatch):
     assert updates[-1]["status"] == "ERROR"
     assert "Crédits OpenRouter épuisés" in updates[-1]["error"]
     assert notices == [{"kind": "provider", "provider": "openrouter", "reason": "credits"}]
+
+
+def test_tells_what_is_left_on_a_capped_key(monkeypatch):
+    import httpx as real_httpx
+
+    from app.services import settings
+
+    monkeypatch.setattr(settings, "get", lambda key, env=None, default="": "sk-test")
+    answers = {"capped": {"data": {"limit": 20, "limit_remaining": 6.2529}}, "uncapped": {"data": {"limit": None, "limit_remaining": None}}}
+    for name, expected in [("capped", {"remaining": 6.25, "limit": 20.0}), ("uncapped", None)]:
+        monkeypatch.setattr(real_httpx, "get", lambda *a, n=name, **k: types.SimpleNamespace(json=lambda: answers[n]))
+        assert provider_errors.openrouter_credit() == expected
+

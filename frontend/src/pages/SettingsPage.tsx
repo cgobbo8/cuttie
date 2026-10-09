@@ -134,7 +134,7 @@ function DiagRow({ label, value, level }: { label: string; value: ReactNode; lev
 }
 
 function DiagnosticsSection() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const toast = useToast();
   const [diag, setDiag] = useState<Diagnostics | null>(null);
   const [loading, setLoading] = useState(false);
@@ -207,7 +207,7 @@ function DiagnosticsSection() {
               <DiagRow label={t("settings.diag.ytdlp")} level={w.yt_dlp ? "ok" : "error"} value={w.yt_dlp ?? t("settings.diag.notFound")} />
               <DiagRow
                 label={t("settings.diag.keys")}
-                level={w.keys?.openrouter && (w.openrouter ?? "ok") === "ok" ? "ok" : "error"}
+                level={!w.keys?.openrouter || (w.openrouter ?? "ok") !== "ok" ? "error" : (w.openrouter_credit?.remaining ?? 99) < 1 ? "warn" : "ok"}
                 value={
                   !w.keys?.openrouter ? (
                     t("settings.diag.keysMissing")
@@ -221,7 +221,17 @@ function DiagnosticsSection() {
                   ) : w.openrouter === "key" ? (
                     t("settings.diag.openrouterKey")
                   ) : (
-                    t(w.keys?.groq ? "settings.diag.keysBoth" : "settings.diag.keysOk")
+                    <>
+                      {t(w.keys?.groq ? "settings.diag.keysBoth" : "settings.diag.keysOk")}
+                      {w.openrouter_credit && (
+                        <>
+                          {" · "}
+                          {t("settings.diag.creditLeft", {
+                            amount: w.openrouter_credit.remaining.toLocaleString(i18n.language, { style: "currency", currency: "USD", currencyDisplay: "narrowSymbol" }),
+                          })}
+                        </>
+                      )}
+                    </>
                   )
                 }
               />

@@ -128,6 +128,8 @@ export interface WorkerDiagnostics {
   keys?: { groq: boolean; openrouter: boolean };
   /** OpenRouter answering ("ok"), out of credits, or refusing the key */
   openrouter?: "ok" | "credits" | "key";
+  /** Dollars left on the OpenRouter key, when it has a spending limit */
+  openrouter_credit?: { remaining: number; limit: number } | null;
   disk_free_gb?: number;
   busy?: string | null;
   torch?: string;

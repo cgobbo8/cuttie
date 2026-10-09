@@ -507,7 +507,8 @@
       "cpu": "processeur (lent)",
       "openrouterCredits": "Crédits OpenRouter épuisés",
       "openrouterKey": "Clé OpenRouter refusée",
-      "appleChip": "puce Apple"
+      "appleChip": "puce Apple",
+      "creditLeft": "{{amount}} restants sur ta clé"
     },
     "subtitle": "Tes clés d'IA, la langue de l'app et l'état de ton installation.",
     "openaiRole": "Assistant de l'éditeur avancé (facultatif)",

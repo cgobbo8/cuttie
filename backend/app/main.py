@@ -301,9 +301,11 @@ def diagnostics() -> dict:
     }
     # One token to OpenRouter: "credits" (none left) or "key" (refused) stop every analysis
     if info["keys"]["openrouter"]:
-        from app.services.provider_errors import check_openrouter
+        from app.services.provider_errors import check_openrouter, openrouter_credit
 
         info["openrouter"] = check_openrouter() or "ok"
+        # Dollars left on the key, when it has a spending limit
+        info["openrouter_credit"] = openrouter_credit()
     try:
         from app.services import transcriber
 

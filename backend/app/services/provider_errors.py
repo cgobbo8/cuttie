@@ -71,3 +71,24 @@ def check_openrouter() -> str | None:
             logger.info(f"OpenRouter check inconclusive: {e}")
         return reason
     return None
+
+
+def openrouter_credit() -> dict | None:
+    """What's left on the OpenRouter key when it has a spending limit (free to
+    ask): {"remaining": dollars, "limit": dollars}, else None."""
+    import httpx
+
+    from app.services import settings
+
+    key = settings.get("openrouter_api_key", "OPENROUTER_API_KEY")
+    if not key:
+        return None
+    try:
+        response = httpx.get("https://openrouter.ai/api/v1/key", headers={"Authorization": f"Bearer {key}"}, timeout=10)
+        data = response.json().get("data") or {}
+    except Exception as e:
+        logger.info(f"OpenRouter credit unknown: {e}")
+        return None
+    if data.get("limit") is None or data.get("limit_remaining") is None:
+        return None
+    return {"remaining": round(float(data["limit_remaining"]), 2), "limit": round(float(data["limit"]), 2)}

@@ -507,7 +507,8 @@
       "cpu": "processor (slow)",
       "openrouterCredits": "OpenRouter credits used up",
       "openrouterKey": "OpenRouter key refused",
-      "appleChip": "Apple chip"
+      "appleChip": "Apple chip",
+      "creditLeft": "{{amount}} left on your key"
     },
     "subtitle": "Your AI keys, the app language and the state of your install.",
     "openaiRole": "Advanced editor assistant (optional)",

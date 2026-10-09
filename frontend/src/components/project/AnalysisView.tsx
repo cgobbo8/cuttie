@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Check, Clock3, Scissors, Sparkles } from "lucide-react";
 import { getStoryboard, type JobResponse, type TimelineCandidate, type TwitchStoryboard } from "../../lib/api";
 import { analysisProgress, clock } from "../../lib/format";
 import { evenFrames, frameAt, tileStyle } from "../../lib/storyboard";
+import { stackLabels } from "../../lib/labels";
 
 /** How many moments the analysis keeps in the end */
 const KEEP = 20;
@@ -67,6 +68,16 @@ export default function AnalysisView({ job, vodId }: Props) {
     const id = window.setInterval(() => setNow(Date.now() / 1000), 1000);
     return () => window.clearInterval(id);
   }, []);
+  // The curve's width, to keep the passages' labels apart
+  const stage = useRef<HTMLDivElement>(null);
+  const [stageWidth, setStageWidth] = useState(800);
+  useLayoutEffect(() => {
+    const el = stage.current;
+    if (!el) return;
+    const observer = new ResizeObserver(([entry]) => setStageWidth(entry.contentRect.width));
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   const timeline = job.timeline ?? {};
   const duration = timeline.duration ?? job.vod_duration_seconds ?? 0;
@@ -117,6 +128,9 @@ export default function AnalysisView({ job, vodId }: Props) {
   };
 
   const labeled = leaders.slice(0, 3);
+  // Close passages: their labels on separate rows (a label is up to ~210 px wide)
+  const labelCenters = labeled.map((c) => Math.min(Math.max((c.t / Math.max(duration, 1)) * stageWidth, 80), stageWidth - 80));
+  const labelRows = stackLabels(labelCenters, 215);
 
   return (
     <section className="flex flex-wrap gap-[18px] items-stretch">
@@ -132,7 +146,7 @@ export default function AnalysisView({ job, vodId }: Props) {
         </div>
 
         {/* The live: voice energy, chat, frames, and the passages on it */}
-        <div className="relative mt-[22px] h-[236px] rounded-[14px] overflow-hidden bg-black/30 border border-white/[0.06]">
+        <div ref={stage} className="relative mt-[22px] h-[236px] rounded-[14px] overflow-hidden bg-black/30 border border-white/[0.06]">
           {curve.area ? (
             <svg viewBox={`0 0 ${W} 160`} preserveAspectRatio="none" aria-hidden className="absolute left-0 top-9 w-full h-[150px]">
               <defs>
@@ -163,12 +177,15 @@ export default function AnalysisView({ job, vodId }: Props) {
             </div>
           )}
 
-          {labeled.map((c) => (
+          {labeled.map((c, i) => (
             <div key={`label-${c.t}`}>
-              <div className="absolute top-10 bottom-[26px] w-px bg-[linear-gradient(180deg,var(--color-accent)_0%,var(--color-accent-soft)_100%)]" style={{ left: at(c.t) }} />
+              <div
+                className="absolute bottom-[26px] w-px bg-[linear-gradient(180deg,var(--color-accent)_0%,var(--color-accent-soft)_100%)]"
+                style={{ left: at(c.t), top: 40 + labelRows[i] * 32 }}
+              />
               <span
-                className="absolute top-3 -translate-x-1/2 chip glass-chip text-white h-[26px] border border-white/10"
-                style={{ left: `clamp(80px, ${at(c.t)}, calc(100% - 80px))` }}
+                className="absolute -translate-x-1/2 chip glass-chip text-white h-[26px] border border-white/10"
+                style={{ left: `clamp(80px, ${at(c.t)}, calc(100% - 80px))`, top: 12 + labelRows[i] * 32 }}
               >
                 <span className="mono text-accent">{Math.round((c.score ?? 0) * 100)}</span>
                 <span className="max-w-[160px] truncate">{c.name}</span>

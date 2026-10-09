@@ -104,6 +104,8 @@ export const CuttieComposition: React.FC<CuttieCompositionProps> = ({ layers }) 
 
   return (
     <AbsoluteFill style={{ background: "black", width: 1080, height: 1920 }}>
+      {/* Same box model as the editor's preview (Tailwind's preflight): padding stays inside widths */}
+      <style>{"*, *::before, *::after { box-sizing: border-box; }"}</style>
       {visibleLayers.map((layer) => (
         <ResolvedLayer key={layer.id} layer={layer} />
       ))}

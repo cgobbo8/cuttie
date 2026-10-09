@@ -21,12 +21,27 @@ function chunkWords(words: SubtitleWord[], maxWords = 4, maxDuration = 3.0, spli
   return chunks;
 }
 
-/** Spoken word "pop": grows fast, then settles a little bigger while it's said (the words get a bit more room, see wordSpacing) */
-function popScale(sinceStart: number): number {
-  if (sinceStart < 0) return 1;
-  if (sinceStart < 0.08) return 1 + 0.2 * (sinceStart / 0.08);
-  if (sinceStart < 0.22) return 1.2 - 0.08 * ((sinceStart - 0.08) / 0.14);
-  return 1.12;
+/**
+ * Spoken word "pop": hops up and grows a little, then settles slightly bigger
+ * while it's said. It pushes its neighbors as it grows (see popRoom), so wide
+ * words (Poppins, Montserrat) don't cover the spaces around them.
+ */
+function popMotion(sinceStart: number): { scale: number; lift: number } {
+  if (sinceStart < 0) return { scale: 1, lift: 0 };
+  if (sinceStart < 0.08) {
+    const k = sinceStart / 0.08;
+    return { scale: 1 + 0.1 * k, lift: -0.12 * k };
+  }
+  if (sinceStart < 0.24) {
+    const k = (sinceStart - 0.08) / 0.16;
+    return { scale: 1.1 - 0.06 * k, lift: -0.12 * (1 - k) };
+  }
+  return { scale: 1.04, lift: 0 };
+}
+
+/** Room on each side of a word grown by `scale` (a letter is ~0.62em in the widest clip fonts) */
+function popRoom(word: string, scale: number): string {
+  return `${(((scale - 1) / 2) * word.length * 0.62).toFixed(3)}em`;
 }
 
 function tintWhite(hex: string, strength = 0.15): string {
@@ -121,7 +136,8 @@ export default function SubtitleLayer({ layer }: Props) {
           margin: 0,
           textShadow: subtitle.boxed ? undefined : subtitle.noStroke ? "0 3px 12px rgba(0,0,0,0.75)" : "2px 3px 5px rgba(0,0,0,0.6)",
           wordBreak: "break-word",
-          ...(subtitle.pop ? { wordSpacing: "0.18em" } : {}),
+          // A little room for the spoken word to grow
+          ...(subtitle.pop ? { wordSpacing: "0.12em" } : {}),
           ...(subtitle.boxed
             ? {
                 display: "inline-block",
@@ -149,10 +165,10 @@ export default function SubtitleLayer({ layer }: Props) {
                 color = isFilled ? highlightColor : baseColor;
               }
               const speaking = currentTime >= word.start && currentTime <= word.end + 0.05;
-              const scale = subtitle.pop && speaking ? popScale(currentTime - word.start) : 1;
+              const pop = subtitle.pop && speaking ? popMotion(currentTime - word.start) : { scale: 1, lift: 0 };
               return (
                 <span key={`${word.start}-${i}`}>
-                  <span style={{ color, ...(subtitle.pop ? { display: "inline-block", transform: `scale(${scale})`, transformOrigin: "50% 70%" } : {}) }}>
+                  <span style={{ color, ...(subtitle.pop ? { display: "inline-block", transform: `translateY(${pop.lift}em) scale(${pop.scale})`, transformOrigin: "50% 70%", marginInline: popRoom(word.word, pop.scale) } : {}) }}>
                     {subtitle.uppercase ? word.word.toUpperCase() : word.word}
                   </span>
                   {i < visible.length - 1 ? " " : ""}

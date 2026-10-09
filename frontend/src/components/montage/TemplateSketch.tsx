@@ -81,7 +81,7 @@ export default function TemplateSketch({ layers, frameUrl, width, sample, at, cl
               color: sub.boxed ? "#fff" : sub.customColor,
               WebkitTextStroke: sub.boxed || sub.noStroke ? undefined : `${Math.max(2, sub.fontSize / 25)}px black`,
               paintOrder: "stroke fill",
-              ...(sub.pop ? { wordSpacing: "0.18em" } : {}),
+              ...(sub.pop ? { wordSpacing: "0.12em" } : {}),
               ...(sub.boxed
                 ? { display: "inline-block", padding: `${sub.fontSize * 0.22}px ${sub.fontSize * 0.45}px`, borderRadius: sub.fontSize * 0.35, background: "rgba(0,0,0,0.58)" }
                 : {}),
@@ -96,7 +96,7 @@ export default function TemplateSketch({ layers, frameUrl, width, sample, at, cl
                   <span
                     style={{
                       ...(sub.activeColor ? { color: spoken ? sub.activeColor : sub.restColor } : {}),
-                      ...(sub.pop && spoken ? { display: "inline-block", transform: "scale(1.12)", transformOrigin: "50% 70%" } : {}),
+                      ...(sub.pop && spoken ? { display: "inline-block", transform: "scale(1.04)", transformOrigin: "50% 70%" } : {}),
                     }}
                   >
                     {word}

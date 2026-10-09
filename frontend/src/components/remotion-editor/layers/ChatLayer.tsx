@@ -60,6 +60,7 @@ export default function ChatLayer({ layer }: Props) {
               key={`${msg.timestamp}-${i}`}
               style={{
                 maxWidth: "100%",
+                boxSizing: "border-box",
                 padding: `${Math.round(fontSize * 0.3)}px ${Math.round(fontSize * 0.55)}px`,
                 borderRadius: Math.round(fontSize * 0.7),
                 // Dark with a light rim: reads on the game and on a dark background alike

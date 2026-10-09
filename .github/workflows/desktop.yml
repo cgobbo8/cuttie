@@ -1,0 +1,157 @@
+name: Desktop app (Windows)
+
+# The Windows app as the friend gets it: the installer is built on Windows,
+# installed silently on a clean runner and started in smoke-test mode (Python
+# modules, API, worker, ffmpeg, Whisper on the CPU; the runner has no GPU).
+# The test suites run on Windows alongside. On a v* tag (= desktop/package.json
+# version), the tested installer is published to GitHub Releases, where the
+# app's "Mettre à jour" button finds it.
+on:
+  push:
+    branches: [feat/local-desktop]
+    tags: ["v*"]
+  workflow_dispatch:
+
+concurrency:
+  group: desktop-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  installer:
+    name: Installer + smoke test
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      # The installer bundles this very Node (better-sqlite3 is installed for it)
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: 24.11.1
+          cache: npm
+          cache-dependency-path: |
+            frontend/package-lock.json
+            api/package-lock.json
+            desktop/package-lock.json
+
+      # ...and this uv, which installs the Python modules on first launch
+      - uses: astral-sh/setup-uv@v10.2.0
+        with:
+          version: "0.9.17"
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      - name: Version matches the tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          version=$(node -p "require('./desktop/package.json').version")
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "desktop/package.json says $version but the tag is $GITHUB_REF_NAME"
+            exit 1
+          fi
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          npm ci --prefix frontend --no-audit --no-fund
+          npm ci --prefix api --no-audit --no-fund
+          npm ci --prefix desktop --no-audit --no-fund
+
+      - name: Stage the app (builds, production modules, uv, node, ffmpeg)
+        working-directory: desktop
+        run: node scripts/stage.mjs
+
+      - name: Build the installer
+        working-directory: desktop
+        run: npx electron-builder --win --publish never
+
+      - name: Install it and run the smoke test
+        shell: pwsh
+        run: ./desktop/scripts/smoke-test.ps1 -Full
+
+      - uses: actions/upload-artifact@v7.0.1
+        if: always()
+        with:
+          name: cuttie-windows
+          path: |
+            desktop/dist/Cuttie-Setup-*.exe
+            desktop/dist/Cuttie-Setup-*.exe.blockmap
+            desktop/dist/latest.yml
+            smoke-report.json
+            cuttie.log
+          if-no-files-found: warn
+          retention-days: 14
+
+  tests:
+    name: Tests on Windows
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: 24.11.1
+          cache: npm
+          cache-dependency-path: |
+            frontend/package-lock.json
+            api/package-lock.json
+
+      - uses: astral-sh/setup-uv@v10.2.0
+        with:
+          version: "0.9.17"
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          npm ci --prefix frontend --no-audit --no-fund
+          npm ci --prefix api --no-audit --no-fund
+
+      - name: Frontend
+        working-directory: frontend
+        run: npx vitest run
+
+      - name: API
+        working-directory: api
+        run: node ace test
+
+      - name: Worker (CUDA build of PyTorch, as on the friend's PC)
+        working-directory: backend
+        run: |
+          uv sync --frozen
+          uv run --no-sync pytest -q
+
+  release:
+    name: Publish the release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [installer, tests]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - uses: actions/download-artifact@v8.0.1
+        with:
+          name: cuttie-windows
+          path: release
+
+      # The installer, its blockmap (smaller updates) and latest.yml (what the app reads)
+      - name: Create the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          files=$(find release -name "Cuttie-Setup-*.exe" -o -name "Cuttie-Setup-*.exe.blockmap" -o -name "latest.yml")
+          echo "$files"
+          test "$(echo "$files" | wc -l)" -eq 3
+          gh release create "$GITHUB_REF_NAME" \
+            --title "Cuttie ${GITHUB_REF_NAME#v}" \
+            --notes-file desktop/release-notes.md \
+            --verify-tag \
+            $files

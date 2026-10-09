@@ -508,7 +508,13 @@
       "openrouterCredits": "Créditos de OpenRouter agotados",
       "openrouterKey": "Clave de OpenRouter rechazada",
       "appleChip": "chip Apple",
-      "creditLeft": "Quedan {{amount}} en tu clave"
+      "creditLeft": "Quedan {{amount}} en tu clave",
+      "localTest": "Transcripción en este PC",
+      "localTestRun": "Probar (30 s)",
+      "localTestRunning": "Probando…",
+      "localTestDownloading": "Descargando el modelo (1,6 GB) y probando…",
+      "localTestResult": "OK en {{where}}: {{speed}}× el tiempo real",
+      "localTestFailed": "Error: {{error}}"
     },
     "subtitle": "Tus claves de IA, el idioma de la app y el estado de tu instalación.",
     "openaiRole": "Asistente del editor avanzado (opcional)",

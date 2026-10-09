@@ -508,7 +508,13 @@
       "openrouterCredits": "OpenRouter credits used up",
       "openrouterKey": "OpenRouter key refused",
       "appleChip": "Apple chip",
-      "creditLeft": "{{amount}} left on your key"
+      "creditLeft": "{{amount}} left on your key",
+      "localTest": "Transcription on this computer",
+      "localTestRun": "Test (30 s)",
+      "localTestRunning": "Testing…",
+      "localTestDownloading": "Downloading the model (1.6 GB), then testing…",
+      "localTestResult": "OK on {{where}}: {{speed}}× real time",
+      "localTestFailed": "Failed: {{error}}"
     },
     "subtitle": "Your AI keys, the app language and the state of your install.",
     "openaiRole": "Advanced editor assistant (optional)",

@@ -151,6 +151,17 @@ export interface Diagnostics {
   worker_error: string | null;
 }
 
+/** The GPU and Whisper on this computer, run once (Settings > Diagnostic) */
+export interface LocalTest {
+  gpu: { device?: string; name?: string; vram_gb?: number; cuda?: string; cudnn?: number; matmul_ms?: number; torch?: string; error?: string };
+  whisper: { backend: "mlx" | "cuda" | "cpu"; backend_after?: string; model_ready?: boolean; load_seconds?: number; seconds?: number; realtime?: number; error?: string };
+}
+
+export async function runLocalTest(): Promise<LocalTest> {
+  const res = await fetch(`${BASE}/diagnostics/local-test`, { method: "POST" });
+  return jsonOrThrow(res, "The test did not run");
+}
+
 export async function getDiagnostics(): Promise<Diagnostics> {
   const res = await fetch(`${BASE}/diagnostics`);
   if (!res.ok) throw new Error("Failed to load diagnostics");

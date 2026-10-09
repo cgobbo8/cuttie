@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { Link } from "react-router";
 import { useTranslation } from "react-i18next";
 import { AlertTriangle, ArrowRight, Check, CheckCircle2, Copy, Globe, KeyRound, Loader2, Mic, RefreshCw, Sparkles, Stethoscope, XCircle } from "lucide-react";
-import { getDiagnostics, updateTranscription, type Diagnostics, type TranscriptionEngine, type WorkerDiagnostics } from "../lib/api";
+import { getDiagnostics, runLocalTest, updateTranscription, type Diagnostics, type LocalTest, type TranscriptionEngine, type WorkerDiagnostics } from "../lib/api";
 import { useSettings } from "../lib/SettingsContext";
 import { LANGUAGE_STORAGE_KEY } from "../lib/i18n";
 import KeyField, { OPTIONAL_KEYS, REQUIRED_KEYS, useKeyChecks } from "../components/KeyField";
@@ -138,6 +138,19 @@ function DiagnosticsSection() {
   const toast = useToast();
   const [diag, setDiag] = useState<Diagnostics | null>(null);
   const [loading, setLoading] = useState(false);
+  const [localTest, setLocalTest] = useState<LocalTest | null>(null);
+  const [testing, setTesting] = useState(false);
+
+  const testLocal = async () => {
+    setTesting(true);
+    try {
+      setLocalTest(await runLocalTest());
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t("settings.diag.failed"));
+    } finally {
+      setTesting(false);
+    }
+  };
   // The toast context object changes on every toast, its methods don't
   const showError = toast.error;
 
@@ -159,7 +172,7 @@ function DiagnosticsSection() {
   const copyReport = async () => {
     if (!diag) return;
     try {
-      await navigator.clipboard.writeText(JSON.stringify(diag, null, 2));
+      await navigator.clipboard.writeText(JSON.stringify(localTest ? { ...diag, local_test: localTest } : diag, null, 2));
       toast.success(t("settings.reportCopied"));
     } catch {
       toast.error(t("settings.copyFailed"));
@@ -255,6 +268,33 @@ function DiagnosticsSection() {
               value={diskGb >= 20 ? `${diskGb} Go` : t("settings.diag.diskLow", { gb: diskGb })}
             />
           )}
+          <DiagRow
+            label={t("settings.diag.localTest")}
+            level={!localTest ? "ok" : localTest.whisper.error || localTest.gpu.error ? "error" : localTest.whisper.backend === "cpu" ? "warn" : "ok"}
+            value={
+              testing ? (
+                <span className="inline-flex items-center gap-2 text-ink-3">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" /> {t(localTest?.whisper.model_ready === false || !w?.transcription?.local_model_ready ? "settings.diag.localTestDownloading" : "settings.diag.localTestRunning")}
+                </span>
+              ) : localTest ? (
+                <span className="flex flex-col gap-0.5">
+                  <span>
+                    {localTest.whisper.error
+                      ? t("settings.diag.localTestFailed", { error: localTest.whisper.error.slice(0, 160) })
+                      : t("settings.diag.localTestResult", {
+                          where: localTest.gpu.name ?? (localTest.whisper.backend === "mlx" ? t("settings.diag.appleChip") : localTest.whisper.backend === "cuda" ? "NVIDIA" : t("settings.diag.cpu")),
+                          speed: Math.round(localTest.whisper.realtime ?? 0).toLocaleString(i18n.language),
+                        })}
+                  </span>
+                  {localTest.gpu.error && <span className="text-[12px] text-ink-3">PyTorch : {localTest.gpu.error.slice(0, 160)}</span>}
+                </span>
+              ) : (
+                <button onClick={testLocal} className="btn btn-glass btn-sm">
+                  {t("settings.diag.localTestRun")}
+                </button>
+              )
+            }
+          />
           <DiagRow label={t("settings.diag.dataDir")} level="ok" value={<span className="mono text-[12.5px]">{diag.api.data_dir}</span>} />
           <DiagRow
             label={t("settings.diag.versions")}

@@ -135,6 +135,11 @@ export async function detectPalette(urls: string[]): Promise<DetectedPalette> {
   return call<DetectedPalette>('POST', '/palette', { body: { urls }, timeoutMs: 30_000 })
 }
 
+/** Run the GPU and local Whisper once (the first run downloads ~1.6 GB) */
+export async function runLocalTest(): Promise<Record<string, unknown>> {
+  return call('POST', '/diagnostics/local-test', { timeoutMs: 20 * 60_000 })
+}
+
 export async function getDiagnostics(): Promise<Record<string, unknown>> {
   return call('GET', '/diagnostics', { timeoutMs: 30_000 })
 }

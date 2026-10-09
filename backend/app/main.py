@@ -284,6 +284,14 @@ def _first_line(cmd: list[str]) -> str | None:
         return None
 
 
+@app.post("/diagnostics/local-test", dependencies=[Depends(require_secret)])
+def local_test() -> dict:
+    """Run the GPU and Whisper on this computer once (the first time downloads the model)."""
+    from app.services import local_check
+
+    return local_check.run()
+
+
 @app.get("/diagnostics", dependencies=[Depends(require_secret)])
 def diagnostics() -> dict:
     info: dict = {

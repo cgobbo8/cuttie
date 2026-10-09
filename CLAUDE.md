@@ -26,6 +26,10 @@ npm run dev                         # http://localhost:5173
 # Mode "comme l'app desktop" : API compilee qui sert le front build + worker
 npm start                           # npm start -- --build pour forcer le rebuild
 
+# App desktop (Electron, voir desktop/README.md)
+cd desktop && npm run dev           # coque Electron sur le depot (apres un npm start)
+cd desktop && npm run pack          # app empaquetee pour cet OS ; Cuttie --smoke-test=full --smoke-report=r.json
+
 # Tests
 cd frontend && npx vitest           # frontend tests
 cd backend && uv run pytest         # backend tests
@@ -121,6 +125,12 @@ cuttie/
 │   ├── assets/fonts/LuckiestGuy-Regular.ttf
 │   └── pyproject.toml
 │
+├── desktop/                           # App Windows (Electron) — voir desktop/README.md
+│   ├── main.mjs                               # demarrage, Python via uv au 1er lancement, lanceur, mises a jour, --smoke-test
+│   ├── preload.cjs                            # window.cuttieDesktop (version, mises a jour, journaux, reparation)
+│   ├── setup.html                             # ecran de demarrage / installation
+│   └── scripts/                               # stage.mjs (ce que l'installeur embarque), smoke-test.ps1
+│
 └── frontend/                          # React SPA
     └── src/
         ├── App.tsx                            # Router principal
@@ -157,6 +167,7 @@ cuttie/
         │   └── remotion-editor/               # Remotion composition + layers
         └── lib/
             ├── api.ts                         # Client REST type-safe + SSE
+            ├── desktop.ts                     # pont vers l'app desktop : mises a jour (pastille TopBar, Parametres > Application)
             ├── AuthContext.tsx                 # Auth context + session
             ├── SettingsContext.tsx            # Parametres (cles, onboarded)
             ├── ChannelContext.tsx             # Kit de marque + chaine Twitch, couleur d'accent de l'app
@@ -290,6 +301,13 @@ Fournisseur qui refuse tout (`provider_errors.py`) : credits OpenRouter epuises 
 - Zones couvertes par TikTok / Shorts / Reels (1080x1920) : haut y < 200, bas y > 1440, droite x > 930 entre y 760 et 1440. Textes, cam et marque restent hors de ces zones (teste) ; le jeu peut passer dessous, une cam pleine largeur en haut passe sous les onglets.
 - Accroche = couverture du clip : visible des la 1re image, s'efface apres 3,5 s (ou a la moitie, ou jamais), posee sur le jeu, jamais sur le visage. Sous-titres : 1 a 5 mots a la fois, le mot prononce grossit (`pop`). Chat : messages du clip en bulles (`chatForClip` retire commandes, bots, liens).
 - Widgets du kit et polices : ecrits dans `frontend/`, copies dans `api/remotion` par `node scripts/sync-remotion.mjs` (verifie par `remotionSync.test.ts`).
+
+## App desktop (Windows)
+
+- Electron autour du mode `npm start` : `scripts/launcher.mjs` lance l'API (node.exe embarque, celui du build : `better-sqlite3`) et le worker, attend que les deux repondent.
+- Python n'est pas embarque : `uv.exe` installe Python 3.12 + `backend/uv.lock` (PyTorch CUDA 12.6) au 1er lancement dans `%LOCALAPPDATA%\Cuttie\python-env` ; relance un `uv sync` quand `uv.lock` change. Donnees : `%LOCALAPPDATA%\Cuttie\data`.
+- Mises a jour : `electron-updater` + GitHub Releases (`latest.yml`), pastille dans la TopBar, Parametres > Application ; installation silencieuse apres arret de l'API et du worker.
+- CI `.github/workflows/desktop.yml` (windows-latest) : installeur, installation silencieuse, `--smoke-test=full`, tests sous Windows ; un tag `v*` (= version de `desktop/package.json`) publie la release avec `desktop/release-notes.md`.
 
 ## Webcam
 

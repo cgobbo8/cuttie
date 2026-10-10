@@ -12,6 +12,16 @@ import sys
 
 import uvicorn
 
+# Python's own SSL (urllib) trusts only the certificates already in Windows'
+# store, which a fresh Windows fills on demand (CERTIFICATE_VERIFY_FAILED on
+# Twitch images): certifi's bundle too, as requests and httpx use
+try:
+    import certifi
+
+    os.environ.setdefault("SSL_CERT_FILE", certifi.where())
+except ImportError:
+    pass
+
 # Windows: the Visual C++ runtime the desktop app ships (PyTorch and numba need
 # it and a fresh Windows doesn't have it). Extension modules don't search the
 # PATH, only these folders (the handles are kept: closing one removes it)

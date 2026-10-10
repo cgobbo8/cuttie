@@ -25,6 +25,8 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 90
     steps:
+      # Files byte for byte as in the repo (LF), not Git for Windows' CRLF conversion
+      - run: git config --global core.autocrlf false
       - uses: actions/checkout@v7.0.1
 
       # The installer bundles this very Node (better-sqlite3 is installed for it)
@@ -91,6 +93,7 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 60
     steps:
+      - run: git config --global core.autocrlf false
       - uses: actions/checkout@v7.0.1
 
       - uses: actions/setup-node@v7.0.0
@@ -119,7 +122,21 @@ jobs:
 
       - name: API
         working-directory: api
-        run: node ace test
+        shell: bash
+        run: |
+          cp .env.example .env
+          node ace generate:key
+          node ace test
+
+      # The build the installer ships (scripts/stage.mjs): some worker tests run ffmpeg
+      - name: FFmpeg
+        shell: pwsh
+        run: |
+          $zip = Join-Path $env:RUNNER_TEMP "ffmpeg.zip"
+          Invoke-WebRequest "https://github.com/GyanD/codexffmpeg/releases/download/8.1.2/ffmpeg-8.1.2-essentials_build.zip" -OutFile $zip
+          if ((Get-FileHash $zip -Algorithm SHA256).Hash -ne "DB580001CAA24AC104C8CB856CD113A87B0A443F7BDF47D8C12B1D740584A2EC") { throw "FFmpeg checksum mismatch" }
+          & "$env:SystemRoot\System32\tar.exe" -xf $zip -C $env:RUNNER_TEMP
+          Join-Path $env:RUNNER_TEMP "ffmpeg-8.1.2-essentials_build\bin" | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
 
       - name: Worker (CUDA build of PyTorch, as on the friend's PC)
         working-directory: backend

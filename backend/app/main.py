@@ -118,8 +118,14 @@ class JobQueue:
                 self.current = req
             try:
                 _run(req)
-            except Exception:
+            except Exception as e:
                 logger.exception("Job %s crashed", req.job_id)
+                # Before the pipeline could report it (a module that won't load...): the app shows it
+                try:
+                    reason = f"{type(e).__name__}: {e}".splitlines()[0][:300]
+                    update_job(req.job_id, status="ERROR", progress="Analyse arrêtée.", error=f"Le moteur d'analyse a planté : {reason}")
+                except Exception:
+                    logger.exception("Could not mark job %s as failed", req.job_id)
             finally:
                 job_control.clear(req.job_id)
                 with self._cv:

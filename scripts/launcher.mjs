@@ -87,14 +87,17 @@ export async function startCuttie({
 
   const launch = (name, command, args, options) => {
     const child = spawn(command, args, { ...options, stdio: ["ignore", "pipe", "pipe"], windowsHide: true });
-    const forward = (chunk) =>
-      chunk
-        .toString()
-        .split(/\r?\n/)
-        .filter(Boolean)
-        .forEach((line) => onLog(name, line));
-    child.stdout.on("data", forward);
-    child.stderr.on("data", forward);
+    // Whole lines: a chunk may end in the middle of one
+    const lines = () => {
+      let rest = "";
+      return (chunk) => {
+        const parts = (rest + chunk.toString()).split(/\r?\n/);
+        rest = parts.pop();
+        parts.filter(Boolean).forEach((line) => onLog(name, line));
+      };
+    };
+    child.stdout.on("data", lines());
+    child.stderr.on("data", lines());
     child.on("exit", (code) => {
       child.exited = true;
       exitedResolve(`${name} exited (code ${code})`);

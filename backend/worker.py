@@ -8,8 +8,18 @@ Run:
 """
 
 import os
+import sys
 
 import uvicorn
+
+# Windows: the Visual C++ runtime the desktop app ships (PyTorch and numba need
+# it and a fresh Windows doesn't have it). Extension modules don't search the
+# PATH, only these folders (the handles are kept: closing one removes it)
+_dll_dirs = []
+if sys.platform == "win32":
+    for folder in filter(None, os.getenv("CUTTIE_DLL_DIRS", "").split(os.pathsep)):
+        if os.path.isdir(folder):
+            _dll_dirs.append(os.add_dll_directory(folder))
 
 if __name__ == "__main__":
     uvicorn.run(

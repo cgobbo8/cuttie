@@ -168,14 +168,34 @@ function showSplash() {
 
 /* ── Python environment (first launch, and when uv.lock changes) ──────────── */
 
+/** Whole lines out of a stream's chunks (a chunk may end mid-line). */
+function lineReader(onLine) {
+  let rest = "";
+  const read = (chunk) => {
+    const parts = (rest + chunk.toString()).split(/\r?\n/);
+    rest = parts.pop();
+    parts.filter((line) => line.trim()).forEach(onLine);
+  };
+  read.flush = () => {
+    if (rest.trim()) onLine(rest);
+    rest = "";
+  };
+  return read;
+}
+
 function run(command, args, { env, onLine }) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, { env, windowsHide: true });
-    const forward = (chunk) => chunk.toString().split(/\r?\n/).filter(Boolean).forEach(onLine);
-    child.stdout.on("data", forward);
-    child.stderr.on("data", forward);
+    const out = lineReader(onLine);
+    const err = lineReader(onLine);
+    child.stdout.on("data", out);
+    child.stderr.on("data", err);
     child.on("error", reject);
-    child.on("exit", (code) => (code === 0 ? resolve() : reject(new Error(`${path.basename(command)} exited with code ${code}`))));
+    child.on("exit", (code) => {
+      out.flush();
+      err.flush();
+      code === 0 ? resolve() : reject(new Error(`${path.basename(command)} exited with code ${code}`));
+    });
   });
 }
 
@@ -226,8 +246,12 @@ async function startStack() {
     // A plain Node (better-sqlite3 is built for it, not for Electron's)
     nodeBin: path.join(bin, exe("node")),
     workerCommand: [python, "worker.py"],
-    // ffmpeg / ffprobe, and yt-dlp from the Python environment
-    env: { PATH: [bin, path.dirname(python), process.env.PATH ?? ""].join(path.delimiter) },
+    // ffmpeg / ffprobe, and yt-dlp from the Python environment; the Visual C++
+    // runtime for PyTorch and numba (not on a fresh Windows)
+    env: {
+      PATH: [bin, path.dirname(python), process.env.PATH ?? ""].join(path.delimiter),
+      CUTTIE_DLL_DIRS: path.join(bin, "msvc"),
+    },
     onLog: log,
   });
 }
@@ -301,6 +325,8 @@ function openMain(url) {
   mainWindow.once("ready-to-show", () => {
     mainWindow.show();
     splash?.destroy();
+    // Software rendering has no backdrop blur (the glass looks flat): worth knowing from the logs
+    setTimeout(() => log("app", `GPU: ${JSON.stringify(app.getGPUFeatureStatus())}`), 5000);
   });
   mainWindow.on("closed", () => (mainWindow = null));
   mainWindow.loadURL(url);

@@ -135,6 +135,20 @@ if (isWindows) {
   run(path.join(process.env.SystemRoot ?? "C:\\Windows", "System32", "tar.exe"), ["-xf", zip, "-C", unpacked], cache);
   const [folder] = readdirSync(unpacked);
   for (const name of ["ffmpeg", "ffprobe"]) tool(path.join(unpacked, folder, "bin", exe(name)), name);
+
+  // The Visual C++ runtime (app-local, as Microsoft allows): PyTorch and numba
+  // need it and a fresh Windows doesn't have it. The worker adds this folder
+  // to its DLL search (CUTTIE_DLL_DIRS, see main.mjs and backend/worker.py)
+  const system32 = path.join(process.env.SystemRoot ?? "C:\\Windows", "System32");
+  const msvc = path.join(bin, "msvc");
+  mkdirSync(msvc, { recursive: true });
+  const required = ["vcruntime140.dll", "vcruntime140_1.dll", "msvcp140.dll"];
+  const optional = ["msvcp140_1.dll", "msvcp140_2.dll", "msvcp140_atomic_wait.dll", "msvcp140_codecvt_ids.dll", "concrt140.dll", "vcomp140.dll"];
+  for (const dll of [...required, ...optional]) {
+    const from = path.join(system32, dll);
+    if (existsSync(from)) copyFileSync(from, path.join(msvc, dll));
+    else if (required.includes(dll)) throw new Error(`${dll} not found in ${system32}: install the Visual C++ Redistributable on the build machine`);
+  }
 } else {
   // Local test of the packaged app only: this machine's ffmpeg
   for (const name of ["ffmpeg", "ffprobe"]) tool(onPath(name), name);

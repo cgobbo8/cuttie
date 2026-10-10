@@ -81,3 +81,31 @@ def test_out_of_memory_retries_with_fewer_chunks(monkeypatch):
     monkeypatch.setattr(Pipeline, "transcribe", broken)
     with pytest.raises(RuntimeError, match="cuDNN"):
         transcriber._transcribe_cuda(object(), [], words=True)
+
+
+def test_the_laughs_model_carries_on_with_the_cpu_when_the_gpu_is_full(monkeypatch):
+    import numpy as np
+
+    from app.services import audio_classifier
+
+    class Net:
+        def to(self, where):
+            self.on = where
+            return self
+
+    net = Net()
+
+    def infer(net, device, batch):
+        if device.type == "cuda":
+            raise RuntimeError("CUDA out of memory. Tried to allocate 1.17 GiB")
+        return np.zeros((len(batch), 527), dtype=np.float32)
+
+    monkeypatch.setattr(audio_classifier, "_infer", infer)
+    monkeypatch.setattr(audio_classifier, "_model", (net, torch.device("cuda")))
+    windows: list[dict] = []
+    audio_classifier._process_batch(audio_classifier._model, [np.zeros(80000, np.float32)] * 2, [0.0, 5.0], windows)
+    assert [w["time"] for w in windows] == [0.0, 5.0]
+    assert audio_classifier._model[1].type == "cpu" and net.on == "cpu"
+    # Next batches: straight on the CPU
+    audio_classifier._process_batch(audio_classifier._model, [np.zeros(80000, np.float32)], [10.0], windows)
+    assert len(windows) == 3

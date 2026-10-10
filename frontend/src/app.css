@@ -168,7 +168,6 @@ body::after {
     inset 0 1px 0 rgba(255, 255, 255, 0.08),
     0 30px 60px -30px rgba(0, 0, 0, 0.7);
   backdrop-filter: blur(30px) saturate(160%);
-  -webkit-backdrop-filter: blur(30px) saturate(160%);
 }
 
 /* Hero cards and dialogs: thinner tint, stronger blur, more depth */
@@ -179,7 +178,6 @@ body::after {
     inset 0 1px 0 rgba(255, 255, 255, 0.13),
     0 40px 80px -40px rgba(0, 0, 0, 0.85);
   backdrop-filter: blur(36px) saturate(170%);
-  -webkit-backdrop-filter: blur(36px) saturate(170%);
 }
 
 /* Top bar */
@@ -190,14 +188,12 @@ body::after {
     inset 0 1px 0 rgba(255, 255, 255, 0.10),
     0 20px 40px -24px rgba(0, 0, 0, 0.6);
   backdrop-filter: blur(30px) saturate(170%);
-  -webkit-backdrop-filter: blur(30px) saturate(170%);
 }
 
 /* Small labels floating over images and video */
 .glass-chip {
   background: rgba(12, 12, 13, 0.62);
   backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
 }
 
 /* Blocks inside a glass panel (no extra blur) */
@@ -213,7 +209,6 @@ body::after {
   border: 1px solid var(--color-border);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07);
   backdrop-filter: blur(24px) saturate(160%);
-  -webkit-backdrop-filter: blur(24px) saturate(160%);
 }
 
 .surface {

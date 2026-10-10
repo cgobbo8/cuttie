@@ -610,7 +610,7 @@
     "sortMoments": "Ordenar los momentos",
     "failed": "El análisis falló",
     "retry": "Reintentar",
-    "yourLives": "Tus últimos directos",
+    "yourLives": "Tus directos anteriores",
     "pasteLink": "Pegar el enlace de otro directo",
     "pastePlaceholder": "https://www.twitch.tv/videos/…",
     "analyze": "Analizar",
@@ -631,7 +631,11 @@
     "setChannel": "Elegir mi canal",
     "twitchError": "Twitch no responde ahora mismo. Puedes pegar el enlace de un directo.",
     "processing": "Twitch todavía está procesando este directo",
-    "analysisStarted": "Análisis iniciado"
+    "analysisStarted": "Análisis iniciado",
+    "latestLive": "Tu último directo",
+    "liveNow": "En directo",
+    "afterLive": "Analízalo tras el directo",
+    "liveHint": "Estás en directo: en cuanto termine, Cuttie lo propone aquí, listo para analizar."
   },
   "brand": {
     "title": "Mi canal",

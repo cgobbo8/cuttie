@@ -44,6 +44,8 @@ const ChannelContext = createContext<ChannelContextValue>({
   },
 });
 
+const CHANNEL_REFRESH_MS = 5 * 60_000;
+
 export function ChannelProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const [kit, setKit] = useState<BrandKit | null>(null);
@@ -66,6 +68,27 @@ export function ChannelProvider({ children }: { children: ReactNode }) {
     getBrandKit().then(setKit).catch(() => {});
     refreshChannel();
   }, [user, refreshChannel]);
+
+  // New lives show up by themselves: when Cuttie comes back to the front, and
+  // every few minutes (a failed refresh keeps what's on screen)
+  useEffect(() => {
+    if (!user) return;
+    const refreshQuietly = () => {
+      if (document.visibilityState !== "visible") return;
+      getTwitchChannel()
+        .then((next) => {
+          setChannel(next);
+          setChannelError(null);
+        })
+        .catch(() => {});
+    };
+    document.addEventListener("visibilitychange", refreshQuietly);
+    const id = window.setInterval(refreshQuietly, CHANNEL_REFRESH_MS);
+    return () => {
+      document.removeEventListener("visibilitychange", refreshQuietly);
+      window.clearInterval(id);
+    };
+  }, [user]);
 
   // The whole app wears the streamer's color
   useEffect(() => {

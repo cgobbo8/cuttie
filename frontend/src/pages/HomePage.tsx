@@ -70,12 +70,18 @@ function Hero({ vod, busy, onAnalyze }: { vod: TwitchVod; busy: boolean; onAnaly
           </span>
         ) : job?.status === "ERROR" ? (
           <span className="chip chip-danger">{t("start.failed")}</span>
+        ) : vod.recording ? (
+          <span className="chip chip-danger">
+            <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" /> {t("start.liveNow")}
+          </span>
         ) : isNew ? (
           <span className="chip chip-accent">
             <span className="w-1.5 h-1.5 rounded-full bg-accent" /> {t("start.newLive")}
           </span>
         ) : null}
-        <span>{liveDate(vod.published_at, i18n.language)}</span>
+        <span>
+          {t("start.latestLive")} · {liveDate(vod.published_at, i18n.language)}
+        </span>
       </div>
 
       <h1 className="mt-4 text-[48px] leading-[1.02] tracking-[-0.035em] font-[650] text-white [text-wrap:balance]">{title}</h1>
@@ -108,6 +114,10 @@ function Hero({ vod, busy, onAnalyze }: { vod: TwitchVod; busy: boolean; onAnaly
             {job.status === "DONE" ? t("start.sortMoments") : t("start.seeAnalysis")}
             <ArrowRight className="w-4 h-4" strokeWidth={2.2} />
           </Link>
+        ) : vod.recording ? (
+          <button disabled className="btn btn-primary btn-lg">
+            <Sparkles className="w-4 h-4" /> {t("start.afterLive")}
+          </button>
         ) : (
           <button onClick={onAnalyze} disabled={busy} className="btn btn-primary btn-lg">
             {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
@@ -119,7 +129,7 @@ function Hero({ vod, busy, onAnalyze }: { vod: TwitchVod; busy: boolean; onAnaly
           <ExternalLink className="w-[15px] h-[15px]" />
         </a>
       </div>
-      {!job && <p className="mt-3.5 text-[12.5px] text-ink-3">{t("start.estimate")}</p>}
+      {!job && <p className="mt-3.5 text-[12.5px] text-ink-3">{t(vod.recording ? "start.liveHint" : "start.estimate")}</p>}
       {job?.status === "ERROR" && (job.error || stopped) && (
         <div className="mt-4 flex flex-wrap items-center gap-3">
           <p className="flex-1 min-w-[220px] text-[13px] leading-snug text-red-200">{stopped ? t(`job.provider.${stopped.reason}`) : job.error}</p>

@@ -275,6 +275,8 @@ export interface TwitchVod {
   thumbnail_large_url: string | null;
   game: string | null;
   url: string;
+  /** Still being recorded: the streamer is live right now */
+  recording?: boolean;
   /** Existing analysis of this VOD, if any */
   job: {
     id: string;

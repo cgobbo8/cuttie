@@ -610,7 +610,7 @@
     "sortMoments": "Trier les moments",
     "failed": "L'analyse a échoué",
     "retry": "Relancer",
-    "yourLives": "Tes derniers lives",
+    "yourLives": "Tes lives précédents",
     "pasteLink": "Coller le lien d'un autre live",
     "pastePlaceholder": "https://www.twitch.tv/videos/…",
     "analyze": "Analyser",
@@ -631,7 +631,11 @@
     "setChannel": "Choisir ma chaîne",
     "twitchError": "Twitch ne répond pas pour l'instant. Tu peux coller le lien d'un live.",
     "processing": "Twitch prépare encore ce live",
-    "analysisStarted": "Analyse lancée"
+    "analysisStarted": "Analyse lancée",
+    "latestLive": "Ton dernier live",
+    "liveNow": "En direct",
+    "afterLive": "À analyser après le live",
+    "liveHint": "Tu es en live : dès qu'il se termine, Cuttie le propose ici, prêt à analyser."
   },
   "brand": {
     "title": "Ma chaîne",

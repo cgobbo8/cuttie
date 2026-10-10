@@ -20,6 +20,8 @@ export interface TwitchVod {
   thumbnail_large_url: string | null
   game: string | null
   url: string
+  /** Still being recorded: the streamer is live right now */
+  recording: boolean
 }
 
 export interface TwitchChannel {
@@ -75,7 +77,7 @@ export async function fetchChannel(login: string): Promise<TwitchChannel | null>
       login displayName description primaryColorHex profileImageURL(width: 300) bannerImageURL
       followers { totalCount }
       videos(first: 12, type: ARCHIVE, sort: TIME) {
-        edges { node { id title lengthSeconds publishedAt viewCount previewThumbnailURL(width: 640, height: 360) game { displayName } } }
+        edges { node { id title status lengthSeconds publishedAt viewCount previewThumbnailURL(width: 640, height: 360) game { displayName } } }
       }
     }
   }`
@@ -105,6 +107,7 @@ export async function fetchChannel(login: string): Promise<TwitchChannel | null>
             thumbnail_large_url: thumb ? resizeThumbnail(thumb, 1280, 720) : null,
             game: node.game?.displayName ?? null,
             url: `https://www.twitch.tv/videos/${node.id}`,
+            recording: node.status === 'RECORDING',
           }
         }),
       }

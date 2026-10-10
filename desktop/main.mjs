@@ -12,6 +12,9 @@
  * `--smoke-test[=full] --smoke-report=<file>`: no window; sets up Python, starts
  * the stack, checks the API, the worker and its tools (full: also the GPU,
  * Whisper and the voice model), writes a JSON report and exits 0 or 1 (CI, scripts/smoke-test.ps1).
+ *
+ * `--update-test=<file>`: no window; what the update button does (check GitHub,
+ * download, silent install) without relaunching, with a JSON report (remote tests).
  */
 
 import { app, BrowserWindow, dialog, ipcMain, screen, shell } from "electron";
@@ -32,6 +35,9 @@ const APP_ID = "app.cuttie.desktop";
 const smokeArg = process.argv.find((a) => a.startsWith("--smoke-test"));
 const reportArg = process.argv.find((a) => a.startsWith("--smoke-report="));
 const smoke = smokeArg ? { full: smokeArg === "--smoke-test=full", report: reportArg ? reportArg.slice("--smoke-report=".length) : "smoke-report.json" } : null;
+
+const updateTestArg = process.argv.find((a) => a.startsWith("--update-test="));
+const updateTestReport = updateTestArg ? updateTestArg.slice("--update-test=".length) : null;
 
 if (!smoke && !app.requestSingleInstanceLock()) app.exit(0);
 
@@ -414,6 +420,34 @@ async function smokeTest() {
   }
 }
 
+/* ── Update test (remote) ─────────────────────────────────────────────────── */
+
+async function updateTest() {
+  const report = { from: app.getVersion(), at: new Date().toISOString() };
+  const save = (extra) => writeFileSync(updateTestReport, JSON.stringify({ ...report, ...extra }, null, 2));
+  try {
+    const result = await autoUpdater.checkForUpdates();
+    report.available = !!result?.isUpdateAvailable;
+    report.version = result?.updateInfo?.version ?? null;
+    report.notes = plainNotes(result?.updateInfo?.releaseNotes);
+    if (!report.available) {
+      save({ ok: true });
+      return app.exit(0);
+    }
+    autoUpdater.on("download-progress", (p) => (report.percent = Math.round(p.percent)));
+    const t0 = Date.now();
+    await autoUpdater.downloadUpdate();
+    report.download_seconds = (Date.now() - t0) / 1000;
+    save({ ok: true, installing: true });
+    log("update", `update test: installing ${report.version}`);
+    // Silent, and no relaunch: a remote session has no screen
+    autoUpdater.quitAndInstall(true, false);
+  } catch (err) {
+    save({ ok: false, error: String(err?.message ?? err) });
+    app.exit(1);
+  }
+}
+
 /* ── Updates (GitHub Releases) ────────────────────────────────────────────── */
 
 autoUpdater.autoDownload = false;
@@ -504,7 +538,7 @@ app.on("before-quit", (event) => {
   }
 });
 app.on("window-all-closed", () => {
-  if (!smoke) app.quit();
+  if (!smoke && !updateTestReport) app.quit();
 });
 
 if (isWindows) app.setAppUserModelId(APP_ID);
@@ -513,5 +547,6 @@ app.whenReady().then(() => {
   words = WORDS[app.getLocale().slice(0, 2)] ?? WORDS.fr;
   log("app", `Cuttie ${app.getVersion()}${packaged ? "" : " (dev)"} — data ${dataDir}`);
   if (smoke) smokeTest();
+  else if (updateTestReport) updateTest();
   else launch();
 });

@@ -272,7 +272,7 @@ function DiagnosticsSection() {
           )}
           <DiagRow
             label={t("settings.diag.localTest")}
-            level={!localTest ? "ok" : localTest.whisper.error || localTest.gpu.error ? "error" : localTest.whisper.backend === "cpu" ? "warn" : "ok"}
+            level={!localTest ? "ok" : localTest.whisper.error || localTest.gpu.error || localTest.voices?.error ? "error" : localTest.whisper.backend === "cpu" ? "warn" : "ok"}
             value={
               testing ? (
                 <span className="inline-flex items-center gap-2 text-ink-3">
@@ -289,6 +289,7 @@ function DiagnosticsSection() {
                         })}
                   </span>
                   {localTest.gpu.error && <span className="text-[12px] text-ink-3">PyTorch : {localTest.gpu.error.slice(0, 160)}</span>}
+                  {localTest.voices?.error && <span className="text-[12px] text-ink-3">{t("settings.diag.voicesFailed", { error: localTest.voices.error.slice(0, 160) })}</span>}
                 </span>
               ) : (
                 <button onClick={testLocal} className="btn btn-glass btn-sm">

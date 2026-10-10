@@ -16,3 +16,13 @@ def test_reports_the_speed_or_the_exact_error(monkeypatch):
     monkeypatch.setattr(transcriber, "transcribe", missing_dll)
     report = local_check._whisper()
     assert report["error"] == "RuntimeError: Library cublas64_12.dll is not found or cannot be loaded"
+
+
+def test_reports_when_the_voice_model_cannot_load(monkeypatch):
+    from app.services import speaker_diarizer
+
+    def offline():
+        raise OSError("Hugging Face unreachable")
+
+    monkeypatch.setattr(speaker_diarizer, "_get_embedder", offline)
+    assert local_check._voices() == {"error": "OSError: Hugging Face unreachable"}

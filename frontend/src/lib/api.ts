@@ -155,6 +155,8 @@ export interface Diagnostics {
 export interface LocalTest {
   gpu: { device?: string; name?: string; vram_gb?: number; cuda?: string; cudnn?: number; matmul_ms?: number; torch?: string; error?: string };
   whisper: { backend: "mlx" | "cuda" | "cpu"; backend_after?: string; model_ready?: boolean; load_seconds?: number; seconds?: number; realtime?: number; error?: string };
+  /** The model that tells speakers apart */
+  voices?: { load_seconds?: number; seconds?: number; dim?: number; error?: string };
 }
 
 export async function runLocalTest(): Promise<LocalTest> {

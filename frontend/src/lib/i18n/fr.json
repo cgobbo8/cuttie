@@ -516,7 +516,8 @@
       "localTestRunning": "Test en cours…",
       "localTestDownloading": "Téléchargement du modèle (1,6 Go) puis test…",
       "localTestResult": "OK sur {{where}} : {{speed}}× le temps réel",
-      "localTestFailed": "Échec : {{error}}"
+      "localTestFailed": "Échec : {{error}}",
+      "voicesFailed": "Séparation des voix : {{error}}"
     },
     "subtitle": "Tes clés d'IA, la langue de l'app et l'état de ton installation.",
     "openaiRole": "Assistant de l'éditeur avancé (facultatif)",

@@ -10,8 +10,8 @@
  * is: api/build and frontend/dist must exist (`npm start` at the root builds them).
  *
  * `--smoke-test[=full] --smoke-report=<file>`: no window; sets up Python, starts
- * the stack, checks the API, the worker and its tools (full: also the GPU and
- * Whisper), writes a JSON report and exits 0 or 1 (CI, scripts/smoke-test.ps1).
+ * the stack, checks the API, the worker and its tools (full: also the GPU,
+ * Whisper and the voice model), writes a JSON report and exits 0 or 1 (CI, scripts/smoke-test.ps1).
  */
 
 import { app, BrowserWindow, dialog, ipcMain, screen, shell } from "electron";
@@ -371,6 +371,7 @@ async function smokeTest() {
         const result = await get("/api/diagnostics/local-test", { method: "POST" });
         if (result.gpu?.error) throw new Error(`GPU check: ${result.gpu.error}`);
         if (result.whisper?.error) throw new Error(`Whisper: ${result.whisper.error}`);
+        if (result.voices?.error) throw new Error(`Voice model: ${result.voices.error}`);
         return result;
       });
     }

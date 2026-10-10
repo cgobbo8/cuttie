@@ -1,6 +1,7 @@
 """Run the local models once, to know what this computer can do (Settings >
-Diagnostic): the GPU through PyTorch, and Whisper on 30 seconds of audio.
-The report says how fast, or the exact error (a missing CUDA DLL, ...).
+Diagnostic): the GPU through PyTorch, Whisper on 30 seconds of audio, and the
+voice model that tells speakers apart. The report says how fast, or the exact
+error (a missing CUDA DLL, ...).
 """
 
 import logging
@@ -71,5 +72,23 @@ def _whisper() -> dict:
     return report
 
 
+def _voices() -> dict:
+    """The speaker model (downloaded once, 26 MB) and the speech detector, on noise."""
+    try:
+        from app.services import speaker_diarizer
+
+        t0 = time.time()
+        speaker_diarizer._get_embedder()
+        load = time.time() - t0
+        audio = (0.05 * np.random.default_rng(0).standard_normal(16000 * 12)).astype(np.float32)
+        t0 = time.time()
+        speaker_diarizer._speech_regions(audio)
+        embeddings = speaker_diarizer._embed(audio, [(i * 1.5, i * 1.5 + 1.5, 0) for i in range(8)])
+        return {"load_seconds": round(load, 1), "seconds": round(time.time() - t0, 2), "dim": int(embeddings.shape[1])}
+    except Exception as e:
+        logger.warning(f"Voice model check failed: {e}")
+        return {"error": f"{type(e).__name__}: {e}"}
+
+
 def run() -> dict:
-    return {"gpu": _gpu(), "whisper": _whisper()}
+    return {"gpu": _gpu(), "whisper": _whisper(), "voices": _voices()}

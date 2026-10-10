@@ -51,7 +51,7 @@ def extract_metadata(url: str) -> dict:
     }
 
 
-AUDIO_SAMPLE_RATE = 16000  # speech models (Whisper, pyannote) work at 16 kHz
+AUDIO_SAMPLE_RATE = 16000  # speech models (Whisper, VAD, voice embeddings) work at 16 kHz
 
 
 def download_audio(url: str, output_dir: str) -> str:

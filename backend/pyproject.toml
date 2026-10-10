@@ -23,8 +23,6 @@ dependencies = [
     "panns-inference>=0.1.1",
     "opencv-python-headless>=4.13.0.92",
     "ultralytics>=8.4.33",
-    "pyannote-audio>=4.0.4",
-    "speechbrain>=1.1.0",
     "faster-whisper>=1.1",
     "mlx-whisper>=0.4 ; platform_machine == 'arm64' and sys_platform == 'darwin'",
 ]

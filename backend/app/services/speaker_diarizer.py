@@ -1,21 +1,25 @@
-"""Speaker diarization — identifies WHO speaks WHEN in audio segments.
+"""Speaker diarization — who speaks when in a clip, with no account or API.
 
-Uses pyannote.audio community-1 for diarization and ECAPA-TDNN (SpeechBrain)
-for voiceprint extraction / speaker identification.
+Silero VAD (shipped with faster-whisper) finds the speech; WeSpeaker ResNet34
+(public ONNX model, CC-BY-4.0, 26 MB, downloaded once) turns every 1.5 s window
+of it into a voice embedding; a cautious clustering groups them into a few
+voices. The streamer's voice (voiceprint) is learned once per live: the voice
+heard again in most of a dozen passages spread over it (other players come and
+go, the streamer is always there). It names the "streamer" voice of each clip.
 
-Designed to run on the top 50 candidates AFTER blended re-ranking, just before
-the per-clip LLM analysis. Adds speaker labels to Whisper transcripts so the
-LLM can understand conversation dynamics.
+Tuned on 21 clips of a GTA RP live (other players heard through the game):
+2.2 voices per clip on average, and 80 % of the words of sentences addressed
+to the streamer by name land on another voice.
 
-Pipeline:
-1. Extract streamer voiceprint from first 2 min of VOD (one-time)
-2. For each candidate segment: diarize → assign speakers to Whisper words
-3. Label the streamer via cosine similarity against voiceprint
+Runs on the candidates sent to the LLM (speaker-labeled transcript) and for the
+subtitle colors (one per voice). Never fails a job: callers fall back to words
+without speakers.
 """
 
 import logging
 import os
 import subprocess
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -23,58 +27,53 @@ import numpy as np
 import torch
 
 from app.services import paths
-from app.services.device import get_device
 from app.services.transcript_format import format_labeled_transcript
 
 logger = logging.getLogger(__name__)
 
-# ─── Lazy singletons ────────────────────────────────────────────────────────
+SAMPLE_RATE = 16000
+WINDOW, HOP = 1.5, 0.75  # seconds: one voice embedding per window
+CLUSTER_DISTANCE = 0.7  # first grouping (average linkage, cosine distance)
+MERGE_SIMILARITY = 0.5  # voices whose centroids are this alike are one
+MIN_VOICE_SECONDS = 2.0  # less speech than this is not a voice of its own
+MAX_VOICES = 4
+STREAMER_SIMILARITY = 0.3  # a voice this close to the voiceprint is the streamer's
+STREAMER = "STREAMER"  # label of the streamer's voice, before naming
+NEAREST_TURN_SECONDS = 1.0  # a word outside every turn joins the nearest one within this
 
-_pipeline = None
-_classifier = None
-
-VOICEPRINT_THRESHOLD = 0.55  # cosine similarity to match streamer
 VOICEPRINT_DURATION = 120  # seconds of reference audio (from the VOD start when no passages are given)
-VOICE_REFERENCE_LEN = 30.0  # seconds per reference passage
-VOICE_REFERENCE_COUNT = 4
-DIARIZE_WORKERS = 3  # parallel diarization workers (GPU-bound)
+VOICE_REFERENCE_LEN = 20.0  # seconds per reference passage
+VOICE_REFERENCE_COUNT = 12
+VOICEPRINT_MATCH = 0.5  # the same voice, found again in another passage
+DIARIZE_WORKERS = 3
+
+EMBEDDER_REPO = "Wespeaker/wespeaker-voxceleb-resnet34-LM"
+EMBEDDER_FILE = "voxceleb_resnet34_LM.onnx"
+EMBEDDER_REVISION = "f0c48c298fd835726c27956a5d617bad7115627e"
+EMBEDDING_DIM = 256
+
+_embedder = None
+_embedder_lock = threading.Lock()
 
 
-def _get_pipeline():
-    """Lazy-load pyannote diarization pipeline."""
-    global _pipeline
-    if _pipeline is not None:
-        return _pipeline
+def _get_embedder():
+    """WeSpeaker ResNet34 on the CPU, downloaded once into <data>/models/wespeaker."""
+    global _embedder
+    with _embedder_lock:
+        if _embedder is None:
+            import onnxruntime as ort
+            from huggingface_hub import hf_hub_download
 
-    from pyannote.audio import Pipeline
-
-    t0 = time.time()
-    _pipeline = Pipeline.from_pretrained("pyannote/speaker-diarization-community-1")
-    device = get_device()
-    _pipeline.to(device)
-    logger.info(f"pyannote pipeline loaded on {device} in {time.time()-t0:.1f}s")
-    return _pipeline
-
-
-def _get_classifier():
-    """Lazy-load ECAPA-TDNN speaker encoder (always on CPU — fast enough)."""
-    global _classifier
-    if _classifier is not None:
-        return _classifier
-
-    from speechbrain.inference.speaker import EncoderClassifier
-    from speechbrain.utils.fetching import LocalStrategy
-
-    t0 = time.time()
-    _classifier = EncoderClassifier.from_hparams(
-        source="speechbrain/spkrec-ecapa-voxceleb",
-        savedir=os.path.join(paths.DATA_DIR, "models", "spkrec-ecapa-voxceleb"),
-        run_opts={"device": "cpu"},
-        # Symlinks need admin rights on Windows — copy the files instead
-        local_strategy=LocalStrategy.COPY,
-    )
-    logger.info(f"ECAPA-TDNN classifier loaded in {time.time()-t0:.1f}s")
-    return _classifier
+            t0 = time.time()
+            path = hf_hub_download(
+                EMBEDDER_REPO,
+                EMBEDDER_FILE,
+                revision=EMBEDDER_REVISION,
+                local_dir=os.path.join(paths.DATA_DIR, "models", "wespeaker"),
+            )
+            _embedder = ort.InferenceSession(path, providers=["CPUExecutionProvider"])
+            logger.info(f"Speaker embedder loaded in {time.time() - t0:.1f}s")
+    return _embedder
 
 
 # ─── Audio helpers ───────────────────────────────────────────────────────────
@@ -82,8 +81,8 @@ def _get_classifier():
 def _load_wav(path: str) -> tuple[torch.Tensor, int]:
     """Load a WAV file as a mono (1, samples) float tensor at 16 kHz.
 
-    Uses soundfile rather than torchaudio.load / pyannote's file decoding, which
-    go through torchcodec and need FFmpeg shared libraries on Windows.
+    Uses soundfile rather than torchaudio.load, which goes through torchcodec
+    and needs FFmpeg shared libraries on Windows.
     """
     import soundfile as sf
 
@@ -91,11 +90,11 @@ def _load_wav(path: str) -> tuple[torch.Tensor, int]:
     waveform = torch.from_numpy(data.T.copy())
     if waveform.shape[0] > 1:
         waveform = waveform.mean(dim=0, keepdim=True)
-    if sr != 16000:
+    if sr != SAMPLE_RATE:
         import torchaudio
 
-        waveform = torchaudio.functional.resample(waveform, sr, 16000)
-        sr = 16000
+        waveform = torchaudio.functional.resample(waveform, sr, SAMPLE_RATE)
+        sr = SAMPLE_RATE
     return waveform, sr
 
 
@@ -107,9 +106,9 @@ def _extract_wav_segment(
         subprocess.run(
             [
                 "ffmpeg", "-y",
-                "-i", wav_path,
                 "-ss", str(start),
                 "-t", str(end - start),
+                "-i", wav_path,
                 "-ac", "1", "-ar", "16000",
                 "-loglevel", "error",
                 output_path,
@@ -120,6 +119,161 @@ def _extract_wav_segment(
     except Exception as e:
         logger.warning(f"Failed to extract WAV segment: {e}")
         return False
+
+
+# ─── Voices ──────────────────────────────────────────────────────────────────
+
+def _speech_regions(audio: np.ndarray) -> list[tuple[float, float]]:
+    """Where someone speaks (seconds), split at pauses of 0.3 s."""
+    from faster_whisper.vad import VadOptions, get_speech_timestamps
+
+    options = VadOptions(threshold=0.5, min_speech_duration_ms=250, min_silence_duration_ms=300, speech_pad_ms=100)
+    return [(r["start"] / SAMPLE_RATE, r["end"] / SAMPLE_RATE) for r in get_speech_timestamps(audio, options, sampling_rate=SAMPLE_RATE)]
+
+
+def _windows(regions: list[tuple[float, float]]) -> list[tuple[float, float, int]]:
+    """1.5 s windows every 0.75 s over each speech region: (start, end, region index)."""
+    out: list[tuple[float, float, int]] = []
+    for ri, (a, b) in enumerate(regions):
+        if b - a < 0.5:
+            continue
+        if b - a <= WINDOW:
+            out.append((a, b, ri))
+            continue
+        t = a
+        while t + WINDOW <= b:
+            out.append((t, t + WINDOW, ri))
+            t += HOP
+        if out[-1][1] < b - 0.25:
+            out.append((b - WINDOW, b, ri))
+    return out
+
+
+def _unit(v: np.ndarray) -> np.ndarray:
+    return v / np.maximum(np.linalg.norm(v, axis=-1, keepdims=True), 1e-9)
+
+
+def _embed(audio: np.ndarray, windows: list[tuple[float, float, int]]) -> np.ndarray:
+    """One unit-length voice embedding per window."""
+    import torchaudio.compliance.kaldi as kaldi
+
+    session = _get_embedder()
+    feats = []
+    for a, b, _ in windows:
+        chunk = torch.from_numpy(audio[int(a * SAMPLE_RATE) : int(b * SAMPLE_RATE)].copy()).unsqueeze(0) * (1 << 15)
+        f = kaldi.fbank(chunk, num_mel_bins=80, frame_length=25, frame_shift=10, dither=0.0,
+                        sample_frequency=SAMPLE_RATE, window_type="hamming", use_energy=False)
+        feats.append((f - f.mean(dim=0)).numpy())
+    out = np.zeros((len(windows), EMBEDDING_DIM), dtype=np.float32)
+    # Batched by length (all full windows share theirs)
+    by_length: dict[int, list[int]] = {}
+    for i, f in enumerate(feats):
+        by_length.setdefault(f.shape[0], []).append(i)
+    for indexes in by_length.values():
+        for s in range(0, len(indexes), 32):
+            part = indexes[s : s + 32]
+            out[part] = session.run(["embs"], {"feats": np.stack([feats[i] for i in part])})[0]
+    return _unit(out)
+
+
+def _smooth(embeddings: np.ndarray, windows: list[tuple[float, float, int]]) -> np.ndarray:
+    """Each window averaged with its neighbours in the same speech region (steadier voices)."""
+    out = embeddings.copy()
+    for i in range(len(windows)):
+        group = [embeddings[i]] + [embeddings[j] for j in (i - 1, i + 1) if 0 <= j < len(windows) and windows[j][2] == windows[i][2]]
+        out[i] = np.mean(group, axis=0)
+    return _unit(out)
+
+
+def _cluster(embeddings: np.ndarray, windows: list[tuple[float, float, int]]) -> np.ndarray:
+    """A voice label per window: few voices, each with enough speech, no flicker."""
+    labels = np.zeros(len(embeddings), dtype=int)
+    if len(embeddings) < 2:
+        return labels
+    from sklearn.cluster import AgglomerativeClustering
+
+    labels = AgglomerativeClustering(
+        n_clusters=None, metric="cosine", linkage="average", distance_threshold=CLUSTER_DISTANCE,
+    ).fit_predict(embeddings)
+    seconds = np.array([b - a for a, b, _ in windows]) * HOP / WINDOW  # windows overlap by half
+
+    def centroids() -> tuple[list[int], np.ndarray]:
+        keys = sorted(set(labels.tolist()))
+        return keys, _unit(np.array([embeddings[labels == k].mean(axis=0) for k in keys]))
+
+    # Merge the two closest voices while they're alike, or while there are too many
+    while True:
+        keys, c = centroids()
+        if len(keys) < 2:
+            break
+        sim = c @ c.T
+        np.fill_diagonal(sim, -1.0)
+        i, j = np.unravel_index(int(np.argmax(sim)), sim.shape)
+        if sim[i, j] < MERGE_SIMILARITY and len(keys) <= MAX_VOICES:
+            break
+        labels[labels == keys[j]] = keys[i]
+    # Too little speech for a voice of its own: to the closest one
+    while True:
+        keys, c = centroids()
+        small = [k for k in keys if seconds[labels == k].sum() < MIN_VOICE_SECONDS]
+        if len(keys) < 2 or not small:
+            break
+        k = min(small, key=lambda q: seconds[labels == q].sum())
+        ck = c[keys.index(k)]
+        labels[labels == k] = max((q for q in keys if q != k), key=lambda q: float(c[keys.index(q)] @ ck))
+    # A lone window between two of another voice, in one breath: that voice
+    for i in range(1, len(labels) - 1):
+        if labels[i - 1] == labels[i + 1] != labels[i] and windows[i - 1][2] == windows[i][2] == windows[i + 1][2]:
+            labels[i] = labels[i - 1]
+    return labels
+
+
+def _name_voices(embeddings: np.ndarray, labels: np.ndarray, voiceprint: np.ndarray | None) -> dict[int, str]:
+    """STREAMER for the voice closest to the voiceprint (when close enough), SPEAKER_01... for
+    the others by speaking time."""
+    keys = sorted(set(labels.tolist()), key=lambda k: -int((labels == k).sum()))
+    streamer = None
+    if voiceprint is not None and voiceprint.shape == (EMBEDDING_DIM,):
+        vp = _unit(voiceprint.astype(np.float32))
+        sims = {k: float(_unit(embeddings[labels == k].mean(axis=0)) @ vp) for k in keys}
+        best = max(sims, key=sims.get)
+        if sims[best] >= STREAMER_SIMILARITY:
+            streamer = best
+    names: dict[int, str] = {}
+    n = 1
+    for k in keys:
+        if k == streamer:
+            names[k] = STREAMER
+        else:
+            names[k] = f"SPEAKER_{n:02d}"
+            n += 1
+    return names
+
+
+def _segments(windows: list[tuple[float, float, int]], voices: list[str], regions: list[tuple[float, float]]) -> list[dict]:
+    """Speech regions cut into turns: every 0.1 s goes to the voice of the nearest window."""
+    centers = np.array([(a + b) / 2 for a, b, _ in windows])
+    segments: list[dict] = []
+    for a, b in regions:
+        t = a
+        while t < b - 1e-6:
+            step = min(0.1, b - t)
+            voice = voices[int(np.argmin(np.abs(centers - (t + step / 2))))]
+            if segments and segments[-1]["speaker"] == voice and abs(segments[-1]["end"] - t) < 1e-6:
+                segments[-1]["end"] = t + step
+            else:
+                segments.append({"speaker": voice, "start": t, "end": t + step})
+            t += step
+    return segments
+
+
+def _voices_of(audio: np.ndarray) -> tuple[list[tuple[float, float]], list[tuple[float, float, int]], np.ndarray, np.ndarray]:
+    regions = _speech_regions(audio)
+    windows = _windows(regions)
+    if not windows:
+        return regions, windows, np.zeros((0, EMBEDDING_DIM), dtype=np.float32), np.zeros(0, dtype=int)
+    embeddings = _smooth(_embed(audio, windows), windows)
+    return regions, windows, embeddings, _cluster(embeddings, windows)
 
 
 # ─── Voiceprint ──────────────────────────────────────────────────────────────
@@ -154,245 +308,87 @@ def pick_voice_reference(classification: list[dict], duration: float) -> list[fl
 
 
 def extract_voiceprint(wav_path: str, duration: float = VOICEPRINT_DURATION, starts: list[float] | None = None) -> np.ndarray | None:
-    """Extract the streamer's voiceprint.
-
-    Strategy: diarize the reference audio, take the dominant speaker, extract
-    their embedding. The reference is a few speech-dense passages spread over
-    the VOD (`starts`, see pick_voice_reference): the voice heard in most of
-    them is the streamer's. Without passages, the first 2 minutes.
-
-    Returns 192-dim ECAPA-TDNN embedding, or None on failure.
+    """The streamer's voice: of the voices in a few passages spread over the VOD
+    (`starts`, see pick_voice_reference), the one found again in the most
+    passages. Without passages, the first 2 minutes. Returns a unit embedding, or None.
     """
     t0 = time.time()
-    logger.info(f"Extracting streamer voiceprint from {len(starts) if starts else 'the VOD start'} passage(s)...")
-
-    ref_paths: list[str] = []
-    try:
-        spans = [(s, s + VOICE_REFERENCE_LEN) for s in starts] if starts else [(0.0, duration)]
-        parts = []
-        for i, (a, b) in enumerate(spans):
-            ref_path = f"{wav_path}.voiceprint_ref_{i}.wav"
-            ref_paths.append(ref_path)
-            if _extract_wav_segment(wav_path, a, b, ref_path):
-                parts.append(_load_wav(ref_path)[0])
-        if not parts:
-            logger.warning("Failed to extract reference audio for voiceprint")
-            return None
-
-        # Diarize the reference passages together
-        waveform, sr = torch.cat(parts, dim=1), 16000
-        pipeline = _get_pipeline()
-        output = pipeline({"waveform": waveform, "sample_rate": sr})
-        annotation = getattr(output, "exclusive_speaker_diarization", None)
-        if annotation is None:
-            annotation = getattr(output, "speaker_diarization", output)
-
-        # Find dominant speaker
-        speaker_durations: dict[str, float] = {}
-        speaker_segments: dict[str, list[tuple[float, float]]] = {}
-        for turn, _, speaker in annotation.itertracks(yield_label=True):
-            dur = turn.end - turn.start
-            speaker_durations[speaker] = speaker_durations.get(speaker, 0) + dur
-            speaker_segments.setdefault(speaker, []).append((turn.start, turn.end))
-
-        if not speaker_durations:
-            logger.warning("No speakers found in the reference audio — cannot create voiceprint")
-            return None
-
-        dominant = max(speaker_durations, key=speaker_durations.get)
-        dominant_dur = speaker_durations[dominant]
-        logger.info(
-            f"Dominant speaker in the reference audio: {dominant} ({dominant_dur:.1f}s / "
-            f"{len(speaker_durations)} speakers)"
-        )
-
-        # Extract embedding from dominant speaker's segments
-        chunks = []
-        total = 0.0
-        for seg_start, seg_end in speaker_segments[dominant]:
-            s, e = int(seg_start * sr), int(seg_end * sr)
-            if e > waveform.shape[1]:
-                e = waveform.shape[1]
-            chunks.append(waveform[:, s:e])
-            total += seg_end - seg_start
-            if total >= 30:  # 30s of clean speech is plenty
-                break
-
-        if not chunks or total < 3:
-            logger.warning(f"Not enough speech from dominant speaker ({total:.1f}s)")
-            return None
-
-        audio = torch.cat(chunks, dim=1)
-        classifier = _get_classifier()
-        embedding = classifier.encode_batch(audio)
-        emb = embedding.squeeze().cpu().numpy()
-
-        elapsed = time.time() - t0
-        logger.info(f"Voiceprint extracted: {emb.shape[0]}-dim in {elapsed:.1f}s")
-        return emb
-
-    except Exception as e:
-        logger.error(f"Voiceprint extraction failed: {e}")
-        return None
-    finally:
-        for ref_path in ref_paths:
+    if starts:
+        spans = [(s, s + VOICE_REFERENCE_LEN) for s in starts]
+    else:
+        spans = [(t, t + VOICE_REFERENCE_LEN) for t in np.arange(0.0, duration, VOICE_REFERENCE_LEN)]
+    centroids: list[np.ndarray] = []
+    seconds: list[float] = []
+    passage: list[int] = []
+    for i, (a, b) in enumerate(spans):
+        ref_path = f"{wav_path}.voiceprint_ref_{i}.wav"
+        try:
+            if not _extract_wav_segment(wav_path, a, b, ref_path):
+                continue
+            audio = _load_wav(ref_path)[0].squeeze(0).numpy()
+            _, windows, embeddings, labels = _voices_of(audio)
+            spoken = np.array([w[1] - w[0] for w in windows]) * HOP / WINDOW
+            for k in set(labels.tolist()):
+                if spoken[labels == k].sum() >= MIN_VOICE_SECONDS:
+                    centroids.append(_unit(embeddings[labels == k].mean(axis=0)))
+                    seconds.append(float(spoken[labels == k].sum()))
+                    passage.append(i)
+        except Exception as e:
+            logger.warning(f"Voiceprint passage {i} failed: {e}")
+        finally:
             if os.path.isfile(ref_path):
                 os.remove(ref_path)
+    if not centroids:
+        logger.warning("No voice found for a voiceprint")
+        return None
+
+    c = np.array(centroids)
+    sim = c @ c.T
+    owners = np.array(passage)
+    # How many other passages each voice is heard again in (ties: the one who talks most)
+    support = [len(set(owners[sim[i] >= VOICEPRINT_MATCH].tolist()) - {owners[i]}) for i in range(len(c))]
+    best = max(range(len(c)), key=lambda i: (support[i], seconds[i]))
+    # Its closest voice in each passage where it's heard
+    members: dict[int, int] = {}
+    for i in np.flatnonzero(sim[best] >= VOICEPRINT_MATCH):
+        p = int(owners[i])
+        if p not in members or sim[best, i] > sim[best, members[p]]:
+            members[p] = int(i)
+    weights = np.array([seconds[i] for i in members.values()])
+    voiceprint = _unit((c[list(members.values())] * weights[:, None]).sum(axis=0))
+    logger.info(
+        f"Voiceprint: a voice heard in {len(members)}/{len(set(passage))} passages "
+        f"({len(c)} voices in all), {time.time() - t0:.1f}s"
+    )
+    return voiceprint
 
 
-# ─── Segment diarization ────────────────────────────────────────────────────
+# ─── Clip diarization ────────────────────────────────────────────────────────
 
-def _cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
-    norm = np.linalg.norm(a) * np.linalg.norm(b)
-    return float(np.dot(a, b) / norm) if norm > 0 else 0.0
-
-
-def diarize_segment(
-    seg_wav: str,
-) -> list[dict]:
+def diarize_segment(seg_wav: str, voiceprint: np.ndarray | None = None) -> list[dict]:
     """Diarize a pre-extracted WAV file (see diarize_waveform)."""
     try:
         waveform, sr = _load_wav(seg_wav)
     except Exception as e:
         logger.warning(f"Could not load {seg_wav} for diarization: {e}")
         return []
-    return diarize_waveform(waveform, sr)
+    return diarize_waveform(waveform, sr, voiceprint)
 
 
-def diarize_waveform(waveform: "torch.Tensor", sr: int) -> list[dict]:
-    """Diarize a mono 16 kHz waveform.
-
-    Uses non-exclusive diarization (speaker_diarization) which allows
-    overlapping speech — detects more speakers than exclusive mode.
-    Word assignment handles overlaps via temporal majority.
-
-    Returns list of {"speaker": str, "start": float, "end": float} where
-    timestamps are relative to the segment start.
-    """
+def diarize_waveform(waveform: "torch.Tensor", sr: int, voiceprint: np.ndarray | None = None) -> list[dict]:
+    """Who speaks when in a mono 16 kHz waveform: [{"speaker", "start", "end"}]
+    (seconds from its start). The streamer's voice is STREAMER when a voiceprint
+    recognizes it, the others SPEAKER_01, SPEAKER_02..."""
     try:
-        pipeline = _get_pipeline()
-        output = pipeline({"waveform": waveform, "sample_rate": sr})
-        # Non-exclusive: keeps overlapping speech, detects more speakers
-        annotation = getattr(output, "speaker_diarization", None)
-        if annotation is None:
-            annotation = output
-
-        segments = []
-        for turn, _, speaker in annotation.itertracks(yield_label=True):
-            segments.append({
-                "speaker": speaker,
-                "start": turn.start,
-                "end": turn.end,
-            })
-        return segments
-
+        audio = waveform.squeeze(0).numpy().astype(np.float32)
+        regions, windows, embeddings, labels = _voices_of(audio)
+        if not windows:
+            return []
+        names = _name_voices(embeddings, labels, voiceprint)
+        return _segments(windows, [names[int(k)] for k in labels], regions)
     except Exception as e:
         logger.warning(f"Diarization failed: {e}")
         return []
-
-
-MERGE_SIMILARITY = 0.75  # cosine similarity above this → same person
-
-
-def _extract_speaker_embedding(
-    waveform: "torch.Tensor",
-    sr: int,
-    diarize_segments: list[dict],
-    speaker_id: str,
-    max_seconds: float = 15,
-) -> np.ndarray | None:
-    """Extract ECAPA-TDNN embedding for a single speaker from their segments."""
-    chunks = []
-    total = 0.0
-    for seg in diarize_segments:
-        if seg["speaker"] != speaker_id:
-            continue
-        s, e = int(seg["start"] * sr), int(seg["end"] * sr)
-        if e > waveform.shape[1]:
-            e = waveform.shape[1]
-        if e <= s:
-            continue
-        chunks.append(waveform[:, s:e])
-        total += seg["end"] - seg["start"]
-        if total >= max_seconds:
-            break
-
-    if not chunks or total < 0.5:
-        return None
-
-    audio = torch.cat(chunks, dim=1)
-    classifier = _get_classifier()
-    emb = classifier.encode_batch(audio).squeeze().cpu().numpy()
-    return emb
-
-
-def _merge_similar_speakers(
-    diarize_segments: list[dict],
-    waveform: "torch.Tensor",
-    sr: int,
-) -> list[dict]:
-    """Merge speakers with similar voice embeddings within a segment.
-
-    pyannote sometimes splits one person into multiple speaker IDs.
-    We compute ECAPA-TDNN embeddings for each speaker and merge those
-    with cosine similarity > MERGE_SIMILARITY.
-
-    Returns segments with merged speaker labels.
-    """
-    # Get unique speakers
-    speaker_ids = list({seg["speaker"] for seg in diarize_segments})
-    if len(speaker_ids) <= 1:
-        return diarize_segments
-
-    # Extract embeddings
-    embeddings: dict[str, np.ndarray] = {}
-    for spk in speaker_ids:
-        emb = _extract_speaker_embedding(waveform, sr, diarize_segments, spk)
-        if emb is not None:
-            embeddings[spk] = emb
-
-    if len(embeddings) <= 1:
-        return diarize_segments
-
-    # Build merge map: find pairs with high similarity
-    merge_to: dict[str, str] = {spk: spk for spk in speaker_ids}
-    emb_items = list(embeddings.items())
-
-    for i in range(len(emb_items)):
-        for j in range(i + 1, len(emb_items)):
-            spk_a, emb_a = emb_items[i]
-            spk_b, emb_b = emb_items[j]
-            sim = _cosine_similarity(emb_a, emb_b)
-            if sim >= MERGE_SIMILARITY:
-                # Merge the smaller speaker into the larger one
-                dur_a = sum(s["end"] - s["start"] for s in diarize_segments if s["speaker"] == spk_a)
-                dur_b = sum(s["end"] - s["start"] for s in diarize_segments if s["speaker"] == spk_b)
-                if dur_a >= dur_b:
-                    merge_to[spk_b] = merge_to[spk_a]
-                else:
-                    merge_to[spk_a] = merge_to[spk_b]
-
-    # Resolve transitive merges (A→B, B→C → A→C)
-    changed = True
-    while changed:
-        changed = False
-        for spk in merge_to:
-            target = merge_to[spk]
-            if merge_to[target] != target:
-                merge_to[spk] = merge_to[target]
-                changed = True
-
-    # Check if any merges happened
-    if all(merge_to[spk] == spk for spk in speaker_ids):
-        return diarize_segments
-
-    merged_count = len(speaker_ids) - len(set(merge_to.values()))
-    logger.debug(f"Merged {merged_count} fragmented speakers: {merge_to}")
-
-    return [
-        {**seg, "speaker": merge_to.get(seg["speaker"], seg["speaker"])}
-        for seg in diarize_segments
-    ]
 
 
 def identify_speakers(
@@ -402,86 +398,22 @@ def identify_speakers(
     voiceprint: np.ndarray | None,
     streamer_name: str = "Streamer",
 ) -> dict[str, str]:
-    """Merge fragmented speakers, then identify the streamer.
-
-    1. Merge speakers with similar ECAPA-TDNN embeddings (fixes pyannote
-       splitting one person into multiple IDs)
-    2. Match against voiceprint to label the streamer
-
-    Args:
-        waveform: Pre-loaded audio tensor (1, samples) at given sr
-        sr: Sample rate (should be 16000)
-        diarize_segments: Output from diarize_segment (MODIFIED in-place with merged labels)
-        voiceprint: Streamer embedding (or None for dominant-speaker heuristic)
-        streamer_name: Display name for the streamer
-
-    Returns {speaker_id: display_name} mapping.
+    """Display names of the voices: the streamer's name for the voice the
+    voiceprint recognized; without a voiceprint, for the one who speaks most.
+    With a voiceprint that recognized nobody, the streamer isn't heard here.
+    (`waveform` and `sr` are kept for callers: the voices are already grouped.)
     """
-    # Step 1: Merge fragmented speakers
-    merged = _merge_similar_speakers(diarize_segments, waveform, sr)
-    # Update segments in-place so callers see merged labels
-    diarize_segments.clear()
-    diarize_segments.extend(merged)
-
-    # Gather unique speakers and durations (post-merge)
-    speaker_durations: dict[str, float] = {}
+    durations: dict[str, float] = {}
     for seg in diarize_segments:
-        dur = seg["end"] - seg["start"]
-        speaker_durations[seg["speaker"]] = speaker_durations.get(seg["speaker"], 0) + dur
-
-    if not speaker_durations:
+        durations[seg["speaker"]] = durations.get(seg["speaker"], 0.0) + seg["end"] - seg["start"]
+    if not durations:
         return {}
-
-    speakers = sorted(speaker_durations.keys(), key=lambda s: -speaker_durations[s])
-    names: dict[str, str] = {}
-
-    # Single speaker → always the streamer
-    if len(speakers) == 1:
-        names[speakers[0]] = streamer_name
-        return names
-
-    # No voiceprint → dominant speaker heuristic
-    if voiceprint is None:
-        names[speakers[0]] = streamer_name
-        for spk in speakers[1:]:
-            names[spk] = spk
-        return names
-
-    # Step 2: Match against voiceprint
-    try:
-        best_sim = -1.0
-        best_spk = None
-
-        for spk in speakers:
-            emb = _extract_speaker_embedding(waveform, sr, diarize_segments, spk)
-            if emb is None:
-                names[spk] = spk
-                continue
-
-            sim = _cosine_similarity(voiceprint, emb)
-
-            if sim > best_sim:
-                best_sim = sim
-                best_spk = spk
-
-            if sim >= VOICEPRINT_THRESHOLD:
-                names[spk] = streamer_name
-            else:
-                names[spk] = spk
-
-        # If no speaker reached threshold, assign streamer to best match
-        streamer_found = any(n == streamer_name for n in names.values())
-        if not streamer_found and best_spk is not None:
-            names[best_spk] = streamer_name
-
-        return names
-
-    except Exception as e:
-        logger.warning(f"Speaker identification failed: {e}")
-        names[speakers[0]] = streamer_name
-        for spk in speakers[1:]:
-            names[spk] = spk
-        return names
+    names = {spk: spk for spk in durations}
+    if STREAMER in names:
+        names[STREAMER] = streamer_name
+    elif voiceprint is None:
+        names[max(durations, key=durations.get)] = streamer_name
+    return names
 
 
 # ─── Whisper word assignment ────────────────────────────────────────────────
@@ -491,7 +423,8 @@ def assign_speakers_to_words(
     diarize_segments: list[dict],
     speaker_names: dict[str, str],
 ) -> list[dict]:
-    """Assign a named speaker to each Whisper word via temporal overlap.
+    """Assign a named speaker to each Whisper word via temporal overlap (a word
+    just outside every turn, within a second: the nearest one).
 
     Returns words with added "speaker" key (display name).
     """
@@ -509,6 +442,13 @@ def assign_speakers_to_words(
             if overlap > best_overlap:
                 best_overlap = overlap
                 best_speaker = seg["speaker"]
+        if best_speaker is None:
+            gap, nearest = min(
+                ((max(seg["start"] - w_end, w_start - seg["end"]), seg["speaker"]) for seg in diarize_segments),
+                key=lambda g: g[0],
+            )
+            if gap <= NEAREST_TURN_SECONDS:
+                best_speaker = nearest
 
         name = speaker_names.get(best_speaker, best_speaker) if best_speaker else None
         labeled.append({**w, "speaker": name})
@@ -552,20 +492,14 @@ def diarize_candidates(
     logger.info(f"[{job_id[:8]}] Diarizing {total} candidates...")
     t0 = time.time()
 
-    # Warm up the pipeline (load once before parallel calls); raises if the
-    # model can't be loaded — the caller treats diarization as optional
-    _get_pipeline()
-    _get_classifier()
-
-    import threading
+    # Load (or download) the model once before the parallel calls; raises if it
+    # can't be — the caller treats diarization as optional
+    _get_embedder()
 
     transcripts: dict[int, str] = {}
     all_labeled_words: dict[int, list[dict]] = {}
-    # Lock ONLY for pyannote GPU calls — identification runs on CPU without lock
-    _gpu_lock = threading.Lock()
 
     def _process_one(idx: int, hp) -> tuple[int, str, list[dict]]:
-        # Determine segment bounds
         if hp.clip_start is not None and hp.clip_end is not None:
             start, end = hp.clip_start, hp.clip_end
         else:
@@ -573,54 +507,34 @@ def diarize_candidates(
             end = min(vod_duration, hp.timestamp_seconds + CLIP_HALF_DURATION)
 
         words = whisper_words.get(idx, [])
+        plain = " ".join(w["word"] for w in words) if words else ""
         seg_wav = os.path.join(work_dir, f"diarize_{idx:03d}.wav")
 
         try:
-            # 1. Extract WAV once (reused for both diarization + identification)
             if not _extract_wav_segment(wav_path, start, end, seg_wav):
-                plain = " ".join(w["word"] for w in words) if words else ""
                 return idx, plain, words
-
-            # 2. Diarize — GPU, needs lock
             waveform, sr = _load_wav(seg_wav)
-            with _gpu_lock:
-                segments = diarize_waveform(waveform, sr)
-
+            segments = diarize_waveform(waveform, sr, voiceprint)
             if not segments:
-                plain = " ".join(w["word"] for w in words) if words else ""
                 return idx, plain, words
-
-            # 3. Identify speakers — CPU only, no lock needed
-            speaker_names = identify_speakers(
-                waveform, sr, segments, voiceprint, streamer_name,
-            )
-
-            # 4. Assign speakers to Whisper words
+            speaker_names = identify_speakers(waveform, sr, segments, voiceprint, streamer_name)
             if words:
                 labeled = assign_speakers_to_words(words, segments, speaker_names)
-                transcript = format_labeled_transcript(labeled)
-                return idx, transcript, labeled
-            else:
-                lines = []
-                for seg in segments:
-                    name = speaker_names.get(seg["speaker"], seg["speaker"])
-                    lines.append(f"[{seg['start']:.1f}s-{seg['end']:.1f}s] {name}: (speech)")
-                return idx, "\n".join(lines), []
-
+                return idx, format_labeled_transcript(labeled), labeled
+            lines = [
+                f"[{seg['start']:.1f}s-{seg['end']:.1f}s] {speaker_names.get(seg['speaker'], seg['speaker'])}: (speech)"
+                for seg in segments
+            ]
+            return idx, "\n".join(lines), []
         except Exception as e:
             logger.warning(f"Diarization failed for candidate {idx}: {e}")
-            plain = " ".join(w["word"] for w in words) if words else ""
             return idx, plain, words
         finally:
             if os.path.isfile(seg_wav):
                 os.remove(seg_wav)
 
-    # Parallel: while one thread runs identification (CPU), another can diarize (GPU)
     with ThreadPoolExecutor(max_workers=DIARIZE_WORKERS) as executor:
-        futures = {
-            executor.submit(_process_one, idx, hp): idx
-            for idx, hp in candidates
-        }
+        futures = {executor.submit(_process_one, idx, hp): idx for idx, hp in candidates}
         done = 0
         for future in as_completed(futures):
             done += 1
@@ -638,17 +552,14 @@ def diarize_candidates(
             if done % 10 == 0 or done == total:
                 logger.info(f"[{job_id[:8]}] Diarization: {done}/{total}")
 
-    # Cleanup
     try:
         import shutil
+
         shutil.rmtree(work_dir, ignore_errors=True)
     except Exception:
         pass
 
     elapsed = time.time() - t0
     non_empty = sum(1 for t in transcripts.values() if t)
-    logger.info(
-        f"[{job_id[:8]}] Diarization complete: {non_empty}/{total} "
-        f"with speech in {elapsed:.1f}s"
-    )
+    logger.info(f"[{job_id[:8]}] Diarization complete: {non_empty}/{total} with speech in {elapsed:.1f}s")
     return transcripts, all_labeled_words

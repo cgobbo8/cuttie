@@ -62,14 +62,14 @@ def _label_speakers(job_id: str, clip_path: str, words: list[dict]) -> list[dict
     finally:
         os.remove(tmp_wav)
 
-    segments = diarize_waveform(waveform, sr)
-    if not segments:
-        return words
-
     voiceprint = None
     voiceprint_path = os.path.join(paths.clip_dir(job_id), "_voiceprint.npy")
     if os.path.isfile(voiceprint_path):
         voiceprint = np.load(voiceprint_path)
+
+    segments = diarize_waveform(waveform, sr, voiceprint)
+    if not segments:
+        return words
 
     job = get_job(job_id)
     streamer_name = (job.streamer if job else None) or "Streamer"

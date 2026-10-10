@@ -107,7 +107,7 @@ cuttie/
 │   │       ├── transcriber.py                 # Speech-to-text : Groq / OpenRouter / local (mlx-whisper, faster-whisper), mots normalises
 │   │       ├── vod_transcript.py              # Le live entier transcrit en arriere-plan, par morceaux de 10 min (cache transcripts/<job>)
 │   │       ├── presort.py                     # L'IA lit tout le live (transcript + pics du chat) et propose des moments
-│   │       ├── speaker_diarizer.py            # pyannote diarization + ECAPA-TDNN voiceprint
+│   │       ├── speaker_diarizer.py            # qui parle quand, sans compte : Silero VAD + WeSpeaker (ONNX) + regroupement prudent, empreinte du streamer
 │   │       ├── clipper.py                     # Extraction clips video
 │   │       ├── facecam_detector.py            # YOLOv8 pose + accroche au cadre de la cam, visages par clip
 │   │       ├── palette.py                     # couleurs du logo / de la banniere (roles accent, highlight, dark, light)
@@ -213,7 +213,10 @@ cuttie/
                           d. Re-rank blende (50% heuristique + 50% content_score) -> top 50
                           e. En parallele :
                              - 6 frames par candidat via ffmpeg seek sur URL VOD directe
-                             - Speaker diarization (pyannote community-1 MPS) + voiceprint ECAPA-TDNN
+                             - Qui parle quand (speaker_diarizer.py, local, sans compte Hugging Face) :
+                               Silero VAD + empreintes WeSpeaker ResNet34 (ONNX, 26 Mo) sur des fenetres
+                               de 1,5 s, regroupement prudent (2,2 voix / clip, 4 max) ; empreinte du
+                               streamer = la voix retrouvee dans le plus de 12 passages repartis sur le live
                                → transcript avec labels speakers ([Streamer]: ..., [SPEAKER_01]: ...)
                           f. 1 appel LLM multimodal par candidat (audio + frames + speaker transcript
                              + chat recale + vod_context) -> score, titre, accroche, coupe conseillee

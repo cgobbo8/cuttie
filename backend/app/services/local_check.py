@@ -31,9 +31,16 @@ def _gpu() -> dict:
             x = (x @ x) / 2048
         x.sum().item()  # waits for the GPU
         info: dict = {"device": device.type, "torch": torch.__version__, "matmul_ms": round((time.time() - t0) * 100, 1)}
-        if device.type == "cuda":
+        # The NVIDIA card, even when the PyTorch models stay on the CPU (small or unusable card)
+        if torch.cuda.is_available():
             props = torch.cuda.get_device_properties(0)
-            info.update(name=props.name, vram_gb=round(props.total_memory / 1024**3, 1), cuda=torch.version.cuda, cudnn=torch.backends.cudnn.version())
+            info.update(
+                name=props.name,
+                vram_gb=round(props.total_memory / 1024**3, 1),
+                capability=f"{props.major}.{props.minor}",
+                cuda=torch.version.cuda,
+                cudnn=torch.backends.cudnn.version(),
+            )
         return info
     except Exception as e:
         logger.warning(f"GPU check failed: {e}")
@@ -64,6 +71,8 @@ def _whisper() -> dict:
             transcriber.transcribe(timed, "local", words=False)
             seconds = time.time() - t0
             report.update(seconds=round(seconds, 2), realtime=round(TEST_SECONDS / max(seconds, 0.01), 1))
+            if transcriber._local_model is not None and report["backend"] == "cuda":
+                report.update(compute_type=transcriber._local_model.model.compute_type, batch_size=transcriber._cuda_batch_size())
         except Exception as e:
             logger.warning(f"Local Whisper check failed: {e}")
             report["error"] = f"{type(e).__name__}: {e}"

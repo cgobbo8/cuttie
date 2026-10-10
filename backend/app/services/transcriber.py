@@ -109,6 +109,7 @@ _local_model = None
 _load_lock = threading.Lock()
 _run_lock = threading.Lock()  # one transcription at a time on the GPU
 _cuda_failed = False
+_batch_size: int | None = None  # 30 s chunks transcribed at once on the GPU
 
 
 def _cuda_dlls() -> None:
@@ -173,6 +174,47 @@ def _mlx_model() -> str:
         return target
 
 
+def _cuda_compute_type() -> str:
+    """float16 on recent NVIDIA cards; int8 on a GTX 10xx (Pascal), where
+    CTranslate2 refuses float16 (no faster than float32 there)."""
+    import ctranslate2
+
+    supported = ctranslate2.get_supported_compute_types("cuda")
+    return next((kind for kind in ("float16", "int8_float16", "int8") if kind in supported), "float32")
+
+
+def _cuda_batch_size() -> int:
+    """How many chunks the GPU's memory holds at once (16 on 10 GB and more, 2 on 2 GB)."""
+    global _batch_size
+    if _batch_size is None:
+        try:
+            import torch
+
+            vram_gb = torch.cuda.get_device_properties(0).total_memory / 1024**3
+        except Exception:
+            vram_gb = 4.0
+        _batch_size = 16 if vram_gb >= 10 else 8 if vram_gb >= 6 else 4 if vram_gb >= 3.5 else 2
+    return _batch_size
+
+
+def _transcribe_cuda(model, audio, words: bool) -> list:
+    """Batched on the GPU; when its memory runs out, fewer chunks at a time from then on."""
+    global _batch_size
+    from faster_whisper import BatchedInferencePipeline
+
+    while True:
+        try:
+            segments, _info = BatchedInferencePipeline(model=model).transcribe(
+                audio, word_timestamps=words, vad_filter=True, batch_size=_cuda_batch_size()
+            )
+            return list(segments)
+        except RuntimeError as e:
+            if "out of memory" not in str(e).lower() or _cuda_batch_size() == 1:
+                raise
+            _batch_size = _cuda_batch_size() // 2
+            logger.warning(f"GPU memory full: {_batch_size} chunk(s) at a time from now on")
+
+
 def _get_local_model():
     global _local_model, _cuda_failed
     with _load_lock:
@@ -185,7 +227,7 @@ def _get_local_model():
                 _local_model = WhisperModel(
                     LOCAL_MODEL,
                     device=device,
-                    compute_type="float16" if device == "cuda" else "int8",
+                    compute_type=_cuda_compute_type() if device == "cuda" else "int8",
                     download_root=local_model_dir(),
                 )
             except Exception as e:
@@ -222,9 +264,7 @@ def _local(audio_path: str, words: bool = True) -> Transcript:
     audio = _decode(audio_path)
     with _run_lock:
         if model.model.device == "cuda":
-            from faster_whisper import BatchedInferencePipeline
-
-            segments, _info = BatchedInferencePipeline(model=model).transcribe(audio, word_timestamps=words, vad_filter=True, batch_size=16)
+            segments = _transcribe_cuda(model, audio, words)
         else:
             segments, _info = model.transcribe(audio, word_timestamps=words, vad_filter=True, beam_size=1)
         out = Transcript(text="")

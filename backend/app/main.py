@@ -333,8 +333,9 @@ def diagnostics() -> dict:
 
         device = get_device()
         info["torch"] = torch.__version__
+        # Where the PyTorch models run (a small NVIDIA card is left to Whisper)
         info["device"] = device.type
-        if device.type == "cuda":
+        if torch.cuda.is_available():
             info["gpu"] = torch.cuda.get_device_name(0)
         elif device.type == "mps":
             info["gpu"] = "Apple Silicon (MPS)"

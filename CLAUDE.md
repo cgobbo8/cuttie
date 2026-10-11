@@ -83,6 +83,7 @@ cuttie/
 │   │   │   ├── edit_env_resolver.ts          # donnees editeur d'un clip (dims, cam, mots, chat)
 │   │   │   ├── twitch.ts                     # GQL public Twitch : chaine, VODs, storyboards
 │   │   │   ├── clip_variants.ts              # fond floute 9:16 pre-calcule (ffmpeg)
+│   │   │   ├── clip_extend.ts                # +30 s sur un cote de la coupe (le fichier grandit si besoin)
 │   │   │   └── remotion_renderer.ts          # Bundle + render Remotion
 │   │   ├── validators/user.ts                # VineJS validation
 │   │   └── transformers/user_transformer.ts
@@ -118,7 +119,7 @@ cuttie/
 │   │       ├── storage.py                     # stockage local (ex-S3)
 │   │       ├── api_events.py                  # envoi ordonne des statuts a l'API
 │   │       ├── settings.py                    # lecture settings.json (cles API)
-│   │       ├── clip_tools.py                  # transcription a la demande + cam d'un live (clips) ou d'une VOD
+│   │       ├── clip_tools.py                  # transcription a la demande + cam d'un live (clips) ou d'une VOD + clip allonge (+30 s)
 │   │       ├── openai_client.py               # Clients multi-provider (Groq, OpenRouter)
 │   │       ├── provider_errors.py             # Refus definitifs (credits, cle) -> arret clair de l'analyse
 │   │       └── db.py                          # SQLite persistence (WAL)
@@ -204,7 +205,9 @@ cuttie/
                           b'. Pre-tri par l'IA (presort.py, 1 appel texte ~0,05 $) : lit tout le transcript
                              (une ligne / ~20 s) + les pics du chat -> jusqu'a 40 moments, fenetres
                              elargies (-10 s / +20 s, la reaction) ; un candidat qui chevauche prend la
-                             fenetre de l'IA ; 15 des 50 places de l'etape f leur sont reservees
+                             fenetre de l'IA ; 15 des 50 places de l'etape f leur sont reservees ;
+                             un moment trouve en lisant prend les mesures de la fenetre la plus forte
+                             de son passage (scorer.ScoreTrack), marque found_by = "reading"
                           c. VOD context gathering (1 appel LLM text-only) :
                              - Lit les 200 transcripts chronologiquement
                              - Produit contexte VOD (narrative, phases, protagonistes, themes)
@@ -269,10 +272,12 @@ Fournisseur qui refuse tout (`provider_errors.py`) : credits OpenRouter epuises 
 | `/api/jobs/{id}/retry`                | POST    | Token    | Relancer depuis un checkpoint    |
 | `/api/jobs/{id}/selection`            | PATCH   | Token    | Garder / passer / trim un clip   |
 | `/api/jobs/{id}/facecam`              | PUT     | Token    | Cam reglee a la main pour ce live|
+| `/api/jobs/{id}/chat`                 | GET     | Token    | Messages du chat de chaque clip  |
 | `/api/jobs/{id}/sse`                  | GET     | SSE Token| SSE temps reel                   |
 | `/api/clips/{id}/{filename}`          | GET     | Token    | Telecharger un clip              |
 | `/api/clips/{id}/{filename}/edit-env` | GET     | Token    | Donnees editeur                  |
 | `/api/clips/{id}/{filename}/trim`     | POST    | Token    | Trim clip FFmpeg                 |
+| `/api/clips/{id}/{filename}/extend`   | POST    | Token    | +30 s avant / apres (re-extrait) |
 | `/api/clips/{id}/{filename}/thumb`    | GET     | Token    | Vignette (clip ou render)        |
 | `/api/clips/{id}/{filename}/background` | GET   | Token    | Fond floute 9:16 du clip         |
 | `/api/brand-kit`                      | GET/PUT | Token    | Kit de marque                    |
@@ -299,6 +304,7 @@ Fournisseur qui refuse tout (`provider_errors.py`) : credits OpenRouter epuises 
 
 - Premier lancement `/bienvenue` (installation sans analyse ni `onboarded` dans settings.json) : chaine Twitch (lives + couleurs du logo), deux cles (verifiees aupres de Groq / OpenRouter), webcam reperee sur le dernier live pendant ce temps.
 - Projet en 4 etapes : Analyse (en direct) -> Choisir (garder / passer / trim) -> Monter (7 modeles a la DA de la chaine) -> Exporter.
+- Choisir : le chat sur la frise du live (barres, le dixieme le plus actif en blanc vif) et sur celle du clip (un point par message, le texte au survol) ; « + » au survol de la frise du clip = 30 s de plus de ce cote (le clip est re-extrait du live quand la coupe depasse son fichier : mots, cam et vignettes suivent) ; « Pourquoi ce moment » dit d'ou vient un moment (score son + chat, lu par l'IA, demande sur le stream, ajoute a la main).
 - Design : verre fonce pose sur du contenu floute (vignettes, frames), une seule couleur d'accent = couleur de la chaine.
 - Modeles : les 7 mises en page, chacune sa structure (Empile = cam en bandeau / jeu ; Reaction = visage en grand + jeu en vignette ; Discussion RP = scene du jeu + cam ronde, conversation et chat dessous ; Action = jeu plein ecran + cam ronde ; Cinema = ecran du live entier entre deux bandes, titre au-dessus ; Signature = cartes sur fond floute ; Sans cam) + les modeles perso du streamer (`brand_kit.templates`, v2 = elements : fond, jeu (ou ecran entier), cam, chat, sous-titres, accroche, widgets avec arrivee / depart / animations, ordre des calques) ; `brand_kit.default_template` sert aux nouveaux projets. L'editeur a calques reste le mode avance.
 - Zones couvertes par TikTok / Shorts / Reels (1080x1920) : haut y < 200, bas y > 1440, droite x > 930 entre y 760 et 1440. Textes, cam et marque restent hors de ces zones (teste) ; le jeu peut passer dessous, une cam pleine largeur en haut passe sous les onglets.

@@ -2,3 +2,4 @@
 - Paramètres > Stockage : ce que Cuttie prend sur ton disque, et le ménage des anciens clips. Ceux des projets sans activité depuis 30 jours partent tout seuls (réglable) : le projet et ses exports restent, et « Récupérer les clips » les fait revenir tant que le live est sur Twitch.
 - Projets : la place prise par chaque projet, et la corbeille propose de libérer l'espace sans tout supprimer.
 - Le widget de chaîne arrive en rebond, et un widget ajouté à un modèle se pose au centre.
+- Correctif : après une analyse interrompue, la section Stockage ne s'affichait pas et le ménage ne passait pas.

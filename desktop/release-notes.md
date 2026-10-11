@@ -1,1 +1,3 @@
-- La transcription prend le moteur le plus rapide : avec une clé Groq, un live entier est transcrit en moins d'une minute.
+- La cam disparaît des clips où elle est vide : quand le live passe ta webcam en plein écran (ou sur un écran de pause) pendant le moment, plus de rond noir.
+- Le chat des clips n'affiche plus les noms des emotes.
+- Dans les sous-titres, ta voix reste en blanc, même quand quelqu'un d'autre parle en premier.

@@ -10,6 +10,7 @@ import { deleteObject, storagePath } from '#services/storage'
 import { cancelJob, enqueueJob, type WorkerJob } from '#services/worker_client'
 import { chatInClip, readJobChat } from '#services/edit_env_resolver'
 import { freeableBytes } from '#services/disk_space'
+import { dbTime } from '#services/db_time'
 import { createJobValidator } from '#validators/user'
 
 /** Hand a job to the worker in the background; mark it failed if the worker never answers. */
@@ -19,7 +20,7 @@ function dispatch(job: WorkerJob) {
     if (job.type === 'add_clip') return
     await Job.query()
       .where('id', job.job_id)
-      .update({ status: 'ERROR', error: err.message, updated_at: new Date().toISOString() })
+      .update({ status: 'ERROR', error: err.message, updated_at: dbTime() })
   })
 }
 

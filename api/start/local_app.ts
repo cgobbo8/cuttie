@@ -15,6 +15,7 @@ import { MigrationRunner } from '@adonisjs/lucid/migration'
 import { CLIPS_DIR, DATA_DIR, STORAGE_DIR } from '#services/data_paths'
 import { autoLoginEnabled, ensureLocalUser } from '#services/local_user'
 import { scheduleCleanup } from '#services/disk_space'
+import { dbTime } from '#services/db_time'
 
 const ACTIVE_STATUSES = [
   'PENDING',
@@ -44,7 +45,8 @@ const now = new Date().toISOString()
 const interrupted = await db
   .from('jobs')
   .whereIn('status', ACTIVE_STATUSES)
-  .update({ status: 'ERROR', error: 'Analyse interrompue (Cuttie a été fermé). Relance-la.', updated_at: now })
+  // Lucid's format: the model reads jobs' times back
+  .update({ status: 'ERROR', error: 'Analyse interrompue (Cuttie a été fermé). Relance-la.', updated_at: dbTime() })
 await db
   .from('renders')
   .whereIn('status', ['pending', 'rendering'])

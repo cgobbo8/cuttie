@@ -21,6 +21,7 @@ import { LOGS_DIR, logsSize } from '#services/app_logs'
 import { readClipMeta } from '#services/clip_extend'
 import { keepThumb } from '#services/clip_thumbs'
 import { CLIPS_DIR, DATA_DIR, STORAGE_DIR, clipDir } from '#services/data_paths'
+import { dbMillis, dbTime } from '#services/db_time'
 import { readSettings, writeSettings } from '#services/user_settings'
 import { restoreClipFiles } from '#services/worker_client'
 
@@ -100,28 +101,30 @@ export async function projectSpaces(userId?: number): Promise<ProjectSpace[]> {
   const query = Job.query().orderBy('created_at', 'asc')
   if (userId !== undefined) query.where('user_id', userId)
   const jobs = await query
-  const renders = await db
-    .from('renders')
-    .select('job_id', 'status', 'updated_at', 'created_at')
-    .whereIn(
-      'job_id',
-      jobs.map((job) => job.id)
-    )
+  const ids = jobs.map((job) => job.id)
+  const renders = await db.from('renders').select('job_id', 'status', 'updated_at', 'created_at').whereIn('job_id', ids)
+  // The times as stored (some older rows hold ISO text that the model can't read)
+  const stored = new Map((await db.from('jobs').select('id', 'created_at', 'updated_at').whereIn('id', ids)).map((row) => [row.id, row]))
+  const now = Date.now()
 
   return jobs.map((job) => {
     const own = renders.filter((r) => r.job_id === job.id)
-    const times = [job.updatedAt?.toMillis() ?? 0, job.createdAt?.toMillis() ?? 0, ...own.map((r) => Date.parse(r.updated_at ?? r.created_at) || 0)]
+    const row = stored.get(job.id)
+    const times = [row?.created_at, row?.updated_at, ...own.flatMap((r) => [r.created_at, r.updated_at])].filter((t) => t !== null && t !== undefined && t !== '')
+    const read = times.map(dbMillis)
+    // A time that can't be read never makes a project look idle
+    const lastActivity = read.length && read.every(Number.isFinite) ? Math.max(...read) : now
     return {
       id: job.id,
       title: job.customTitle || job.vodTitle,
-      date: job.streamDate ?? job.createdAt?.toISO() ?? null,
+      date: job.streamDate ?? (Number.isFinite(dbMillis(row?.created_at)) ? new Date(dbMillis(row?.created_at)).toISOString() : null),
       status: job.status,
-      last_activity: new Date(Math.max(...times)).toISOString(),
+      last_activity: new Date(lastActivity).toISOString(),
       clips: freeableBytes(job.id),
       exports: sizeOf(path.join(STORAGE_DIR, 'renders', job.id)),
       kept: Object.values(job.selection ?? {}).filter((s: any) => s?.state === 'kept').length,
       exported: own.filter((r) => r.status === 'done').length,
-      freed_at: job.clipsFreedAt?.toISO() ?? null,
+      freed_at: job.clipsFreedAt?.isValid ? job.clipsFreedAt.toISO() : null,
       rendering: own.some((r) => r.status === 'pending' || r.status === 'rendering'),
     }
   })
@@ -162,8 +165,10 @@ export async function freeProject(job: Job): Promise<number> {
     }
   }
   if (!job.clipsFreedAt) {
-    job.clipsFreedAt = DateTime.now()
-    await job.save()
+    // Only this column: saving the whole job would also rewrite times it may not read
+    const at = new Date()
+    await db.from('jobs').where('id', job.id).update({ clips_freed_at: dbTime(at) })
+    job.clipsFreedAt = DateTime.fromJSDate(at)
   }
   logger.info(`[cleanup] ${job.id.slice(0, 8)}: ${clips.length} clips freed, ${human(freed)}`)
   return freed
@@ -194,8 +199,9 @@ export async function restoreProject(job: Job): Promise<{ restored: number; fail
 
   const result = await restoreClipFiles(job.id, job.url, clips)
   if (result.failed.length === 0) {
+    // Back with clips, and active again (the cleanup waits its days before freeing them again)
+    await db.from('jobs').where('id', job.id).update({ clips_freed_at: null, updated_at: dbTime() })
     job.clipsFreedAt = null
-    await job.save()
   }
   logger.info(`[cleanup] ${job.id.slice(0, 8)}: ${result.restored.length}/${clips.length} clips cut again from the live`)
   return { restored: result.restored.length, failed: result.failed.length }

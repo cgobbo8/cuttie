@@ -9,6 +9,7 @@ import User from '#models/user'
 import Job from '#models/job'
 import { SETTINGS_PATH, STORAGE_DIR, clipDir } from '#services/data_paths'
 import { stale, type ProjectSpace } from '#services/disk_space'
+import { dbTime } from '#services/db_time'
 
 const MB = 1_000_000
 
@@ -120,6 +121,33 @@ test.group('Disk space | freeing clips', (group) => {
     now.assertStatus(200)
     assert.deepEqual(now.body(), { projects: 0, bytes: 0 })
     ;(await client.put('/api/disk/cleanup').loginAs(user).json({ days: 12 })).assertStatus(400)
+  })
+
+  test("a time stored as ISO text (an analysis cut short) is read, never taken for an old one", async ({ client, assert }) => {
+    const user = await User.create({ fullName: 'Streamer', email: `s-${randomUUID()}@cuttie.app`, password: 'password123' })
+    const yesterday = await project(user)
+    const longAgo = await project(user)
+    const unreadable = await project(user)
+    // What start/local_app.ts wrote in updated_at for interrupted analyses before 0.1.9 (created_at is Lucid's)
+    const ago = (days: number) => new Date(Date.now() - days * 86_400_000)
+    const iso = (days: number) => ago(days).toISOString()
+    const recent = iso(1)
+    await db.from('jobs').where('id', yesterday.job.id).update({ status: 'ERROR', created_at: dbTime(ago(2)), updated_at: recent })
+    await db.from('jobs').where('id', longAgo.job.id).update({ status: 'ERROR', created_at: dbTime(ago(41)), updated_at: iso(40) })
+    await db.from('jobs').where('id', unreadable.job.id).update({ created_at: dbTime(ago(41)), updated_at: 'sometime' })
+    await db.from('renders').whereIn('job_id', [yesterday.job.id, longAgo.job.id, unreadable.job.id]).update({ created_at: iso(41), updated_at: iso(41) })
+
+    const disk = await client.get('/api/disk').loginAs(user)
+    disk.assertStatus(200)
+    const byId = new Map(disk.body().projects.map((p: any) => [p.id, p]))
+    assert.equal((byId.get(yesterday.job.id) as any).last_activity, recent)
+    // Only the one idle for 40 days is due; the unreadable one never is
+    assert.deepEqual(disk.body().cleanable['30'], { projects: 1, bytes: 2.5 * MB })
+    const due = await client.post('/api/disk/free').loginAs(user).json({ days: 30 })
+    assert.deepEqual(due.body(), { projects: 1, bytes: 2.5 * MB })
+    assert.isFalse(existsSync(path.join(longAgo.dir, 'a.mp4')))
+    assert.isTrue(existsSync(path.join(yesterday.dir, 'a.mp4')))
+    assert.isTrue(existsSync(path.join(unreadable.dir, 'a.mp4')))
   })
 
   test('a project being analyzed or exported is not freed', ({ assert }) => {

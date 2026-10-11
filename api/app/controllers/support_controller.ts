@@ -4,6 +4,7 @@ import db from '@adonisjs/lucid/services/db'
 import Job from '#models/job'
 import { clearLogs, journalSince, logsSize, redact } from '#services/app_logs'
 import { DATA_DIR } from '#services/data_paths'
+import { dbMillis } from '#services/db_time'
 import { cleanupDays, diskUsage } from '#services/disk_space'
 import { readSettings } from '#services/user_settings'
 import { getCachedMachineProfile, getDiagnostics } from '#services/worker_client'
@@ -26,15 +27,6 @@ export function supportSettings(value: unknown, name = ''): unknown {
     return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, supportSettings(item, key)]))
   }
   return value
-}
-
-/** A database time as ms (Luxon, Date, or SQLite text, which is UTC) */
-function millis(value: unknown): number {
-  if (!value) return 0
-  if (typeof (value as any).toMillis === 'function') return (value as any).toMillis()
-  if (value instanceof Date) return value.getTime()
-  const text = String(value)
-  return Date.parse(/[zZ]|[+-]\d\d:?\d\d$/.test(text) ? text : `${text.replace(' ', 'T')}Z`) || 0
 }
 
 export default class SupportController {
@@ -74,8 +66,13 @@ export default class SupportController {
       machine = await getCachedMachineProfile()
     } catch {}
 
-    const inPeriod = (...times: unknown[]) => !since || times.some((t) => millis(t) >= since)
-    const jobs = (await Job.query().where('user_id', user.id).orderBy('created_at', 'asc')).filter((job) => inPeriod(job.createdAt, job.updatedAt))
+    const inPeriod = (...times: unknown[]) => !since || times.some((t) => dbMillis(t) >= since)
+    // The times as stored (some older rows hold ISO text that the model can't read)
+    const stored = new Map((await db.from('jobs').select('id', 'created_at', 'updated_at').where('user_id', user.id)).map((row) => [row.id, row]))
+    const iso = (t: unknown) => (Number.isFinite(dbMillis(t)) ? new Date(dbMillis(t)).toISOString() : null)
+    const jobs = (await Job.query().where('user_id', user.id).orderBy('created_at', 'asc')).filter((job) =>
+      inPeriod(stored.get(job.id)?.created_at, stored.get(job.id)?.updated_at)
+    )
     const renders = (await db.from('renders').where('user_id', user.id).orderBy('created_at', 'asc')).filter((r) => inPeriod(r.created_at, r.updated_at))
 
     const zone = String(request.input('tz', '')).slice(0, 64)
@@ -104,8 +101,8 @@ export default class SupportController {
         status: job.status,
         progress: job.progress,
         error: job.error,
-        created_at: job.createdAt?.toISO(),
-        updated_at: job.updatedAt?.toISO(),
+        created_at: iso(stored.get(job.id)?.created_at),
+        updated_at: iso(stored.get(job.id)?.updated_at),
         title: job.vodTitle,
         game: job.vodGame,
         live_seconds: job.vodDurationSeconds,

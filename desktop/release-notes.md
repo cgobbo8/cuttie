@@ -1,2 +1,1 @@
-- Les couleurs de ta chaîne se lisent aussi sur un Windows tout neuf.
-- Pendant une mise à jour, une petite fenêtre montre l'installation, puis Cuttie se relance tout seul.
+- La transcription prend le moteur le plus rapide : avec une clé Groq, un live entier est transcrit en moins d'une minute.

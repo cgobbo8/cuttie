@@ -307,6 +307,18 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/app_controller').default['diagnostics']>>>
     }
   }
+  'app.local_test': {
+    methods: ["POST"]
+    pattern: '/api/diagnostics/local-test'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/app_controller').default['localTest']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/app_controller').default['localTest']>>>
+    }
+  }
   'games.index': {
     methods: ["GET","HEAD"]
     pattern: '/api/games'

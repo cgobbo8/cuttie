@@ -156,6 +156,12 @@ const routes = {
     tokens: [{"old":"/api/diagnostics","type":0,"val":"api","end":""},{"old":"/api/diagnostics","type":0,"val":"diagnostics","end":""}],
     types: placeholder as Registry['app.diagnostics']['types'],
   },
+  'app.local_test': {
+    methods: ["POST"],
+    pattern: '/api/diagnostics/local-test',
+    tokens: [{"old":"/api/diagnostics/local-test","type":0,"val":"api","end":""},{"old":"/api/diagnostics/local-test","type":0,"val":"diagnostics","end":""},{"old":"/api/diagnostics/local-test","type":0,"val":"local-test","end":""}],
+    types: placeholder as Registry['app.local_test']['types'],
+  },
   'games.index': {
     methods: ["GET","HEAD"],
     pattern: '/api/games',

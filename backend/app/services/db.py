@@ -158,6 +158,10 @@ def reset_notices(job_id: str) -> None:
 def update_job(job_id: str, **kwargs) -> None:
     if not kwargs:
         return
+    from app.services import eta
+
+    # The analysis' time estimate follows each step and progress line
+    eta.observe(job_id, status=kwargs.get("status"), progress=kwargs.get("progress"))
     now = datetime.now(timezone.utc).isoformat()
     kwargs["updated_at"] = now
 

@@ -81,6 +81,8 @@ export interface JobTimeline {
   energy?: number[]
   chat?: number[]
   candidates?: TimelineCandidate[]
+  /** When the analysis started and should be done, unix seconds (worker's estimate, eta.py) */
+  eta?: { start: number; end: number }
 }
 
 export interface ClipSelection {

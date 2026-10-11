@@ -157,7 +157,7 @@ export default class BrandController {
     if (!channel) return { channel: null }
 
     const jobs = await Job.query()
-      .select('id', 'url', 'status', 'progress', 'error', 'notices', 'hot_points', 'created_at')
+      .select('id', 'url', 'status', 'progress', 'error', 'notices', 'hot_points', 'timeline', 'created_at')
       .orderBy('created_at', 'desc')
     const vods = channel.vods.map((vod) => {
       const job = jobs.find((j) => j.url?.includes(`/videos/${vod.id}`))
@@ -172,6 +172,8 @@ export default class BrandController {
               error: job.status === 'ERROR' ? job.error : null,
               notices: job.notices ?? [],
               clip_count: (job.hotPoints ?? []).filter((h: any) => h.clip_filename).length,
+              // When the analysis should be done (worker's estimate)
+              eta: job.timeline?.eta ?? null,
             }
           : null,
       }

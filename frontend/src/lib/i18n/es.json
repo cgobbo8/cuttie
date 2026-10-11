@@ -603,7 +603,7 @@
     "viewOnTwitch": "Ver en Twitch",
     "estimate": "Unos 5 minutos · una veintena de momentos propuestos",
     "analyzing": "Analizando",
-    "minutesLeft": "faltan {{minutes}} min",
+    "minutesLeft": "faltan {{time}}",
     "seeAnalysis": "Ver el análisis",
     "momentsFound_one": "{{count}} momento encontrado",
     "momentsFound_other": "{{count}} momentos encontrados",
@@ -880,7 +880,7 @@
     },
     "watched": "{{done}} pasajes vistos de {{total}} · {{kept}} guardados por ahora",
     "cutting": "Clip {{done}} de {{total}}",
-    "left": "faltan {{minutes}} min",
+    "left": "faltan {{time}}",
     "curveSoon": "La curva del directo aparece en cuanto termina la escucha.",
     "legend": {
       "voice": "Energía de tu voz",

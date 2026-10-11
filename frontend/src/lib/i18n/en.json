@@ -603,7 +603,7 @@
     "viewOnTwitch": "Watch on Twitch",
     "estimate": "About 5 minutes · around twenty moments suggested",
     "analyzing": "Analyzing",
-    "minutesLeft": "{{minutes}} min left",
+    "minutesLeft": "{{time}} left",
     "seeAnalysis": "See the analysis",
     "momentsFound_one": "{{count}} moment found",
     "momentsFound_other": "{{count}} moments found",
@@ -880,7 +880,7 @@
     },
     "watched": "{{done}} of {{total}} passages watched · {{kept}} kept so far",
     "cutting": "Clip {{done}} of {{total}}",
-    "left": "{{minutes}} min left",
+    "left": "{{time}} left",
     "curveSoon": "The stream's curve shows up as soon as listening is done.",
     "legend": {
       "voice": "Your voice's energy",

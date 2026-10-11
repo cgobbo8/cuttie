@@ -38,7 +38,7 @@ function ProjectCard({
   const stage: ProjectStage = projectStage(job);
   const { tag, title } = splitVodTitle(job.custom_title || job.vod_title);
   const date = job.stream_date ?? job.created_at;
-  const progress = stage === "analyzing" ? analysisProgress(job.status, job.progress) : null;
+  const progress = stage === "analyzing" ? analysisProgress(job.status, job.progress, job.eta) : null;
 
   const stop = (e: MouseEvent, action: () => void) => {
     e.preventDefault();

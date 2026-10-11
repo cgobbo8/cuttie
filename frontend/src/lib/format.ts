@@ -85,11 +85,29 @@ function stepIndex(status: string): number {
   return i === -1 ? 0 : i;
 }
 
+/** When an analysis started and should be done, unix seconds (the worker's estimate) */
+export interface AnalysisEta {
+  start: number;
+  end: number;
+}
+
 /**
- * Rough progress of an analysis from its status and progress text
- * ("Extraction clips (16/20)..." gives the share of the current step done).
+ * Progress of an analysis: from the worker's estimate when there is one (it knows
+ * the live's length, the transcription engine and this computer's speed), else
+ * roughly from its status and progress text ("Extraction clips (16/20)...").
  */
-export function analysisProgress(status: string, progress?: string | null): { percent: number; minutesLeft: number } {
+export function analysisProgress(
+  status: string,
+  progress?: string | null,
+  eta?: AnalysisEta | null,
+  now = Date.now() / 1000,
+): { percent: number; minutesLeft: number } {
+  if (eta && eta.end > eta.start) {
+    return {
+      percent: Math.max(2, Math.min(99, Math.round(((now - eta.start) / (eta.end - eta.start)) * 100))),
+      minutesLeft: Math.max(1, Math.round((eta.end - now) / 60)),
+    };
+  }
   const total = PIPELINE_STEPS.reduce((sum, s) => sum + s.minutes, 0);
   const i = stepIndex(status);
   const ratio = /\((\d+)\s*\/\s*(\d+)\)/.exec(progress ?? "");
@@ -99,4 +117,9 @@ export function analysisProgress(status: string, progress?: string | null): { pe
     percent: Math.max(2, Math.min(99, Math.round((done / total) * 100))),
     minutesLeft: Math.max(1, Math.round(total - done)),
   };
+}
+
+/** What's left of an analysis: "12 min", "1 h 50" */
+export function timeLeft(minutes: number): string {
+  return minutes < 60 ? `${minutes} min` : `${Math.floor(minutes / 60)} h ${String(minutes % 60).padStart(2, "0")}`;
 }

@@ -1,3 +1,4 @@
+import type { AnalysisEta } from "./format";
 import type { CustomTemplate } from "./templates";
 import type { TemplateSpec } from "./templateSpec";
 
@@ -286,6 +287,8 @@ export interface TwitchVod {
     /** Why it stopped, when it did */
     error?: string | null;
     notices?: JobNotice[];
+    /** While analyzing: when it should be done */
+    eta?: AnalysisEta | null;
   } | null;
 }
 
@@ -500,6 +503,8 @@ export interface JobTimeline {
   /** Chat messages per slice of the live */
   chat?: number[];
   candidates?: TimelineCandidate[];
+  /** When the analysis started and should be done, unix seconds (worker's estimate) */
+  eta?: AnalysisEta;
 }
 
 export interface ClipSelection {
@@ -531,6 +536,8 @@ export interface JobSummary {
   clip_count: number;
   kept_count: number;
   export_count: number;
+  /** While analyzing: when it should be done */
+  eta: AnalysisEta | null;
 }
 
 export interface PaginationMeta {
@@ -594,6 +601,7 @@ interface ServerJobSummary {
   clipCount?: number;
   keptCount?: number;
   exportCount?: number;
+  eta?: AnalysisEta | null;
 }
 
 function mapJobResponse(raw: ServerJobResponse): JobResponse {
@@ -624,6 +632,7 @@ function mapJobResponse(raw: ServerJobResponse): JobResponse {
 
 function mapJobSummary(raw: ServerJobSummary): JobSummary {
   return {
+    eta: raw.eta ?? null,
     job_id: raw.id,
     url: raw.url,
     status: raw.status,

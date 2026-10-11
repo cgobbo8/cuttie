@@ -187,6 +187,7 @@ class Background:
     """The live transcript running next to the rest of the analysis."""
 
     def __init__(self, job_id: str, wav_path: str, duration: float) -> None:
+        self.job_id = job_id
         self.stop = threading.Event()
         self.done = 0
         self.total = max(1, math.ceil(max(0.0, duration) / CHUNK_SECONDS))
@@ -194,7 +195,10 @@ class Background:
         self._future = self._pool.submit(transcribe_vod, job_id, wav_path, duration, self.stop, self._progress)
 
     def _progress(self, done: int, total: int) -> None:
+        from app.services import eta
+
         self.done, self.total = done, total
+        eta.transcribing(self.job_id, done, total)
 
     def result(self, on_wait=None, poll: float = 2.0) -> VodTranscript:
         """Wait for the transcript, calling `on_wait(done, total)` while it runs."""

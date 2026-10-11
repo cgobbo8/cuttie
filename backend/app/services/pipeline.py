@@ -412,6 +412,7 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
                 stream_date=stream_date,
             )
             logger.info(f"Metadata extracted: {streamer} — {vod_game} — {vod_title}")
+            _track_eta(job_id, duration)
 
             # Now download audio + chat in parallel (slow I/O bound)
             logger.info(f"[{job_id[:8]}] Starting audio + chat download...")
@@ -647,6 +648,19 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
         # Cleanup temp audio files (clips stay in storage)
         if os.path.exists(output_dir):
             shutil.rmtree(output_dir, ignore_errors=True)
+
+
+def _track_eta(job_id: str, duration: float) -> None:
+    """When the analysis should be done (shown on the analysis screen), from the live's
+    length and how it gets transcribed: on this computer, at the speed it was measured at."""
+    try:
+        from app.services import eta, machine, transcriber
+
+        engine = transcriber.chosen_engine()
+        local_rate = machine.profile()["whisper_realtime"] if engine == "local" else None
+        eta.track(job_id, duration, engine, local_rate)
+    except Exception as e:
+        logger.warning(f"[{job_id[:8]}] No time estimate: {e}")
 
 
 def _wait_for_live_transcript(job_id: str, live: "vod_transcript.Background | None") -> "vod_transcript.VodTranscript | None":

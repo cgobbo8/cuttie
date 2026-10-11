@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { analysisProgress, clock, dayDate, hoursMinutes, splitVodTitle } from "./format";
+import { analysisProgress, clock, dayDate, hoursMinutes, splitVodTitle, timeLeft } from "./format";
 
 describe("format", () => {
   it("pulls the server tag out of a VOD title", () => {
@@ -23,6 +23,18 @@ describe("format", () => {
     expect(clipping.percent).toBeGreaterThan(90);
     expect(clipping.minutesLeft).toBe(1);
     expect(analysisProgress("ANALYZING_CLIPS", "Analyse IA (25/50)").percent).toBeGreaterThan(analysisProgress("ANALYZING_CLIPS").percent);
+  });
+
+  it("follows the worker's estimate when there is one", () => {
+    // Started 30 min ago, should be done in 1 h 30 (a live transcribed on a small card)
+    const eta = { start: 10_000, end: 10_000 + 2 * 3600 };
+    const p = analysisProgress("ANALYZING_CLIPS", "Analyse IA (25/50)", eta, 10_000 + 1800);
+    expect(p).toEqual({ percent: 25, minutesLeft: 90 });
+    // Late on its estimate: still a minute left, not zero
+    expect(analysisProgress("CLIPPING", null, eta, eta.end + 120).minutesLeft).toBe(1);
+    expect(timeLeft(90)).toBe("1 h 30");
+    expect(timeLeft(125)).toBe("2 h 05");
+    expect(timeLeft(12)).toBe("12 min");
   });
 });
 

@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperti
 import { useTranslation } from "react-i18next";
 import { Check, Clock3, Scissors, Sparkles } from "lucide-react";
 import { getStoryboard, type JobResponse, type TimelineCandidate, type TwitchStoryboard } from "../../lib/api";
-import { analysisProgress, clock } from "../../lib/format";
+import { analysisProgress, clock, timeLeft } from "../../lib/format";
 import { evenFrames, frameAt, tileStyle } from "../../lib/storyboard";
 import { stackLabels } from "../../lib/labels";
 import { useFlip } from "../../lib/useFlip";
@@ -110,7 +110,7 @@ export default function AnalysisView({ job, vodId }: Props) {
 
   const stepIndex = stepIndexOf(job.status);
   const count = counter(job.progress);
-  const { minutesLeft } = analysisProgress(job.status, job.progress);
+  const { minutesLeft } = analysisProgress(job.status, job.progress, job.timeline?.eta, now);
   const at = (seconds: number) => `${Math.min(100, Math.max(0, (seconds / Math.max(duration, 1)) * 100))}%`;
 
   const W = 1200;
@@ -157,7 +157,7 @@ export default function AnalysisView({ job, vodId }: Props) {
             <p className="mt-1.5 text-[14px] text-ink-2">{subtitle}</p>
           </div>
           <span className="chip chip-neutral h-8 px-3 text-[13px] font-[550]">
-            <Clock3 className="w-[15px] h-[15px]" /> {t("analysis.left", { minutes: minutesLeft })}
+            <Clock3 className="w-[15px] h-[15px]" /> {t("analysis.left", { time: timeLeft(minutesLeft) })}
           </span>
         </div>
 

@@ -17,7 +17,7 @@ import { useToast } from "../components/Toast";
 import Storyboard from "../components/Storyboard";
 import TemplatePreview, { useDefaultTemplate } from "../components/TemplatePreview";
 import ProviderFix, { providerNotice } from "../components/ProviderFix";
-import { ACTIVE_STATUSES, analysisProgress, clock, hoursMinutes, liveDate, sampleSubtitle, shortDate, splitVodTitle } from "../lib/format";
+import { ACTIVE_STATUSES, analysisProgress, clock, hoursMinutes, liveDate, sampleSubtitle, shortDate, splitVodTitle, timeLeft } from "../lib/format";
 
 const HERO_HEIGHT = 700;
 
@@ -52,7 +52,7 @@ function Hero({ vod, busy, onAnalyze }: { vod: TwitchVod; busy: boolean; onAnaly
   const { tag, title } = splitVodTitle(vod.title);
   const job = vod.job;
   const running = job && ACTIVE_STATUSES.has(job.status);
-  const progress = running ? analysisProgress(job.status, job.progress) : null;
+  const progress = running ? analysisProgress(job.status, job.progress, job.eta) : null;
   const isNew = Date.now() - new Date(vod.published_at).getTime() < 2 * 86_400_000;
   // Stopped because the AI provider refuses every call (no credits, refused key)
   const stopped = job?.status === "ERROR" ? providerNotice(job.notices) : undefined;
@@ -103,7 +103,7 @@ function Hero({ vod, busy, onAnalyze }: { vod: TwitchVod; busy: boolean; onAnaly
             <div className="h-full rounded-full bg-accent shadow-[0_0_12px_var(--color-accent-glow)] transition-[width] duration-700" style={{ width: `${progress.percent}%` }} />
           </div>
           <p className="mt-2 text-[12.5px] text-ink-3">
-            {t(`jobStatus.${job!.status}`)} · {t("start.minutesLeft", { minutes: progress.minutesLeft })}
+            {t(`jobStatus.${job!.status}`)} · {t("start.minutesLeft", { time: timeLeft(progress.minutesLeft) })}
           </p>
         </div>
       )}
@@ -148,7 +148,7 @@ function LiveCard({ vod, index, busy, onAnalyze }: { vod: TwitchVod; index: numb
   const { title } = splitVodTitle(vod.title);
   const job = vod.job;
   const running = job && ACTIVE_STATUSES.has(job.status);
-  const progress = running ? analysisProgress(job.status, job.progress) : null;
+  const progress = running ? analysisProgress(job.status, job.progress, job.eta) : null;
   const open = job && job.status !== "ERROR" ? () => navigate(`/${job.id}`) : null;
 
   return (
@@ -212,7 +212,7 @@ function LiveCard({ vod, index, busy, onAnalyze }: { vod: TwitchVod; index: numb
         </h3>
         <p className="mt-0.5 text-[12.5px] text-ink-3">
           {shortDate(vod.published_at, i18n.language)} ·{" "}
-          {progress ? t("start.minutesLeft", { minutes: progress.minutesLeft }) : t("start.views", { count: vod.view_count })}
+          {progress ? t("start.minutesLeft", { time: timeLeft(progress.minutesLeft) }) : t("start.views", { count: vod.view_count })}
         </p>
       </div>
     </article>
@@ -430,7 +430,7 @@ export default function HomePage() {
         {otherActive.length > 0 && (
           <section className="mt-6 flex flex-col gap-2">
             {otherActive.map((job) => {
-              const p = analysisProgress(job.status);
+              const p = analysisProgress(job.status, job.progress, job.eta);
               return (
                 <Link key={job.job_id} to={`/${job.job_id}`} className="glass rounded-[14px] px-4 py-3 flex items-center gap-4 hover:bg-white/[0.06] transition-colors">
                   <Loader2 className="w-4 h-4 animate-spin text-accent" />

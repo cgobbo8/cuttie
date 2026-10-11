@@ -182,6 +182,8 @@ export default class JobsController {
         error: serialized.error,
         createdAt: serialized.createdAt,
         progress: serialized.progress,
+        // When the analysis should be done (worker's estimate)
+        eta: job.timeline?.eta ?? null,
         vodId: serialized.url?.match(/\/videos\/(\d+)/)?.[1] ?? null,
         // Best moment first: its frame stands for the project
         coverClip: (job.hotPoints ?? []).find((hp: any) => hp.clip_filename)?.clip_filename ?? null,

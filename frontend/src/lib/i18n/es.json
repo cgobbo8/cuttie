@@ -1312,7 +1312,7 @@
   "freed": {
     "title": "Clips liberados para hacer espacio",
     "body": "Los clips de este directo se borraron el {{date}}. El proyecto y sus exportaciones siguen aquí.",
-    "restoreHint": "Puedes recuperarlos mientras el directo siga en Twitch (un minuto más o menos).",
+    "restoreHint": "Puedes recuperarlos mientras el directo siga en Twitch (unos minutos).",
     "goneHint": "Este directo ya no está en Twitch: sus clips no pueden volver.",
     "exports_one": "Ver la exportación",
     "exports_other": "Ver las {{count}} exportaciones",

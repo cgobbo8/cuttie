@@ -1312,7 +1312,7 @@
   "freed": {
     "title": "Clips libérés pour faire de la place",
     "body": "Les clips de ce live ont été supprimés le {{date}}. Le projet et ses exports sont toujours là.",
-    "restoreHint": "Tu peux les récupérer tant que le live est sur Twitch (environ une minute).",
+    "restoreHint": "Tu peux les récupérer tant que le live est sur Twitch (quelques minutes).",
     "goneHint": "Ce live n'est plus sur Twitch : ses clips ne peuvent plus revenir.",
     "exports_one": "Voir l'export",
     "exports_other": "Voir les {{count}} exports",

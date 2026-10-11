@@ -1312,7 +1312,7 @@
   "freed": {
     "title": "Clips freed to make room",
     "body": "This live's clips were deleted on {{date}}. The project and its exports are still here.",
-    "restoreHint": "You can get them back while the live is on Twitch (about a minute).",
+    "restoreHint": "You can get them back while the live is on Twitch (a few minutes).",
     "goneHint": "This live is no longer on Twitch: its clips can't come back.",
     "exports_one": "See the export",
     "exports_other": "See the {{count}} exports",

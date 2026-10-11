@@ -162,6 +162,48 @@ const routes = {
     tokens: [{"old":"/api/machine","type":0,"val":"api","end":""},{"old":"/api/machine","type":0,"val":"machine","end":""}],
     types: placeholder as Registry['app.machine']['types'],
   },
+  'support.show': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/logs',
+    tokens: [{"old":"/api/logs","type":0,"val":"api","end":""},{"old":"/api/logs","type":0,"val":"logs","end":""}],
+    types: placeholder as Registry['support.show']['types'],
+  },
+  'support.destroy': {
+    methods: ["DELETE"],
+    pattern: '/api/logs',
+    tokens: [{"old":"/api/logs","type":0,"val":"api","end":""},{"old":"/api/logs","type":0,"val":"logs","end":""}],
+    types: placeholder as Registry['support.destroy']['types'],
+  },
+  'support.download': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/logs/export',
+    tokens: [{"old":"/api/logs/export","type":0,"val":"api","end":""},{"old":"/api/logs/export","type":0,"val":"logs","end":""},{"old":"/api/logs/export","type":0,"val":"export","end":""}],
+    types: placeholder as Registry['support.download']['types'],
+  },
+  'support.client_log': {
+    methods: ["POST"],
+    pattern: '/api/client-log',
+    tokens: [{"old":"/api/client-log","type":0,"val":"api","end":""},{"old":"/api/client-log","type":0,"val":"client-log","end":""}],
+    types: placeholder as Registry['support.client_log']['types'],
+  },
+  'disk.show': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/disk',
+    tokens: [{"old":"/api/disk","type":0,"val":"api","end":""},{"old":"/api/disk","type":0,"val":"disk","end":""}],
+    types: placeholder as Registry['disk.show']['types'],
+  },
+  'disk.update_cleanup': {
+    methods: ["PUT"],
+    pattern: '/api/disk/cleanup',
+    tokens: [{"old":"/api/disk/cleanup","type":0,"val":"api","end":""},{"old":"/api/disk/cleanup","type":0,"val":"disk","end":""},{"old":"/api/disk/cleanup","type":0,"val":"cleanup","end":""}],
+    types: placeholder as Registry['disk.update_cleanup']['types'],
+  },
+  'disk.free': {
+    methods: ["POST"],
+    pattern: '/api/disk/free',
+    tokens: [{"old":"/api/disk/free","type":0,"val":"api","end":""},{"old":"/api/disk/free","type":0,"val":"disk","end":""},{"old":"/api/disk/free","type":0,"val":"free","end":""}],
+    types: placeholder as Registry['disk.free']['types'],
+  },
   'app.local_test': {
     methods: ["POST"],
     pattern: '/api/diagnostics/local-test',
@@ -239,6 +281,18 @@ const routes = {
     pattern: '/api/jobs/:id',
     tokens: [{"old":"/api/jobs/:id","type":0,"val":"api","end":""},{"old":"/api/jobs/:id","type":0,"val":"jobs","end":""},{"old":"/api/jobs/:id","type":1,"val":"id","end":""}],
     types: placeholder as Registry['jobs.destroy']['types'],
+  },
+  'disk.free_job': {
+    methods: ["POST"],
+    pattern: '/api/jobs/:id/free',
+    tokens: [{"old":"/api/jobs/:id/free","type":0,"val":"api","end":""},{"old":"/api/jobs/:id/free","type":0,"val":"jobs","end":""},{"old":"/api/jobs/:id/free","type":1,"val":"id","end":""},{"old":"/api/jobs/:id/free","type":0,"val":"free","end":""}],
+    types: placeholder as Registry['disk.free_job']['types'],
+  },
+  'disk.restore_job': {
+    methods: ["POST"],
+    pattern: '/api/jobs/:id/restore',
+    tokens: [{"old":"/api/jobs/:id/restore","type":0,"val":"api","end":""},{"old":"/api/jobs/:id/restore","type":0,"val":"jobs","end":""},{"old":"/api/jobs/:id/restore","type":1,"val":"id","end":""},{"old":"/api/jobs/:id/restore","type":0,"val":"restore","end":""}],
+    types: placeholder as Registry['disk.restore_job']['types'],
   },
   'jobs.destroy_clip': {
     methods: ["DELETE"],

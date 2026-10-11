@@ -45,6 +45,7 @@ Positionnees par les lanceurs (`scripts/dev.mjs`, `scripts/launcher.mjs`) :
 - `CUTTIE_INTERNAL_SECRET` — secret partage API <-> worker (header `X-Cuttie-Secret`)
 - `WORKER_URL` (API) / `CUTTIE_API_URL` + `CUTTIE_WORKER_PORT` (worker)
 - `CUTTIE_AUTO_LOGIN` (defaut true), `FRONTEND_DIST` (API sert le front build)
+- `CUTTIE_APP_VERSION` (version de l'app desktop, dans l'export des journaux), `CUTTIE_CLEANUP_DAYS` (menage par defaut : 30 dans l'app installee, rien en dev)
 
 Fichier `api/.env` : voir `api/.env.example` (APP_KEY en dev ; l'app packagee genere `<data dir>/app.key`).
 
@@ -63,6 +64,8 @@ cuttie/
 │   │   │   ├── brand_controller.ts           # Kit de marque, chaine Twitch, couleurs, webcam, recherche de chaine
 │   │   │   ├── storage_controller.ts         # GET /api/storage/* (URLs signees, Range)
 │   │   │   ├── app_controller.ts             # app info, parametres (cles API + verification, onboarded), diagnostic
+│   │   │   ├── support_controller.ts         # journaux : taille, vider, export .zip (periode, cles masquees), erreurs de la page
+│   │   │   ├── disk_controller.ts            # espace disque, menage des anciens clips, liberer / recuperer un projet
 │   │   │   ├── internal_controller.ts        # evenements de statut pousses par le worker
 │   │   │   ├── spa_controller.ts             # sert frontend/dist (FRONTEND_DIST)
 │   │   │   ├── renders_controller.ts         # Remotion renders
@@ -84,6 +87,10 @@ cuttie/
 │   │   │   ├── twitch.ts                     # GQL public Twitch : chaine, VODs, storyboards
 │   │   │   ├── clip_variants.ts              # fond floute 9:16 pre-calcule (ffmpeg)
 │   │   │   ├── clip_extend.ts                # +30 s sur un cote de la coupe (le fichier grandit si besoin)
+│   │   │   ├── clip_thumbs.ts                # vignettes (ffmpeg, cache) ; gardees quand les clips sont liberes
+│   │   │   ├── disk_space.ts                 # place prise, projets inactifs, liberer (exports gardes), recuperer, menage auto (6 h)
+│   │   │   ├── app_logs.ts                   # journal de l'app desktop (<data dir>/logs) : periode, cles masquees, vider
+│   │   │   ├── zip.ts                        # petit ecrivain .zip (deflate) pour l'export des journaux
 │   │   │   └── remotion_renderer.ts          # Bundle + render Remotion
 │   │   ├── validators/user.ts                # VineJS validation
 │   │   └── transformers/user_transformer.ts
@@ -119,7 +126,7 @@ cuttie/
 │   │       ├── storage.py                     # stockage local (ex-S3)
 │   │       ├── api_events.py                  # envoi ordonne des statuts a l'API
 │   │       ├── settings.py                    # lecture settings.json (cles API)
-│   │       ├── clip_tools.py                  # transcription a la demande + cam d'un live (clips) ou d'une VOD + clip allonge (+30 s)
+│   │       ├── clip_tools.py                  # transcription a la demande + cam d'un live (clips) ou d'une VOD + clip allonge (+30 s) + clips recoupes depuis le live (projet libere)
 │   │       ├── openai_client.py               # Clients multi-provider (Groq, OpenRouter)
 │   │       ├── provider_errors.py             # Refus definitifs (credits, cle) -> arret clair de l'analyse
 │   │       └── db.py                          # SQLite persistence (WAL)
@@ -163,12 +170,14 @@ cuttie/
         │   ├── TemplatePreview.tsx            # Apercu du modele par defaut (memes calques que l'export)
         │   ├── Toast.tsx                      # Systeme de notifications
         │   ├── ConfirmModal.tsx               # Dialog confirmation
+        │   ├── ProjectRemoveModal.tsx         # Liberer l'espace (clips) ou supprimer le projet
         │   ├── ui/Tooltip.tsx                 # Radix tooltip wrapper
         │   ├── editor/                        # Canvas editor (layers, panels, viewport) ; widgets/kit = widgets de marque (copies cote API)
         │   └── remotion-editor/               # Remotion composition + layers
         └── lib/
             ├── api.ts                         # Client REST type-safe + SSE
             ├── desktop.ts                     # pont vers l'app desktop : mises a jour (pastille TopBar, Parametres > Application)
+            ├── clientErrors.ts                # erreurs de la page -> journal de l'app (20 max, une fois chacune)
             ├── AuthContext.tsx                 # Auth context + session
             ├── SettingsContext.tsx            # Parametres (cles, onboarded)
             ├── ChannelContext.tsx             # Kit de marque + chaine Twitch, couleur d'accent de l'app
@@ -297,6 +306,14 @@ Fournisseur qui refuse tout (`provider_errors.py`) : credits OpenRouter epuises 
 | `/api/settings`                       | GET/PUT | Token    | Cles API (masquees), onboarded   |
 | `/api/settings/verify`                | POST    | Token    | Verifie une cle aupres du fournisseur |
 | `/api/diagnostics`                    | GET     | Token    | GPU, ffmpeg, yt-dlp, cles, disque|
+| `/api/logs`                           | GET/DELETE | Token | Taille du journal / le vider     |
+| `/api/logs/export?hours=`             | GET     | Token    | .zip : journal, diagnostic, analyses (cles masquees) |
+| `/api/client-log`                     | POST    | Token    | Erreur de la page -> journal     |
+| `/api/disk`                           | GET     | Token    | Place prise, menage, projets     |
+| `/api/disk/cleanup`                   | PUT     | Token    | Menage auto (0, 7, 30, 90 jours) |
+| `/api/disk/free`                      | POST    | Token    | Liberer les projets inactifs     |
+| `/api/jobs/{id}/free`                 | POST    | Token    | Liberer les clips d'un projet    |
+| `/api/jobs/{id}/restore`              | POST    | Token    | Recouper ses clips depuis le live (410 : live parti) |
 | `/api/storage/*`                      | GET     | Signee   | Fichiers stockes (Range)         |
 | `/api/internal/worker-events`         | POST    | Secret   | Statuts pousses par le worker    |
 
@@ -318,6 +335,8 @@ Fournisseur qui refuse tout (`provider_errors.py`) : credits OpenRouter epuises 
 - Windows neuf : runtime Visual C++ embarque (`resources/bin/msvc`, `CUTTIE_DLL_DIRS` lu par `backend/worker.py`), certificats de certifi pour urllib (`SSL_CERT_FILE`). Le CSS ne doit pas doubler `backdrop-filter` avec `-webkit-backdrop-filter` (le minifieur ne garderait que le second : plus de flou dans l'app compilee, teste).
 - Teste en vrai sur un portable Windows (GTX 1650 Max-Q) : live de 7 h 39 analyse en 2 h (transcription locale ~4,6x temps reel), export Remotion OK, mises a jour 0.1.0 -> 0.1.1 -> 0.1.2 (bouton). `--update-test=<rapport>` rejoue le bouton de mise a jour sans fenetre.
 - Mises a jour : `electron-updater` + GitHub Releases (`latest.yml`), pastille dans la TopBar, Parametres > Application ; installation silencieuse apres arret de l'API et du worker.
+- Journal : `<data dir>/logs/cuttie.log` (API, worker, app ; une ligne = heure ISO UTC), tourne a 10 Mo (cuttie.1.log, cuttie.2.log : 30 Mo max). Parametres > Aide a distance : export .zip d'une periode (journal, diagnostic, analyses et exports, reglages sans cles), « Supprimer les journaux ». On y trouve la vitesse de chaque morceau de transcription, le bilan de chaque analyse (duree des etapes, estimation contre realite), la vitesse des exports et les erreurs de la page.
+- Stockage : un projet = ~1 Go de clips. Parametres > Stockage : place prise, menage des projets sans activite (7 / 30 / 90 jours, automatique toutes les 6 h ou a la main). Liberer = supprimer les clips (et fonds floutes) ; le projet, ses exports, vignettes, mots et cam restent, `jobs.clips_freed_at` le dit, et « Recuperer les clips » les recoupe depuis la VOD tant que Twitch l'a (7 a 60 jours).
 - CI `.github/workflows/desktop.yml` (windows-latest) : installeur, installation silencieuse, `--smoke-test=full`, tests sous Windows ; un tag `v*` (= version de `desktop/package.json`) publie la release avec `desktop/release-notes.md`.
 
 ## Webcam

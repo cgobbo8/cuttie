@@ -566,6 +566,58 @@
       "repairTitle": "Réparer les modules d'analyse ?",
       "repairBody": "Cuttie redémarre et réinstalle ses modules d'analyse (quelques minutes). Tes projets ne bougent pas.",
       "repairConfirm": "Réparer et redémarrer"
+    },
+    "storage": {
+      "title": "Stockage",
+      "hint": "Ce que Cuttie garde sur ce PC. Le ménage ne touche jamais à tes exports.",
+      "used": "{{size}} utilisés par Cuttie",
+      "free": "{{size}} libres sur le disque",
+      "part": {
+        "clips": "Clips des projets",
+        "exports": "Exports",
+        "models": "Modèles IA",
+        "other": "Autres"
+      },
+      "cleanTitle": "Libérer les anciens clips",
+      "cleanHint": "Seuls les clips des projets sans activité sont supprimés : le projet et ses exports restent, et les clips se récupèrent tant que le live est sur Twitch.",
+      "days": "{{count}} jours",
+      "cleanable_one": "1 projet à libérer · {{size}}",
+      "cleanable_other": "{{count}} projets à libérer · {{size}}",
+      "nothing": "Rien à libérer",
+      "freeNow": "Libérer maintenant",
+      "auto": "Ménage automatique",
+      "autoHintOn": "Les clips des projets sans activité depuis {{count}} jours partent tout seuls.",
+      "autoHintOff": "Désactivé : rien n'est supprimé sans toi.",
+      "autoOn": "Ménage automatique activé ({{count}} jours)",
+      "autoOnFreed": "Ménage automatique activé : {{size}} libérés",
+      "autoOff": "Ménage automatique désactivé",
+      "freed_one": "1 projet libéré · {{size}}",
+      "freed_other": "{{count}} projets libérés · {{size}}",
+      "failed": "Le ménage n'a pas pu se faire. Réessaie.",
+      "confirmFreeTitle": "Libérer {{size}} ?",
+      "confirmAutoTitle": "Activer le ménage automatique ?",
+      "confirmBody_one": "Les clips d'un projet sans activité depuis {{days}} jours seront supprimés tout de suite ({{size}}). Le projet et ses exports restent.",
+      "confirmBody_other": "Les clips de {{count}} projets sans activité depuis {{days}} jours seront supprimés tout de suite ({{size}}). Les projets et leurs exports restent.",
+      "confirmAuto": "Activer"
+    },
+    "journal": {
+      "title": "Aide à distance",
+      "hint": "Si quelque chose coince, extrais tes journaux et envoie le fichier à la personne qui t'aide : on y voit ce qui s'est passé (erreurs, lenteurs), sans tes clés API.",
+      "period": "Période",
+      "periods": {
+        "1": "Dernière heure",
+        "24": "24 h",
+        "168": "7 jours",
+        "0": "Tout"
+      },
+      "extract": "Extraire mes journaux",
+      "exported": "Journaux extraits : envoie {{file}}",
+      "exportFailed": "Les journaux n'ont pas pu être extraits.",
+      "clear": "Supprimer les journaux · {{size}}",
+      "clearTitle": "Supprimer les journaux ?",
+      "clearBody": "Ce qui s'est passé jusqu'ici ne pourra plus être envoyé pour de l'aide.",
+      "cleared": "Journaux supprimés · {{size}} libérés",
+      "clearFailed": "Les journaux n'ont pas pu être supprimés."
     }
   },
   "analyze": {
@@ -1004,7 +1056,8 @@
     "stage": {
       "choose": "À trier",
       "edit": "À monter",
-      "exported": "Exporté"
+      "exported": "Exporté",
+      "freed": "Clips libérés"
     },
     "moments_one": "{{count}} moment",
     "moments_other": "{{count}} moments",
@@ -1017,13 +1070,25 @@
       "error": "Relancer l'analyse",
       "choose": "Choisir les moments",
       "edit": "Monter les clips",
-      "exported": "Voir les exports"
+      "exported": "Voir les exports",
+      "freed": "Voir les exports"
     },
     "retryError": "Impossible de relancer l'analyse",
     "emptyTitle": "Aucun projet pour l'instant",
     "emptyHint": "Choisis un live sur l'accueil : Cuttie y trouve les meilleurs moments, prêts à monter.",
     "emptyFiltered": "Aucun projet ne correspond. Essaie une autre recherche ou un autre filtre.",
-    "emptyCta": "Choisir un live"
+    "emptyCta": "Choisir un live",
+    "size": "Place prise par ses clips sur ce PC",
+    "remove": {
+      "title": "Que faire de ce projet ?",
+      "free": "Libérer l'espace · {{size}}",
+      "freeHint": "Supprime ses clips. Le projet et ses exports restent, et les clips se récupèrent tant que le live est sur Twitch.",
+      "delete": "Supprimer le projet",
+      "deleteHint": "Le projet, ses clips et ses exports disparaissent.",
+      "freeCta": "Libérer",
+      "freed": "Espace libéré · {{size}}",
+      "freeError": "Les clips n'ont pas pu être supprimés. Réessaie."
+    }
   },
   "templateEditor": {
     "defaultName": "Mon modèle {{n}}",
@@ -1243,5 +1308,20 @@
       "name": "Barre de progression",
       "desc": "Elle avance avec le clip"
     }
+  },
+  "freed": {
+    "title": "Clips libérés pour faire de la place",
+    "body": "Les clips de ce live ont été supprimés le {{date}}. Le projet et ses exports sont toujours là.",
+    "restoreHint": "Tu peux les récupérer tant que le live est sur Twitch (environ une minute).",
+    "goneHint": "Ce live n'est plus sur Twitch : ses clips ne peuvent plus revenir.",
+    "exports_one": "Voir l'export",
+    "exports_other": "Voir les {{count}} exports",
+    "restore": "Récupérer les clips",
+    "restoring": "Récupération…",
+    "restored": "Clips récupérés",
+    "partial_one": "1 clip n'a pas pu revenir. Réessaie.",
+    "partial_other": "{{count}} clips n'ont pas pu revenir. Réessaie.",
+    "gone": "Ce live n'est plus sur Twitch : les clips ne peuvent plus être récupérés.",
+    "failed": "Les clips n'ont pas pu être récupérés. Vérifie ta connexion et réessaie."
   }
 }

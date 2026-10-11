@@ -45,6 +45,19 @@ export interface ApiDefinition {
     lookupColors: typeof routes['brand.lookup_colors']
     storyboard: typeof routes['brand.storyboard']
   }
+  support: {
+    show: typeof routes['support.show']
+    destroy: typeof routes['support.destroy']
+    download: typeof routes['support.download']
+    clientLog: typeof routes['support.client_log']
+  }
+  disk: {
+    show: typeof routes['disk.show']
+    updateCleanup: typeof routes['disk.update_cleanup']
+    free: typeof routes['disk.free']
+    freeJob: typeof routes['disk.free_job']
+    restoreJob: typeof routes['disk.restore_job']
+  }
   games: {
     index: typeof routes['games.index']
   }

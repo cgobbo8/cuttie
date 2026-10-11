@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { analysisProgress, clock, dayDate, hoursMinutes, splitVodTitle, timeLeft } from "./format";
+import { analysisProgress, clock, dayDate, fileSize, hoursMinutes, splitVodTitle, timeLeft } from "./format";
 
 describe("format", () => {
   it("pulls the server tag out of a VOD title", () => {
@@ -42,5 +42,16 @@ describe("dayDate", () => {
   it("keeps a bare date on its day", () => {
     expect(dayDate("2026-10-02", "fr-FR")).toBe("Vendredi 2 octobre");
     expect(dayDate("2026-10-06T18:58:04Z", "fr-FR")).toMatch(/^Mardi 6 octobre$/);
+  });
+
+  it("says sizes in the units of the language", () => {
+    // Intl puts a (narrow) no-break space before the unit
+    const size = (bytes: number, lang: string) => fileSize(bytes, lang).replace(/[\u00a0\u202f]/g, " ");
+    expect(size(1.24e9, "fr")).toBe("1,2 Go");
+    expect(size(12.6e9, "fr")).toBe("13 Go");
+    expect(size(484e6, "fr")).toBe("484 Mo");
+    expect(size(270_527, "fr")).toBe("271 ko");
+    expect(size(0, "fr")).toBe("0 ko");
+    expect(size(1.24e9, "en")).toBe("1.2 GB");
   });
 });

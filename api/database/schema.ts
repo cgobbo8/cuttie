@@ -54,10 +54,12 @@ export class CreatorSchema extends BaseModel {
 }
 
 export class JobSchema extends BaseModel {
-  static $columns = ['clips', 'createdAt', 'creatorId', 'customTitle', 'error', 'facecam', 'hotPoints', 'id', 'notices', 'progress', 'selection', 'status', 'stepTimings', 'streamDate', 'streamer', 'streamerThumbnail', 'timeline', 'updatedAt', 'url', 'userId', 'viewCount', 'vodContext', 'vodDurationSeconds', 'vodGame', 'vodGameId', 'vodGameThumbnail', 'vodTitle'] as const
+  static $columns = ['clips', 'clipsFreedAt', 'createdAt', 'creatorId', 'customTitle', 'error', 'facecam', 'hotPoints', 'id', 'notices', 'progress', 'selection', 'status', 'stepTimings', 'streamDate', 'streamer', 'streamerThumbnail', 'timeline', 'updatedAt', 'url', 'userId', 'viewCount', 'vodContext', 'vodDurationSeconds', 'vodGame', 'vodGameId', 'vodGameThumbnail', 'vodTitle'] as const
   $columns = JobSchema.$columns
   @column()
   declare clips: any | null
+  @column.dateTime()
+  declare clipsFreedAt: DateTime | null
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime | null
   @column()

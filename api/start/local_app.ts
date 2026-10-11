@@ -14,6 +14,7 @@ import db from '@adonisjs/lucid/services/db'
 import { MigrationRunner } from '@adonisjs/lucid/migration'
 import { CLIPS_DIR, DATA_DIR, STORAGE_DIR } from '#services/data_paths'
 import { autoLoginEnabled, ensureLocalUser } from '#services/local_user'
+import { scheduleCleanup } from '#services/disk_space'
 
 const ACTIVE_STATUSES = [
   'PENDING',
@@ -55,3 +56,6 @@ logger.info(
   DATA_DIR,
   interruptedCount ? ` — ${interruptedCount} interrupted job(s) marked as failed` : ''
 )
+
+// Projects idle for a while give their clips' space back (Settings > Storage)
+if (!app.inTest) scheduleCleanup()

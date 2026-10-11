@@ -566,6 +566,58 @@
       "repairTitle": "Repair the analysis modules?",
       "repairBody": "Cuttie restarts and reinstalls its analysis modules (a few minutes). Your projects stay as they are.",
       "repairConfirm": "Repair and restart"
+    },
+    "storage": {
+      "title": "Storage",
+      "hint": "What Cuttie keeps on this PC. The cleanup never touches your exports.",
+      "used": "{{size}} used by Cuttie",
+      "free": "{{size}} free on the disk",
+      "part": {
+        "clips": "Project clips",
+        "exports": "Exports",
+        "models": "AI models",
+        "other": "Other"
+      },
+      "cleanTitle": "Free old clips",
+      "cleanHint": "Only the clips of idle projects are deleted: the project and its exports stay, and the clips can come back while the live is on Twitch.",
+      "days": "{{count}} days",
+      "cleanable_one": "1 project to free · {{size}}",
+      "cleanable_other": "{{count}} projects to free · {{size}}",
+      "nothing": "Nothing to free",
+      "freeNow": "Free now",
+      "auto": "Automatic cleanup",
+      "autoHintOn": "Clips of projects idle for {{count}} days go by themselves.",
+      "autoHintOff": "Off: nothing is deleted without you.",
+      "autoOn": "Automatic cleanup on ({{count}} days)",
+      "autoOnFreed": "Automatic cleanup on: {{size}} freed",
+      "autoOff": "Automatic cleanup off",
+      "freed_one": "1 project freed · {{size}}",
+      "freed_other": "{{count}} projects freed · {{size}}",
+      "failed": "The cleanup couldn't run. Try again.",
+      "confirmFreeTitle": "Free {{size}}?",
+      "confirmAutoTitle": "Turn on automatic cleanup?",
+      "confirmBody_one": "The clips of one project idle for {{days}} days will be deleted right away ({{size}}). The project and its exports stay.",
+      "confirmBody_other": "The clips of {{count}} projects idle for {{days}} days will be deleted right away ({{size}}). The projects and their exports stay.",
+      "confirmAuto": "Turn on"
+    },
+    "journal": {
+      "title": "Help from afar",
+      "hint": "If something goes wrong, extract your logs and send the file to whoever helps you: it shows what happened (errors, slowness), without your API keys.",
+      "period": "Period",
+      "periods": {
+        "1": "Last hour",
+        "24": "24 h",
+        "168": "7 days",
+        "0": "All"
+      },
+      "extract": "Extract my logs",
+      "exported": "Logs extracted: send {{file}}",
+      "exportFailed": "The logs couldn't be extracted.",
+      "clear": "Delete the logs · {{size}}",
+      "clearTitle": "Delete the logs?",
+      "clearBody": "What happened so far can no longer be sent for help.",
+      "cleared": "Logs deleted · {{size}} freed",
+      "clearFailed": "The logs couldn't be deleted."
     }
   },
   "analyze": {
@@ -1004,7 +1056,8 @@
     "stage": {
       "choose": "To sort",
       "edit": "To edit",
-      "exported": "Exported"
+      "exported": "Exported",
+      "freed": "Clips freed"
     },
     "moments_one": "{{count}} moment",
     "moments_other": "{{count}} moments",
@@ -1017,13 +1070,25 @@
       "error": "Run the analysis again",
       "choose": "Pick the moments",
       "edit": "Edit the clips",
-      "exported": "See the exports"
+      "exported": "See the exports",
+      "freed": "See the exports"
     },
     "retryError": "Couldn't restart the analysis",
     "emptyTitle": "No projects yet",
     "emptyHint": "Pick a stream on the home page: Cuttie finds its best moments, ready to edit.",
     "emptyFiltered": "No project matches. Try another search or filter.",
-    "emptyCta": "Pick a stream"
+    "emptyCta": "Pick a stream",
+    "size": "Space its clips take on this PC",
+    "remove": {
+      "title": "What to do with this project?",
+      "free": "Free up space · {{size}}",
+      "freeHint": "Deletes its clips. The project and its exports stay, and the clips can come back while the live is on Twitch.",
+      "delete": "Delete the project",
+      "deleteHint": "The project, its clips and its exports are gone.",
+      "freeCta": "Free up",
+      "freed": "Space freed · {{size}}",
+      "freeError": "The clips couldn't be deleted. Try again."
+    }
   },
   "templateEditor": {
     "defaultName": "My template {{n}}",
@@ -1243,5 +1308,20 @@
       "name": "Progress bar",
       "desc": "It moves along with the clip"
     }
+  },
+  "freed": {
+    "title": "Clips freed to make room",
+    "body": "This live's clips were deleted on {{date}}. The project and its exports are still here.",
+    "restoreHint": "You can get them back while the live is on Twitch (about a minute).",
+    "goneHint": "This live is no longer on Twitch: its clips can't come back.",
+    "exports_one": "See the export",
+    "exports_other": "See the {{count}} exports",
+    "restore": "Get the clips back",
+    "restoring": "Getting them back…",
+    "restored": "Clips back",
+    "partial_one": "1 clip couldn't come back. Try again.",
+    "partial_other": "{{count}} clips couldn't come back. Try again.",
+    "gone": "This live is no longer on Twitch: the clips can't be brought back.",
+    "failed": "The clips couldn't be brought back. Check your connection and try again."
   }
 }

@@ -8,6 +8,7 @@ import { splitVodTitle } from "../lib/format";
 import { activeRenderId, latestPerClip } from "../lib/renders";
 import RenderCard from "../components/project/RenderCard";
 import Stepper from "../components/project/Stepper";
+import FreedNotice from "../components/project/FreedNotice";
 
 export default function ExportStepPage() {
   const { t } = useTranslation();
@@ -49,8 +50,8 @@ export default function ExportStepPage() {
     <div className="animate-fade-in">
       <header className="flex flex-wrap items-end justify-between gap-5">
         <div className="min-w-0">
-          <Link to={`/${jobId}/montage`} className="btn btn-ghost btn-sm -ml-2 h-7 px-2">
-            <ArrowLeft className="w-4 h-4" /> {t("project.step.edit")}
+          <Link to={job?.clips_freed_at ? "/projects" : `/${jobId}/montage`} className="btn btn-ghost btn-sm -ml-2 h-7 px-2">
+            <ArrowLeft className="w-4 h-4" /> {job?.clips_freed_at ? t("sidebar.projects") : t("project.step.edit")}
           </Link>
           <h1 className="mt-2 text-[32px] leading-[1.1] tracking-[-0.03em] font-[650] text-white">
             {busy ? t("exportStep.titleBusy") : t("exportStep.title")}
@@ -60,15 +61,24 @@ export default function ExportStepPage() {
         <Stepper current="export" links={{ analyze: `/${jobId}`, choose: `/${jobId}`, edit: `/${jobId}/montage` }} />
       </header>
 
+      {/* Clips freed to make room: the exports stay, the clips can come back */}
+      {job?.clips_freed_at && (
+        <div className="mt-[22px]">
+          <FreedNotice job={job} onRestored={() => getJobStatus(jobId).then(setJob).catch(() => {})} />
+        </div>
+      )}
+
       {renders === null ? (
         <div className="flex justify-center py-20">
           <Loader2 className="w-5 h-5 animate-spin text-ink-3" />
         </div>
       ) : items.length === 0 ? (
+        job?.clips_freed_at ? null : (
         <div className="mt-8 glass rounded-[18px] p-6 max-w-[560px]">
           <p className="text-[15px] text-ink-2">{t("exportStep.empty")}</p>
           <Link to={`/${jobId}/montage`} className="btn btn-primary mt-4">{t("exportStep.toEdit")}</Link>
         </div>
+        )
       ) : (
         <>
           <section className="mt-[22px] glass rounded-[18px] px-5 py-4 flex flex-wrap items-center gap-[22px]">

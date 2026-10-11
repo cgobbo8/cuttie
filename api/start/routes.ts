@@ -62,6 +62,14 @@ router
         router.post('/settings/verify', [() => import('#controllers/app_controller'), 'verifyKey'])
         router.get('/diagnostics', [() => import('#controllers/app_controller'), 'diagnostics'])
         router.get('/machine', [() => import('#controllers/app_controller'), 'machine'])
+        // Journal (help from afar) and disk space
+        router.get('/logs', [() => import('#controllers/support_controller'), 'show'])
+        router.delete('/logs', [() => import('#controllers/support_controller'), 'destroy'])
+        router.get('/logs/export', [() => import('#controllers/support_controller'), 'download'])
+        router.post('/client-log', [() => import('#controllers/support_controller'), 'clientLog'])
+        router.get('/disk', [() => import('#controllers/disk_controller'), 'show'])
+        router.put('/disk/cleanup', [() => import('#controllers/disk_controller'), 'updateCleanup'])
+        router.post('/disk/free', [() => import('#controllers/disk_controller'), 'free'])
         router.post('/diagnostics/local-test', [() => import('#controllers/app_controller'), 'localTest'])
 
         // Games
@@ -81,6 +89,8 @@ router
         router.put('/jobs/:id/facecam', [() => import('#controllers/jobs_controller'), 'updateFacecam'])
         router.post('/jobs/:id/retry', [() => import('#controllers/jobs_controller'), 'retry'])
         router.delete('/jobs/:id', [() => import('#controllers/jobs_controller'), 'destroy'])
+        router.post('/jobs/:id/free', [() => import('#controllers/disk_controller'), 'freeJob'])
+        router.post('/jobs/:id/restore', [() => import('#controllers/disk_controller'), 'restoreJob'])
         router.delete('/jobs/:id/clips/:clipFilename', [() => import('#controllers/jobs_controller'), 'destroyClip'])
         router.patch('/jobs/:id/clips/:clipFilename/name', [() => import('#controllers/jobs_controller'), 'renameClip'])
         router.post('/jobs/:jobId/batch-render', [() => import('#controllers/renders_controller'), 'batchStore'])

@@ -20,7 +20,8 @@ export function useLatestMoments(refreshKey?: unknown): LatestMoments | null | u
     (async () => {
       try {
         const page = await listJobs({ per_page: 12 });
-        const done = page.data.find((j) => j.status === "DONE");
+        // Clips freed to make room can't play: the latest project that still has them
+        const done = page.data.find((j) => j.status === "DONE" && !j.clips_freed_at);
         if (!done) {
           if (!cancelled) setLatest(null);
           return;

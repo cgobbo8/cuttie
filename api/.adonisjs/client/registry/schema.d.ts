@@ -319,6 +319,90 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/app_controller').default['machine']>>>
     }
   }
+  'support.show': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/logs'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/support_controller').default['show']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/support_controller').default['show']>>>
+    }
+  }
+  'support.destroy': {
+    methods: ["DELETE"]
+    pattern: '/api/logs'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/support_controller').default['destroy']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/support_controller').default['destroy']>>>
+    }
+  }
+  'support.download': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/logs/export'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/support_controller').default['download']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/support_controller').default['download']>>>
+    }
+  }
+  'support.client_log': {
+    methods: ["POST"]
+    pattern: '/api/client-log'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/support_controller').default['clientLog']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/support_controller').default['clientLog']>>>
+    }
+  }
+  'disk.show': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/disk'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/disk_controller').default['show']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/disk_controller').default['show']>>>
+    }
+  }
+  'disk.update_cleanup': {
+    methods: ["PUT"]
+    pattern: '/api/disk/cleanup'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/disk_controller').default['updateCleanup']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/disk_controller').default['updateCleanup']>>>
+    }
+  }
+  'disk.free': {
+    methods: ["POST"]
+    pattern: '/api/disk/free'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/disk_controller').default['free']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/disk_controller').default['free']>>>
+    }
+  }
   'app.local_test': {
     methods: ["POST"]
     pattern: '/api/diagnostics/local-test'
@@ -473,6 +557,30 @@ export interface Registry {
       query: {}
       response: ExtractResponse<Awaited<ReturnType<import('#controllers/jobs_controller').default['destroy']>>>
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/jobs_controller').default['destroy']>>>
+    }
+  }
+  'disk.free_job': {
+    methods: ["POST"]
+    pattern: '/api/jobs/:id/free'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { id: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/disk_controller').default['freeJob']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/disk_controller').default['freeJob']>>>
+    }
+  }
+  'disk.restore_job': {
+    methods: ["POST"]
+    pattern: '/api/jobs/:id/restore'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { id: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/disk_controller').default['restoreJob']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/disk_controller').default['restoreJob']>>>
     }
   }
   'jobs.destroy_clip': {

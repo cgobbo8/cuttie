@@ -123,3 +123,12 @@ export function analysisProgress(
 export function timeLeft(minutes: number): string {
   return minutes < 60 ? `${minutes} min` : `${Math.floor(minutes / 60)} h ${String(minutes % 60).padStart(2, "0")}`;
 }
+
+/** 1.24e9 -> "1,2 Go", 484e6 -> "484 Mo", 270e3 -> "270 ko" (units of the language) */
+export function fileSize(bytes: number, lang: string): string {
+  const format = (value: number, unit: string, digits = 0) =>
+    new Intl.NumberFormat(lang, { style: "unit", unit, unitDisplay: "short", maximumFractionDigits: digits }).format(value);
+  if (bytes >= 0.95e9) return format(bytes / 1e9, "gigabyte", bytes < 9.95e9 ? 1 : 0);
+  if (bytes >= 0.95e6) return format(bytes / 1e6, "megabyte");
+  return format(Math.round(Math.max(0, bytes) / 1e3), "kilobyte");
+}

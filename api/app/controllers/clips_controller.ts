@@ -1,8 +1,6 @@
 import type { HttpContext } from '@adonisjs/core/http'
-import { execFile } from 'node:child_process'
-import { existsSync, mkdirSync, readFileSync, renameSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import path from 'node:path'
-import { promisify } from 'node:util'
 import Job from '#models/job'
 import { getPresignedUrl, storagePath } from '#services/storage'
 import { loadJobSharedData, resolveEditEnv } from '#services/edit_env_resolver'
@@ -17,49 +15,7 @@ import {
   type Side,
 } from '#services/clip_extend'
 import { extendClipFile } from '#services/worker_client'
-
-const execFileAsync = promisify(execFile)
-
-// ── Thumbnails ───────────────────────────────────────────────────────────────
-// Frames are extracted on demand with ffmpeg and cached next to the clip.
-const THUMB_WIDTHS = [480, 1280]
-const MAX_FFMPEG = 3
-let ffmpegRunning = 0
-const ffmpegWaiters: (() => void)[] = []
-
-async function withFfmpegSlot<T>(fn: () => Promise<T>): Promise<T> {
-  if (ffmpegRunning >= MAX_FFMPEG) await new Promise<void>((resolve) => ffmpegWaiters.push(resolve))
-  ffmpegRunning++
-  try {
-    return await fn()
-  } finally {
-    ffmpegRunning--
-    ffmpegWaiters.shift()?.()
-  }
-}
-
-/** 40 % into the clip: past the lead-in, before the payoff fades out */
-function defaultThumbTime(jobId: string, filename: string): number {
-  const probe = storagePath(`clips/${jobId}/${filename.replace(/\.mp4$/, '')}_probe.json`)
-  try {
-    const duration = Number(JSON.parse(readFileSync(probe, 'utf-8')).duration)
-    if (duration > 0) return Math.round(duration * 4) / 10
-  } catch {}
-  return 1
-}
-
-async function extractFrame(clipPath: string, seconds: number, width: number, dest: string) {
-  mkdirSync(path.dirname(dest), { recursive: true })
-  const tmp = `${dest}.${process.pid}.${Date.now()}.tmp.jpg`
-  await withFfmpegSlot(() =>
-    execFileAsync(
-      'ffmpeg',
-      ['-v', 'error', '-ss', String(seconds), '-i', clipPath, '-frames:v', '1', '-vf', `scale=${width}:-2`, '-q:v', '4', '-y', tmp],
-      { timeout: 30_000 }
-    )
-  )
-  renameSync(tmp, dest)
-}
+import { THUMB_WIDTHS, anyThumb, defaultThumbTime, extractFrame, thumbPath } from '#services/clip_thumbs'
 
 // ── Layout constants (mirrors vertical_clipper.py) ───────────────────────────
 const OUTPUT_WIDTH = 1080
@@ -184,11 +140,8 @@ export default class ClipsController {
     const safeFilename = path.basename(params.filename)
     // Exported videos live next to the clips, under renders/
     const folder = safeFilename.startsWith('render_') ? 'renders' : 'clips'
-    const clipPath = storagePath(`${folder}/${safeJobId}/${safeFilename}`)
-    if (!safeFilename.endsWith('.mp4') || !existsSync(clipPath)) {
-      return response.notFound({ error: 'clip not found' })
-    }
-
+    if (!safeFilename.endsWith('.mp4')) return response.notFound({ error: 'clip not found' })
+    const videoPath = storagePath(`${folder}/${safeJobId}/${safeFilename}`)
     const width = THUMB_WIDTHS.includes(Number(request.input('w'))) ? Number(request.input('w')) : 480
     const requested = Number(request.input('t'))
     const seconds =
@@ -197,18 +150,24 @@ export default class ClipsController {
         : folder === 'renders'
           ? 1.5 // after the widget's entrance
           : defaultThumbTime(safeJobId, safeFilename)
-    const base = safeFilename.replace(/\.mp4$/, '')
-    const thumbPath = storagePath(`${folder}/${safeJobId}/thumbs/${base}_${width}_${Math.round(seconds * 10)}.jpg`)
+    let thumb = thumbPath(folder, safeJobId, safeFilename, width, seconds)
 
-    if (!existsSync(thumbPath)) {
-      try {
-        await extractFrame(clipPath, seconds, width, thumbPath)
-      } catch {
-        return response.unprocessableEntity({ error: 'thumbnail failed' })
+    if (!existsSync(thumb)) {
+      if (!existsSync(videoPath)) {
+        // Clips freed to make room: the pictures made before stay
+        const kept = anyThumb(folder, safeJobId, safeFilename, width)
+        if (!kept) return response.notFound({ error: 'clip not found' })
+        thumb = kept
+      } else {
+        try {
+          await extractFrame(videoPath, seconds, width, thumb)
+        } catch {
+          return response.unprocessableEntity({ error: 'thumbnail failed' })
+        }
       }
     }
     response.header('Cache-Control', 'private, max-age=86400')
-    return response.download(thumbPath)
+    return response.download(thumb)
   }
 
   // GET /api/clips/:jobId/:filename/background — blurred 9:16 backdrop (templates)

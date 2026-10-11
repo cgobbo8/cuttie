@@ -202,6 +202,61 @@ def extend_clip(job_id: str, clip_filename: str, vod_url: str, start: float, end
     return {"vod_start": meta["vod_start"], "vod_end": meta["vod_end"], "duration": probe["duration"], "added_before": added_before}
 
 
+RESTORE_WORKERS = 3
+# What yt-dlp says about a VOD Twitch deleted (7 to 60 days after the live)
+_GONE = ("does not exist", "404", "not available", "deleted", "private")
+
+
+class LiveGone(Exception):
+    """The live is no longer on Twitch: its clips can't be cut again."""
+
+
+def restore_clips(job_id: str, vod_url: str, clips: list[dict]) -> dict:
+    """Cut a project's clips again from the live, at the same places (`clips`:
+    filename, start, end in live seconds), after they were deleted to free disk
+    space. Their sidecars stayed: same words, same cam, same thumbnails."""
+    import time
+    from concurrent.futures import ThreadPoolExecutor
+
+    from app.services.clipper import _streamcopy_clip
+    from app.services.frame_extractor import get_vod_direct_url
+
+    try:
+        direct = get_vod_direct_url(vod_url)
+    except subprocess.CalledProcessError as e:
+        said = f"{e.stderr or ''} {e.stdout or ''}".lower()
+        if any(word in said for word in _GONE):
+            raise LiveGone(vod_url) from e
+        raise RuntimeError("the live's video could not be fetched") from e
+    except subprocess.TimeoutExpired as e:
+        raise RuntimeError("the live's video could not be fetched") from e
+
+    clip_dir = paths.clip_dir(job_id)
+    os.makedirs(clip_dir, exist_ok=True)
+    t0 = time.time()
+
+    def restore(clip: dict) -> bool:
+        name = os.path.basename(clip["filename"])
+        start, end = float(clip["start"]), float(clip["end"])
+        target = os.path.join(clip_dir, name)
+        if os.path.isfile(target):
+            return True
+        tmp = os.path.join(clip_dir, f"{os.path.splitext(name)[0]}.restoring.mp4")
+        if _streamcopy_clip(direct, start, end - start, tmp) and _duration(tmp) >= (end - start) - 2:
+            _replace(tmp, target)
+            return True
+        if os.path.isfile(tmp):
+            os.remove(tmp)
+        return False
+
+    with ThreadPoolExecutor(RESTORE_WORKERS) as pool:
+        done = list(pool.map(restore, clips))
+    restored = [os.path.basename(c["filename"]) for c, ok in zip(clips, done) if ok]
+    failed = [os.path.basename(c["filename"]) for c, ok in zip(clips, done) if not ok]
+    logger.info(f"[{job_id[:8]}] Clips cut again from the live: {len(restored)}/{len(clips)} in {time.time() - t0:.0f} s")
+    return {"restored": restored, "failed": failed}
+
+
 def _extend_words(job_id: str, words_path: str, clip_path: str, start: float, end: float, old_start: float, old_end: float) -> None:
     """Shift the clip's words to its new start and add the words of the added parts."""
     old = _read_json(words_path)

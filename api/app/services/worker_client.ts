@@ -27,6 +27,16 @@ export class WorkerUnavailableError extends Error {
   }
 }
 
+/** The worker answered with an error (status kept: 410 = the live is gone from Twitch) */
+export class WorkerHttpError extends Error {
+  constructor(
+    readonly status: number,
+    message: string
+  ) {
+    super(message)
+  }
+}
+
 function baseUrl(): string {
   return (env.get('WORKER_URL') ?? 'http://127.0.0.1:3334').replace(/\/$/, '')
 }
@@ -52,7 +62,7 @@ async function call<T>(
   }
   if (!res.ok) {
     const text = await res.text().catch(() => '')
-    throw new Error(`Worker ${method} ${path} failed: HTTP ${res.status} ${text.slice(0, 200)}`)
+    throw new WorkerHttpError(res.status, `Worker ${method} ${path} failed: HTTP ${res.status} ${text.slice(0, 200)}`)
   }
   return (await res.json()) as T
 }
@@ -140,6 +150,11 @@ export async function getMachineProfile(): Promise<MachineProfile> {
   return call<MachineProfile>('GET', '/machine', { timeoutMs: 120_000 })
 }
 
+/** The profile when the worker already measured it (null otherwise: never a new measure) */
+export async function getCachedMachineProfile(): Promise<MachineProfile | null> {
+  return call<MachineProfile | null>('GET', '/machine?cached=true', { timeoutMs: 5_000 })
+}
+
 export interface ExtendedClip {
   vod_start: number
   vod_end: number
@@ -158,6 +173,15 @@ export async function extendClipFile(
     body,
     timeoutMs: 300_000,
   })
+}
+
+/** Cut a project's clips again from the live (freed to make room); 410 when the live is gone */
+export async function restoreClipFiles(
+  jobId: string,
+  url: string,
+  clips: { filename: string; start: number; end: number }[]
+): Promise<{ restored: string[]; failed: string[] }> {
+  return call('POST', `/clips/${encodeURIComponent(jobId)}/restore`, { body: { url, clips }, timeoutMs: 15 * 60_000 })
 }
 
 export interface DetectedPalette {

@@ -1,8 +1,23 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, useLocation } from "react-router";
 import { useTranslation } from "react-i18next";
-import { AlertTriangle, AppWindow, ArrowRight, Check, CheckCircle2, Copy, Download, FolderOpen, Globe, KeyRound, Loader2, Mic, RefreshCw, RotateCw, Sparkles, Stethoscope, Wrench, XCircle } from "lucide-react";
-import { getDiagnostics, runLocalTest, updateTranscription, type Diagnostics, type LocalTest, type TranscriptionEngine, type WorkerDiagnostics } from "../lib/api";
+import { AlertTriangle, AppWindow, ArrowRight, Check, CheckCircle2, Copy, Download, FolderOpen, Globe, HardDrive, KeyRound, LifeBuoy, Loader2, Mic, RefreshCw, RotateCw, Sparkles, Stethoscope, Trash2, Wrench, XCircle } from "lucide-react";
+import {
+  clearLogs,
+  exportLogs,
+  freeIdleProjects,
+  getDiagnostics,
+  getDiskSpace,
+  getLogsSize,
+  runLocalTest,
+  setCleanupDays,
+  updateTranscription,
+  type Diagnostics,
+  type DiskSpace,
+  type LocalTest,
+  type TranscriptionEngine,
+  type WorkerDiagnostics,
+} from "../lib/api";
 import { desktop, updates, useUpdateState, type DesktopInfo } from "../lib/desktop";
 import ConfirmModal from "../components/ConfirmModal";
 import { useSettings } from "../lib/SettingsContext";
@@ -13,6 +28,7 @@ import { OPENROUTER_CREDITS_URL } from "../components/ProviderFix";
 import MachineCard from "../components/welcome/MachineCard";
 import { useChannel } from "../lib/ChannelContext";
 import { typicalLive } from "../lib/machine";
+import { fileSize } from "../lib/format";
 
 const LANGUAGES = [
   { code: "fr", labelKey: "profile.french" },
@@ -120,6 +136,253 @@ function TranscriptionSection() {
       <div className="mt-3">
         <MachineCard liveSeconds={typicalLive((channel?.vods ?? []).map((v) => v.duration_seconds))} />
       </div>
+    </Section>
+  );
+}
+
+// ── Storage ─────────────────────────────────────────────────────────────────
+
+const CLEANUP_AGES = [7, 30, 90] as const;
+
+/** What Cuttie keeps on this computer, and the cleanup of old clips (exports always stay) */
+function StorageSection() {
+  const { t, i18n } = useTranslation();
+  const toast = useToast();
+  const [disk, setDisk] = useState<DiskSpace | null>(null);
+  const [age, setAge] = useState<number>(30);
+  const [busy, setBusy] = useState(false);
+  const [confirm, setConfirm] = useState<"free" | "auto" | null>(null);
+  const aged = useRef(false);
+
+  const load = useCallback(async () => {
+    try {
+      const space = await getDiskSpace();
+      setDisk(space);
+      // The age shown first: the cleanup's, when it runs
+      if (!aged.current && space.cleanup_days) setAge(space.cleanup_days);
+      aged.current = true;
+    } catch {
+      setDisk(null);
+    }
+  }, []);
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  if (!disk) return null;
+  const size = (bytes: number) => fileSize(bytes, i18n.language);
+  const { usage } = disk;
+  const auto = disk.cleanup_days > 0;
+  const cleanable = disk.cleanable[String(age)] ?? { projects: 0, bytes: 0 };
+  const parts = [
+    { key: "clips", bytes: usage.clips, color: "bg-accent" },
+    { key: "exports", bytes: usage.exports, color: "bg-white/60" },
+    { key: "models", bytes: usage.models, color: "bg-white/30" },
+    { key: "other", bytes: usage.other + usage.logs, color: "bg-white/15" },
+  ].filter((p) => p.bytes > 0);
+  const lowDisk = usage.free !== null && usage.free < 20e9;
+
+  const saveCleanup = async (days: number) => {
+    setBusy(true);
+    try {
+      const { freed } = await setCleanupDays(days);
+      if (!days) toast.success(t("settings.storage.autoOff"));
+      else if (freed > 0) toast.success(t("settings.storage.autoOnFreed", { size: size(freed) }));
+      else toast.success(t("settings.storage.autoOn", { count: days }));
+      await load();
+    } catch {
+      toast.error(t("settings.storage.failed"));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const freeNow = async () => {
+    setBusy(true);
+    try {
+      const { projects, bytes } = await freeIdleProjects(age);
+      toast.success(t("settings.storage.freed", { count: projects, size: size(bytes) }));
+      await load();
+    } catch {
+      toast.error(t("settings.storage.failed"));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const chooseAge = (days: number) => {
+    setAge(days);
+    if (auto && days !== disk.cleanup_days) {
+      // A shorter age frees projects at once: say so first
+      if ((disk.cleanable[String(days)]?.projects ?? 0) > 0) setConfirm("auto");
+      else saveCleanup(days);
+    }
+  };
+  const toggleAuto = () => {
+    if (auto) saveCleanup(0);
+    else if (cleanable.projects > 0) setConfirm("auto");
+    else saveCleanup(age);
+  };
+
+  return (
+    <Section id="stockage" icon={HardDrive} title={t("settings.storage.title")} hint={t("settings.storage.hint")}>
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+        <span className="text-[14px] font-[550] text-white">{t("settings.storage.used", { size: size(usage.total) })}</span>
+        {usage.free !== null && (
+          <span className={`text-[12.5px] ${lowDisk ? "text-[#f5b14c]" : "text-ink-3"}`}>{t("settings.storage.free", { size: size(usage.free) })}</span>
+        )}
+      </div>
+      <div className="mt-2.5 h-2 rounded-full bg-white/[0.08] overflow-hidden flex gap-px" role="img" aria-label={t("settings.storage.used", { size: size(usage.total) })}>
+        {parts.map((p, i) => (
+          <span key={p.key} className={`machine-bar ${p.color}`} style={{ width: `${(p.bytes / Math.max(1, usage.total)) * 100}%`, ["--i" as string]: i }} />
+        ))}
+      </div>
+      <div className="mt-2.5 flex flex-wrap gap-x-4 gap-y-1.5 text-[12.5px]">
+        {parts.map((p) => (
+          <span key={p.key} className="inline-flex items-center gap-1.5 text-ink-2">
+            <span className={`w-2 h-2 rounded-full ${p.color}`} />
+            {t(`settings.storage.part.${p.key}`)} <span className="mono text-ink-3">{size(p.bytes)}</span>
+          </span>
+        ))}
+      </div>
+
+      <div className="mt-5 pt-5 border-t border-white/[0.06]">
+        <div className="text-[14px] font-[550] text-white">{t("settings.storage.cleanTitle")}</div>
+        <p className="mt-0.5 text-[12.5px] leading-relaxed text-ink-3 max-w-[64ch]">{t("settings.storage.cleanHint")}</p>
+        <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2.5">
+          <div role="group" aria-label={t("settings.storage.cleanTitle")} className="seg">
+            {CLEANUP_AGES.map((days) => (
+              <button key={days} aria-pressed={age === days} disabled={busy} onClick={() => chooseAge(days)}>
+                {t("settings.storage.days", { count: days })}
+              </button>
+            ))}
+          </div>
+          <span className="text-[13px] text-ink-2">
+            {cleanable.projects ? t("settings.storage.cleanable", { count: cleanable.projects, size: size(cleanable.bytes) }) : t("settings.storage.nothing")}
+          </span>
+          <button onClick={() => setConfirm("free")} disabled={busy || !cleanable.projects} className="btn btn-glass btn-sm ml-auto">
+            {busy && confirm === null ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />} {t("settings.storage.freeNow")}
+          </button>
+        </div>
+        <div className="mt-4 flex items-center gap-3">
+          <button role="switch" aria-checked={auto} aria-label={t("settings.storage.auto")} disabled={busy} onClick={toggleAuto} className="switch">
+            <span />
+          </button>
+          <div className="min-w-0">
+            <div className="text-[13.5px] text-white">{t("settings.storage.auto")}</div>
+            <div className="text-[12px] text-ink-3">{auto ? t("settings.storage.autoHintOn", { count: disk.cleanup_days }) : t("settings.storage.autoHintOff")}</div>
+          </div>
+        </div>
+      </div>
+
+      <ConfirmModal
+        open={confirm !== null}
+        variant="default"
+        title={confirm === "auto" ? t("settings.storage.confirmAutoTitle") : t("settings.storage.confirmFreeTitle", { size: size(cleanable.bytes) })}
+        message={t("settings.storage.confirmBody", {
+          count: disk.cleanable[String(age)]?.projects ?? 0,
+          days: age,
+          size: size(disk.cleanable[String(age)]?.bytes ?? 0),
+        })}
+        confirmLabel={confirm === "auto" ? t("settings.storage.confirmAuto") : t("settings.storage.freeNow")}
+        onConfirm={() => {
+          const action = confirm;
+          setConfirm(null);
+          if (action === "auto") saveCleanup(age);
+          else freeNow();
+        }}
+        onCancel={() => {
+          setConfirm(null);
+          if (auto) setAge(disk.cleanup_days);
+        }}
+      />
+    </Section>
+  );
+}
+
+// ── Help from afar ──────────────────────────────────────────────────────────
+
+const LOG_PERIODS = [1, 24, 168, 0] as const;
+
+/** The journal as a .zip to send to whoever helps (keys taken out), and emptying it */
+function JournalSection() {
+  const { t, i18n } = useTranslation();
+  const toast = useToast();
+  const [hours, setHours] = useState<number>(24);
+  const [bytes, setBytes] = useState<number | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [confirmClear, setConfirmClear] = useState(false);
+
+  useEffect(() => {
+    getLogsSize()
+      .then(setBytes)
+      .catch(() => setBytes(null));
+  }, []);
+
+  const extract = async () => {
+    setExporting(true);
+    try {
+      const { blob, filename } = await exportLogs(hours);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
+      toast.success(t("settings.journal.exported", { file: filename }));
+    } catch {
+      toast.error(t("settings.journal.exportFailed"));
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const clear = async () => {
+    setConfirmClear(false);
+    try {
+      const { freed, bytes: left } = await clearLogs();
+      setBytes(left);
+      toast.success(t("settings.journal.cleared", { size: fileSize(freed, i18n.language) }));
+    } catch {
+      toast.error(t("settings.journal.clearFailed"));
+    }
+  };
+
+  return (
+    <Section icon={LifeBuoy} title={t("settings.journal.title")} hint={t("settings.journal.hint")}>
+      <div className="flex flex-wrap items-center gap-3">
+        <div role="group" aria-label={t("settings.journal.period")} className="seg">
+          {LOG_PERIODS.map((h) => (
+            <button key={h} aria-pressed={hours === h} onClick={() => setHours(h)}>
+              {t(`settings.journal.periods.${h}`)}
+            </button>
+          ))}
+        </div>
+        <button onClick={extract} disabled={exporting} className="btn btn-primary btn-sm">
+          {exporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />} {t("settings.journal.extract")}
+        </button>
+      </div>
+      <div className="mt-4 pt-4 border-t border-white/[0.06] flex flex-wrap gap-1.5">
+        {desktop && (
+          <button onClick={() => desktop?.openLogs()} className="btn btn-ghost btn-sm">
+            <FolderOpen className="w-3.5 h-3.5" /> {t("settings.app.logs")}
+          </button>
+        )}
+        {bytes !== null && (
+          <button onClick={() => setConfirmClear(true)} disabled={bytes === 0} className="btn btn-ghost btn-sm">
+            <Trash2 className="w-3.5 h-3.5" /> {t("settings.journal.clear", { size: fileSize(bytes, i18n.language) })}
+          </button>
+        )}
+      </div>
+      <ConfirmModal
+        open={confirmClear}
+        title={t("settings.journal.clearTitle")}
+        message={t("settings.journal.clearBody")}
+        onConfirm={clear}
+        onCancel={() => setConfirmClear(false)}
+      />
     </Section>
   );
 }
@@ -468,16 +731,13 @@ function AppSection() {
         </div>
       )}
 
-      <div className="mt-4 pt-4 border-t border-white/[0.06] flex flex-wrap gap-1.5">
-        <button onClick={() => desktop?.openLogs()} className="btn btn-ghost btn-sm">
-          <FolderOpen className="w-3.5 h-3.5" /> {t("settings.app.logs")}
-        </button>
-        {info?.packaged && (
+      {info?.packaged && (
+        <div className="mt-4 pt-4 border-t border-white/[0.06] flex flex-wrap gap-1.5">
           <button onClick={() => setConfirm("repair")} className="btn btn-ghost btn-sm">
             <Wrench className="w-3.5 h-3.5" /> {t("settings.app.repair")}
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
       <ConfirmModal
         open={confirm === "busy"}
@@ -551,7 +811,11 @@ export default function SettingsPage() {
           </div>
         </Section>
 
+        <StorageSection />
+
         <DiagnosticsSection />
+
+        <JournalSection />
 
         <AppSection />
 

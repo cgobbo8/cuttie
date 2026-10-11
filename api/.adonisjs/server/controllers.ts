@@ -13,6 +13,7 @@ export const controllers = {
   Clips: () => import('#controllers/clips_controller'),
   Creators: () => import('#controllers/creators_controller'),
   Dashboard: () => import('#controllers/dashboard_controller'),
+  Disk: () => import('#controllers/disk_controller'),
   Games: () => import('#controllers/games_controller'),
   GoogleAuth: () => import('#controllers/google_auth_controller'),
   Internal: () => import('#controllers/internal_controller'),
@@ -22,6 +23,7 @@ export const controllers = {
   Renders: () => import('#controllers/renders_controller'),
   Spa: () => import('#controllers/spa_controller'),
   Storage: () => import('#controllers/storage_controller'),
+  Support: () => import('#controllers/support_controller'),
   Themes: () => import('#controllers/themes_controller'),
   Workers: () => import('#controllers/workers_controller'),
 }

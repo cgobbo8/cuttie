@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { Link, useNavigate } from "react-router";
 import { useTranslation } from "react-i18next";
-import { ArrowRight, Clapperboard, Download, Film, Loader2, RotateCcw, Search, Sparkles, Trash2 } from "lucide-react";
+import { Archive, ArrowRight, Clapperboard, Download, Film, HardDrive, Loader2, RotateCcw, Search, Sparkles, Trash2 } from "lucide-react";
 import {
   clipThumbUrl,
   deleteJob,
+  freeProject,
   listGamesAndStreamers,
   listJobs,
   retryJob,
@@ -14,9 +15,10 @@ import {
 } from "../lib/api";
 import { useChannel } from "../lib/ChannelContext";
 import { useCreatorWorkspace } from "../lib/CreatorWorkspaceContext";
-import { analysisProgress, dayDate, hoursMinutes, splitVodTitle } from "../lib/format";
+import { analysisProgress, dayDate, fileSize, hoursMinutes, splitVodTitle } from "../lib/format";
 import { projectPath, projectStage, type ProjectStage } from "../lib/projects";
 import ConfirmModal from "../components/ConfirmModal";
+import ProjectRemoveModal from "../components/ProjectRemoveModal";
 import { useToast } from "../components/Toast";
 
 type StatusFilter = "" | "in_progress" | "done" | "error";
@@ -57,7 +59,9 @@ function ProjectCard({
             src={cover}
             alt=""
             loading="lazy"
-            className={`w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.04] ${stage === "error" ? "grayscale-[0.6] brightness-[0.6]" : ""}`}
+            className={`w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.04] ${
+              stage === "error" ? "grayscale-[0.6] brightness-[0.6]" : stage === "freed" ? "grayscale-[0.5] brightness-[0.75]" : ""
+            }`}
           />
         ) : (
           <div className="w-full h-full skeleton" />
@@ -71,6 +75,10 @@ function ProjectCard({
             </>
           ) : stage === "error" ? (
             <span className="text-[#ff8a7a]">{t("status.error")}</span>
+          ) : stage === "freed" ? (
+            <>
+              <Archive className="w-3 h-3" /> {t("projects.stage.freed")}
+            </>
           ) : (
             <>
               <span className="w-1.5 h-1.5 rounded-full bg-accent" /> {t(`projects.stage.${stage}`)}
@@ -118,6 +126,12 @@ function ProjectCard({
                 <Download className="w-3.5 h-3.5 text-ink-3" /> {t("projects.exported", { count: job.export_count })}
               </span>
             )}
+            {/* What its clips take on this computer */}
+            {job.clips_bytes > 0 && (
+              <span className="inline-flex items-center gap-1.5 text-ink-3" title={t("projects.size")}>
+                <HardDrive className="w-3.5 h-3.5" /> {fileSize(job.clips_bytes, i18n.language)}
+              </span>
+            )}
           </div>
         )}
         {stage === "error" && job.error && <p className="text-[12.5px] leading-snug text-ink-3 line-clamp-2">{job.error}</p>}
@@ -141,7 +155,7 @@ function ProjectCard({
 
 /** Every live analyzed so far, each opening at the step it is at */
 export default function ProjectsPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const toast = useToast();
   const { channel } = useChannel();
@@ -240,6 +254,24 @@ export default function ProjectsPage() {
       setDeleting(false);
     }
   };
+
+  // Only the clips: the project and its exports stay
+  const confirmFree = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      const { freed } = await freeProject(deleteTarget.job_id);
+      setDeleteTarget(null);
+      toast.success(t("projects.remove.freed", { size: fileSize(freed, i18n.language) }));
+      fetchJobs();
+    } catch {
+      toast.error(t("projects.remove.freeError"));
+    } finally {
+      setDeleting(false);
+    }
+  };
+  // A project still being analyzed, or with nothing to free, can only be deleted
+  const canFree = !!deleteTarget && deleteTarget.clips_bytes > 0 && (deleteTarget.status === "DONE" || deleteTarget.status === "ERROR");
 
   const filtered = !!(debouncedSearch || statusFilter || gameFilter);
   const filters: { key: StatusFilter; label: string }[] = [
@@ -359,8 +391,16 @@ export default function ProjectsPage() {
         </nav>
       )}
 
+      <ProjectRemoveModal
+        open={canFree}
+        clipsBytes={deleteTarget?.clips_bytes ?? 0}
+        onFree={confirmFree}
+        onDelete={confirmDelete}
+        onCancel={() => setDeleteTarget(null)}
+        loading={deleting}
+      />
       <ConfirmModal
-        open={!!deleteTarget}
+        open={!!deleteTarget && !canFree}
         title={t("home.deleteProject")}
         message={t("home.deleteProjectMessage")}
         onConfirm={confirmDelete}

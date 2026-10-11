@@ -9,6 +9,7 @@ import { clipDir, TRANSCRIPTS_DIR } from '#services/data_paths'
 import { deleteObject, storagePath } from '#services/storage'
 import { cancelJob, enqueueJob, type WorkerJob } from '#services/worker_client'
 import { chatInClip, readJobChat } from '#services/edit_env_resolver'
+import { freeableBytes } from '#services/disk_space'
 import { createJobValidator } from '#validators/user'
 
 /** Hand a job to the worker in the background; mark it failed if the worker never answers. */
@@ -190,6 +191,9 @@ export default class JobsController {
         clipCount: (job.hotPoints ?? []).filter((hp: any) => hp.clip_filename).length,
         keptCount: Object.values(job.selection ?? {}).filter((sel) => sel.state === 'kept').length,
         exportCount: exportCounts.get(job.id) ?? 0,
+        // Clips deleted to free disk space (exports kept), and what freeing them would give back
+        clipsFreedAt: job.clipsFreedAt?.toISO() ?? null,
+        clipsBytes: freeableBytes(job.id),
       }
     })
 
@@ -348,6 +352,8 @@ export default class JobsController {
     job.status = 'PENDING'
     job.error = null
     job.progress = null
+    // Clips freed to make room: the analysis cuts them again
+    job.clipsFreedAt = null
     await job.save()
 
     dispatch({ job_id: job.id, url: job.url })

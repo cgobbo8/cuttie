@@ -9,6 +9,7 @@ import {
   ExtendError,
   getJobChat,
   getJobStatus,
+  listRenders,
   mapSSEHotPoint,
   renameClip,
   retryJob,
@@ -33,6 +34,8 @@ import VodTimeline from "../components/project/VodTimeline";
 import MomentPlayer, { type MomentPlayerHandle } from "../components/project/MomentPlayer";
 import MomentDetails from "../components/project/MomentDetails";
 import MomentList from "../components/project/MomentList";
+import FreedNotice from "../components/project/FreedNotice";
+import { latestPerClip } from "../lib/renders";
 
 function vodIdOf(url: string | null): string | null {
   return url?.match(/videos\/(\d+)/)?.[1] ?? null;
@@ -118,6 +121,16 @@ export default function ProjectPage() {
     const first = moments.findIndex((m) => m.state === "todo");
     setSelected(first === -1 ? 0 : first);
   }, [jobId, moments]);
+
+  // Freed projects point to their exports
+  const [exportCount, setExportCount] = useState(0);
+  const freedAt = job?.clips_freed_at;
+  useEffect(() => {
+    if (!jobId || !freedAt) return;
+    listRenders()
+      .then((renders) => setExportCount(latestPerClip(renders, jobId).filter((r) => r.status === "done").length))
+      .catch(() => setExportCount(0));
+  }, [jobId, freedAt]);
 
   // When the chat spoke in each clip, for the trim strip (once the clips exist)
   const [clipChat, setClipChat] = useState<Record<string, ClipChatLine[]>>({});
@@ -266,7 +279,8 @@ export default function ProjectPage() {
   // Stopped because the AI provider refuses every call (no credits, refused key)
   const stopped = job.status === "ERROR" ? providerNotice(job.notices) : undefined;
   const categoryLabel = (category: string | undefined) => (category ? t(`categories.${category}`, { defaultValue: category }) : null);
-  const stepLinks = { analyze: `/${jobId}`, choose: `/${jobId}`, edit: `/${jobId}/montage`, export: `/${jobId}/montage` };
+  const freed = !!job.clips_freed_at;
+  const stepLinks = { analyze: `/${jobId}`, choose: `/${jobId}`, edit: `/${jobId}/montage`, export: freed ? `/${jobId}/export` : `/${jobId}/montage` };
 
   return (
     <div className="animate-fade-in">
@@ -305,7 +319,7 @@ export default function ProjectPage() {
         <Stepper
           current={processing ? "analyze" : "choose"}
           links={stepLinks}
-          locked={processing ? ["choose", "edit", "export"] : counts.kept === 0 ? ["edit", "export"] : []}
+          locked={processing ? ["choose", "edit", "export"] : freed ? ["edit"] : counts.kept === 0 ? ["edit", "export"] : []}
           detail={processing ? undefined : t("project.keptCount", { count: counts.kept })}
         />
       </header>
@@ -368,7 +382,13 @@ export default function ProjectPage() {
         </div>
       )}
 
-      {!processing && moments.length > 0 && current && (
+      {freed && (
+        <div className="mt-6">
+          <FreedNotice job={job} exports={exportCount} onRestored={() => getJobStatus(jobId).then(setJob).catch(() => {})} />
+        </div>
+      )}
+
+      {!processing && !freed && moments.length > 0 && current && (
         <>
           <section className="mt-5">
             <VodTimeline

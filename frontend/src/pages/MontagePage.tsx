@@ -26,6 +26,7 @@ import TemplateSketch from "../components/montage/TemplateSketch";
 import TemplatePicker from "../components/montage/TemplatePicker";
 import CamSheet from "../components/montage/CamSheet";
 import Stepper from "../components/project/Stepper";
+import FreedNotice from "../components/project/FreedNotice";
 import { useToast } from "../components/Toast";
 
 const FPS = 30;
@@ -274,6 +275,21 @@ export default function MontagePage() {
       locked={kept.length === 0 ? ["export"] : []}
     />
   );
+
+  // Clips freed to make room: nothing to edit until they're back
+  if (job.clips_freed_at) {
+    return (
+      <div className="animate-fade-in">
+        <div className="flex flex-wrap items-end justify-between gap-5">
+          <h1 className="title-large">{t("montage.title")}</h1>
+          {stepper}
+        </div>
+        <div className="mt-8">
+          <FreedNotice job={job} onRestored={() => getJobStatus(jobId).then(setJob).catch(() => {})} />
+        </div>
+      </div>
+    );
+  }
 
   if (!current) {
     return (

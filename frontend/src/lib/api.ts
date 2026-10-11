@@ -474,6 +474,8 @@ export interface JobResponse {
   timeline: JobTimeline | null;
   /** Things that degraded the analysis without failing it */
   notices?: JobNotice[] | null;
+  /** Its clips were deleted to free disk space (exports kept) */
+  clips_freed_at: string | null;
 }
 
 /** e.g. segments Whisper could not transcribe (rate limits), or the AI provider refusing every call */
@@ -538,6 +540,10 @@ export interface JobSummary {
   export_count: number;
   /** While analyzing: when it should be done */
   eta: AnalysisEta | null;
+  /** Its clips were deleted to free disk space (exports kept) */
+  clips_freed_at: string | null;
+  /** Bytes freeing its clips would give back */
+  clips_bytes: number;
 }
 
 export interface PaginationMeta {
@@ -573,6 +579,7 @@ interface ServerJobResponse {
   selection?: Record<string, ClipSelection> | null;
   timeline?: JobTimeline | null;
   notices?: JobNotice[] | null;
+  clipsFreedAt?: string | null;
 }
 
 interface ServerHotPoint {
@@ -602,6 +609,8 @@ interface ServerJobSummary {
   keptCount?: number;
   exportCount?: number;
   eta?: AnalysisEta | null;
+  clipsFreedAt?: string | null;
+  clipsBytes?: number;
 }
 
 function mapJobResponse(raw: ServerJobResponse): JobResponse {
@@ -627,6 +636,7 @@ function mapJobResponse(raw: ServerJobResponse): JobResponse {
     selection: raw.selection ?? {},
     timeline: raw.timeline ?? null,
     notices: raw.notices ?? null,
+    clips_freed_at: raw.clipsFreedAt ?? null,
   };
 }
 
@@ -653,6 +663,8 @@ function mapJobSummary(raw: ServerJobSummary): JobSummary {
     clip_count: raw.clipCount ?? 0,
     kept_count: raw.keptCount ?? 0,
     export_count: raw.exportCount ?? 0,
+    clips_freed_at: raw.clipsFreedAt ?? null,
+    clips_bytes: raw.clipsBytes ?? 0,
   };
 }
 
@@ -931,6 +943,95 @@ export async function extendClip(jobId: string, filename: string, side: "start" 
   const json = await res.json().catch(() => ({}));
   if (!res.ok) throw new ExtendError(res.status === 409 ? "edge" : res.status === 502 ? "unreachable" : "other", json.error ?? "extend failed");
   return json;
+}
+
+// ── Disk space ───────────────────────────────────────────
+
+export interface DiskUsage {
+  /** Bytes in Cuttie's data folder */
+  total: number;
+  /** Free bytes on its disk */
+  free: number | null;
+  clips: number;
+  exports: number;
+  models: number;
+  logs: number;
+  other: number;
+}
+
+export interface DiskSpace {
+  usage: DiskUsage;
+  /** Clips of projects idle for this many days are freed by themselves (0 = never) */
+  cleanup_days: number;
+  /** What freeing the projects idle for 7, 30 or 90 days would give back */
+  cleanable: Record<string, { projects: number; bytes: number }>;
+}
+
+export async function getDiskSpace(): Promise<DiskSpace> {
+  return jsonOrThrow(await fetch(`${BASE}/disk`), "Failed to read disk space");
+}
+
+/** Turn the cleanup on (days) or off (0); it runs at once: the bytes it freed */
+export async function setCleanupDays(days: number): Promise<{ cleanup_days: number; freed: number }> {
+  return jsonOrThrow(
+    await fetch(`${BASE}/disk/cleanup`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ days }) }),
+    "Failed to save the cleanup"
+  );
+}
+
+/** Free now the clips of the projects idle for `days` */
+export async function freeIdleProjects(days: number): Promise<{ projects: number; bytes: number }> {
+  return jsonOrThrow(
+    await fetch(`${BASE}/disk/free`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ days }) }),
+    "Failed to free the clips"
+  );
+}
+
+/** Delete a project's clips to free disk space; its exports stay */
+export async function freeProject(jobId: string): Promise<{ freed: number }> {
+  return jsonOrThrow(await fetch(`${BASE}/jobs/${encodeURIComponent(jobId)}/free`, { method: "POST" }), "Failed to free the clips");
+}
+
+/** Why the clips couldn't come back: the live is gone from Twitch, or it couldn't be read */
+export class RestoreError extends Error {
+  constructor(readonly reason: "gone" | "failed", message: string) {
+    super(message);
+  }
+}
+
+/** Cut a freed project's clips again from the live (a minute or so) */
+export async function restoreProject(jobId: string): Promise<{ restored: number; failed: number }> {
+  const res = await fetch(`${BASE}/jobs/${encodeURIComponent(jobId)}/restore`, { method: "POST" });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new RestoreError(res.status === 410 ? "gone" : "failed", json.error ?? "restore failed");
+  return json;
+}
+
+// ── Journal (help from afar) ─────────────────────────────
+
+export async function getLogsSize(): Promise<number> {
+  return (await jsonOrThrow<{ bytes: number }>(await fetch(`${BASE}/logs`), "Failed to read the journal")).bytes;
+}
+
+export async function clearLogs(): Promise<{ freed: number; bytes: number }> {
+  return jsonOrThrow(await fetch(`${BASE}/logs`, { method: "DELETE" }), "Failed to empty the journal");
+}
+
+/** The journal of the last `hours` (0 = all) as a .zip to send to whoever helps */
+export async function exportLogs(hours: number, now = new Date()): Promise<{ blob: Blob; filename: string }> {
+  // The journal's times are UTC: its zone tells what they were here
+  const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const res = await fetch(`${BASE}/logs/export?hours=${hours}&tz=${encodeURIComponent(zone)}`);
+  if (!res.ok) throw new Error("Failed to export the journal");
+  // Named at this computer's time (the API runs in UTC)
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const filename = `cuttie-journal-${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}-${pad(now.getHours())}h${pad(now.getMinutes())}.zip`;
+  return { blob: await res.blob(), filename };
+}
+
+/** An error of this page, into the journal (never throws) */
+export function reportClientError(entry: { kind: string; message: string; stack?: string; page?: string }): void {
+  fetch(`${BASE}/client-log`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(entry), keepalive: true }).catch(() => {});
 }
 
 // ── Hot point mapping ────────────────────────────────────

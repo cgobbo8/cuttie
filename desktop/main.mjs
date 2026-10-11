@@ -53,14 +53,47 @@ const logDir = path.join(dataDir, "logs");
 
 mkdirSync(logDir, { recursive: true });
 const logFile = path.join(logDir, "cuttie.log");
-try {
-  if (statSync(logFile).size > 5_000_000) renameSync(logFile, path.join(logDir, "cuttie.old.log"));
-} catch {}
-const logStream = createWriteStream(logFile, { flags: "a" });
-logStream.on("error", () => {});
+// cuttie.log, then cuttie.1.log and cuttie.2.log: 30 MB at most (a day of tests with a 2 h analysis is ~300 KB)
+const LOG_MAX_BYTES = 10_000_000;
+const LOG_KEEP = 2;
+let logStream = null;
+let logBytes = 0;
+
+function openLog() {
+  try {
+    logBytes = statSync(logFile).size;
+  } catch {
+    logBytes = 0;
+  }
+  logStream = createWriteStream(logFile, { flags: "a" });
+  logStream.on("error", () => {});
+}
+
+function rotateLog() {
+  logStream?.end();
+  for (let i = LOG_KEEP; i >= 1; i--) {
+    const from = i === 1 ? logFile : path.join(logDir, `cuttie.${i - 1}.log`);
+    try {
+      if (existsSync(from)) renameSync(from, path.join(logDir, `cuttie.${i}.log`));
+    } catch {}
+  }
+  rmSync(path.join(logDir, "cuttie.old.log"), { force: true }); // before rotation existed
+  openLog();
+}
+
+openLog();
+if (logBytes > LOG_MAX_BYTES) rotateLog();
 const log = (name, line) => {
   const text = `${new Date().toISOString()} [${name}] ${line}\n`;
+  if (logBytes + text.length > LOG_MAX_BYTES) {
+    // Emptied from Settings meanwhile: carry on in the same file
+    try {
+      logBytes = statSync(logFile).size;
+    } catch {}
+    if (logBytes + text.length > LOG_MAX_BYTES) rotateLog();
+  }
   logStream.write(text);
+  logBytes += Buffer.byteLength(text);
   if (!packaged || smoke) process.stdout.write(text);
 };
 
@@ -243,7 +276,7 @@ async function ensurePython() {
 async function startStack() {
   const { startCuttie } = await import(pathToFileURL(path.join(root, "scripts", "launcher.mjs")).href);
   if (!packaged) {
-    return startCuttie({ root, dataDir, nodeBin: "node", onLog: log });
+    return startCuttie({ root, dataDir, nodeBin: "node", env: { CUTTIE_APP_VERSION: app.getVersion() }, onLog: log });
   }
   const python = path.join(venvDir, isWindows ? "Scripts" : "bin", exe("python"));
   return startCuttie({
@@ -257,6 +290,9 @@ async function startStack() {
     env: {
       PATH: [bin, path.dirname(python), process.env.PATH ?? ""].join(path.delimiter),
       CUTTIE_DLL_DIRS: path.join(bin, "msvc"),
+      CUTTIE_APP_VERSION: app.getVersion(),
+      // Clips of projects idle for 30 days give their space back, exports kept (Settings > Storage)
+      CUTTIE_CLEANUP_DAYS: "30",
     },
     onLog: log,
   });

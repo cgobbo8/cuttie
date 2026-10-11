@@ -109,6 +109,11 @@ def _voices() -> dict:
         return {"seconds": None, "error": f"{type(e).__name__}: {e}"}
 
 
+def cached() -> dict | None:
+    """The profile when it was already measured (a journal export doesn't run the benchmark)."""
+    return _cached
+
+
 def profile() -> dict:
     """This computer, measured once per run of the worker."""
     global _cached

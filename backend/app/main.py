@@ -70,6 +70,18 @@ class ExtendRequest(BaseModel):
     end: float
 
 
+class RestoreClip(BaseModel):
+    filename: str
+    # Where the clip sits in the live, seconds
+    start: float
+    end: float
+
+
+class RestoreRequest(BaseModel):
+    url: str
+    clips: list[RestoreClip]
+
+
 class VodFacecamRequest(BaseModel):
     vod_id: str
     duration: float
@@ -272,6 +284,20 @@ def clip_extend(job_id: str, clip_filename: str, req: ExtendRequest) -> dict:
         raise HTTPException(status_code=502, detail=str(e)) from e
 
 
+@app.post("/clips/{job_id}/restore", dependencies=[Depends(require_secret)])
+def clips_restore(job_id: str, req: RestoreRequest) -> dict:
+    """Cut a project's clips again from the live (deleted to free disk space)."""
+    from app.services.clip_tools import LiveGone, restore_clips
+
+    clips = [c.model_dump() for c in req.clips if c.start >= 0 and c.end - c.start >= 1]
+    try:
+        return restore_clips(_check_job_id(job_id), req.url, clips)
+    except LiveGone:
+        raise HTTPException(status_code=410, detail="the live is no longer on Twitch")
+    except RuntimeError as e:
+        raise HTTPException(status_code=502, detail=str(e)) from e
+
+
 @app.post("/jobs/{job_id}/facecam", dependencies=[Depends(require_secret)])
 def facecam(job_id: str, req: FacecamRequest) -> dict:
     from app.services.clip_tools import detect_job_facecam
@@ -312,11 +338,12 @@ def _first_line(cmd: list[str]) -> str | None:
 
 
 @app.get("/machine", dependencies=[Depends(require_secret)])
-def machine_profile() -> dict:
-    """The card, how fast Whisper would run here and the voice model's speed, measured in seconds (no Whisper download)."""
+def machine_profile(cached: bool = False) -> dict | None:
+    """The card, how fast Whisper would run here and the voice model's speed, measured in seconds (no Whisper download).
+    `cached`: only when already measured (null otherwise), never a new measure."""
     from app.services import machine
 
-    return machine.profile()
+    return machine.cached() if cached else machine.profile()
 
 
 @app.post("/diagnostics/local-test", dependencies=[Depends(require_secret)])

@@ -54,20 +54,23 @@ function tintWhite(hex: string, strength = 0.15): string {
   return `rgb(${tr},${tg},${tb})`;
 }
 
+/** A voice the diarizer couldn't name (the streamer's is named after the channel) */
+const UNNAMED_VOICE = /^SPEAKER_\d+$/;
+
+/** The streamer in white, whoever speaks first; the other voices in color */
 function buildFallbackMap(words: SubtitleWord[], baseColor: string): Map<string, SpeakerStyle> {
   const map = new Map<string, SpeakerStyle>();
-  let idx = 0;
-  for (const w of words) {
-    if (w.speaker && !map.has(w.speaker)) {
-      if (idx === 0) {
-        map.set(w.speaker, { color: "#FFFFFF", bgColor: baseColor });
-      } else {
-        const bg = SPEAKER_COLORS[(idx - 1) % SPEAKER_COLORS.length];
-        map.set(w.speaker, { color: tintWhite(bg), bgColor: bg });
-      }
-      idx++;
+  const voices = [...new Set(words.map((w) => w.speaker).filter((s): s is string => !!s))];
+  const streamer = voices.find((s) => !UNNAMED_VOICE.test(s));
+  const ordered = streamer ? [streamer, ...voices.filter((s) => s !== streamer)] : voices;
+  ordered.forEach((speaker, idx) => {
+    if (idx === 0) {
+      map.set(speaker, { color: "#FFFFFF", bgColor: baseColor });
+    } else {
+      const bg = SPEAKER_COLORS[(idx - 1) % SPEAKER_COLORS.length];
+      map.set(speaker, { color: tintWhite(bg), bgColor: bg });
     }
-  }
+  });
   return map;
 }
 

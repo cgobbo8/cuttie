@@ -400,6 +400,8 @@ export interface HotPoint {
   vertical_filename: string | null;
   clip_name: string;
   clip_source: "auto" | "manual" | "detected";
+  /** "reading": the AI found it reading the whole live, not in the sound and chat peaks */
+  found_by?: string;
   /** Bounds of the clip in the VOD (seconds) */
   clip_start?: number;
   clip_end?: number;

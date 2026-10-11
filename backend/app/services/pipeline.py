@@ -19,7 +19,7 @@ from app.services.downloader import extract_metadata, download_audio, download_c
 from app.services.llm_analyzer import analyze_candidates, analyze_hot_points, analyze_single_clip
 from app.services.provider_errors import ProviderUnavailable, check_openrouter
 from app.services import vod_transcript
-from app.services.scorer import compute_scores
+from app.services.scorer import peaks, score_track
 from app.services.speaker_diarizer import pick_voice_reference
 from app.services import job_control
 from app.services.job_control import JobCancelled
@@ -470,12 +470,9 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
             timer.start("SCORING")
             logger.info(f"[{job_id[:8]}] Computing scores...")
             update_job(job_id, status="SCORING", progress="Computing scores and finding hot points...", step_timings=timer.timings)
-            hot_points = compute_scores(
-                audio_features, chat_features,
-                total_duration=duration, top_n=200,
-                classification_features=classification_features,
-                chat_lag=chat_lag,
-            )
+            # The whole live window by window: the peaks, and later the signals of passages found otherwise
+            track = score_track(audio_features, chat_features, classification_features=classification_features, chat_lag=chat_lag)
+            hot_points = peaks(track, top_n=200) if track else []
             logger.info(f"[{job_id[:8]}] Scoring done: {len(hot_points)} hot points")
 
             # Save initial hot points to DB
@@ -516,6 +513,7 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
                 chat_lag=chat_lag,
                 voice_reference=pick_voice_reference(classification_features, duration),
                 vod_transcript=live_transcript,
+                signals_of=track.signals_between if track else None,
             )
 
         # Step 7: Clipping — download video only for top 20

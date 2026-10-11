@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from app.services.scorer import WEIGHTS, _normalize, compute_scores, seconds_to_display
+from app.services.scorer import WEIGHTS, _normalize, compute_scores, score_track, seconds_to_display
 
 
 class TestNormalize:
@@ -182,3 +182,24 @@ class TestComputeScores:
         ]
         result = compute_scores(audio, [], top_n=5, classification_features=classification)
         assert len(result) > 0
+
+
+def test_a_passage_found_otherwise_takes_its_strongest_windows_signals():
+    """Moments found by the AI or by "clip" get the signals a peak there would have."""
+    audio = []
+    for i in range(200):
+        loud = 160 <= i <= 164  # a shout at 400-410 s, over a live that never sits still
+        base = 0.1 + 0.05 * ((i * 37) % 10) / 10
+        audio.append({"time": i * 2.5, "rms": 0.9 if loud else base, "centroid": base, "zcr": base, "flux": 0.8 if loud else base, "onset": base, "pitch_var": base})
+    chat = [
+        {"time": i * 2.5 + 5, "chat_speed": 5.0 if 160 <= i <= 166 else 0.5 + ((i * 13) % 7) / 10, "dominant_mood": "fun" if 160 <= i <= 166 else ""}
+        for i in range(200)
+    ]
+    track = score_track(audio, chat, chat_lag=5.0)
+
+    signals, mood = track.signals_between(380, 440)
+    assert signals.rms == 1.0 and signals.chat_speed == 1.0 and mood == "fun"
+    # Somewhere the chat didn't react: no mood made up
+    assert track.signals_between(100, 160)[1] == ""
+    # A passage between two windows: the nearest one
+    assert track.signals_between(400.1, 400.2)[0].rms == 1.0

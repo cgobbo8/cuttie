@@ -9,6 +9,8 @@ Improvements over v1:
 - Signal agreement bonus (when audio + chat both spike)
 """
 
+from dataclasses import dataclass
+
 import numpy as np
 from scipy.ndimage import gaussian_filter1d
 from scipy.signal import find_peaks
@@ -67,6 +69,41 @@ def _normalize(arr: np.ndarray) -> np.ndarray:
     return np.clip(normed, 0.0, 1.0)
 
 
+@dataclass
+class ScoreTrack:
+    """The live window by window: normalized signals and the smoothed composite score."""
+
+    times: np.ndarray
+    norm: dict[str, np.ndarray]
+    excitement: np.ndarray
+    speech: np.ndarray
+    clip_requests: np.ndarray
+    moods: list[str]
+    score: np.ndarray
+
+    def breakdown(self, idx: int) -> SignalBreakdown:
+        """What the signals said at window `idx`."""
+        return SignalBreakdown(
+            rms=round(float(self.norm["rms"][idx]), 3),
+            spectral_flux=round(float(self.norm["flux"][idx]), 3),
+            pitch_variance=round(float(self.norm["pitch_var"][idx]), 3),
+            spectral_centroid=round(float(self.norm["centroid"][idx]), 3),
+            zcr=round(float(self.norm["zcr"][idx]), 3),
+            chat_speed=round(float(self.norm["chat_speed"][idx]), 3),
+            vocal_excitement=round(float(self.excitement[idx]), 3),
+            speech_presence=round(float(self.speech[idx]), 3),
+            clip_requests=int(self.clip_requests[max(0, idx - 2) : idx + 3].max()),
+        )
+
+    def signals_between(self, start: float, end: float) -> tuple[SignalBreakdown, str]:
+        """A passage found otherwise (by the AI, "clip" said): its strongest window's signals, as a peak's."""
+        inside = np.where((self.times >= start) & (self.times <= end))[0]
+        if len(inside) == 0:
+            inside = np.array([int(np.argmin(np.abs(self.times - (start + end) / 2)))])
+        idx = int(inside[np.argmax(self.score[inside])])
+        return self.breakdown(idx), self.moods[idx]
+
+
 def compute_scores(
     audio_features: list[dict],
     chat_features: list[dict],
@@ -81,8 +118,20 @@ def compute_scores(
     Chat reacts `chat_lag` seconds after what happens on stream: the chat
     window at t + chat_lag scores the moment at t.
     """
+    track = score_track(audio_features, chat_features, hop_sec, classification_features, chat_lag)
+    return peaks(track, top_n, hop_sec) if track else []
+
+
+def score_track(
+    audio_features: list[dict],
+    chat_features: list[dict],
+    hop_sec: float = 2.5,
+    classification_features: list[dict] | None = None,
+    chat_lag: float = 0.0,
+) -> ScoreTrack | None:
+    """The composite score of every window of the live, and the signals behind it."""
     if not audio_features:
-        return []
+        return None
 
     n = len(audio_features)
 
@@ -205,7 +254,20 @@ def compute_scores(
     score += CLIP_REQUEST_WEIGHT * np.clip(clip_requests / CLIP_REQUEST_FULL, 0, 1)
 
     # Smooth score curve for cleaner peak detection
-    score_smooth = gaussian_filter1d(score, sigma=SMOOTH_SIGMA)
+    return ScoreTrack(
+        times=times,
+        norm=norm,
+        excitement=norm_excite,
+        speech=norm_speech,
+        clip_requests=clip_requests,
+        moods=dominant_moods,
+        score=gaussian_filter1d(score, sigma=SMOOTH_SIGMA),
+    )
+
+
+def peaks(track: ScoreTrack, top_n: int = 20, hop_sec: float = 2.5) -> list[HotPoint]:
+    """The top_n peaks of the live's score, at least MIN_PEAK_DISTANCE_SEC apart."""
+    score_smooth = track.score
 
     # Find peaks on smoothed curve with minimum distance
     min_distance = max(1, int(MIN_PEAK_DISTANCE_SEC / hop_sec))
@@ -217,27 +279,13 @@ def compute_scores(
     # Sort by smoothed score descending and take top N
     sorted_peaks = sorted(peak_indices, key=lambda i: score_smooth[i], reverse=True)[:top_n]
 
-    # Build HotPoint objects (use raw score for display, smoothed for ranking)
-    hot_points = []
-    for idx in sorted_peaks:
-        hot_points.append(
-            HotPoint(
-                timestamp_seconds=round(float(times[idx]), 1),
-                timestamp_display=seconds_to_display(times[idx]),
-                score=round(float(score_smooth[idx]), 3),
-                signals=SignalBreakdown(
-                    rms=round(float(norm["rms"][idx]), 3),
-                    spectral_flux=round(float(norm["flux"][idx]), 3),
-                    pitch_variance=round(float(norm["pitch_var"][idx]), 3),
-                    spectral_centroid=round(float(norm["centroid"][idx]), 3),
-                    zcr=round(float(norm["zcr"][idx]), 3),
-                    chat_speed=round(float(norm["chat_speed"][idx]), 3),
-                    vocal_excitement=round(float(norm_excite[idx]), 3),
-                    speech_presence=round(float(norm_speech[idx]), 3),
-                    clip_requests=int(clip_requests[max(0, idx - 2) : idx + 3].max()),
-                ),
-                chat_mood=dominant_moods[idx],
-            )
+    return [
+        HotPoint(
+            timestamp_seconds=round(float(track.times[idx]), 1),
+            timestamp_display=seconds_to_display(track.times[idx]),
+            score=round(float(score_smooth[idx]), 3),
+            signals=track.breakdown(idx),
+            chat_mood=track.moods[idx],
         )
-
-    return hot_points
+        for idx in sorted_peaks
+    ]

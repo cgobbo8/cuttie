@@ -95,9 +95,21 @@ def test_the_ai_picks_reach_the_llm_with_room_for_the_reaction(monkeypatch, tmp_
         PresortMoment(1010.0, 1060.0, 0.95, "hélices"),  # on the quiet candidate: its window takes in the reaction
         PresortMoment(5000.0, 5030.0, 0.9, "blague"),  # nowhere in the heuristics: a new candidate
     ])
-    llm_analyzer.analyze_candidates("job-x", hot_points, "/nonexistent.wav", "", 6000.0, {}, chat_messages=[], vod_transcript=transcript)
+    measured: list[tuple[float, float]] = []
+
+    def signals_of(start, end):
+        measured.append((start, end))
+        return SignalBreakdown(rms=0.7, chat_speed=0.4, vocal_excitement=0.9), "fun"
+
+    llm_analyzer.analyze_candidates(
+        "job-x", hot_points, "/nonexistent.wav", "", 6000.0, {}, chat_messages=[], vod_transcript=transcript, signals_of=signals_of
+    )
 
     assert (1000, 1080.0) in sent[0]  # 1010-1060 with room: 1000-1080
     assert (4990.0, 5050.0) in sent[0]
     assert (100, 160) in sent[0]  # the best heuristic one still goes
+    # The one found by reading shows what the sound and the chat said over its window
+    found = next(hp for hp in hot_points if hp.clip_start == 4990.0)
+    assert (found.signals.rms, found.signals.chat_speed, found.chat_mood, found.found_by) == (0.7, 0.4, "fun", "reading")
+    assert measured == [(4990.0, 5050.0)]
 

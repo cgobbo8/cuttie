@@ -747,7 +747,12 @@
       "live_transcript": "{{failed}} morceaux de 10 minutes sur {{total}} n'ont pas pu être transcrits : les moments de ces passages ont été moins bien repérés."
     },
     "timelineChat": "Chat",
-    "chatDots": "messages du chat"
+    "chatDots": "messages du chat",
+    "origin": {
+      "reading": "L'IA l'a repéré en lisant tout ce qui s'est dit pendant le live.",
+      "asked": "Quelqu'un a demandé un clip à ce moment-là.",
+      "manual": "Clip ajouté à la main."
+    }
   },
   "montage": {
     "title": "Habille tes clips",

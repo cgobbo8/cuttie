@@ -747,7 +747,12 @@
       "live_transcript": "{{failed}} fragmentos de 10 minutos de {{total}} no se pudieron transcribir: los momentos de esas partes se detectaron peor."
     },
     "timelineChat": "Chat",
-    "chatDots": "mensajes del chat"
+    "chatDots": "mensajes del chat",
+    "origin": {
+      "reading": "La IA lo detectó leyendo todo lo que se dijo durante el directo.",
+      "asked": "Alguien pidió un clip en ese momento.",
+      "manual": "Clip añadido a mano."
+    }
   },
   "montage": {
     "title": "Viste tus clips",

@@ -747,7 +747,12 @@
       "live_transcript": "{{failed}} 10-minute chunks out of {{total}} could not be transcribed: moments in those parts were found less reliably."
     },
     "timelineChat": "Chat",
-    "chatDots": "chat messages"
+    "chatDots": "chat messages",
+    "origin": {
+      "reading": "The AI spotted it reading everything said during the live.",
+      "asked": "Someone asked for a clip right then.",
+      "manual": "Clip added by hand."
+    }
   },
   "montage": {
     "title": "Dress up your clips",

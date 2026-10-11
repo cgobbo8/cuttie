@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
-import { Download, Pencil, SquarePen, Trash2 } from "lucide-react";
+import { Download, MessageCircle, Pencil, Sparkles, SquarePen, Trash2, Upload } from "lucide-react";
 import { Link } from "react-router";
 import { clipUrl } from "../../lib/api";
 import { clock } from "../../lib/format";
@@ -31,6 +31,17 @@ export default function MomentDetails({ jobId, moment, onRename, onSeek, onDelet
   };
 
   const s = moment.hp.signals;
+  // Moments found otherwise than in the sound and chat peaks say so; no bars when nothing was measured
+  const measured = !!s && Object.values(s).some((v) => typeof v === "number" && v > 0);
+  const origin =
+    moment.hp.clip_source === "manual"
+      ? "manual"
+      : moment.hp.clip_source === "detected"
+        ? "asked"
+        : moment.hp.found_by === "reading" || !measured
+          ? "reading"
+          : null;
+  const OriginIcon = origin === "manual" ? Upload : origin === "asked" ? MessageCircle : Sparkles;
   const signals = [
     { label: t("project.signal.voice"), value: s?.rms ?? 0 },
     { label: t("project.signal.excitement"), value: s?.vocal_excitement ?? 0 },
@@ -90,7 +101,13 @@ export default function MomentDetails({ jobId, moment, onRename, onSeek, onDelet
       </div>
       <div className="flex-[0_1_250px] min-w-[200px]">
         <div className="text-[12.5px] font-[550] text-ink-2">{t("project.why")}</div>
-        <div className="mt-3 flex flex-col gap-[11px]">
+        {origin && (
+          <p className="mt-2.5 flex items-start gap-2 text-[12.5px] leading-snug text-ink-2">
+            <OriginIcon className="w-3.5 h-3.5 mt-px flex-none text-accent" />
+            {t(`project.origin.${origin}`)}
+          </p>
+        )}
+        <div className={`mt-3 flex flex-col gap-[11px] ${measured ? "" : "hidden"}`}>
           {signals.map((x) => (
             <div key={x.label}>
               <div className="flex justify-between text-[12.5px]">

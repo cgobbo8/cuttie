@@ -21,6 +21,7 @@ import shutil
 import subprocess
 import threading
 import time as _time
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from app.models.schemas import HotPoint, KeyMoment, LlmAnalysis, SignalBreakdown, VodContext
@@ -941,6 +942,7 @@ def analyze_candidates(
     chat_lag: float = 0.0,
     voice_reference: list[float] | None = None,
     vod_transcript: VodTranscript | None = None,
+    signals_of: Callable[[float, float], tuple[SignalBreakdown, str]] | None = None,
 ) -> tuple[list[HotPoint], list[HotPoint], dict[int, list[dict]], VodContext | None]:
     """Analyze all candidates with Whisper, gather VOD context, then LLM-rank.
 
@@ -957,7 +959,13 @@ def analyze_candidates(
 
     `chat_lag`: how late chat reacts (estimate_chat_lag). `voice_reference`:
     starts of speech-dense passages to learn the streamer's voice from.
+    `signals_of(start, end)`: what the sound and the chat said over a passage
+    (scorer.ScoreTrack.signals_between), for the moments found otherwise.
     """
+
+    def measured(start: float, end: float) -> tuple[SignalBreakdown, str]:
+        return signals_of(start, end) if signals_of else (SignalBreakdown(), "")
+
     total = len(hot_points)
     logger.info(f"═══ Analyzing {total} candidates (keeping top {keep_n}) ═══")
     pipeline_t0 = _time.time()
@@ -993,7 +1001,8 @@ def analyze_candidates(
         for kw in _keyword_moments(vod_transcript):
             idx = next((i for i, hp in candidates if i not in keyword_at and _window_bounds(hp, vod_duration)[0] <= kw <= _window_bounds(hp, vod_duration)[1]), None)
             if idx is None:
-                hot_points.append(HotPoint(timestamp_seconds=round(kw, 1), timestamp_display=seconds_to_display(kw), score=0.0, signals=SignalBreakdown()))
+                signals, mood = measured(max(0.0, kw - DETECTED_PRE_PEAK), kw + DETECTED_POST_PEAK)
+                hot_points.append(HotPoint(timestamp_seconds=round(kw, 1), timestamp_display=seconds_to_display(kw), score=0.0, signals=signals, chat_mood=mood))
                 idx = len(hot_points) - 1
                 candidates.append((idx, hot_points[idx]))
             keyword_at[idx] = kw
@@ -1029,6 +1038,7 @@ def analyze_candidates(
     # ── Step 3a: the AI reads the whole live and points at moments ──
     # (what's said calmly: the audio peaks miss it)
     presort_picks: list[int] = []
+    found_by_reading: list[int] = []
     if vod_transcript is not None:
         update_job(job_id, progress="L'IA lit tout le live...")
         try:
@@ -1049,16 +1059,21 @@ def analyze_candidates(
                 continue
             idx = next((i for i in normal_indices if _share(i, m.start, m.end) >= 0.5), None)
             if idx is None:
-                # Found by reading only: its pre-sort score stands in for the heuristic one
+                # Found by reading only: its pre-sort score stands in for the heuristic one,
+                # what the sound and the chat said there still shows
+                signals, mood = measured(start, end)
                 hot_points.append(HotPoint(
                     timestamp_seconds=round((m.start + m.end) / 2, 1),
                     timestamp_display=seconds_to_display((m.start + m.end) / 2),
                     score=round(m.score, 3),
-                    signals=SignalBreakdown(),
+                    signals=signals,
+                    chat_mood=mood,
                     clip_start=round(start, 1),
                     clip_end=round(end, 1),
+                    found_by="reading",
                 ))
                 idx = len(hot_points) - 1
+                found_by_reading.append(idx)
                 candidates.append((idx, hot_points[idx]))
                 normal_indices.append(idx)
             else:
@@ -1072,7 +1087,7 @@ def analyze_candidates(
             transcripts[idx] = _from_live_transcript(vod_transcript, hot_points[idx], vod_duration)
             if idx not in presort_picks:
                 presort_picks.append(idx)
-        logger.info(f"[{job_id[:8]}] Pre-sort: {len(moments)} moments, {sum(1 for i in presort_picks if hot_points[i].signals == SignalBreakdown())} new candidates")
+        logger.info(f"[{job_id[:8]}] Pre-sort: {len(moments)} moments, {len(found_by_reading)} new candidates")
 
     # ── Step 3b: VOD context gathering + content scoring ──
     vod_context: VodContext | None = None

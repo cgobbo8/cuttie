@@ -8,6 +8,7 @@ import db from '@adonisjs/lucid/services/db'
 import { clipDir, TRANSCRIPTS_DIR } from '#services/data_paths'
 import { deleteObject, storagePath } from '#services/storage'
 import { cancelJob, enqueueJob, type WorkerJob } from '#services/worker_client'
+import { chatInClip, readJobChat } from '#services/edit_env_resolver'
 import { createJobValidator } from '#validators/user'
 
 /** Hand a job to the worker in the background; mark it failed if the worker never answers. */
@@ -252,6 +253,26 @@ export default class JobsController {
     await job.save()
 
     return { custom_title: customTitle }
+  }
+
+  // GET /api/jobs/:id/chat — when the chat spoke in each clip (clip seconds), for the trim strip
+  async chat({ params, response, auth }: HttpContext) {
+    const user = auth.getUserOrFail()
+    const job = await Job.find(params.id)
+    if (!job || job.userId !== user.id) return response.notFound({ error: 'job not found' })
+
+    const allChat = readJobChat(job.id)
+    const clips: Record<string, { t: number; author: string; text: string }[]> = {}
+    for (const hp of job.hotPoints ?? []) {
+      const name = hp?.clip_filename
+      if (!name) continue
+      clips[name] = chatInClip(job.id, name, allChat).map((m) => ({
+        t: Math.round(m.timestamp * 10) / 10,
+        author: m.author,
+        text: m.text.slice(0, 120),
+      }))
+    }
+    return { clips }
   }
 
   // PATCH /api/jobs/:id/selection — keep / pass a clip, set its trim

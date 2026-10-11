@@ -56,6 +56,7 @@ export interface ApiDefinition {
     index: typeof routes['jobs.index']
     show: typeof routes['jobs.show']
     update: typeof routes['jobs.update']
+    chat: typeof routes['jobs.chat']
     updateSelection: typeof routes['jobs.update_selection']
     updateFacecam: typeof routes['jobs.update_facecam']
     retry: typeof routes['jobs.retry']

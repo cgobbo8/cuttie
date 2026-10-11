@@ -403,6 +403,18 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/jobs_controller').default['update']>>>
     }
   }
+  'jobs.chat': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/jobs/:id/chat'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { id: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/jobs_controller').default['chat']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/jobs_controller').default['chat']>>>
+    }
+  }
   'jobs.update_selection': {
     methods: ["PATCH"]
     pattern: '/api/jobs/:id/selection'

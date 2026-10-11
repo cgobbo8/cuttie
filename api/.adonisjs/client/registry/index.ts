@@ -204,6 +204,12 @@ const routes = {
     tokens: [{"old":"/api/jobs/:id","type":0,"val":"api","end":""},{"old":"/api/jobs/:id","type":0,"val":"jobs","end":""},{"old":"/api/jobs/:id","type":1,"val":"id","end":""}],
     types: placeholder as Registry['jobs.update']['types'],
   },
+  'jobs.chat': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/jobs/:id/chat',
+    tokens: [{"old":"/api/jobs/:id/chat","type":0,"val":"api","end":""},{"old":"/api/jobs/:id/chat","type":0,"val":"jobs","end":""},{"old":"/api/jobs/:id/chat","type":1,"val":"id","end":""},{"old":"/api/jobs/:id/chat","type":0,"val":"chat","end":""}],
+    types: placeholder as Registry['jobs.chat']['types'],
+  },
   'jobs.update_selection': {
     methods: ["PATCH"],
     pattern: '/api/jobs/:id/selection',

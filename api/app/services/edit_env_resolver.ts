@@ -38,7 +38,7 @@ export interface EditEnvironment {
 }
 
 /** A chat message; `emotes` lists the emote names in its text (chats downloaded since they're kept) */
-interface ChatLine {
+export interface ChatLine {
   author: string
   text: string
   timestamp: number
@@ -190,6 +190,39 @@ async function resolveJobFacecam(jobId: string, width: number, height: number) {
   }
 }
 
+/** The live's whole chat (clips/<job>/chat.json), empty when there is none */
+export function readJobChat(jobId: string): ChatLine[] {
+  const chatPath = path.join(CLIPS_BASE, jobId, 'chat.json')
+  if (!existsSync(chatPath)) return []
+  try {
+    const chat = JSON.parse(readFileSync(chatPath, 'utf-8'))
+    return Array.isArray(chat) ? chat : []
+  } catch {
+    return []
+  }
+}
+
+/** The messages posted while a clip runs, timed in clip seconds (its _meta.json gives where it sits in the live) */
+export function chatInClip(jobId: string, clipFilename: string, allChat: ChatLine[]): ChatLine[] {
+  if (allChat.length === 0) return []
+  const base = path.basename(clipFilename, path.extname(clipFilename))
+  const metaPath = path.join(CLIPS_BASE, jobId, `${base}_meta.json`)
+  if (!existsSync(metaPath)) return []
+  try {
+    const { vod_start, vod_end } = JSON.parse(readFileSync(metaPath, 'utf-8'))
+    return allChat
+      .filter((m) => m.timestamp >= vod_start && m.timestamp <= vod_end)
+      .map((m) => ({
+        author: m.author,
+        text: m.text,
+        timestamp: m.timestamp - vod_start,
+        ...(m.emotes?.length ? { emotes: m.emotes } : {}),
+      }))
+  } catch {
+    return []
+  }
+}
+
 /** Load shared job data (facecam, dominant_color, chat). Cached per batch. */
 export async function loadJobSharedData(jobId: string, sampleClipFilename: string): Promise<JobSharedData> {
   // Clip dimensions (same for all clips in a job since they come from the same VOD)
@@ -204,12 +237,7 @@ export async function loadJobSharedData(jobId: string, sampleClipFilename: strin
     try { dominantColor = JSON.parse(readFileSync(dominantPath, 'utf-8')) } catch {}
   }
 
-  // Chat
-  const chatPath = path.join(CLIPS_BASE, jobId, 'chat.json')
-  let allChat: ChatLine[] = []
-  if (existsSync(chatPath)) {
-    try { allChat = JSON.parse(readFileSync(chatPath, 'utf-8')) } catch {}
-  }
+  const allChat = readJobChat(jobId)
 
   return {
     facecam: facecam.resolved,
@@ -258,22 +286,7 @@ export async function resolveEditEnv(
     }
   }
 
-  // Chat messages (per-clip window)
-  const metaPath = path.join(CLIPS_BASE, jobId, `${base}_meta.json`)
-  let chatMessages: ChatLine[] = []
-  if (existsSync(metaPath) && shared.allChat.length > 0) {
-    try {
-      const { vod_start, vod_end } = JSON.parse(readFileSync(metaPath, 'utf-8'))
-      chatMessages = shared.allChat
-        .filter((m) => m.timestamp >= vod_start && m.timestamp <= vod_end)
-        .map((m) => ({
-          author: m.author,
-          text: m.text,
-          timestamp: m.timestamp - vod_start,
-          ...(m.emotes?.length ? { emotes: m.emotes } : {}),
-        }))
-    } catch {}
-  }
+  const chatMessages = chatInClip(jobId, clipFilename, shared.allChat)
 
   const { rect, source, moved } = shared.facecam
   const name = path.basename(clipFilename)

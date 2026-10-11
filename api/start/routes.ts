@@ -75,6 +75,7 @@ router
         router.get('/jobs', [() => import('#controllers/jobs_controller'), 'index'])
         router.get('/jobs/:id', [() => import('#controllers/jobs_controller'), 'show'])
         router.patch('/jobs/:id', [() => import('#controllers/jobs_controller'), 'update'])
+        router.get('/jobs/:id/chat', [() => import('#controllers/jobs_controller'), 'chat'])
         router.patch('/jobs/:id/selection', [() => import('#controllers/jobs_controller'), 'updateSelection'])
         router.put('/jobs/:id/facecam', [() => import('#controllers/jobs_controller'), 'updateFacecam'])
         router.post('/jobs/:id/retry', [() => import('#controllers/jobs_controller'), 'retry'])

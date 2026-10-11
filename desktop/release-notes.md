@@ -1,1 +1,4 @@
-- Le temps restant d'une analyse est enfin juste : il tient compte de la durée du live, de la transcription (Groq ou ton PC) et de la vitesse de ta machine, puis se recale au fil de l'analyse.
+- Paramètres > Aide à distance : extrais tes journaux (dernière heure, 24 h, 7 jours ou tout) en un fichier à envoyer quand quelque chose coince. Tes clés API n'y sont pas. « Supprimer les journaux » libère leur place.
+- Paramètres > Stockage : ce que Cuttie prend sur ton disque, et le ménage des anciens clips. Ceux des projets sans activité depuis 30 jours partent tout seuls (réglable) : le projet et ses exports restent, et « Récupérer les clips » les fait revenir tant que le live est sur Twitch.
+- Projets : la place prise par chaque projet, et la corbeille propose de libérer l'espace sans tout supprimer.
+- Le widget de chaîne arrive en rebond, et un widget ajouté à un modèle se pose au centre.

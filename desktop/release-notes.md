@@ -1,6 +1,1 @@
-- 30 s de plus avant ou après un clip : passe la souris sur sa frise et clique sur « + » (Cuttie va rechercher le passage dans le live si besoin).
-- Le chat s'affiche sur les frises : les moments où il s'est emballé dans le live, et chaque message dans le clip (survole un point pour le lire).
-- « Coupe de l'IA » remet bien les poignées où l'IA les avait mises.
-- « Pourquoi ce moment » explique les moments trouvés par l'IA en lisant le live, au lieu d'afficher des zéros.
-- Les moments trouvés pendant l'analyse arrivent avec un petit rebond.
-- L'éditeur de modèles prend toute la largeur (calques, aperçu, réglages) et la pastille d'Empilé est centrée.
+- « Ta machine » : Cuttie mesure ta carte graphique en quelques secondes et compare, pour un de tes lives, la transcription sur ton PC et avec Groq (temps et prix). À voir au premier lancement et dans Paramètres > Transcription.

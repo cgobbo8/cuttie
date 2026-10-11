@@ -34,7 +34,15 @@ export interface EditEnvironment {
   cam: { rect: Rect | null; source: FacecamSource | null; moved: boolean; visible: boolean }
   dominant_color: { r: number; g: number; b: number } | null
   words: { word: string; start: number; end: number }[]
-  chat_messages: { author: string; text: string; timestamp: number }[]
+  chat_messages: ChatLine[]
+}
+
+/** A chat message; `emotes` lists the emote names in its text (chats downloaded since they're kept) */
+interface ChatLine {
+  author: string
+  text: string
+  timestamp: number
+  emotes?: string[]
 }
 
 /** Shared data that is per-job (not per-clip). Load once, reuse for batch. */
@@ -47,7 +55,7 @@ export interface JobSharedData {
   /** The part of each clip that gets exported, when not the whole clip */
   parts: Record<string, [number, number]>
   dominantColor: { r: number; g: number; b: number } | null
-  allChat: { timestamp: number; text: string; author: string }[]
+  allChat: ChatLine[]
   clipWidth: number
   clipHeight: number
 }
@@ -198,7 +206,7 @@ export async function loadJobSharedData(jobId: string, sampleClipFilename: strin
 
   // Chat
   const chatPath = path.join(CLIPS_BASE, jobId, 'chat.json')
-  let allChat: { timestamp: number; text: string; author: string }[] = []
+  let allChat: ChatLine[] = []
   if (existsSync(chatPath)) {
     try { allChat = JSON.parse(readFileSync(chatPath, 'utf-8')) } catch {}
   }
@@ -252,13 +260,18 @@ export async function resolveEditEnv(
 
   // Chat messages (per-clip window)
   const metaPath = path.join(CLIPS_BASE, jobId, `${base}_meta.json`)
-  let chatMessages: { author: string; text: string; timestamp: number }[] = []
+  let chatMessages: ChatLine[] = []
   if (existsSync(metaPath) && shared.allChat.length > 0) {
     try {
       const { vod_start, vod_end } = JSON.parse(readFileSync(metaPath, 'utf-8'))
       chatMessages = shared.allChat
         .filter((m) => m.timestamp >= vod_start && m.timestamp <= vod_end)
-        .map((m) => ({ author: m.author, text: m.text, timestamp: m.timestamp - vod_start }))
+        .map((m) => ({
+          author: m.author,
+          text: m.text,
+          timestamp: m.timestamp - vod_start,
+          ...(m.emotes?.length ? { emotes: m.emotes } : {}),
+        }))
     } catch {}
   }
 

@@ -18,12 +18,24 @@ const BOTS = new Set([
   "streamstickers",
 ]);
 const MAX_CHARS = 90;
+/** A channel emote, its prefix then a capital (falkarCry, xotrixPedro): chats saved before emotes were kept */
+const CHANNEL_EMOTE = /^[a-z][a-z0-9]{2,}[A-Z][A-Za-z0-9]*$/;
 
-/** The chat worth showing in a clip: no commands (!clip), bots or links, long messages cut */
-export function chatForClip(messages: ChatMessage[]): ChatMessage[] {
+/** Twitch shows emotes as images: their names would only be noise in a clip */
+function withoutEmotes(text: string, emotes: string[] = []): string {
+  const names = new Set(emotes);
+  return text
+    .split(/\s+/)
+    .filter((word) => word && !names.has(word) && !CHANNEL_EMOTE.test(word))
+    .join(" ");
+}
+
+/** The chat worth showing in a clip: no emotes, commands (!clip), bots or links, long messages cut */
+export function chatForClip(messages: (ChatMessage & { emotes?: string[] })[]): ChatMessage[] {
   return messages
-    .map((m) => ({ ...m, text: m.text.trim() }))
-    .filter((m) => m.text && !/^[!/]/.test(m.text) && !BOTS.has(m.author.toLowerCase()) && !/https?:\/\/|www\./i.test(m.text))
+    .map(({ emotes, ...m }) => ({ ...m, text: withoutEmotes(m.text, emotes) }))
+    // Not a single letter left (<3, ??, 1): nothing to read
+    .filter((m) => /\p{L}/u.test(m.text) && !/^[!/]/.test(m.text) && !BOTS.has(m.author.toLowerCase()) && !/https?:\/\/|www\./i.test(m.text))
     .map((m) => (m.text.length > MAX_CHARS ? { ...m, text: `${m.text.slice(0, MAX_CHARS - 1).trimEnd()}…` } : m));
 }
 

@@ -227,7 +227,7 @@ def _download_chat_chunk(
                     node {
                         contentOffsetSeconds
                         commenter { displayName }
-                        message { fragments { text } }
+                        message { fragments { text emote { emoteID } } }
                     }
                 }
             }
@@ -283,11 +283,17 @@ def _download_chat_chunk(
                 past_boundary = True
                 break
             author = (node.get("commenter") or {}).get("displayName", "")
-            text = "".join(f.get("text", "") for f in node.get("message", {}).get("fragments", []))
+            fragments = node.get("message", {}).get("fragments") or []
+            text = "".join(f.get("text", "") for f in fragments)
             key = (float(ts), author, text)
             if key not in seen:
                 seen.add(key)
-                messages.append({"timestamp": float(ts), "text": text, "author": author})
+                message = {"timestamp": float(ts), "text": text, "author": author}
+                # Emote names (falkarCry, <3...): shown as images on Twitch, as noise in a clip
+                emotes = sorted({f["text"] for f in fragments if f.get("emote") and f.get("text")})
+                if emotes:
+                    message["emotes"] = emotes
+                messages.append(message)
             last_ts = max(last_ts, ts)
 
         if past_boundary:

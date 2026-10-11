@@ -926,7 +926,7 @@ export interface EditEnvironment {
     source: "live" | "brand" | "detected" | null;
     /** Not where it usually is on this live */
     moved: boolean;
-    /** Somebody is in the cam in this clip */
+    /** Somebody is in the cam in the part of this clip that gets exported */
     visible: boolean;
   };
   dominant_color: { r: number; g: number; b: number } | null;
@@ -943,7 +943,8 @@ export interface EditEnvironment {
     game_margin_bottom: number;
   };
   words: TranscriptWord[];
-  chat_messages: { author: string; text: string; timestamp: number }[];
+  /** `emotes`: the emote names in a message (chats downloaded since they are kept) */
+  chat_messages: { author: string; text: string; timestamp: number; emotes?: string[] }[];
 }
 
 /** Webcam framing for one live: a rectangle, false (no cam on this live) or null (automatic) */

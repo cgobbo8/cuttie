@@ -186,7 +186,7 @@ const LAYOUTS: Record<TemplateId, Layout> = {
     game: { box: { x: 0, y: 240, w: 1080, h: 1350 }, frame: frame(0) },
     subtitles: { box: { x: 150, y: 1060, w: 780, h: 240 }, font: "montserrat", size: 66, uppercase: true, words: 3, stroke: true },
     hook: { box: { x: 100, y: 280, w: 880, h: 160 }, style: "box", font: "poppins", size: 56, until: "half" },
-    brand: { kind: "channel-pill", box: { x: 190, y: 1352, w: 700, h: 68 }, enter: "rise", exit: "sink" },
+    brand: { kind: "channel-pill", box: { x: 190, y: 1352, w: 700, h: 68 }, enter: "bounce", exit: "shrink" },
     extras: [followAtEnd({ x: 290, y: 760, w: 500, h: 160 })],
   },
 };
@@ -200,7 +200,7 @@ const WITHOUT_CAM: Partial<Record<TemplateId, Layout>> = {
     game: { box: { x: 40, y: 600, w: 1000, h: 563 }, frame: frame(32, 0, "white", true) },
     subtitles: { ...LAYOUTS.signature.subtitles, box: { x: 150, y: 1180, w: 780, h: 160 } },
     hook: { ...LAYOUTS.signature.hook, box: { x: 100, y: 400, w: 880, h: 160 } },
-    brand: { kind: "channel-pill", box: { x: 240, y: 1360, w: 600, h: 60 }, enter: "rise", exit: "sink" },
+    brand: { kind: "channel-pill", box: { x: 240, y: 1360, w: 600, h: 60 }, enter: "bounce", exit: "shrink" },
   },
   // The pill becomes a name tag on the scene
   discussion: {

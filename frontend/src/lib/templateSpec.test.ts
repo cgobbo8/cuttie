@@ -55,6 +55,25 @@ describe("element templates", () => {
     expect(specFromLayout("signature", { subtitleStyle: "minimal" }).subtitles).toMatchObject({ font: "geist", boxed: true, pop: false });
   });
 
+  it("the channel pill bounces in where it sits centered, never slides up", async () => {
+    const { enterOf, exitOf } = await import("./templateSpec");
+    const { TEMPLATE_IDS } = await import("./templates");
+    for (const id of TEMPLATE_IDS) {
+      for (const hasCam of [true, false]) {
+        for (const w of builtInSpec(id, { hasCam }).widgets.filter((w) => w.kind === "channel-pill")) {
+          const centered = w.box.x + w.box.w / 2 === 540;
+          if (centered) expect(["pop", "bounce"], `${id} ${hasCam}`).toContain(enterOf(w));
+          expect(enterOf(w), `${id} ${hasCam}`).not.toBe("rise");
+        }
+      }
+    }
+    // A pill in a template made before entrances were chosen
+    const pill = { id: "w", kind: "channel-pill" as const, box: { x: 140, y: 152, w: 800, h: 76 }, timing: "start" as const, fields: {} };
+    expect(enterOf(pill)).toBe("bounce");
+    expect(exitOf(pill)).toBe("shrink");
+    expect(enterOf({ ...pill, enter: "fade" })).toBe("fade");
+  });
+
   it("hands the pill its alignment: a name tag stays against its edge", () => {
     // Discussion RP without a cam: the pill is a name tag on the scene
     const spec = builtInSpec("discussion", { hasCam: false });
@@ -297,10 +316,15 @@ describe("what the apps cover", () => {
     expect(coveredBy({ x: 240, y: 300, w: 600, h: 600 })).toEqual([]);
   });
 
-  it("drops every kit widget in the visible part of the frame", async () => {
+  it("drops every kit widget in the visible part of the frame, centered unless it belongs on a side", async () => {
     const { coveredBy } = await import("./templateSpec");
     const { KIT_WIDGETS } = await import("../components/editor/widgets/kit");
-    for (const w of KIT_WIDGETS) expect(coveredBy(w.box), w.id).toEqual([]);
+    // A logo, a live badge, a lower third, a sticker and the corner logo sit on a side on purpose
+    const onASide = ["logo", "live-badge", "lower-third", "clip-sticker", "corner-logo"];
+    for (const w of KIT_WIDGETS) {
+      expect(coveredBy(w.box), w.id).toEqual([]);
+      if (!onASide.includes(w.id)) expect(w.box.x + w.box.w / 2, w.id).toBe(540);
+    }
   });
 
   it("drops a new widget on a free spot near its usual one", async () => {

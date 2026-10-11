@@ -116,9 +116,10 @@ export function defaultShow(kind: WidgetKind, timing: WidgetTimingKind): WidgetS
 }
 
 export const showOf = (w: SpecWidget): WidgetShow => w.show ?? defaultShow(w.kind, w.timing);
+// The channel pill bounces in and shrinks away unless the streamer chose otherwise
 export const enterOf = (w: SpecWidget): EnterId =>
-  w.enter ?? (w.kind === "channel-pill" ? "rise" : (KIT_ENTER[kitWidget(w.kind)?.enter ?? ""] ?? (kitWidget(w.kind)?.enter === null ? "none" : "fade")));
-export const exitOf = (w: SpecWidget): ExitId => w.exit ?? "fade";
+  w.enter ?? (w.kind === "channel-pill" ? "bounce" : (KIT_ENTER[kitWidget(w.kind)?.enter ?? ""] ?? (kitWidget(w.kind)?.enter === null ? "none" : "fade")));
+export const exitOf = (w: SpecWidget): ExitId => w.exit ?? (w.kind === "channel-pill" ? "shrink" : "fade");
 
 /** The rough timing a precise one falls under */
 export function timingOf(show: WidgetShow): WidgetTimingKind {

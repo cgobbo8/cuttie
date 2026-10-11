@@ -59,18 +59,38 @@ export function resolveFacecam(input: {
   return { rect: null, source: null, moved: false }
 }
 
+/** Center of a person the worker saw: [x, y], plus the time in the clip since facecam.json v3 */
+export type SeenPerson = [number, number] | [number, number, number]
+
 /**
  * Whether the cam shows in a clip, from the centers of the people the worker
  * saw on its frames. Unknown (clip not checked) counts as visible.
+ *
+ * With the time of each frame checked (`checked`), only the part that gets
+ * exported counts: the stream can switch scene mid-clip (webcam put full screen,
+ * a pause screen) and leave the cam's corner empty. The cam shows when somebody
+ * is in it on at least half of those frames.
  */
-export function camVisible(rect: Rect | null, people: [number, number][] | undefined): boolean {
+export function camVisible(
+  rect: Rect | null,
+  people: SeenPerson[] | undefined,
+  checked?: number[],
+  part?: [number, number] | null
+): boolean {
   if (!rect) return false
   if (!people) return true
   const mx = rect.w * 0.1
   const my = rect.h * 0.1
-  return people.some(
-    ([x, y]) => x >= rect.x - mx && x <= rect.x + rect.w + mx && y >= rect.y - my && y <= rect.y + rect.h + my
-  )
+  const inCam = ([x, y]: SeenPerson) =>
+    x >= rect.x - mx && x <= rect.x + rect.w + mx && y >= rect.y - my && y <= rect.y + rect.h + my
+  if (!checked?.length) return people.some(inCam)
+
+  // Frames within the part, give or take half the time between two of them
+  const [from, to] = part ?? [0, Number.POSITIVE_INFINITY]
+  let times = checked.filter((t) => t >= from - 2 && t <= to + 2)
+  if (times.length < 2) times = checked
+  const occupied = new Set(people.filter((p) => p.length === 3 && inCam(p)).map((p) => p[2]))
+  return times.filter((t) => occupied.has(t)).length * 2 >= times.length
 }
 
 /** Scale a rectangle measured on a `fromW`x`fromH` frame to another size */

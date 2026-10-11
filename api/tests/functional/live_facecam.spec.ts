@@ -57,6 +57,43 @@ test.group('Webcam on each live', (group) => {
     assert.deepEqual(b.cam.rect, { x: 1518, y: 0, w: 402, h: 446 })
   })
 
+  test('judges the cam on the part of the clip that gets exported', async ({ client, assert }) => {
+    const user = await User.create({ fullName: 'Streamer', email: `s-${randomUUID()}@cuttie.app`, password: 'password123' })
+    // The AI's cut is the end of the clip, where the stream put the webcam full screen
+    const job = await Job.create({
+      id: randomUUID(),
+      url: 'https://twitch.tv/videos/123',
+      status: 'DONE',
+      userId: user.id,
+      hotPoints: [{ clip_filename: 'a.mp4', llm: { cut_start: 50, cut_end: 75 } }],
+    })
+    cleanup.push(clipDir(job.id))
+    // Checked every 4 s: the streamer in the cam for 40 s, then a face in the middle of the frame
+    const frames = Array.from({ length: 20 }, (_, i) => i * 4)
+    mkdirSync(clipDir(job.id), { recursive: true })
+    writeFileSync(
+      path.join(clipDir(job.id), 'facecam.json'),
+      JSON.stringify({
+        version: 3,
+        rect: { x: 1516, y: 0, w: 404, h: 446 },
+        frame_w: 1920,
+        frame_h: 1080,
+        people: { 'a.mp4': frames.map((t) => (t < 40 ? [1720, 270, t] : [900, 500, t])) },
+        frames: { 'a.mp4': frames },
+      })
+    )
+
+    const cut = (await client.get(`/api/clips/${job.id}/a.mp4/edit-env`).loginAs(user)).body() as any
+    assert.isNull(cut.facecam)
+    assert.deepInclude(cut.cam, { source: 'brand', visible: false })
+
+    // The streamer keeps the start instead: the cam is back
+    ;(await client.patch(`/api/jobs/${job.id}/selection`).loginAs(user).json({ clip_filename: 'a.mp4', trim: [5, 30] })).assertStatus(200)
+    const trimmed = (await client.get(`/api/clips/${job.id}/a.mp4/edit-env`).loginAs(user)).body() as any
+    assert.deepEqual(trimmed.facecam, { x: 1518, y: 0, w: 402, h: 446 })
+    assert.isTrue(trimmed.cam.visible)
+  })
+
   test('follows the cam when it moved on this live', async ({ client, assert }) => {
     const moved = { x: 0, y: 640, w: 400, h: 440 }
     const { user, job } = await setup(moved, { 'a.mp4': [[200, 860]] })

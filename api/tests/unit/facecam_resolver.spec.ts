@@ -56,6 +56,22 @@ test.group('Facecam resolver', () => {
     assert.isFalse(camVisible(null, [[1720, 260]]))
   })
 
+  test('only the exported part of a clip counts when frames have a time', ({ assert }) => {
+    // Checked every 4 s; the streamer is in the cam for the first 20 s, then the
+    // stream puts the webcam full screen (a face in the middle, the corner empty)
+    const checked = [0, 4, 8, 12, 16, 20, 24, 28, 32, 36]
+    const people: [number, number, number][] = checked.map((t) => (t < 20 ? [1720, 260, t] : [900, 500, t]))
+
+    assert.isTrue(camVisible(USUAL, people, checked, [0, 18]))
+    assert.isFalse(camVisible(USUAL, people, checked, [22, 36]))
+    // Half and half (frames 8 to 28): still shown
+    assert.isTrue(camVisible(USUAL, people, checked, [10, 26]))
+    // A part too short to tell, or none: the whole clip decides
+    assert.isTrue(camVisible(USUAL, people, checked, [24.5, 25]))
+    assert.isTrue(camVisible(USUAL, people, checked))
+    assert.isFalse(camVisible(USUAL, people.slice(6), checked.slice(6), null))
+  })
+
   test('scales rectangles between frame sizes', ({ assert }) => {
     assert.deepEqual(scaleRect(USUAL, 1920, 1080, 1280, 720), { x: 1012, y: 0, w: 268, h: 297 })
     assert.deepEqual(scaleRect({ ...USUAL, ref_w: 1920 } as any, 1920, 1080, 1920, 1080), USUAL)

@@ -7,8 +7,9 @@ Strategy:
    game characters change between clips)
 4. Grow the person box to the overlay's borders (see _snap_to_overlay)
 
-Every person seen is also kept per source, so callers can tell whether the cam
-is on screen in a given clip (scene without cam, streamer away...).
+Each clip is also checked every few seconds for who stands where, so callers
+can tell whether the cam is on screen in the part of a clip they use (scene
+without cam, webcam put full screen, streamer away...).
 """
 
 import logging
@@ -30,6 +31,9 @@ SAMPLE_POSITIONS = [0.2, 0.35, 0.5, 0.65, 0.8]
 # Fewer frames per clip when checking a whole analysis (20+ clips)
 MANY_CLIPS = 8
 MANY_CLIPS_POSITIONS = [0.15, 0.4, 0.65, 0.9]
+# How often each clip is checked for somebody in the cam: the stream can switch
+# scene mid-clip (webcam full screen, a pause screen) and leave the cam's corner empty
+PRESENCE_EVERY = 4.0
 MIN_CONFIDENCE = 0.4
 CLUSTER_DISTANCE_RATIO = 0.15
 # Edge maps for overlay snapping are computed at 1/EDGE_SCALE resolution
@@ -119,6 +123,26 @@ def _clip_frames(clip_paths: list[str], positions: list[float]) -> Iterable[tupl
         cap.release()
 
 
+def _persons(model: YOLO, frame: np.ndarray) -> list[tuple[tuple[int, int], tuple | None]]:
+    """Each person the pose model sees: (center, (x, y, w, h, conf, fx, fy, fw, fh) when the face shows)."""
+    result = model(frame, conf=MIN_CONFIDENCE, verbose=False)[0]
+    persons: list[tuple[tuple[int, int], tuple | None]] = []
+    for i, box in enumerate(result.boxes):
+        x1, y1, x2, y2 = box.xyxy[0].cpu().numpy().astype(int)
+        pw, ph = int(x2 - x1), int(y2 - y1)
+
+        # Extract face bbox from keypoints
+        face = _face_bbox_from_keypoints(result.keypoints.data[i].cpu().numpy())
+        if face is None:
+            persons.append(((int(x1 + pw // 2), int(y1 + ph // 2)), None))
+            continue
+        fx, fy, fw, fh = face
+        # Where the face is: the streamer's body can line up with a game
+        # character's below the cam and come out as one tall person
+        persons.append(((int(fx + fw // 2), int(fy + fh // 2)), (int(x1), int(y1), pw, ph, float(box.conf[0]), fx, fy, fw, fh)))
+    return persons
+
+
 def _scan(frames: Iterable[tuple[int, np.ndarray]], n_sources: int) -> _Scan:
     """Run the pose model on each frame; only small grayscale copies are kept."""
     model = _get_model()
@@ -131,26 +155,51 @@ def _scan(frames: Iterable[tuple[int, np.ndarray]], n_sources: int) -> _Scan:
             cv2.resize(gray, (scan.frame_w // EDGE_SCALE, scan.frame_h // EDGE_SCALE), interpolation=cv2.INTER_AREA)
         )
         people = scan.people.setdefault(source, [])
-        results = model(frame, conf=MIN_CONFIDENCE, verbose=False)
-
-        for i, box in enumerate(results[0].boxes):
-            x1, y1, x2, y2 = box.xyxy[0].cpu().numpy().astype(int)
-            conf = float(box.conf[0])
-            pw, ph = int(x2 - x1), int(y2 - y1)
-
-            # Extract face bbox from keypoints
-            kps = results[0].keypoints.data[i].cpu().numpy()
-            face = _face_bbox_from_keypoints(kps)
-            if face is None:
-                people.append((int(x1 + pw // 2), int(y1 + ph // 2)))
-                continue
-            fx, fy, fw, fh = face
-            # Where the face is: the streamer's body can line up with a game
-            # character's below the cam and come out as one tall person
-            people.append((int(fx + fw // 2), int(fy + fh // 2)))
-            scan.detections.append((source, int(x1), int(y1), pw, ph, conf, fx, fy, fw, fh))
+        for center, detection in _persons(model, frame):
+            people.append(center)
+            if detection:
+                scan.detections.append((source, *detection))
 
     return scan
+
+
+def _keyframes(clip_path: str, every: float) -> Iterable[tuple[float, np.ndarray]]:
+    """(seconds into the clip, BGR frame) for a keyframe every `every` seconds or so.
+
+    Only keyframes are decoded (Twitch puts one every 2 s): about a second for a 2-min clip.
+    """
+    import av  # comes with faster-whisper
+
+    with av.open(clip_path) as container:
+        start = (container.start_time or 0) / av.time_base
+        stream = container.streams.video[0]
+        stream.codec_context.skip_frame = "NONKEY"
+        next_at = 0.0
+        for frame in container.decode(stream):
+            if frame.time is None:
+                continue
+            t = max(0.0, float(frame.time) - start)
+            if t < next_at:
+                continue
+            # Keyframes don't fall exactly `every` seconds apart
+            next_at = t + every * 0.9
+            yield t, frame.to_ndarray(format="bgr24")
+
+
+def _presence(clip_path: str) -> tuple[list[list[float]], list[float]] | None:
+    """Who is where along a clip: ([x, y, t] per person seen, times checked), or None if unreadable."""
+    model = _get_model()
+    people: list[list[float]] = []
+    times: list[float] = []
+    try:
+        for t, frame in _keyframes(clip_path, PRESENCE_EVERY):
+            t = round(t, 1)
+            times.append(t)
+            people.extend([x, y, t] for (x, y), _ in _persons(model, frame))
+    except Exception as e:
+        logger.warning("Could not check the cam along %s: %s", os.path.basename(clip_path), e)
+        return None
+    return (people, times) if times else None
 
 
 def _static_edges(frames: list[np.ndarray]) -> tuple[np.ndarray, np.ndarray]:
@@ -425,19 +474,29 @@ def detect_facecam(clip_path: str, extra_clips: list[str] | None = None) -> dict
 def analyze_clips(clip_paths: list[str]) -> dict:
     """Webcam of a whole analysis.
 
-    Returns {"rect": {x, y, w, h} | None, "frame_w", "frame_h", "people"}, where
-    `people` lists, per clip filename, the centers of the persons seen on its
-    sampled frames: the API uses them to tell whether the cam shows in a clip.
+    Returns {"rect": {x, y, w, h} | None, "frame_w", "frame_h", "people", "frames"}.
+    Per clip filename, `people` lists [x, y, t] for each person seen (t: seconds
+    into the clip) and `frames` the times checked, every few seconds: the API
+    tells from them whether the cam shows in the part of a clip that gets exported.
     """
     positions = MANY_CLIPS_POSITIONS if len(clip_paths) >= MANY_CLIPS else SAMPLE_POSITIONS
     scan = _scan(_clip_frames(clip_paths, positions), len(clip_paths))
+    people: dict[str, list[list[float]]] = {}
+    frames: dict[str, list[float]] = {}
+    for i, clip_path in enumerate(clip_paths):
+        name = os.path.basename(clip_path)
+        presence = _presence(clip_path)
+        if presence:
+            people[name], frames[name] = presence
+        elif i in scan.people:
+            # Only the few frames used to locate the cam, without their times
+            people[name] = [list(p) for p in scan.people[i]]
     return {
         "rect": _as_dict(_locate(scan)),
         "frame_w": scan.frame_w,
         "frame_h": scan.frame_h,
-        "people": {
-            os.path.basename(clip_paths[i]): [list(p) for p in centers] for i, centers in sorted(scan.people.items())
-        },
+        "people": people,
+        "frames": frames,
     }
 
 

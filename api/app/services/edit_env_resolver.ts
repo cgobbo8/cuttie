@@ -20,6 +20,7 @@ import {
   type FacecamSource,
   type Rect,
   type ResolvedFacecam,
+  type SeenPerson,
 } from '#services/facecam_resolver'
 
 const execFileAsync = promisify(execFile)
@@ -40,7 +41,11 @@ export interface EditEnvironment {
 export interface JobSharedData {
   facecam: ResolvedFacecam
   /** People seen on each clip's frames by the worker (clip pixels), when checked */
-  people: Record<string, [number, number][]> | null
+  people: Record<string, SeenPerson[]> | null
+  /** Times of the frames checked along each clip (facecam.json v3) */
+  checked: Record<string, number[]> | null
+  /** The part of each clip that gets exported, when not the whole clip */
+  parts: Record<string, [number, number]>
   dominantColor: { r: number; g: number; b: number } | null
   allChat: { timestamp: number; text: string; author: string }[]
   clipWidth: number
@@ -74,32 +79,58 @@ export async function getClipDimensions(
   return { width: 1920, height: 1080 }
 }
 
+interface StoredFacecam {
+  rect: Rect | null
+  people: Record<string, SeenPerson[]> | null
+  /** Times checked along each clip (v3) */
+  checked: Record<string, number[]> | null
+}
+
 /** What the worker found on a live's clips (clips/<job>/facecam.json), in clip pixels */
-function readStoredFacecam(
-  jobId: string,
-  width: number,
-  height: number
-): { rect: Rect | null; people: Record<string, [number, number][]> | null } | null {
+function readStoredFacecam(jobId: string, width: number, height: number): StoredFacecam | null {
   const file = path.join(CLIPS_BASE, jobId, 'facecam.json')
   if (!existsSync(file)) return null
   try {
     const data = JSON.parse(readFileSync(file, 'utf-8'))
-    if (data?.version === 2) {
+    // v2: people on a few frames of each clip; v3: every few seconds, with the time
+    if (data?.version === 2 || data?.version === 3) {
       const fw = data.frame_w || width
       const fh = data.frame_h || height
-      const people: Record<string, [number, number][]> = {}
+      const people: Record<string, SeenPerson[]> = {}
       for (const [clip, points] of Object.entries(data.people ?? {})) {
-        people[clip] = (points as [number, number][]).map(([x, y]) => [
-          Math.round((x * width) / fw),
-          Math.round((y * height) / fh),
-        ])
+        people[clip] = (points as number[][]).map(([x, y, t]): SeenPerson => {
+          const scaled: [number, number] = [Math.round((x * width) / fw), Math.round((y * height) / fh)]
+          return t === undefined ? scaled : [...scaled, t]
+        })
       }
-      return { rect: data.rect ? scaleRect(data.rect, fw, fh, width, height) : null, people }
+      return {
+        rect: data.rect ? scaleRect(data.rect, fw, fh, width, height) : null,
+        people,
+        checked: data.frames ?? null,
+      }
     }
     // Before every live was checked: just the rectangle
-    if (Number.isFinite(data?.x)) return { rect: { x: data.x, y: data.y, w: data.w, h: data.h }, people: null }
+    if (Number.isFinite(data?.x)) {
+      return { rect: { x: data.x, y: data.y, w: data.w, h: data.h }, people: null, checked: null }
+    }
   } catch {}
   return null
+}
+
+/** The part of each clip that gets exported: the streamer's trim, else the cut the AI suggested (as in moments.ts) */
+function exportedParts(job: Job | null): Record<string, [number, number]> {
+  const parts: Record<string, [number, number]> = {}
+  for (const hp of job?.hotPoints ?? []) {
+    const name = hp?.clip_filename
+    if (!name) continue
+    const trim = job?.selection?.[name]?.trim
+    const llm = hp.llm
+    if (trim) parts[name] = trim
+    else if (llm?.cut_start != null && llm?.cut_end != null && llm.cut_end - llm.cut_start >= 5) {
+      parts[name] = [llm.cut_start, llm.cut_end]
+    }
+  }
+  return parts
 }
 
 const checking = new Map<string, Promise<unknown>>()
@@ -146,6 +177,8 @@ async function resolveJobFacecam(jobId: string, width: number, height: number) {
   return {
     resolved: resolveFacecam({ live, brand, detected: stored?.rect ?? null }),
     people: stored?.people ?? null,
+    checked: stored?.checked ?? null,
+    parts: exportedParts(job),
   }
 }
 
@@ -170,7 +203,16 @@ export async function loadJobSharedData(jobId: string, sampleClipFilename: strin
     try { allChat = JSON.parse(readFileSync(chatPath, 'utf-8')) } catch {}
   }
 
-  return { facecam: facecam.resolved, people: facecam.people, dominantColor, allChat, clipWidth: width, clipHeight: height }
+  return {
+    facecam: facecam.resolved,
+    people: facecam.people,
+    checked: facecam.checked,
+    parts: facecam.parts,
+    dominantColor,
+    allChat,
+    clipWidth: width,
+    clipHeight: height,
+  }
 }
 
 /** Resolve full edit environment for a single clip, using shared job data. */
@@ -221,7 +263,8 @@ export async function resolveEditEnv(
   }
 
   const { rect, source, moved } = shared.facecam
-  const visible = camVisible(rect, shared.people?.[path.basename(clipFilename)])
+  const name = path.basename(clipFilename)
+  const visible = camVisible(rect, shared.people?.[name], shared.checked?.[name], shared.parts[name])
 
   return {
     clip_width: shared.clipWidth,

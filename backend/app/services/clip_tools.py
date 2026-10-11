@@ -81,8 +81,9 @@ def _label_speakers(job_id: str, clip_path: str, words: list[dict]) -> list[dict
 def detect_job_facecam(job_id: str, clip_filenames: list[str]) -> dict | None:
     """Locate the webcam across stored clips and cache it in facecam.json.
 
-    facecam.json also keeps where people stand in each clip, so the API can
-    check clip by clip whether the cam is on screen.
+    facecam.json also keeps where people stand along each clip (v3: with the
+    time of each frame), so the API can check whether the cam is on screen in
+    the part of a clip that gets exported.
     """
     from app.services.facecam_detector import analyze_clips
 
@@ -97,7 +98,7 @@ def detect_job_facecam(job_id: str, clip_filenames: list[str]) -> dict | None:
 
     result = analyze_clips(clip_paths)
     with open(os.path.join(clip_dir, "facecam.json"), "w", encoding="utf-8") as f:
-        json.dump({"version": 2, **result}, f)
+        json.dump({"version": 3, **result}, f)
     return result["rect"]
 
 

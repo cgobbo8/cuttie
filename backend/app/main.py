@@ -63,6 +63,13 @@ class FacecamRequest(BaseModel):
     clip_filenames: list[str]
 
 
+class ExtendRequest(BaseModel):
+    url: str
+    # The clip's new bounds in the live, seconds
+    start: float
+    end: float
+
+
 class VodFacecamRequest(BaseModel):
     vod_id: str
     duration: float
@@ -249,6 +256,20 @@ def clip_words(job_id: str, clip_filename: str) -> list[dict]:
         raise HTTPException(status_code=404, detail="clip not found")
     except ProviderUnavailable as e:
         raise HTTPException(status_code=402 if e.reason == "credits" else 401, detail=str(e)) from e
+
+
+@app.post("/clips/{job_id}/{clip_filename}/extend", dependencies=[Depends(require_secret)])
+def clip_extend(job_id: str, clip_filename: str, req: ExtendRequest) -> dict:
+    from app.services.clip_tools import extend_clip
+
+    if req.start < 0 or req.end - req.start < 1:
+        raise HTTPException(status_code=400, detail="invalid bounds")
+    try:
+        return extend_clip(_check_job_id(job_id), os.path.basename(clip_filename), req.url, req.start, req.end)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="clip not found")
+    except RuntimeError as e:
+        raise HTTPException(status_code=502, detail=str(e)) from e
 
 
 @app.post("/jobs/{job_id}/facecam", dependencies=[Depends(require_secret)])

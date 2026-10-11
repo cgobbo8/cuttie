@@ -87,6 +87,26 @@ def _load_chunk(path: str) -> dict | None:
         return None
 
 
+def cached_words(job_id: str, start: float, end: float) -> list[dict] | None:
+    """Words said between `start` and `end` (live seconds) in the live transcript's cache.
+
+    None when the cache doesn't cover them with word timings (part of the live
+    not transcribed, or transcribed by the local engine, which gives none).
+    """
+    cache_dir = transcript_dir(job_id)
+    words: list[dict] = []
+    for i in range(int(start // CHUNK_SECONDS), int(max(start, end - 0.001) // CHUNK_SECONDS) + 1):
+        chunk = _load_chunk(_chunk_path(cache_dir, i))
+        if chunk is None:
+            return None
+        spoken = [s for s in chunk.get("segments", []) if s[1] > start and s[0] < end]
+        inside = [w for w in chunk.get("words", []) if w["start"] >= start and w["end"] <= end]
+        if spoken and not inside:
+            return None
+        words += inside
+    return words
+
+
 def transcribe_vod(
     job_id: str,
     wav_path: str,

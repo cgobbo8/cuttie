@@ -74,6 +74,7 @@ export interface ApiDefinition {
     destroy: typeof routes['renders.destroy']
   }
   clips: {
+    extend: typeof routes['clips.extend']
     editEnv: typeof routes['clips.edit_env']
     thumb: typeof routes['clips.thumb']
     background: typeof routes['clips.background']

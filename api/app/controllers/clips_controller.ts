@@ -7,6 +7,16 @@ import Job from '#models/job'
 import { getPresignedUrl, storagePath } from '#services/storage'
 import { loadJobSharedData, resolveEditEnv } from '#services/edit_env_resolver'
 import { ensureBackground } from '#services/clip_variants'
+import logger from '@adonisjs/core/services/logger'
+import {
+  dropClipCaches,
+  planExtend,
+  readClipMeta,
+  shiftClipClock,
+  suggestedCut,
+  type Side,
+} from '#services/clip_extend'
+import { extendClipFile } from '#services/worker_client'
 
 const execFileAsync = promisify(execFile)
 
@@ -68,7 +78,56 @@ async function verifyJobOwnership(jobId: string, auth: HttpContext['auth']) {
   return job
 }
 
+/** Clips being extracted again, one at a time each ("job/file") */
+const extending = new Set<string>()
+
 export default class ClipsController {
+  // POST /api/clips/:jobId/:filename/extend { side: "start" | "end" } — 30 s more cut on that side
+  async extend({ params, request, response, auth }: HttpContext) {
+    const job = await verifyJobOwnership(params.jobId, auth)
+    if (!job) return response.notFound({ error: 'clip not found' })
+    const filename = path.basename(params.filename)
+    const side = request.input('side') as Side
+    if (side !== 'start' && side !== 'end') return response.badRequest({ error: 'side must be start or end' })
+    const hp = (job.hotPoints ?? []).find((h: any) => h?.clip_filename === filename)
+    const meta = readClipMeta(job.id, filename)
+    if (!hp || !meta) return response.notFound({ error: 'clip not found' })
+    const key = `${job.id}/${filename}`
+    if (extending.has(key)) return response.status(423).send({ error: 'already extending' })
+
+    const trim = job.selection?.[filename]?.trim ?? suggestedCut(hp) ?? [0, meta.vod_end - meta.vod_start]
+    const plan = planExtend(side, meta.vod_start, meta.vod_end, trim, job.vodDurationSeconds ?? 0)
+    if (!plan) return response.conflict({ error: side === 'start' ? 'the live starts here' : 'the live ends here' })
+
+    let done: { vod_start: number; vod_end: number; added_before: number } | null = null
+    if (plan.file) {
+      extending.add(key)
+      try {
+        done = await extendClipFile(job.id, filename, { url: job.url, ...plan.file })
+      } catch (err) {
+        logger.warn({ err }, 'Extending %s failed', key)
+        return response.status(502).send({ error: 'the live could not be read' })
+      } finally {
+        extending.delete(key)
+      }
+      dropClipCaches(job.id, filename)
+    }
+
+    // The streamer may have sorted other clips meanwhile
+    await job.refresh()
+    if (done) {
+      const extended = done
+      job.hotPoints = (job.hotPoints ?? []).map((h: any) =>
+        h?.clip_filename === filename
+          ? { ...shiftClipClock(h, extended.added_before), clip_start: extended.vod_start, clip_end: extended.vod_end }
+          : h
+      )
+    }
+    job.selection = { ...(job.selection ?? {}), [filename]: { ...(job.selection?.[filename] ?? {}), trim: plan.trim } }
+    await job.save()
+    return { extended: !!done, trim: plan.trim }
+  }
+
   // GET /api/clips/:jobId/:filename/edit-env
   async editEnv({ params, response, auth }: HttpContext) {
     const safeJobId = params.jobId.replace(/[^a-zA-Z0-9_-]/g, '')

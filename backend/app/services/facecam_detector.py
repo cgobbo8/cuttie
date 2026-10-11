@@ -186,7 +186,7 @@ def _keyframes(clip_path: str, every: float) -> Iterable[tuple[float, np.ndarray
             yield t, frame.to_ndarray(format="bgr24")
 
 
-def _presence(clip_path: str) -> tuple[list[list[float]], list[float]] | None:
+def presence(clip_path: str) -> tuple[list[list[float]], list[float]] | None:
     """Who is where along a clip: ([x, y, t] per person seen, times checked), or None if unreadable."""
     model = _get_model()
     people: list[list[float]] = []
@@ -485,9 +485,9 @@ def analyze_clips(clip_paths: list[str]) -> dict:
     frames: dict[str, list[float]] = {}
     for i, clip_path in enumerate(clip_paths):
         name = os.path.basename(clip_path)
-        presence = _presence(clip_path)
-        if presence:
-            people[name], frames[name] = presence
+        seen = presence(clip_path)
+        if seen:
+            people[name], frames[name] = seen
         elif i in scan.people:
             # Only the few frames used to locate the cam, without their times
             people[name] = [list(p) for p in scan.people[i]]

@@ -752,7 +752,14 @@
       "reading": "The AI spotted it reading everything said during the live.",
       "asked": "Someone asked for a clip right then.",
       "manual": "Clip added by hand."
-    }
+    },
+    "extendStart": "30 s more before",
+    "extendEnd": "30 s more after",
+    "extendedStart": "30 s more at the start",
+    "extendedEnd": "30 s more at the end",
+    "extendEdgeStart": "The live starts here: nothing more before.",
+    "extendEdgeEnd": "The live ends here: nothing more after.",
+    "extendFailed": "Twitch didn't answer, try again in a moment."
   },
   "montage": {
     "title": "Dress up your clips",

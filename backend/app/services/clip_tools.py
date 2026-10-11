@@ -144,3 +144,164 @@ def detect_vod_facecam(vod_id: str, duration: float) -> dict:
         return {"facecam": rect, "frame_key": key, "frame_w": width, "frame_h": height}
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
+
+
+# ── A clip made longer (more before or after it, asked from the trim strip) ──
+
+EXTEND_ATTEMPTS = 2
+
+
+def extend_clip(job_id: str, clip_filename: str, vod_url: str, start: float, end: float) -> dict:
+    """Extract a stored clip again over a wider part of the live (`start`-`end`, live seconds).
+
+    The clip keeps its name and its sidecars follow: _meta.json (where it sits
+    in the live), _probe.json, _words.json (the added part's words come from
+    the live transcript, or that part alone is transcribed; speakers labelled
+    again) and its cam check in facecam.json.
+    """
+    from app.services.clipper import _streamcopy_clip
+    from app.services.frame_extractor import get_vod_direct_url
+
+    clip_dir = paths.clip_dir(job_id)
+    clip_path = os.path.join(clip_dir, clip_filename)
+    if not os.path.isfile(clip_path):
+        raise FileNotFoundError(clip_path)
+    base = os.path.splitext(clip_filename)[0]
+    meta_path = os.path.join(clip_dir, f"{base}_meta.json")
+    meta = _read_json(meta_path)
+    meta = meta if isinstance(meta, dict) else {}
+    old_start = float(meta.get("vod_start", start))
+    old_end = float(meta.get("vod_end", end))
+
+    tmp = os.path.join(clip_dir, f"{base}.extending.mp4")
+    for _ in range(EXTEND_ATTEMPTS):
+        direct = get_vod_direct_url(vod_url)
+        if direct and _streamcopy_clip(direct, start, end - start, tmp) and _duration(tmp) >= (end - start) - 2:
+            break
+    else:
+        if os.path.isfile(tmp):
+            os.remove(tmp)
+        raise RuntimeError("the live's video could not be fetched")
+    _replace(tmp, clip_path)
+
+    probe = _probe(clip_path)
+    meta.update({"vod_start": round(start, 1), "vod_end": round(end, 1)})
+    _write_json(meta_path, meta)
+    _write_json(os.path.join(clip_dir, f"{base}_probe.json"), probe)
+
+    added_before = round(old_start - start, 1)
+    try:
+        _extend_words(job_id, os.path.join(clip_dir, f"{base}_words.json"), clip_path, start, end, old_start, old_end)
+    except Exception as e:
+        logger.warning(f"Words of {clip_filename} not extended: {e}")
+    try:
+        _recheck_cam(job_id, clip_filename, clip_path)
+    except Exception as e:
+        logger.warning(f"Cam of {clip_filename} not checked again: {e}")
+    logger.info(f"Clip {clip_filename} now {start:.1f}-{end:.1f} (was {old_start:.1f}-{old_end:.1f})")
+    return {"vod_start": meta["vod_start"], "vod_end": meta["vod_end"], "duration": probe["duration"], "added_before": added_before}
+
+
+def _extend_words(job_id: str, words_path: str, clip_path: str, start: float, end: float, old_start: float, old_end: float) -> None:
+    """Shift the clip's words to its new start and add the words of the added parts."""
+    old = _read_json(words_path)
+    if not isinstance(old, list):
+        return  # never transcribed: the editor does it when the clip opens
+    shift = old_start - start
+    words = [{**w, "start": round(w["start"] + shift, 3), "end": round(w["end"] + shift, 3)} for w in old]
+    for a, b in ((start, old_start), (old_end, end)):
+        if b - a > 0.5:
+            words += _words_between(job_id, clip_path, start, a, b)
+    words.sort(key=lambda w: w["start"])
+    try:
+        words = _label_speakers(job_id, clip_path, words)
+    except Exception as e:
+        logger.warning(f"Speakers not labelled again on {os.path.basename(clip_path)}: {e}")
+    _write_json(words_path, words)
+
+
+def _words_between(job_id: str, clip_path: str, clip_start: float, a: float, b: float) -> list[dict]:
+    """Words said between `a` and `b` (live seconds), in clip seconds: from the live transcript, else transcribed."""
+    from app.services.vod_transcript import cached_words
+
+    live = cached_words(job_id, a, b)
+    if live is not None:
+        return [{"word": w["word"], "start": round(w["start"] - clip_start, 3), "end": round(w["end"] - clip_start, 3)} for w in live]
+
+    from app.services.llm_analyzer import _transcribe_audio
+
+    os.makedirs(paths.WORK_DIR, exist_ok=True)
+    fd, audio = tempfile.mkstemp(suffix=".mp3", dir=paths.WORK_DIR)
+    os.close(fd)
+    try:
+        subprocess.run(
+            ["ffmpeg", "-y", "-ss", str(a - clip_start), "-t", str(b - a), "-i", clip_path,
+             "-vn", "-ac", "1", "-ar", "16000", "-b:a", "48k", "-loglevel", "error", audio],
+            check=True, capture_output=True, timeout=60,
+        )
+        _text, _rate, _segments, words = _transcribe_audio(audio)
+    finally:
+        os.remove(audio)
+    offset = a - clip_start
+    return [{"word": w["word"], "start": round(w["start"] + offset, 3), "end": round(w["end"] + offset, 3)} for w in words]
+
+
+def _recheck_cam(job_id: str, clip_filename: str, clip_path: str) -> None:
+    """Who stands where along the new clip, in facecam.json (the API judges the cam from it)."""
+    from app.services.facecam_detector import presence
+
+    path = os.path.join(paths.clip_dir(job_id), "facecam.json")
+    data = _read_json(path)
+    if not isinstance(data, dict) or data.get("version") not in (2, 3):
+        return
+    seen = presence(clip_path)
+    if not seen:
+        return
+    data.setdefault("people", {})[clip_filename], data.setdefault("frames", {})[clip_filename] = seen
+    data["version"] = 3
+    _write_json(path, data)
+
+
+def _probe(path: str) -> dict:
+    result = subprocess.run(
+        ["ffprobe", "-v", "quiet", "-print_format", "json", "-show_streams", "-select_streams", "v:0", "-show_format", path],
+        capture_output=True, text=True, timeout=15,
+    )
+    data = json.loads(result.stdout or "{}")
+    stream = (data.get("streams") or [{}])[0]
+    return {
+        "width": stream.get("width", 1920),
+        "height": stream.get("height", 1080),
+        "duration": round(float((data.get("format") or {}).get("duration", stream.get("duration", 0)) or 0), 3),
+    }
+
+
+def _duration(path: str) -> float:
+    return _probe(path)["duration"] if os.path.isfile(path) else 0.0
+
+
+def _replace(src: str, dst: str, attempts: int = 10) -> None:
+    """os.replace, waiting a little when a reader still holds the old file (Windows)."""
+    import time
+
+    for i in range(attempts):
+        try:
+            os.replace(src, dst)
+            return
+        except PermissionError:
+            if i == attempts - 1:
+                raise
+            time.sleep(0.5)
+
+
+def _read_json(path: str):
+    try:
+        with open(path, encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return None
+
+
+def _write_json(path: str, data) -> None:
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False)

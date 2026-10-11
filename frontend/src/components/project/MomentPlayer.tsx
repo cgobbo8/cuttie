@@ -11,11 +11,12 @@ import {
   type ReactNode,
 } from "react";
 import { useTranslation } from "react-i18next";
-import { Maximize, Pause, Play, Volume2, VolumeX } from "lucide-react";
+import { Loader2, Maximize, Pause, Play, Plus, Volume2, VolumeX } from "lucide-react";
 import { clipThumbUrl, clipUrl, type ClipChatLine } from "../../lib/api";
 import { clock } from "../../lib/format";
 import type { Moment } from "../../lib/moments";
 import { stackChat } from "../../lib/chatActivity";
+import { Tooltip } from "../ui/Tooltip";
 
 export interface MomentPlayerHandle {
   toggle: () => void;
@@ -32,6 +33,8 @@ interface Props {
   onTrimChange: (trim: [number, number] | null) => void;
   /** The chat's messages during the clip, shown on the trim strip */
   chat?: ClipChatLine[];
+  /** 30 s more cut on one side (the clip's file grows from the live when needed) */
+  onExtend?: (side: "start" | "end") => Promise<void>;
   /** Decision row, under the trim bar */
   children?: ReactNode;
 }
@@ -63,7 +66,7 @@ function dragRatio(e: ReactPointerEvent, el: HTMLElement, onMove: (ratio: number
 }
 
 const MomentPlayer = forwardRef<MomentPlayerHandle, Props>(function MomentPlayer(
-  { jobId, moment, categoryLabel, autoPlay, onTrimChange, chat, children },
+  { jobId, moment, categoryLabel, autoPlay, onTrimChange, chat, onExtend, children },
   ref,
 ) {
   const { t } = useTranslation();
@@ -88,7 +91,13 @@ const MomentPlayer = forwardRef<MomentPlayerHandle, Props>(function MomentPlayer
     setPlaying(false);
   }, [moment.filename]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Same moment, trim changed from outside (back to the AI's cut): the handles follow
+  // The clip's file grew (30 s more): its length until the video says
+  useEffect(() => {
+    setDuration(moment.duration);
+  }, [moment.duration]);
+
+  // Same moment, trim changed from outside (back to the AI's cut, 30 s more): the handles glide there
+  const [glide, setGlide] = useState(false);
   const trimFile = useRef(moment.filename);
   const outsideTrim = moment.trim ? `${moment.trim[0]}-${moment.trim[1]}` : "";
   useEffect(() => {
@@ -103,12 +112,48 @@ const MomentPlayer = forwardRef<MomentPlayerHandle, Props>(function MomentPlayer
     if (Math.abs(a - next[0]) < 0.15 && Math.abs(b - next[1]) < 0.15) return;
     trimRef.current = next;
     setTrim(next);
+    setGlide(true);
     const video = videoRef.current;
     if (video && (video.currentTime < next[0] - 0.2 || video.currentTime > next[1] + 0.2)) {
       video.currentTime = next[0];
       setCurrent(next[0]);
     }
+    const settled = window.setTimeout(() => setGlide(false), 750);
+    return () => window.clearTimeout(settled);
   }, [moment.filename, outsideTrim]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // "+30 s" on one side, one at a time
+  const [extending, setExtending] = useState<"start" | "end" | null>(null);
+  const extend = async (side: "start" | "end") => {
+    if (!onExtend || extending) return;
+    setExtending(side);
+    try {
+      await onExtend(side);
+    } finally {
+      setExtending(null);
+    }
+  };
+  // The clip's file changes when it grows: its video and frames are asked for again
+  const version = `${moment.start}-${moment.end}`;
+  const gliding = glide ? "transition-[left,width] duration-700 ease-glide" : "";
+  const plus = (side: "start" | "end") => {
+    if (!onExtend) return null;
+    const label = t(side === "start" ? "project.extendStart" : "project.extendEnd");
+    return (
+      <Tooltip content={label}>
+        <button
+          type="button"
+          onClick={() => extend(side)}
+          disabled={!!extending}
+          aria-label={label}
+          data-busy={extending === side || undefined}
+          className={`extend-plus absolute top-1/2 ${side === "start" ? "right-0" : "left-0"}`}
+        >
+          {extending === side ? <Loader2 className="w-4 h-4 spinner" /> : <Plus className="w-4 h-4" strokeWidth={2.4} />}
+        </button>
+      </Tooltip>
+    );
+  };
 
   const toggle = useCallback(() => {
     const video = videoRef.current;
@@ -157,8 +202,8 @@ const MomentPlayer = forwardRef<MomentPlayerHandle, Props>(function MomentPlayer
         <video
           key={moment.filename}
           ref={videoRef}
-          src={clipUrl(jobId, moment.filename)}
-          poster={clipThumbUrl(jobId, moment.filename, { width: 1280 })}
+          src={clipUrl(jobId, moment.filename, version)}
+          poster={clipThumbUrl(jobId, moment.filename, { width: 1280, version })}
           preload="metadata"
           playsInline
           muted={muted}
@@ -229,11 +274,12 @@ const MomentPlayer = forwardRef<MomentPlayerHandle, Props>(function MomentPlayer
         </div>
       </div>
 
-      {/* Trim: drag the handles to cut the start / end; click or drag elsewhere to move through the clip */}
-      <div className="flex items-center gap-3 px-1.5 pt-3 pb-1">
-        <div className="w-[92px] flex-none">
+      {/* Trim: drag the handles to cut the start / end; click or drag elsewhere to move through the clip; + for 30 s more */}
+      <div className="group/trim flex items-center gap-3 px-1.5 pt-3 pb-1">
+        <div className="relative w-[92px] flex-none">
           <div className="text-[11.5px] text-ink-3">{t("project.start")}</div>
           <div className="mono text-[13px] font-medium text-white">{clock(trim[0])}</div>
+          {plus("start")}
         </div>
         <div
           ref={stripRef}
@@ -244,16 +290,17 @@ const MomentPlayer = forwardRef<MomentPlayerHandle, Props>(function MomentPlayer
             {Array.from({ length: FILMSTRIP_FRAMES }, (_, i) => (
               <img
                 key={i}
-                src={clipThumbUrl(jobId, moment.filename, { time: ((i + 0.5) * moment.duration) / FILMSTRIP_FRAMES })}
+                src={clipThumbUrl(jobId, moment.filename, { time: ((i + 0.5) * moment.duration) / FILMSTRIP_FRAMES, version })}
                 alt=""
                 draggable={false}
                 className="flex-1 min-w-0 h-full object-cover"
               />
             ))}
           </div>
-          <div className="absolute inset-y-0 left-0 bg-black/70" style={{ width: pct(trim[0]) }} />
-          <div className="absolute inset-y-0 right-0 bg-black/70" style={{ width: `calc(100% - ${pct(trim[1])})` }} />
-          <div className="absolute inset-y-0 border-y-2 border-accent pointer-events-none" style={{ left: pct(trim[0]), width: pct(trim[1] - trim[0]) }} />
+          <div className={`absolute inset-y-0 left-0 bg-black/70 ${gliding}`} style={{ width: pct(trim[0]) }} />
+          <div className={`absolute inset-y-0 right-0 bg-black/70 ${gliding}`} style={{ width: `calc(100% - ${pct(trim[1])})` }} />
+          <div className={`absolute inset-y-0 border-y-2 border-accent pointer-events-none ${gliding}`} style={{ left: pct(trim[0]), width: pct(trim[1] - trim[0]) }} />
+          {extending && <div className="extend-glow absolute inset-y-0 w-1/4 pointer-events-none" data-side={extending} />}
           {keys.map((k) => (
             <span
               key={`${k.time}-${k.label}`}
@@ -313,16 +360,17 @@ const MomentPlayer = forwardRef<MomentPlayerHandle, Props>(function MomentPlayer
                 setTrim(next);
                 commitTrim();
               }}
-              className={`absolute inset-y-0 w-3 rounded-[4px] bg-accent cursor-ew-resize grid place-items-center ${side === "start" ? "" : "-translate-x-full"}`}
+              className={`absolute inset-y-0 w-3 rounded-[4px] bg-accent cursor-ew-resize grid place-items-center ${side === "start" ? "" : "-translate-x-full"} ${gliding}`}
               style={{ left: pct(side === "start" ? trim[0] : trim[1]) }}
             >
               <span className="w-0.5 h-4 rounded-full bg-accent-ink/60" />
             </span>
           ))}
         </div>
-        <div className="w-[92px] flex-none text-right">
+        <div className="relative w-[92px] flex-none text-right">
           <div className="text-[11.5px] text-ink-3">{t("project.end")}</div>
           <div className="mono text-[13px] font-medium text-white">{clock(trim[1])}</div>
+          {plus("end")}
         </div>
       </div>
 

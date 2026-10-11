@@ -75,7 +75,7 @@ export default function MomentList({ jobId, moments, selected, onSelect, categor
               } ${m.state === "passed" && !isSelected ? "opacity-50" : ""}`}
             >
               <span className="relative w-[92px] h-[52px] flex-none rounded-[8px] overflow-hidden bg-white/5">
-                <img src={clipThumbUrl(jobId, m.filename)} alt="" loading="lazy" className="w-full h-full object-cover" />
+                <img src={clipThumbUrl(jobId, m.filename, { version: `${m.start}-${m.end}` })} alt="" loading="lazy" className="w-full h-full object-cover" />
                 <span className="mono absolute left-1 bottom-1 h-[17px] px-[5px] rounded-[4px] flex items-center bg-black/75 text-[10.5px] text-white">
                   {clock(m.duration)}
                 </span>

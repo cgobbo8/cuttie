@@ -13,6 +13,7 @@ import { listObjects } from '#services/storage'
 import Job from '#models/job'
 import { detectFacecam, transcribeClipWords } from '#services/worker_client'
 import { brandFacecamFor, getBrandKit } from '#services/brand_kit'
+import { readClipMeta, suggestedCut } from '#services/clip_extend'
 import {
   camVisible,
   resolveFacecam,
@@ -131,12 +132,8 @@ function exportedParts(job: Job | null): Record<string, [number, number]> {
   for (const hp of job?.hotPoints ?? []) {
     const name = hp?.clip_filename
     if (!name) continue
-    const trim = job?.selection?.[name]?.trim
-    const llm = hp.llm
-    if (trim) parts[name] = trim
-    else if (llm?.cut_start != null && llm?.cut_end != null && llm.cut_end - llm.cut_start >= 5) {
-      parts[name] = [llm.cut_start, llm.cut_end]
-    }
+    const part = job?.selection?.[name]?.trim ?? suggestedCut(hp)
+    if (part) parts[name] = part
   }
   return parts
 }
@@ -204,23 +201,16 @@ export function readJobChat(jobId: string): ChatLine[] {
 
 /** The messages posted while a clip runs, timed in clip seconds (its _meta.json gives where it sits in the live) */
 export function chatInClip(jobId: string, clipFilename: string, allChat: ChatLine[]): ChatLine[] {
-  if (allChat.length === 0) return []
-  const base = path.basename(clipFilename, path.extname(clipFilename))
-  const metaPath = path.join(CLIPS_BASE, jobId, `${base}_meta.json`)
-  if (!existsSync(metaPath)) return []
-  try {
-    const { vod_start, vod_end } = JSON.parse(readFileSync(metaPath, 'utf-8'))
-    return allChat
-      .filter((m) => m.timestamp >= vod_start && m.timestamp <= vod_end)
-      .map((m) => ({
-        author: m.author,
-        text: m.text,
-        timestamp: m.timestamp - vod_start,
-        ...(m.emotes?.length ? { emotes: m.emotes } : {}),
-      }))
-  } catch {
-    return []
-  }
+  const meta = allChat.length > 0 ? readClipMeta(jobId, clipFilename) : null
+  if (!meta) return []
+  return allChat
+    .filter((m) => m.timestamp >= meta.vod_start && m.timestamp <= meta.vod_end)
+    .map((m) => ({
+      author: m.author,
+      text: m.text,
+      timestamp: m.timestamp - meta.vod_start,
+      ...(m.emotes?.length ? { emotes: m.emotes } : {}),
+    }))
 }
 
 /** Load shared job data (facecam, dominant_color, chat). Cached per batch. */

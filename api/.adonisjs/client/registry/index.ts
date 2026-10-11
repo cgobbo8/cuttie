@@ -252,6 +252,12 @@ const routes = {
     tokens: [{"old":"/api/jobs/:jobId/batch-render","type":0,"val":"api","end":""},{"old":"/api/jobs/:jobId/batch-render","type":0,"val":"jobs","end":""},{"old":"/api/jobs/:jobId/batch-render","type":1,"val":"jobId","end":""},{"old":"/api/jobs/:jobId/batch-render","type":0,"val":"batch-render","end":""}],
     types: placeholder as Registry['renders.batch_store']['types'],
   },
+  'clips.extend': {
+    methods: ["POST"],
+    pattern: '/api/clips/:jobId/:filename/extend',
+    tokens: [{"old":"/api/clips/:jobId/:filename/extend","type":0,"val":"api","end":""},{"old":"/api/clips/:jobId/:filename/extend","type":0,"val":"clips","end":""},{"old":"/api/clips/:jobId/:filename/extend","type":1,"val":"jobId","end":""},{"old":"/api/clips/:jobId/:filename/extend","type":1,"val":"filename","end":""},{"old":"/api/clips/:jobId/:filename/extend","type":0,"val":"extend","end":""}],
+    types: placeholder as Registry['clips.extend']['types'],
+  },
   'clips.edit_env': {
     methods: ["GET","HEAD"],
     pattern: '/api/clips/:jobId/:filename/edit-env',

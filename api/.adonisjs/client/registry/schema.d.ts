@@ -499,6 +499,18 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/renders_controller').default['batchStore']>>>
     }
   }
+  'clips.extend': {
+    methods: ["POST"]
+    pattern: '/api/clips/:jobId/:filename/extend'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue, ParamValue]
+      params: { jobId: ParamValue; filename: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/clips_controller').default['extend']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/clips_controller').default['extend']>>>
+    }
+  }
   'clips.edit_env': {
     methods: ["GET","HEAD"]
     pattern: '/api/clips/:jobId/:filename/edit-env'

@@ -752,7 +752,14 @@
       "reading": "L'IA l'a repéré en lisant tout ce qui s'est dit pendant le live.",
       "asked": "Quelqu'un a demandé un clip à ce moment-là.",
       "manual": "Clip ajouté à la main."
-    }
+    },
+    "extendStart": "30 s de plus avant",
+    "extendEnd": "30 s de plus après",
+    "extendedStart": "30 s de plus au début",
+    "extendedEnd": "30 s de plus à la fin",
+    "extendEdgeStart": "Le live commence ici : rien de plus avant.",
+    "extendEdgeEnd": "Le live s'arrête ici : rien de plus après.",
+    "extendFailed": "Twitch n'a pas répondu, réessaie dans un instant."
   },
   "montage": {
     "title": "Habille tes clips",

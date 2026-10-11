@@ -5,6 +5,8 @@ import { AlertTriangle, ArrowLeft, ArrowRight, Check, ChevronDown, Loader2, Rota
 import {
   clipThumbUrl,
   deleteClip,
+  extendClip,
+  ExtendError,
   getJobChat,
   getJobStatus,
   mapSSEHotPoint,
@@ -130,12 +132,34 @@ export default function ProjectPage() {
   const hasChat = !!current && (clipChat[current.filename]?.length ?? 0) > 0;
   const vodId = vodIdOf(job?.url ?? null);
   const vodThumb = channel?.vods.find((v) => v.id === vodId)?.thumbnail_url ?? null;
-  useBackdrop(current && jobId ? clipThumbUrl(jobId, current.filename) : vodThumb);
+  useBackdrop(current && jobId ? clipThumbUrl(jobId, current.filename, { version: `${current.start}-${current.end}` }) : vodThumb);
 
   const select = useCallback((index: number) => {
     setInteracted(true);
     setSelected(index);
   }, []);
+
+  // 30 s more on one side of a clip's cut; its file grows from the live when needed
+  const extendMoment = useCallback(
+    async (filename: string, side: "start" | "end") => {
+      if (!jobId) return;
+      try {
+        await extendClip(jobId, filename, side);
+        setJob(await getJobStatus(jobId));
+        toast.success(t(side === "start" ? "project.extendedStart" : "project.extendedEnd"));
+      } catch (err) {
+        const reason = err instanceof ExtendError ? err.reason : "other";
+        toast.error(
+          reason === "edge"
+            ? t(side === "start" ? "project.extendEdgeStart" : "project.extendEdgeEnd")
+            : reason === "unreachable" || !(err instanceof Error)
+              ? t("project.extendFailed")
+              : err.message,
+        );
+      }
+    },
+    [jobId, t, toast],
+  );
 
   const saveChoice = useCallback(
     async (filename: string, patch: { state?: ClipSelection["state"] | null; trim?: [number, number] | null }) => {
@@ -367,6 +391,7 @@ export default function ProjectPage() {
                 categoryLabel={categoryLabel(current.hp.llm?.category)}
                 autoPlay={interacted}
                 chat={clipChat[current.filename]}
+                onExtend={(side) => extendMoment(current.filename, side)}
                 onTrimChange={(trim) => saveChoice(current.filename, { trim })}
               >
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-2.5 px-1.5 pt-3 pb-1.5">

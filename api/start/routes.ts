@@ -85,6 +85,7 @@ router
         router.post('/jobs/:jobId/batch-render', [() => import('#controllers/renders_controller'), 'batchStore'])
 
         // Clips
+        router.post('/clips/:jobId/:filename/extend', [() => import('#controllers/clips_controller'), 'extend'])
         router.get('/clips/:jobId/:filename/edit-env', [() => import('#controllers/clips_controller'), 'editEnv'])
         router.get('/clips/:jobId/:filename/thumb', [() => import('#controllers/clips_controller'), 'thumb'])
         router.get('/clips/:jobId/:filename/background', [() => import('#controllers/clips_controller'), 'background'])

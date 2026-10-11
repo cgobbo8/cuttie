@@ -752,7 +752,14 @@
       "reading": "La IA lo detectó leyendo todo lo que se dijo durante el directo.",
       "asked": "Alguien pidió un clip en ese momento.",
       "manual": "Clip añadido a mano."
-    }
+    },
+    "extendStart": "30 s más antes",
+    "extendEnd": "30 s más después",
+    "extendedStart": "30 s más al principio",
+    "extendedEnd": "30 s más al final",
+    "extendEdgeStart": "El directo empieza aquí: nada más antes.",
+    "extendEdgeEnd": "El directo termina aquí: nada más después.",
+    "extendFailed": "Twitch no respondió, vuelve a intentarlo en un momento."
   },
   "montage": {
     "title": "Viste tus clips",

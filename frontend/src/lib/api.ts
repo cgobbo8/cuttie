@@ -346,11 +346,12 @@ export function clipBackgroundUrl(jobId: string, filename: string): string {
   return `${BASE}/clips/${encodeURIComponent(jobId)}/${encodeURIComponent(filename)}/background`;
 }
 
-/** Still frame of a clip (extracted and cached by the API) */
-export function clipThumbUrl(jobId: string, filename: string, opts: { width?: 480 | 1280; time?: number } = {}): string {
+/** Still frame of a clip (extracted and cached by the API); `version` changes when the clip's file does */
+export function clipThumbUrl(jobId: string, filename: string, opts: { width?: 480 | 1280; time?: number; version?: string } = {}): string {
   const params = new URLSearchParams();
   if (opts.width) params.set("w", String(opts.width));
   if (opts.time !== undefined) params.set("t", opts.time.toFixed(1));
+  if (opts.version) params.set("v", opts.version);
   const query = params.toString();
   return `${BASE}/clips/${encodeURIComponent(jobId)}/${encodeURIComponent(filename)}/thumb${query ? `?${query}` : ""}`;
 }
@@ -885,8 +886,27 @@ export async function retryJob(
   return res.json();
 }
 
-export function clipUrl(jobId: string, filename: string): string {
-  return `${BASE}/clips/${jobId}/${filename}`;
+export function clipUrl(jobId: string, filename: string, version?: string): string {
+  return `${BASE}/clips/${jobId}/${filename}${version ? `?v=${encodeURIComponent(version)}` : ""}`;
+}
+
+/** Why a clip couldn't get longer: the live starts / ends there, or it couldn't be read */
+export class ExtendError extends Error {
+  constructor(readonly reason: "edge" | "unreachable" | "other", message: string) {
+    super(message);
+  }
+}
+
+/** 30 s more cut on one side of a clip (its file grows from the live when needed): the new cut */
+export async function extendClip(jobId: string, filename: string, side: "start" | "end"): Promise<{ extended: boolean; trim: [number, number] }> {
+  const res = await fetch(`${BASE}/clips/${encodeURIComponent(jobId)}/${encodeURIComponent(filename)}/extend`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ side }),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new ExtendError(res.status === 409 ? "edge" : res.status === 502 ? "unreachable" : "other", json.error ?? "extend failed");
+  return json;
 }
 
 // ── Hot point mapping ────────────────────────────────────

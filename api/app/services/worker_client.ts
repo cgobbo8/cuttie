@@ -125,6 +125,26 @@ export async function detectFacecam(
   return res.facecam
 }
 
+export interface ExtendedClip {
+  vod_start: number
+  vod_end: number
+  duration: number
+  /** Seconds the clip gained before its old start: its clock moved by that much */
+  added_before: number
+}
+
+/** Extract a clip again over a wider part of the live, its sidecars following (clip_tools.extend_clip) */
+export async function extendClipFile(
+  jobId: string,
+  clipFilename: string,
+  body: { url: string; start: number; end: number }
+): Promise<ExtendedClip> {
+  return call<ExtendedClip>('POST', `/clips/${encodeURIComponent(jobId)}/${encodeURIComponent(clipFilename)}/extend`, {
+    body,
+    timeoutMs: 300_000,
+  })
+}
+
 export interface DetectedPalette {
   palette: string[]
   roles: { accent: string; highlight: string; dark: string; light: string }

@@ -223,7 +223,7 @@ cuttie/
                           -> Re-rank par final_score, garde top 20
 6. CLIPPING            -> yt-dlp video + FFmpeg extraction (bornes dynamiques RMS)
                           uniquement pour les 20 candidats gardes
-                          + reperage de la webcam sur les clips (facecam.json v2 : cadre + visages par clip)
+                          + reperage de la webcam sur les clips (facecam.json v3 : cadre + qui est ou, toutes les 4 s de chaque clip)
                           + mots des clips gardes transcrits sur leur audio si le live l'a ete sans
 -> DONE
 ```
@@ -302,7 +302,7 @@ Fournisseur qui refuse tout (`provider_errors.py`) : credits OpenRouter epuises 
 - Design : verre fonce pose sur du contenu floute (vignettes, frames), une seule couleur d'accent = couleur de la chaine.
 - Modeles : les 7 mises en page, chacune sa structure (Empile = cam en bandeau / jeu ; Reaction = visage en grand + jeu en vignette ; Discussion RP = scene du jeu + cam ronde, conversation et chat dessous ; Action = jeu plein ecran + cam ronde ; Cinema = ecran du live entier entre deux bandes, titre au-dessus ; Signature = cartes sur fond floute ; Sans cam) + les modeles perso du streamer (`brand_kit.templates`, v2 = elements : fond, jeu (ou ecran entier), cam, chat, sous-titres, accroche, widgets avec arrivee / depart / animations, ordre des calques) ; `brand_kit.default_template` sert aux nouveaux projets. L'editeur a calques reste le mode avance.
 - Zones couvertes par TikTok / Shorts / Reels (1080x1920) : haut y < 200, bas y > 1440, droite x > 930 entre y 760 et 1440. Textes, cam et marque restent hors de ces zones (teste) ; le jeu peut passer dessous, une cam pleine largeur en haut passe sous les onglets.
-- Accroche = couverture du clip : visible des la 1re image, s'efface apres 3,5 s (ou a la moitie, ou jamais), posee sur le jeu, jamais sur le visage. Sous-titres : 1 a 5 mots a la fois, le mot prononce grossit (`pop`). Chat : messages du clip en bulles (`chatForClip` retire commandes, bots, liens).
+- Accroche = couverture du clip : visible des la 1re image, s'efface apres 3,5 s (ou a la moitie, ou jamais), posee sur le jeu, jamais sur le visage. Sous-titres : 1 a 5 mots a la fois, le mot prononce grossit (`pop`). Chat : messages du clip en bulles (`chatForClip` retire emotes, commandes, bots, liens ; les noms d'emotes viennent de Twitch au telechargement).
 - Widgets du kit et polices : ecrits dans `frontend/`, copies dans `api/remotion` par `node scripts/sync-remotion.mjs` (verifie par `remotionSync.test.ts`).
 
 ## App desktop (Windows)
@@ -317,9 +317,9 @@ Fournisseur qui refuse tout (`provider_errors.py`) : credits OpenRouter epuises 
 ## Webcam
 
 La position confirmee au premier lancement est un **repere**, pas une regle : la cam peut bouger d'un live a l'autre.
-- Chaque analyse relocalise la cam sur ses clips (worker, fin de CLIPPING) -> `facecam.json` v2.
+- Chaque analyse relocalise la cam sur ses clips (worker, fin de CLIPPING) -> `facecam.json` v3 : le cadre, et qui est ou sur une image cle toutes les 4 s de chaque clip (PyAV, ~1 s par clip).
 - `facecam_resolver.ts` : cam reglee a la main pour ce live (`jobs.facecam`) > repere si meme place (IoU >= 0.5) > position du live sinon (`moved`, signale dans Monter).
-- Clip ou personne n'est dans la cam (mode realisateur, pause) -> monte sans cam, sauf « afficher quand meme ».
+- La cam est jugee sur la partie exportee (coupe du streamer, sinon coupe de l'IA) : personne dedans sur plus de la moitie des images (webcam passee en plein ecran, ecran de pause, streamer absent) -> monte sans cam, sauf « afficher quand meme ».
 
 ## Conventions
 

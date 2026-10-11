@@ -828,6 +828,24 @@ video {
   }
 }
 
+/* A duration bar growing to its length (stagger with --i) */
+.machine-bar {
+  display: block;
+  height: 100%;
+  border-radius: 9999px;
+  transform-origin: left;
+  animation: bar-grow 900ms var(--ease-glide) both;
+  animation-delay: calc(var(--i, 0) * 140ms);
+}
+@keyframes bar-grow {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: none;
+  }
+}
+
 /* A find arriving in a list (stagger with --i) */
 @keyframes find-in {
   from {
@@ -864,6 +882,7 @@ video {
   .moment-dot > span,
   .chat-bar,
   .chat-stack,
+  .machine-bar,
   .extend-plus,
   .extend-glow,
   .ring-out,

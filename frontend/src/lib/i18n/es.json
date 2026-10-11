@@ -978,6 +978,19 @@
       "sample": "ALLÁ VAMOS",
       "keysMissing": "Falta una clave de IA (o está rechazada): sin ella, el análisis no puede empezar.",
       "addKeys": "Añadir mis claves"
+    },
+    "machine": {
+      "title": "Tu ordenador",
+      "forLive": "Para uno de tus directos ({{duration}})",
+      "measuring": "Midiendo tu ordenador…",
+      "noCard": "Sin tarjeta gráfica adecuada",
+      "here": "Tu PC",
+      "noLocal": "demasiado lento sin tarjeta gráfica",
+      "voices": "Separación de voces: en tu PC, gratis (≈ {{duration}} por análisis)",
+      "voicesHere": "Separación de voces: en tu PC, gratis",
+      "adviceFast": "Tu PC transcribe rápido: Groq es opcional.",
+      "adviceSaves": "Con Groq, cada análisis está listo ≈ {{duration}} antes.",
+      "adviceNeeded": "Sin tarjeta gráfica adecuada, la transcripción pasa por OpenRouter, más lento: se recomienda Groq."
     }
   },
   "projects": {

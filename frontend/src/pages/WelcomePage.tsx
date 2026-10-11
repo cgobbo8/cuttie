@@ -15,6 +15,7 @@ import WebcamStep from "../components/welcome/WebcamStep";
 import ReadyStep from "../components/welcome/ReadyStep";
 import { CamPeek, ChannelPeek, KeysPeek } from "../components/welcome/Peek";
 import type { CamSearch, FoundChannel } from "../components/welcome/shared";
+import { typicalLive } from "../lib/machine";
 
 type Step = "channel" | "keys" | "cam" | "ready";
 
@@ -135,7 +136,13 @@ export default function WelcomePage() {
           <div className="h-[380px] rounded-[14px] skeleton" />
         )
       ) : step === "keys" ? (
-        <KeysStep stateOf={keys.stateOf} setKeyState={keys.setKeyState} ready={keys.requiredOk} onContinue={() => setStep(noChannel ? "ready" : "cam")} />
+        <KeysStep
+          stateOf={keys.stateOf}
+          setKeyState={keys.setKeyState}
+          ready={keys.requiredOk}
+          onContinue={() => setStep(noChannel ? "ready" : "cam")}
+          liveSeconds={typicalLive(vods.map((v) => v.duration_seconds))}
+        />
       ) : step === "cam" ? (
         <WebcamStep
           search={camSearch}

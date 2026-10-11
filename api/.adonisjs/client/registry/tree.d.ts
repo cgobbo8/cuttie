@@ -11,6 +11,7 @@ export interface ApiDefinition {
     updateSettings: typeof routes['app.update_settings']
     verifyKey: typeof routes['app.verify_key']
     diagnostics: typeof routes['app.diagnostics']
+    machine: typeof routes['app.machine']
     localTest: typeof routes['app.local_test']
   }
   storage: {

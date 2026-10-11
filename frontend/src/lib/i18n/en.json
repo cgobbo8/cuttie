@@ -978,6 +978,19 @@
       "sample": "HERE WE GO",
       "keysMissing": "An AI key is missing (or rejected): analyses can't start without it.",
       "addKeys": "Add my keys"
+    },
+    "machine": {
+      "title": "Your computer",
+      "forLive": "For one of your lives ({{duration}})",
+      "measuring": "Measuring your computer…",
+      "noCard": "No suitable graphics card",
+      "here": "Your PC",
+      "noLocal": "too slow without a graphics card",
+      "voices": "Telling voices apart: on your PC, free (≈ {{duration}} per analysis)",
+      "voicesHere": "Telling voices apart: on your PC, free",
+      "adviceFast": "Your PC transcribes fast: Groq is optional.",
+      "adviceSaves": "With Groq, each analysis is ready ≈ {{duration}} sooner.",
+      "adviceNeeded": "Without a suitable graphics card, transcription goes through OpenRouter, slower: Groq is recommended."
     }
   },
   "projects": {

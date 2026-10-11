@@ -890,6 +890,21 @@ export function clipUrl(jobId: string, filename: string, version?: string): stri
   return `${BASE}/clips/${jobId}/${filename}${version ? `?v=${encodeURIComponent(version)}` : ""}`;
 }
 
+/** What this computer can do (first launch): its card, how fast Whisper would run, the voice model's speed */
+export interface MachineProfile {
+  backend: "mlx" | "cuda" | "cpu";
+  gpu: { name: string | null; vram_gb: number | null; tflops: number; error?: string };
+  cpu: string;
+  /** Times faster than real time Whisper would run here, null when it can't run locally */
+  whisper_realtime: number | null;
+  /** Seconds the voice model needs for one analysis */
+  voices: { seconds: number | null; error?: string };
+}
+
+export async function getMachine(): Promise<MachineProfile> {
+  return jsonOrThrow(await fetch(`${BASE}/machine`), "Failed to measure this computer");
+}
+
 /** Why a clip couldn't get longer: the live starts / ends there, or it couldn't be read */
 export class ExtendError extends Error {
   constructor(readonly reason: "edge" | "unreachable" | "other", message: string) {

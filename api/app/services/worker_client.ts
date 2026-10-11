@@ -125,6 +125,21 @@ export async function detectFacecam(
   return res.facecam
 }
 
+export interface MachineProfile {
+  backend: 'mlx' | 'cuda' | 'cpu'
+  gpu: { name: string | null; vram_gb: number | null; tflops: number; error?: string }
+  cpu: string
+  /** How many times faster than real time Whisper would run here, null when it can't run locally */
+  whisper_realtime: number | null
+  /** Seconds the voice model needs for one analysis */
+  voices: { seconds: number | null; error?: string }
+}
+
+/** What this computer can do (first launch: is a Groq key worth it?), measured once per worker run */
+export async function getMachineProfile(): Promise<MachineProfile> {
+  return call<MachineProfile>('GET', '/machine', { timeoutMs: 120_000 })
+}
+
 export interface ExtendedClip {
   vod_start: number
   vod_end: number

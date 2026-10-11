@@ -10,6 +10,9 @@ import { LANGUAGE_STORAGE_KEY } from "../lib/i18n";
 import KeyField, { OPTIONAL_KEYS, REQUIRED_KEYS, useKeyChecks } from "../components/KeyField";
 import { useToast } from "../components/Toast";
 import { OPENROUTER_CREDITS_URL } from "../components/ProviderFix";
+import MachineCard from "../components/welcome/MachineCard";
+import { useChannel } from "../lib/ChannelContext";
+import { typicalLive } from "../lib/machine";
 
 const LANGUAGES = [
   { code: "fr", labelKey: "profile.french" },
@@ -42,6 +45,7 @@ function TranscriptionSection() {
   const { t } = useTranslation();
   const toast = useToast();
   const { settings, refresh } = useSettings();
+  const { channel } = useChannel();
   const [local, setLocal] = useState<WorkerDiagnostics["transcription"] | null>(null);
   const [saving, setSaving] = useState<TranscriptionEngine | null>(null);
 
@@ -112,6 +116,10 @@ function TranscriptionSection() {
         ))}
       </div>
       {active === "local" && local && !local.local_model_ready && <p className="mt-3 text-[12.5px] text-ink-3">{t("settings.transcription.download")}</p>}
+      {/* This computer against Groq, on one of the streamer's lives */}
+      <div className="mt-3">
+        <MachineCard liveSeconds={typicalLive((channel?.vods ?? []).map((v) => v.duration_seconds))} />
+      </div>
     </Section>
   );
 }

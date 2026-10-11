@@ -4,7 +4,7 @@ import Job from '#models/job'
 import { DATA_DIR } from '#services/data_paths'
 import { autoLoginEnabled } from '#services/local_user'
 import { readSettings, writeSettings } from '#services/user_settings'
-import { getDiagnostics, runLocalTest } from '#services/worker_client'
+import { getDiagnostics, getMachineProfile, runLocalTest } from '#services/worker_client'
 
 /** Secret settings the user can edit from the Settings page (stored in settings.json). */
 const KEY_SETTINGS = ['groq_api_key', 'openrouter_api_key', 'openai_api_key'] as const
@@ -103,6 +103,15 @@ export default class AppController {
       return { ok: false, reason: 'unreachable' }
     } catch {
       return { ok: false, reason: 'unreachable' }
+    }
+  }
+
+  /** GET /api/machine — this computer's card, and how long transcribing / telling voices apart would take on it */
+  async machine({ response }: HttpContext) {
+    try {
+      return await getMachineProfile()
+    } catch (err: any) {
+      return response.status(502).json({ error: err.message })
     }
   }
 

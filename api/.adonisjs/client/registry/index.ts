@@ -156,6 +156,12 @@ const routes = {
     tokens: [{"old":"/api/diagnostics","type":0,"val":"api","end":""},{"old":"/api/diagnostics","type":0,"val":"diagnostics","end":""}],
     types: placeholder as Registry['app.diagnostics']['types'],
   },
+  'app.machine': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/machine',
+    tokens: [{"old":"/api/machine","type":0,"val":"api","end":""},{"old":"/api/machine","type":0,"val":"machine","end":""}],
+    types: placeholder as Registry['app.machine']['types'],
+  },
   'app.local_test': {
     methods: ["POST"],
     pattern: '/api/diagnostics/local-test',

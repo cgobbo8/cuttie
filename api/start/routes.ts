@@ -61,6 +61,7 @@ router
         router.put('/settings', [() => import('#controllers/app_controller'), 'updateSettings'])
         router.post('/settings/verify', [() => import('#controllers/app_controller'), 'verifyKey'])
         router.get('/diagnostics', [() => import('#controllers/app_controller'), 'diagnostics'])
+        router.get('/machine', [() => import('#controllers/app_controller'), 'machine'])
         router.post('/diagnostics/local-test', [() => import('#controllers/app_controller'), 'localTest'])
 
         // Games

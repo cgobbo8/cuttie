@@ -2,6 +2,7 @@ import { useTranslation } from "react-i18next";
 import { ArrowRight } from "lucide-react";
 import type { ApiKeyName } from "../../lib/api";
 import KeyField, { GROQ_KEY, REQUIRED_KEYS, type KeyState } from "../KeyField";
+import MachineCard from "./MachineCard";
 import { Progress } from "./shared";
 
 /** Step 2: the OpenRouter key (and Groq, optional, for faster transcription), checked as soon as pasted */
@@ -10,12 +11,15 @@ export default function KeysStep({
   setKeyState,
   ready,
   onContinue,
+  liveSeconds,
 }: {
   stateOf: (name: ApiKeyName) => KeyState;
   setKeyState: (name: ApiKeyName, state: KeyState) => void;
   /** The required key saved and not rejected */
   ready: boolean;
   onContinue: () => void;
+  /** A usual live of the streamer, for the time estimates */
+  liveSeconds: number;
 }) {
   const { t } = useTranslation();
   const busy = [...REQUIRED_KEYS, GROQ_KEY].some((k) => stateOf(k.name) === "saving" || stateOf(k.name) === "checking");
@@ -33,6 +37,7 @@ export default function KeysStep({
         ))}
         <div className="mt-2 text-[12.5px] text-ink-3">{t("welcome.keys.optional")}</div>
         <KeyField def={GROQ_KEY} state={stateOf(GROQ_KEY.name)} setState={(state) => setKeyState(GROQ_KEY.name, state)} removable />
+        <MachineCard liveSeconds={liveSeconds} />
       </div>
 
       <div className="mt-6 flex flex-wrap items-center justify-between gap-3">

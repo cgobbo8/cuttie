@@ -311,6 +311,14 @@ def _first_line(cmd: list[str]) -> str | None:
         return None
 
 
+@app.get("/machine", dependencies=[Depends(require_secret)])
+def machine_profile() -> dict:
+    """The card, how fast Whisper would run here and the voice model's speed, measured in seconds (no Whisper download)."""
+    from app.services import machine
+
+    return machine.profile()
+
+
 @app.post("/diagnostics/local-test", dependencies=[Depends(require_secret)])
 def local_test() -> dict:
     """Run the GPU and Whisper on this computer once (the first time downloads the model)."""

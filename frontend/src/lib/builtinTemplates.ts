@@ -119,8 +119,8 @@ const LAYOUTS: Record<TemplateId, Layout> = {
     subtitles: { box: { x: 150, y: 650, w: 780, h: 240 }, font: "anton", size: 84, uppercase: true, words: 3, stroke: true },
     // Titles go on the game, never on the face
     hook: { box: { x: 100, y: 910, w: 880, h: 150 }, style: "box", font: "poppins", size: 52, until: 3.5 },
-    // A name tag over the webcam
-    brand: { kind: "channel-pill", box: { x: 60, y: 216, w: 640, h: 68 }, enter: "slideLeft", exit: "slideLeft", fields: { align: "left" } },
+    // Centered over the webcam, like everything else here
+    brand: { kind: "channel-pill", box: { x: 220, y: 216, w: 640, h: 68 }, enter: "pop", exit: "shrink" },
     extras: [followAtEnd({ x: 290, y: 1200, w: 500, h: 160 })],
   },
   // The game scene on top with a round webcam, the talk below: who speaks, in color, and the chat

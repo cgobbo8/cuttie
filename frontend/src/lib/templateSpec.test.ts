@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { TemplateContext } from "./templates";
 import { buildFromSpec, dragBox } from "./templateSpec";
-import { buildTemplate, specFromLayout, upgradeTemplate } from "./builtinTemplates";
+import { buildTemplate, builtInSpec, specFromLayout, upgradeTemplate } from "./builtinTemplates";
 
 const ctx: TemplateContext = {
   src: "/api/clips/job/clip.mp4",
@@ -36,7 +36,7 @@ describe("element templates", () => {
     expect(spec.widgets).toHaveLength(1);
     expect(spec.widgets[0]).toMatchObject({ kind: "channel-pill", box: { x: 240, y: 740, w: 600, h: 60 }, enter: "pop" });
 
-    // Webcam on top, full width; the pill is a name tag, a follow button comes at the end
+    // Webcam on top, full width; the pill centered over it like the rest, a follow button comes at the end
     const stacked = specFromLayout("empile");
     expect(stacked.cam.box).toEqual({ x: 0, y: 0, w: 1080, h: 740 });
     expect(stacked.subtitles).toMatchObject({ font: "anton", uppercase: true, words: 3 });
@@ -44,7 +44,8 @@ describe("element templates", () => {
       ["channel-pill", "start"],
       ["follow-button", "end"],
     ]);
-    expect(stacked.widgets[0].fields).toEqual({ align: "left" });
+    expect(stacked.widgets[0].box.x + stacked.widgets[0].box.w / 2).toBe(540);
+    expect(stacked.widgets[0].fields).toEqual({});
     // ...unless the channel's widget already comes at the end
     expect(specFromLayout("empile", { widgetTiming: "end" }).widgets.map((w) => w.kind)).toEqual(["channel-pill"]);
 
@@ -52,6 +53,14 @@ describe("element templates", () => {
     expect(discussion.subtitles).toMatchObject({ speakers: true, uppercase: false, highlight: "none" });
     expect(specFromLayout("signature", { subtitleStyle: "karaoke" }).subtitles.highlight).toBe("highlight");
     expect(specFromLayout("signature", { subtitleStyle: "minimal" }).subtitles).toMatchObject({ font: "geist", boxed: true, pop: false });
+  });
+
+  it("hands the pill its alignment: a name tag stays against its edge", () => {
+    // Discussion RP without a cam: the pill is a name tag on the scene
+    const spec = builtInSpec("discussion", { hasCam: false });
+    expect(spec.widgets[0].fields).toEqual({ align: "left" });
+    const pill = buildFromSpec(spec, ctx).find((l) => l.widget?.widgetId === "channel-pill")!;
+    expect(pill.widget!.props.align).toBe("left");
   });
 
   it("draws a layout the same way as the built-in template", async () => {

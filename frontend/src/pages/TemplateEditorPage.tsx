@@ -489,9 +489,24 @@ export default function TemplateEditorPage() {
         </div>
       </header>
 
-      <section className="mt-[22px] flex flex-wrap gap-[22px] items-start">
+      {/* Like an editing tool: the layers on the left, the frame in the middle, the selected element's settings on the right */}
+      <section className="mt-[22px] grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] gap-[22px] items-start">
+        <aside className="order-2 lg:order-none min-w-0 flex flex-col gap-3 lg:sticky lg:top-[96px]">
+          <LayerList
+            items={orderOf(spec).map((key) => ({
+              key,
+              label: labelOf(key),
+              hidden: (key === "cam" && !spec.cam.visible) || (key === "hook" && !spec.hook.visible) || (key === "chat" && !chatOf(spec).visible),
+            }))}
+            selected={picking ? null : selected}
+            onSelect={select}
+            onMove={(key, index) => update({ ...spec, order: restack(spec, key, index) })}
+            action={<AddWidgetButton onClick={() => setPicking(true)} />}
+          />
+        </aside>
+
         {/* The frame, its playback bar and hint: all as wide as the frame */}
-        <div className="flex flex-col gap-3 flex-none" style={{ width: Math.round((canvasHeight * 1080) / 1920) }}>
+        <div className="order-1 lg:order-none justify-self-center flex flex-col gap-3" style={{ width: Math.round((canvasHeight * 1080) / 1920) }}>
           <EditorCanvas
             layers={layers}
             elements={elements}
@@ -557,19 +572,7 @@ export default function TemplateEditorPage() {
         </div>
 
         {/* Settings of the selected element */}
-        <aside className="flex-[1_1_380px] min-w-0 max-w-[480px] flex flex-col gap-3 lg:sticky lg:top-[96px]">
-          <LayerList
-            items={orderOf(spec).map((key) => ({
-              key,
-              label: labelOf(key),
-              hidden: (key === "cam" && !spec.cam.visible) || (key === "hook" && !spec.hook.visible) || (key === "chat" && !chatOf(spec).visible),
-            }))}
-            selected={picking ? null : selected}
-            onSelect={select}
-            onMove={(key, index) => update({ ...spec, order: restack(spec, key, index) })}
-            action={<AddWidgetButton onClick={() => setPicking(true)} />}
-          />
-
+        <aside className="order-3 lg:order-none min-w-0 flex flex-col gap-3 lg:sticky lg:top-[96px]">
           {covered.length > 0 && !picking && (
             <div className="flex items-start gap-2.5 p-3 rounded-[14px] bg-[rgba(245,177,76,0.12)] border border-[rgba(245,177,76,0.35)]">
               <AlertTriangle className="w-4 h-4 text-[#F5B14C] flex-none mt-0.5" />

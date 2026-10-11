@@ -371,7 +371,7 @@ function widgetLayer(ctx: TemplateContext, w: SpecWidget): Layer {
   };
   layer.widget =
     w.kind === "channel-pill"
-      ? { widgetId: "channel-pill", props: { login: ctx.login ?? "", avatarUrl: ctx.avatarUrl ?? "", darkColor: ctx.colors.dark, lightColor: ctx.colors.light } }
+      ? { widgetId: "channel-pill", props: { login: ctx.login ?? "", avatarUrl: ctx.avatarUrl ?? "", darkColor: ctx.colors.dark, lightColor: ctx.colors.light, ...w.fields } }
       : { widgetId: w.kind, props: { ...brandProps, ...w.fields } };
   layer.animations = animations;
   return layer;

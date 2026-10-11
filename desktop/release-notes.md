@@ -1,1 +1,1 @@
-- « Ta machine » : Cuttie mesure ta carte graphique en quelques secondes et compare, pour un de tes lives, la transcription sur ton PC et avec Groq (temps et prix). À voir au premier lancement et dans Paramètres > Transcription.
+- Le temps restant d'une analyse est enfin juste : il tient compte de la durée du live, de la transcription (Groq ou ton PC) et de la vitesse de ta machine, puis se recale au fil de l'analyse.

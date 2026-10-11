@@ -14,6 +14,7 @@ import os
 import re
 import subprocess
 import threading
+import time
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 
@@ -139,12 +140,16 @@ def transcribe_vod(
         audio = os.path.join(cache_dir, f"chunk_{i:03d}.mp3")
         if not _extract_chunk(wav_path, start, end, audio):
             raise TranscriptionFailed(f"chunk {i}: audio extraction failed")
+        t0 = time.time()
         try:
             engine = transcriber.chosen_engine()
             _text, _rate, segments, words = _transcribe_audio(audio, engine, words=engine != "local")
         finally:
             if os.path.isfile(audio):
                 os.remove(audio)
+        # How fast this computer / the service really goes (remote support reads it in the logs)
+        elapsed = time.time() - t0
+        logger.info(f"[{job_id[:8]}] Live transcript chunk {i + 1}/{total}: {end - start:.0f} s of audio in {elapsed:.1f} s ({(end - start) / max(elapsed, 0.01):.1f}x, {engine})")
         chunk = {
             "start": start,
             "segments": [[round(s + start, 2), round(e + start, 2), squash_repeats(t)] for s, e, t in segments],

@@ -309,6 +309,7 @@ export async function renderClip(opts: RenderOptions): Promise<{ sizeMb: number 
     puppeteerInstance: browser,
   })
 
+  const t0 = Date.now()
   await renderMedia({
     composition: { ...composition, durationInFrames: fullDurationInFrames, fps, width: outputWidth, height: outputHeight },
     serveUrl,
@@ -333,5 +334,12 @@ export async function renderClip(opts: RenderOptions): Promise<{ sizeMb: number 
   scheduleBrowserClose()
 
   const sizeMb = statSync(outputPath).size / 1024 / 1024
+  // The pace of exports on this computer (the journal sent for help)
+  const seconds = (Date.now() - t0) / 1000
+  const frames = Math.max(1, endFrame - startFrame)
+  console.log(
+    `[Remotion] ${clipFilename}: ${(frames / fps).toFixed(1)} s at ${outputWidth}x${outputHeight} ${fps} fps rendered in ${seconds.toFixed(0)} s ` +
+      `(${(frames / seconds).toFixed(1)} frames/s), ${sizeMb.toFixed(1)} MB`
+  )
   return { sizeMb }
 }

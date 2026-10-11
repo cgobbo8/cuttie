@@ -623,7 +623,7 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
             hot_points=all_hot_points,
             step_timings=timer.timings,
         )
-        logger.info(f"[{job_id[:8]}] Pipeline fully complete!")
+        logger.info(f"[{job_id[:8]}] Pipeline fully complete! {_steps_summary(timer)}")
 
     except JobCancelled:
         logger.info(f"Pipeline cancelled for {job_id}")
@@ -648,6 +648,19 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
         # Cleanup temp audio files (clips stay in storage)
         if os.path.exists(output_dir):
             shutil.rmtree(output_dir, ignore_errors=True)
+
+
+def _steps_summary(timer: "StepTimer") -> str:
+    """How long each step took, for the logs: "download 1.9 min, audio 6.4 min, ... (2 h 01 in all)"."""
+    names = {"DOWNLOADING_AUDIO": "download", "ANALYZING_AUDIO": "audio", "ANALYZING_CHAT": "chat", "SCORING": "scoring",
+             "ANALYZING_CLIPS": "AI", "LLM_ANALYSIS": "AI", "CLIPPING": "clips"}
+    parts, total = [], 0.0
+    for status, timing in timer.timings.items():
+        seconds = (timing.duration_seconds if hasattr(timing, "duration_seconds") else timing.get("duration_seconds")) or 0.0
+        total += seconds
+        if seconds >= 1:
+            parts.append(f"{names.get(status, status.lower())} {seconds / 60:.1f} min")
+    return f"{', '.join(parts)} ({total / 60:.1f} min in all)"
 
 
 def _track_eta(job_id: str, duration: float) -> None:

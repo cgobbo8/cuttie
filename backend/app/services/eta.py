@@ -50,6 +50,7 @@ class AnalysisEta:
         self.clips: tuple[float, int, int] | None = None
         self._lock = threading.Lock()
         self._sent = (0.0, 0.0)  # end, at
+        self.first_end = self.end(self.start)
 
     # ── What happened ──
 
@@ -149,6 +150,9 @@ def observe(job_id: str, status: str | None = None, progress: str | None = None)
         return
     if status in ("DONE", "ERROR"):
         _tracked.pop(job_id, None)
+        # How good the guess was: tells from the logs what to tune
+        took = time.time() - estimate.start
+        logger.info(f"[{job_id[:8]}] Time estimate: {(estimate.first_end - estimate.start) / 60:.1f} min at start, took {took / 60:.1f} min ({status})")
         return
     try:
         estimate.observe(status, progress)

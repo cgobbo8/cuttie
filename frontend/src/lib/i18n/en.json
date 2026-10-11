@@ -745,7 +745,9 @@
     "notice": {
       "transcription": "{{failed}} of {{total}} passages could not be transcribed (Groq key limit?). The AI still listened to them; their subtitles will be made when you open the clip.",
       "live_transcript": "{{failed}} 10-minute chunks out of {{total}} could not be transcribed: moments in those parts were found less reliably."
-    }
+    },
+    "timelineChat": "Chat",
+    "chatDots": "chat messages"
   },
   "montage": {
     "title": "Dress up your clips",

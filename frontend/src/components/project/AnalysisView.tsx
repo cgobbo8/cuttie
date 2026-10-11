@@ -1,10 +1,11 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
 import { Check, Clock3, Scissors, Sparkles } from "lucide-react";
 import { getStoryboard, type JobResponse, type TimelineCandidate, type TwitchStoryboard } from "../../lib/api";
 import { analysisProgress, clock } from "../../lib/format";
 import { evenFrames, frameAt, tileStyle } from "../../lib/storyboard";
 import { stackLabels } from "../../lib/labels";
+import { useFlip } from "../../lib/useFlip";
 
 /** How many moments the analysis keeps in the end */
 const KEEP = 20;
@@ -91,6 +92,21 @@ export default function AnalysisView({ job, vodId }: Props) {
     return [...scored].sort((a, b) => (b.score ?? 0) - (a.score ?? 0)).slice(0, KEEP);
   }, [candidates]);
   const leaderSet = new Set(leaders.map((c) => c.t));
+
+  // A batch of passages showing up pops in left to right; a single one, right away
+  const seen = useRef(new Map<number, { at: number; delay: number }>());
+  const nowMs = performance.now();
+  const fresh = candidates.filter((c) => !seen.current.has(c.t));
+  for (const c of fresh) {
+    seen.current.set(c.t, { at: nowMs, delay: fresh.length >= 5 ? Math.round((c.t / Math.max(duration, 1)) * 500) : 0 });
+  }
+  const popDelay = (c: TimelineCandidate) => {
+    const s = seen.current.get(c.t);
+    return s && nowMs - s.at < 2000 ? s.delay : 0;
+  };
+  // Finds that move up or down the list glide there
+  const finds = useRef<HTMLElement>(null);
+  useFlip(finds);
 
   const stepIndex = stepIndexOf(job.status);
   const count = counter(job.progress);
@@ -196,16 +212,13 @@ export default function AnalysisView({ job, vodId }: Props) {
           {/* Candidate track */}
           <div className="absolute inset-x-0 bottom-0 h-[26px] bg-black/30 border-t border-white/[0.06]">
             {candidates.map((c) => {
-              const lead = leaderSet.has(c.t);
-              const look =
-                c.state === "clip"
-                  ? "w-2.5 h-2.5 bg-ink"
-                  : c.state === "pending"
-                    ? "w-[7px] h-[7px] border-[1.5px] border-white/55"
-                    : lead || c.state === "kept"
-                      ? "w-2.5 h-2.5 bg-accent shadow-[0_0_0_2px_rgba(11,11,12,0.8),0_0_12px_var(--color-accent-glow)]"
-                      : "w-[5px] h-[5px] bg-white/25";
-              return <span key={c.t} className={`absolute top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full ${look}`} style={{ left: at(c.t) }} />;
+              const state =
+                c.state === "clip" ? "clip" : c.state === "pending" ? "pending" : leaderSet.has(c.t) || c.state === "kept" ? "lead" : "out";
+              return (
+                <span key={c.t} className="track-dot" data-state={state} style={{ left: at(c.t), "--d": `${popDelay(c)}ms` } as CSSProperties}>
+                  <span />
+                </span>
+              );
             })}
           </div>
         </div>
@@ -268,10 +281,10 @@ export default function AnalysisView({ job, vodId }: Props) {
       </article>
 
       {/* Best finds so far */}
-      <aside className="glass rounded-[20px] p-[18px] flex-[0_1_380px] min-w-0 flex flex-col gap-3">
+      <aside ref={finds} className="relative glass rounded-[20px] p-[18px] flex-[0_1_380px] min-w-0 flex flex-col gap-3">
         <div className="flex items-center justify-between gap-2.5 px-0.5 pb-1">
           <h2 className="text-[16px] font-semibold tracking-[-0.01em] text-white">{t("analysis.finds")}</h2>
-          <span className="chip chip-accent mono">{leaders.length}</span>
+          <span key={leaders.length} className="chip chip-accent mono animate-bump">{leaders.length}</span>
         </div>
 
         {leaders.length === 0 && clips.length === 0 && (
@@ -279,7 +292,7 @@ export default function AnalysisView({ job, vodId }: Props) {
         )}
 
         {leaders.slice(0, 1).map((c) => (
-          <article key={c.t} className="p-2.5 rounded-[14px] bg-white/5 border border-white/[0.06]">
+          <article key={c.t} data-flip={c.t} className="animate-find p-2.5 rounded-[14px] bg-white/5 border border-white/[0.06]">
             <div className="relative aspect-video rounded-[10px] overflow-hidden">
               <LiveFrame storyboard={storyboard} t={c.t} className="absolute inset-0" />
               <span className="mono absolute top-2 left-2 chip bg-accent text-accent-ink h-[22px]">{Math.round((c.score ?? 0) * 100)}</span>
@@ -292,8 +305,13 @@ export default function AnalysisView({ job, vodId }: Props) {
           </article>
         ))}
 
-        {leaders.slice(1, 4).map((c) => (
-          <article key={c.t} className="flex gap-3 p-2.5 rounded-[14px] bg-white/5 border border-white/[0.06]">
+        {leaders.slice(1, 4).map((c, i) => (
+          <article
+            key={c.t}
+            data-flip={c.t}
+            className="animate-find flex gap-3 p-2.5 rounded-[14px] bg-white/5 border border-white/[0.06]"
+            style={{ "--i": i + 1 } as CSSProperties}
+          >
             <div className="relative w-[132px] flex-none aspect-video rounded-[9px] overflow-hidden">
               <LiveFrame storyboard={storyboard} t={c.t} className="absolute inset-0" />
               <span className="mono absolute top-1.5 left-1.5 chip bg-accent text-accent-ink h-5 px-1.5 text-[11.5px]">{Math.round((c.score ?? 0) * 100)}</span>
@@ -309,7 +327,11 @@ export default function AnalysisView({ job, vodId }: Props) {
         ))}
 
         {clips.map((c: TimelineCandidate) => (
-          <article key={`clip-${c.t}`} className="flex items-center gap-3 p-3 rounded-[14px] bg-white/[0.03] border border-dashed border-white/15">
+          <article
+            key={`clip-${c.t}`}
+            data-flip={`clip-${c.t}`}
+            className="animate-find flex items-center gap-3 p-3 rounded-[14px] bg-white/[0.03] border border-dashed border-white/15"
+          >
             <span className="w-[34px] h-[34px] rounded-[10px] flex-none grid place-items-center bg-white/[0.08]">
               <Scissors className="w-[17px] h-[17px]" />
             </span>

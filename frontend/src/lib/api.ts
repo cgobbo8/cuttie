@@ -834,6 +834,20 @@ export async function renameJob(jobId: string, customTitle: string): Promise<{ c
 }
 
 /** Keep / pass a clip, or set its trim (null clears) */
+/** A chat message posted while a clip runs (t: clip seconds) */
+export interface ClipChatLine {
+  t: number;
+  author: string;
+  text: string;
+}
+
+/** When the chat spoke in each clip of an analysis, by clip filename */
+export async function getJobChat(jobId: string): Promise<Record<string, ClipChatLine[]>> {
+  const res = await fetch(`${BASE}/jobs/${jobId}/chat`);
+  const json = await jsonOrThrow<{ clips: Record<string, ClipChatLine[]> }>(res, "Failed to load the chat");
+  return json.clips;
+}
+
 export async function updateSelection(
   jobId: string,
   clipFilename: string,

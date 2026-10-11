@@ -21,6 +21,11 @@ const MAX_CHARS = 90;
 /** A channel emote, its prefix then a capital (falkarCry, xotrixPedro): chats saved before emotes were kept */
 const CHANNEL_EMOTE = /^[a-z][a-z0-9]{2,}[A-Z][A-Za-z0-9]*$/;
 
+/** A chat bot (alerts, commands' answers), not a viewer */
+export function isChatBot(author: string): boolean {
+  return BOTS.has(author.toLowerCase());
+}
+
 /** Twitch shows emotes as images: their names would only be noise in a clip */
 function withoutEmotes(text: string, emotes: string[] = []): string {
   const names = new Set(emotes);
@@ -35,7 +40,7 @@ export function chatForClip(messages: (ChatMessage & { emotes?: string[] })[]): 
   return messages
     .map(({ emotes, ...m }) => ({ ...m, text: withoutEmotes(m.text, emotes) }))
     // Not a single letter left (<3, ??, 1): nothing to read
-    .filter((m) => /\p{L}/u.test(m.text) && !/^[!/]/.test(m.text) && !BOTS.has(m.author.toLowerCase()) && !/https?:\/\/|www\./i.test(m.text))
+    .filter((m) => /\p{L}/u.test(m.text) && !/^[!/]/.test(m.text) && !isChatBot(m.author) && !/https?:\/\/|www\./i.test(m.text))
     .map((m) => (m.text.length > MAX_CHARS ? { ...m, text: `${m.text.slice(0, MAX_CHARS - 1).trimEnd()}…` } : m));
 }
 

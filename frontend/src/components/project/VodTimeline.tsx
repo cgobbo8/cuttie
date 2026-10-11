@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
 import { getStoryboard, type TwitchStoryboard } from "../../lib/api";
 import type { Moment } from "../../lib/moments";
+import { busyThreshold } from "../../lib/chatActivity";
 import { evenFrames, tileStyle } from "../../lib/storyboard";
 
 interface Props {
@@ -10,10 +11,13 @@ interface Props {
   moments: Moment[];
   selected: number;
   onSelect: (index: number) => void;
+  /** Chat messages per slice of the live (analysis timeline), and the length they cover */
+  chat?: number[] | null;
+  chatDuration?: number | null;
 }
 
-/** The whole live as a strip of frames, with every moment pinned where it happened */
-export default function VodTimeline({ vodId, durationSeconds, moments, selected, onSelect }: Props) {
+/** The whole live as a strip of frames, with every moment pinned where it happened and the chat's activity */
+export default function VodTimeline({ vodId, durationSeconds, moments, selected, onSelect, chat, chatDuration }: Props) {
   const { t } = useTranslation();
   const [storyboard, setStoryboard] = useState<TwitchStoryboard | null>(null);
   const tiles = 24;
@@ -23,9 +27,26 @@ export default function VodTimeline({ vodId, durationSeconds, moments, selected,
     getStoryboard(vodId).then(setStoryboard).catch(() => setStoryboard(null));
   }, [vodId]);
 
+  // A moment just kept pops a ring (not the ones already kept when the page opened)
+  const lastState = useRef(new Map<string, string>());
+  const pops = useRef(new Map<string, number>());
+  for (const m of moments) {
+    const before = lastState.current.get(m.filename);
+    if (before !== undefined && before !== "kept" && m.state === "kept") pops.current.set(m.filename, (pops.current.get(m.filename) ?? 0) + 1);
+    lastState.current.set(m.filename, m.state);
+  }
+
   const at = (seconds: number) => `${Math.min(100, Math.max(0, (seconds / Math.max(durationSeconds, 1)) * 100))}%`;
   const current = moments[selected];
-  const hours = Array.from({ length: Math.floor(durationSeconds / 3600) }, (_, i) => i + 1).filter((h) => (h * 3600) / durationSeconds < 0.97);
+  const bars = chat?.length ? chat : null;
+  const hours = Array.from({ length: Math.floor(durationSeconds / 3600) }, (_, i) => i + 1).filter(
+    (h) => (h * 3600) / durationSeconds < (bars ? 0.9 : 0.97),
+  );
+
+  // Chat: one bar per slice (square root: a spike doesn't flatten the rest), the busiest tenth brighter
+  const slice = (chatDuration || durationSeconds) / Math.max(bars?.length ?? 1, 1);
+  const chatMax = Math.max(1, ...(bars ?? [0]));
+  const hot = busyThreshold(bars ?? []);
 
   return (
     <div className="glass rounded-[16px] px-3 pt-2.5 pb-1">
@@ -35,25 +56,33 @@ export default function VodTimeline({ vodId, durationSeconds, moments, selected,
             evenFrames(storyboard, tiles).map((frame, k) => (
               <div key={k} className="flex-1 h-full brightness-[0.5] saturate-[0.9]" style={tileStyle(storyboard, frame)} />
             ))}
+          {bars?.map((count, i) =>
+            count > 0 ? (
+              <span
+                key={i}
+                aria-hidden
+                className="chat-bar"
+                data-hot={count >= hot || undefined}
+                style={{ left: at(i * slice + slice * 0.25), width: at(slice * 0.5), height: 2 + 14 * Math.sqrt(count / chatMax), "--i": i } as CSSProperties}
+              />
+            ) : null,
+          )}
         </div>
         {moments.map((m, i) => {
           const isSelected = i === selected;
-          const look = isSelected
-            ? "w-[15px] h-[15px] bg-ink shadow-[0_0_0_3px_var(--color-accent-line),0_0_18px_var(--color-accent)] z-[3]"
-            : m.state === "kept"
-              ? "w-2.5 h-2.5 bg-accent shadow-[0_0_0_2px_rgba(11,11,12,0.85)] z-[2]"
-              : m.state === "passed"
-                ? "w-1.5 h-1.5 bg-white/35"
-                : "w-[9px] h-[9px] bg-black/60 border-[1.5px] border-white/80";
+          const pop = m.state === "kept" ? pops.current.get(m.filename) : undefined;
           return (
             <button
               key={m.filename}
               onClick={() => onSelect(i)}
               aria-label={`#${m.rank} ${m.hp.clip_name}`}
               title={`#${m.rank} · ${m.hp.clip_name}`}
-              className={`absolute top-5 -translate-x-1/2 -translate-y-1/2 rounded-full transition-transform hover:scale-125 ${look}`}
+              data-state={isSelected ? "selected" : m.state}
+              className={`moment-dot ${isSelected ? "z-[3]" : m.state === "kept" ? "z-[2]" : ""}`}
               style={{ left: at((m.start + m.end) / 2) }}
-            />
+            >
+              <span>{pop ? <span key={pop} className="ring-out" /> : null}</span>
+            </button>
           );
         })}
         {current && (
@@ -72,6 +101,12 @@ export default function VodTimeline({ vodId, durationSeconds, moments, selected,
             {h}:00
           </span>
         ))}
+        {bars && (
+          <span className="absolute right-0 top-0.5 inline-flex items-center gap-1.5 font-sans">
+            <span className="w-1 h-2.5 rounded-[1px] bg-white/60" />
+            {t("project.timelineChat")}
+          </span>
+        )}
         <span className="sr-only">{t("project.timeline")}</span>
       </div>
     </div>

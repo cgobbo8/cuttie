@@ -745,7 +745,9 @@
     "notice": {
       "transcription": "{{failed}} extraits sur {{total}} n'ont pas pu être transcrits (limite de la clé Groq ?). L'IA les a quand même écoutés ; leurs sous-titres se feront à l'ouverture du clip.",
       "live_transcript": "{{failed}} morceaux de 10 minutes sur {{total}} n'ont pas pu être transcrits : les moments de ces passages ont été moins bien repérés."
-    }
+    },
+    "timelineChat": "Chat",
+    "chatDots": "messages du chat"
   },
   "montage": {
     "title": "Habille tes clips",

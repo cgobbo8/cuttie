@@ -5,11 +5,13 @@ import { AlertTriangle, ArrowLeft, ArrowRight, Check, ChevronDown, Loader2, Rota
 import {
   clipThumbUrl,
   deleteClip,
+  getJobChat,
   getJobStatus,
   mapSSEHotPoint,
   renameClip,
   retryJob,
   updateSelection,
+  type ClipChatLine,
   type ClipSelection,
   type JobResponse,
   type TimelineCandidate,
@@ -115,7 +117,17 @@ export default function ProjectPage() {
     setSelected(first === -1 ? 0 : first);
   }, [jobId, moments]);
 
+  // When the chat spoke in each clip, for the trim strip (once the clips exist)
+  const [clipChat, setClipChat] = useState<Record<string, ClipChatLine[]>>({});
+  const done = job?.status === "DONE";
+  useEffect(() => {
+    if (!jobId || !done) return;
+    getJobChat(jobId).then(setClipChat).catch(() => setClipChat({}));
+  }, [jobId, done]);
+
   const current = moments[Math.min(selected, moments.length - 1)];
+  const trimmedByUser = !!current?.suggested && !!current?.trimmedByUser;
+  const hasChat = !!current && (clipChat[current.filename]?.length ?? 0) > 0;
   const vodId = vodIdOf(job?.url ?? null);
   const vodThumb = channel?.vods.find((v) => v.id === vodId)?.thumbnail_url ?? null;
   useBackdrop(current && jobId ? clipThumbUrl(jobId, current.filename) : vodThumb);
@@ -335,7 +347,15 @@ export default function ProjectPage() {
       {!processing && moments.length > 0 && current && (
         <>
           <section className="mt-5">
-            <VodTimeline vodId={vodId} durationSeconds={job.vod_duration_seconds ?? Math.max(...moments.map((m) => m.end))} moments={moments} selected={selected} onSelect={select} />
+            <VodTimeline
+              vodId={vodId}
+              durationSeconds={job.vod_duration_seconds ?? Math.max(...moments.map((m) => m.end))}
+              moments={moments}
+              selected={selected}
+              onSelect={select}
+              chat={job.timeline?.chat}
+              chatDuration={job.timeline?.duration}
+            />
           </section>
 
           <section className="mt-[18px] flex flex-wrap gap-[18px] items-start">
@@ -346,35 +366,50 @@ export default function ProjectPage() {
                 moment={current}
                 categoryLabel={categoryLabel(current.hp.llm?.category)}
                 autoPlay={interacted}
+                chat={clipChat[current.filename]}
                 onTrimChange={(trim) => saveChoice(current.filename, { trim })}
               >
-                <div className="flex flex-wrap items-center gap-2.5 px-1.5 pt-3 pb-1.5">
-                  <span className="text-[12.5px] text-ink-3">
-                    {current.duplicateOf
-                      ? t("project.duplicateHint", { rank: current.duplicateOf.rank })
-                      : current.suggested && !current.trimmedByUser
-                        ? t("project.suggestedTrimHint", { seconds: Math.round(current.suggested[1] - current.suggested[0]) })
-                        : t("project.trimHint")}
-                  </span>
-                  {current.suggested && current.trimmedByUser && (
-                    <button onClick={() => saveChoice(current.filename, { trim: null })} className="btn btn-ghost btn-sm h-7 px-2 -ml-1">
-                      <Sparkles className="w-3.5 h-3.5" /> {t("project.backToSuggestedTrim")}
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-2.5 px-1.5 pt-3 pb-1.5">
+                  {/* The hint, and the way back to the AI's cut under it */}
+                  <div className="flex-1 min-w-[220px] flex flex-col items-start gap-1">
+                    <span className="text-[12.5px] text-ink-3">
+                      {current.duplicateOf
+                        ? t("project.duplicateHint", { rank: current.duplicateOf.rank })
+                        : current.suggested && !current.trimmedByUser
+                          ? t("project.suggestedTrimHint", { seconds: Math.round(current.suggested[1] - current.suggested[0]) })
+                          : t("project.trimHint")}
+                    </span>
+                    {(trimmedByUser || hasChat) && (
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                        {trimmedByUser && (
+                          <button onClick={() => saveChoice(current.filename, { trim: null })} className="btn btn-ghost btn-sm h-7 px-2 -ml-2">
+                            <Sparkles className="w-3.5 h-3.5" /> {t("project.backToSuggestedTrim")}
+                          </button>
+                        )}
+                        {hasChat && (
+                          <span className="inline-flex items-center gap-1.5 text-[12px] text-ink-3 whitespace-nowrap">
+                            <span className="w-1.5 h-1.5 rounded-full bg-white/90" /> {t("project.chatDots")}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  {/* Pass and keep stay side by side */}
+                  <div className="flex items-center gap-2.5 ml-auto">
+                    <button
+                      onClick={() => decide("passed")}
+                      className={`btn btn-lg pr-3 ${current.state === "passed" ? "bg-white/[0.18] text-white border border-white/20" : "btn-glass"}`}
+                    >
+                      <X className="w-[15px] h-[15px]" strokeWidth={2.4} />
+                      {current.state === "passed" ? t("project.passed") : t("project.pass")}
+                      <kbd className="bg-white/[0.08] border-white/10 text-ink-2">X</kbd>
                     </button>
-                  )}
-                  <div className="flex-1" />
-                  <button
-                    onClick={() => decide("passed")}
-                    className={`btn btn-lg pr-3 ${current.state === "passed" ? "bg-white/[0.18] text-white border border-white/20" : "btn-glass"}`}
-                  >
-                    <X className="w-[15px] h-[15px]" strokeWidth={2.4} />
-                    {current.state === "passed" ? t("project.passed") : t("project.pass")}
-                    <kbd className="bg-white/[0.08] border-white/10 text-ink-2">X</kbd>
-                  </button>
-                  <button onClick={() => decide("kept")} className={`btn btn-lg pr-3 ${current.state === "kept" ? "btn-accent" : "btn-primary"}`}>
-                    <Check className="w-[15px] h-[15px]" strokeWidth={2.8} />
-                    {current.state === "kept" ? t("project.kept") : t("project.keep")}
-                    <kbd>G</kbd>
-                  </button>
+                    <button onClick={() => decide("kept")} className={`btn btn-lg pr-3 ${current.state === "kept" ? "btn-accent" : "btn-primary"}`}>
+                      <Check className="w-[15px] h-[15px]" strokeWidth={2.8} />
+                      {current.state === "kept" ? t("project.kept") : t("project.keep")}
+                      <kbd>G</kbd>
+                    </button>
+                  </div>
                 </div>
               </MomentPlayer>
 

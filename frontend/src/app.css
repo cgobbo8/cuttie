@@ -124,6 +124,10 @@
   --duration-base: 200ms;
   --duration-slow: 350ms;
   --ease-spring: cubic-bezier(0.16, 1, 0.3, 1);
+  /* Real springs, released with speed: they overshoot then settle (damping 0.5: things that pop) */
+  --ease-bounce: linear(0, 0.109, 0.23, 0.357, 0.484, 0.607, 0.722, 0.826, 0.917, 0.995, 1.059, 1.109, 1.146, 1.172, 1.186, 1.191, 1.188, 1.179, 1.165, 1.148, 1.128, 1.108, 1.087, 1.067, 1.048, 1.031, 1.015, 1.002, 0.992, 0.983, 0.977, 0.972, 0.97, 0.969, 0.969, 0.971, 0.973, 0.975, 0.979, 0.982, 1);
+  /* Damping 0.7: things that arrive or move */
+  --ease-glide: linear(0, 0.125, 0.246, 0.362, 0.471, 0.57, 0.659, 0.738, 0.808, 0.867, 0.917, 0.958, 0.991, 1.017, 1.037, 1.051, 1.061, 1.067, 1.07, 1.07, 1.068, 1.065, 1.06, 1.055, 1.05, 1.044, 1.038, 1.033, 1.027, 1.023, 1.018, 1.014, 1);
 }
 
 body {
@@ -580,4 +584,231 @@ video {
 
 .animate-modal-enter {
   animation: modal-enter 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* ─── Passages found on a live ───────────────────────────────── */
+
+/*
+ * A passage on the analysis track. It pops in where it was found (a batch
+ * sweeps left to right, see --d); its look follows its state and springs
+ * from one size to the next. Kept: a ring ripples out once.
+ */
+.track-dot {
+  position: absolute;
+  top: 50%;
+  width: 10px;
+  height: 10px;
+  margin: -5px 0 0 -5px;
+  animation: dot-in 650ms var(--ease-bounce) both;
+  animation-delay: var(--d, 0ms);
+}
+.track-dot > span {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  transition:
+    transform 700ms var(--ease-bounce),
+    background-color 300ms ease,
+    border-color 300ms ease,
+    box-shadow 500ms ease;
+}
+.track-dot[data-state="pending"] > span {
+  transform: scale(0.7);
+  border-color: rgb(255 255 255 / 0.55);
+}
+.track-dot[data-state="lead"] > span {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 2px rgba(11, 11, 12, 0.8), 0 0 12px var(--color-accent-glow);
+}
+.track-dot[data-state="out"] > span {
+  transform: scale(0.5);
+  background: rgb(255 255 255 / 0.25);
+}
+.track-dot[data-state="clip"] > span {
+  background: var(--color-ink);
+}
+.track-dot[data-state="lead"] > span::after {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  border: 2px solid var(--color-accent);
+  pointer-events: none;
+  animation: ring-out 1100ms cubic-bezier(0.2, 0.7, 0.3, 1) both;
+  animation-delay: calc(var(--d, 0ms) + 150ms);
+}
+
+/* A ring rippling out of a dot that just got kept */
+.ring-out {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  border: 2px solid var(--color-accent);
+  pointer-events: none;
+  animation: ring-out 1100ms cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}
+
+@keyframes dot-in {
+  from {
+    opacity: 0;
+    transform: scale(0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes ring-out {
+  0% {
+    opacity: 0.95;
+    transform: scale(1);
+  }
+  45% {
+    opacity: 0.55;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(3.2);
+  }
+}
+
+/* A moment on the Choisir timeline: same springs, a ring when it gets kept */
+.moment-dot {
+  position: absolute;
+  top: 20px;
+  width: 15px;
+  height: 15px;
+  margin: -7.5px 0 0 -7.5px;
+  border-radius: 9999px;
+  transition: transform 220ms var(--ease-spring);
+}
+.moment-dot:hover {
+  transform: scale(1.25);
+}
+.moment-dot > span {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 9999px;
+  border: 2.5px solid transparent;
+  transition:
+    transform 650ms var(--ease-bounce),
+    background-color 250ms ease,
+    border-color 250ms ease,
+    box-shadow 400ms ease;
+}
+.moment-dot[data-state="todo"] > span {
+  transform: scale(0.6);
+  background: rgb(0 0 0 / 0.6);
+  border-color: rgb(255 255 255 / 0.8);
+}
+.moment-dot[data-state="kept"] > span {
+  transform: scale(0.667);
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px rgba(11, 11, 12, 0.85);
+}
+.moment-dot[data-state="passed"] > span {
+  transform: scale(0.4);
+  background: rgb(255 255 255 / 0.35);
+}
+.moment-dot[data-state="selected"] > span {
+  background: var(--color-ink);
+  border-color: var(--color-ink);
+  box-shadow: 0 0 0 3px var(--color-accent-line), 0 0 18px var(--color-accent);
+}
+
+/* The chat's activity along a live: rises in a wave when the strip shows */
+.chat-bar {
+  position: absolute;
+  bottom: 0;
+  border-radius: 1.5px 1.5px 0 0;
+  background: rgb(255 255 255 / 0.42);
+  transform-origin: bottom;
+  pointer-events: none;
+  animation: bar-in 600ms var(--ease-bounce) both;
+  animation-delay: calc(var(--i, 0) * 4ms);
+}
+.chat-bar[data-hot] {
+  background: rgb(255 255 255 / 0.92);
+  box-shadow: 0 0 8px rgb(255 255 255 / 0.45);
+}
+@keyframes bar-in {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: none;
+  }
+}
+
+/* The chat on a clip's trim strip: a dot per message, stacked when they come together */
+.chat-stack {
+  position: absolute;
+  bottom: 5px;
+  width: 7px;
+  margin-left: -3.5px;
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: center;
+  gap: 2px;
+  transform-origin: bottom;
+  animation: dot-in 600ms var(--ease-bounce) both;
+  animation-delay: var(--d, 0ms);
+}
+.chat-stack > span {
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  background: rgb(255 255 255 / 0.92);
+  box-shadow: 0 0 0 1.5px rgb(0 0 0 / 0.45);
+}
+
+/* A find arriving in a list (stagger with --i) */
+@keyframes find-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.animate-find {
+  animation: find-in 700ms var(--ease-glide) both;
+  animation-delay: calc(var(--i, 0) * 70ms);
+}
+
+/* A number that just changed */
+@keyframes bump {
+  from {
+    transform: scale(1.35);
+  }
+  to {
+    transform: none;
+  }
+}
+.animate-bump {
+  animation: bump 600ms var(--ease-bounce) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .track-dot,
+  .track-dot > span,
+  .track-dot > span::after,
+  .moment-dot > span,
+  .chat-bar,
+  .chat-stack,
+  .ring-out,
+  .animate-find,
+  .animate-bump {
+    animation: none !important;
+    transition: none !important;
+  }
 }

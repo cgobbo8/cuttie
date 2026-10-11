@@ -3,16 +3,19 @@ import {
   useCallback,
   useEffect,
   useImperativeHandle,
+  useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
 import { useTranslation } from "react-i18next";
 import { Maximize, Pause, Play, Volume2, VolumeX } from "lucide-react";
-import { clipThumbUrl, clipUrl } from "../../lib/api";
+import { clipThumbUrl, clipUrl, type ClipChatLine } from "../../lib/api";
 import { clock } from "../../lib/format";
 import type { Moment } from "../../lib/moments";
+import { stackChat } from "../../lib/chatActivity";
 
 export interface MomentPlayerHandle {
   toggle: () => void;
@@ -27,12 +30,15 @@ interface Props {
   /** Start playing as soon as the clip is ready (after a user action) */
   autoPlay: boolean;
   onTrimChange: (trim: [number, number] | null) => void;
+  /** The chat's messages during the clip, shown on the trim strip */
+  chat?: ClipChatLine[];
   /** Decision row, under the trim bar */
   children?: ReactNode;
 }
 
 const FILMSTRIP_FRAMES = 10;
 const MIN_TRIM = 1;
+const CHAT_STACK_MAX = 4;
 
 /** Pointer drag helper: calls `onMove` with the pointer's position as a 0-1 ratio of `el` */
 function dragRatio(e: ReactPointerEvent, el: HTMLElement, onMove: (ratio: number) => void, onEnd?: () => void) {
@@ -57,7 +63,7 @@ function dragRatio(e: ReactPointerEvent, el: HTMLElement, onMove: (ratio: number
 }
 
 const MomentPlayer = forwardRef<MomentPlayerHandle, Props>(function MomentPlayer(
-  { jobId, moment, categoryLabel, autoPlay, onTrimChange, children },
+  { jobId, moment, categoryLabel, autoPlay, onTrimChange, chat, children },
   ref,
 ) {
   const { t } = useTranslation();
@@ -81,6 +87,28 @@ const MomentPlayer = forwardRef<MomentPlayerHandle, Props>(function MomentPlayer
     setTrim(moment.trim ?? [0, moment.duration]);
     setPlaying(false);
   }, [moment.filename]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Same moment, trim changed from outside (back to the AI's cut): the handles follow
+  const trimFile = useRef(moment.filename);
+  const outsideTrim = moment.trim ? `${moment.trim[0]}-${moment.trim[1]}` : "";
+  useEffect(() => {
+    // A new moment is the reset's job
+    if (trimFile.current !== moment.filename) {
+      trimFile.current = moment.filename;
+      return;
+    }
+    const next: [number, number] = moment.trim ?? [0, duration];
+    const [a, b] = trimRef.current;
+    // The server rounds a trim to 0.1 s: not a change
+    if (Math.abs(a - next[0]) < 0.15 && Math.abs(b - next[1]) < 0.15) return;
+    trimRef.current = next;
+    setTrim(next);
+    const video = videoRef.current;
+    if (video && (video.currentTime < next[0] - 0.2 || video.currentTime > next[1] + 0.2)) {
+      video.currentTime = next[0];
+      setCurrent(next[0]);
+    }
+  }, [moment.filename, outsideTrim]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const toggle = useCallback(() => {
     const video = videoRef.current;
@@ -119,6 +147,9 @@ const MomentPlayer = forwardRef<MomentPlayerHandle, Props>(function MomentPlayer
 
   const pct = (time: number) => `${(time / Math.max(duration, 0.1)) * 100}%`;
   const keys = moment.hp.llm?.key_moments ?? [];
+
+  // The chat: a dot per message (bots aside), stacked when they come together
+  const chatColumns = useMemo(() => stackChat(chat ?? []), [chat]);
 
   return (
     <article className="glass-strong rounded-[20px] p-2.5">
@@ -229,6 +260,18 @@ const MomentPlayer = forwardRef<MomentPlayerHandle, Props>(function MomentPlayer
               className="absolute top-0 w-1.5 h-1.5 -ml-[3px] rounded-b-full bg-accent pointer-events-none"
               style={{ left: pct(Math.min(k.time, duration)) }}
             />
+          ))}
+          {chatColumns.map((column, i) => (
+            <span
+              key={`${moment.filename}-${column.t}`}
+              title={column.lines.map((m) => `${m.author} : ${m.text}`).join("\n")}
+              className="chat-stack"
+              style={{ left: pct(Math.min(column.t, duration)), "--d": `${Math.min(i * 35, 700)}ms` } as CSSProperties}
+            >
+              {column.lines.slice(0, CHAT_STACK_MAX).map((_, k) => (
+                <span key={k} />
+              ))}
+            </span>
           ))}
           <span className="absolute inset-y-0 w-0.5 -ml-px bg-white shadow-[0_0_6px_rgba(0,0,0,0.6)] pointer-events-none" style={{ left: pct(current) }}>
             <span className="absolute -top-px left-1/2 -translate-x-1/2 w-2.5 h-2.5 rounded-full bg-white" />

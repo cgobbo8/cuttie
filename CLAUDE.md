@@ -91,6 +91,7 @@ cuttie/
 │   │   │   ├── disk_space.ts                 # place prise, projets inactifs, liberer (exports gardes), recuperer, menage auto (6 h)
 │   │   │   ├── app_logs.ts                   # journal de l'app desktop (<data dir>/logs) : periode, cles masquees, vider
 │   │   │   ├── zip.ts                        # petit ecrivain .zip (deflate) pour l'export des journaux
+│   │   │   ├── db_time.ts                    # dates SQLite : `dbTime()` = format Lucid pour les UPDATE bruts de jobs, `dbMillis()` lit les deux formats
 │   │   │   └── remotion_renderer.ts          # Bundle + render Remotion
 │   │   ├── validators/user.ts                # VineJS validation
 │   │   └── transformers/user_transformer.ts
@@ -336,6 +337,7 @@ Fournisseur qui refuse tout (`provider_errors.py`) : credits OpenRouter epuises 
 - Teste en vrai sur un portable Windows (GTX 1650 Max-Q) : live de 7 h 39 analyse en 2 h (transcription locale ~4,6x temps reel), export Remotion OK, mises a jour 0.1.0 -> 0.1.1 -> 0.1.2 (bouton). `--update-test=<rapport>` rejoue le bouton de mise a jour sans fenetre.
 - Mises a jour : `electron-updater` + GitHub Releases (`latest.yml`), pastille dans la TopBar, Parametres > Application ; installation silencieuse apres arret de l'API et du worker.
 - Journal : `<data dir>/logs/cuttie.log` (API, worker, app ; une ligne = heure ISO UTC), tourne a 10 Mo (cuttie.1.log, cuttie.2.log : 30 Mo max). Parametres > Aide a distance : export .zip d'une periode (journal, diagnostic, analyses et exports, reglages sans cles), « Supprimer les journaux ». On y trouve la vitesse de chaque morceau de transcription, le bilan de chaque analyse (duree des etapes, estimation contre realite), la vitesse des exports et les erreurs de la page.
+- Dates de `jobs` : Lucid ecrit et ne relit que `2026-10-11 09:23:17` (UTC). Un UPDATE brut doit passer par `dbTime()`, jamais `toISOString()` (le modele verrait une date invalide et `job.save()` echouerait ; la migration 1776100000000 a remis au propre les anciennes). La table `renders`, elle, est en ISO.
 - Stockage : un projet = ~1 Go de clips. Parametres > Stockage : place prise, menage des projets sans activite (7 / 30 / 90 jours, automatique toutes les 6 h ou a la main). Liberer = supprimer les clips (et fonds floutes) ; le projet, ses exports, vignettes, mots et cam restent, `jobs.clips_freed_at` le dit, et « Recuperer les clips » les recoupe depuis la VOD tant que Twitch l'a (7 a 60 jours).
 - CI `.github/workflows/desktop.yml` (windows-latest) : installeur, installation silencieuse, `--smoke-test=full`, tests sous Windows ; un tag `v*` (= version de `desktop/package.json`) publie la release avec `desktop/release-notes.md`.
 

@@ -51,6 +51,12 @@ npm run dist                # installeur Windows (sur Windows)
 2. **Un PC ou une VM Windows** : `powershell -ExecutionPolicy Bypass -File scripts\smoke-test.ps1 -Full -Installer .\Cuttie-Setup-x.y.z.exe`.
 3. **Le GPU NVIDIA** ne se teste que sur une vraie carte (son PC, ou une VM GPU louée) : Paramètres → Diagnostic → **Tester (30 s)** donne CUDA, cuDNN, la VRAM et la vitesse de Whisper, ou l'erreur exacte, dans le rapport copié.
 4. **Sur le Mac** : `npm run pack`, puis `dist/mac-arm64/Cuttie.app/Contents/MacOS/Cuttie --smoke-test --smoke-report=report.json`.
+5. **Un PC Windows à distance** (fait sur un portable GTX 1650 Max-Q) : serveur OpenSSH activé, clé du Mac autorisée, puis depuis le Mac :
+   - installer en silence (`Cuttie-Setup-x.y.z.exe /S`), lancer `Cuttie.exe --smoke-test=full`, lire `%LOCALAPPDATA%\Cuttie\data\logs\cuttie.log` ;
+   - `Cuttie.exe --update-test=<rapport.json>` : ce que fait le bouton de mise à jour (vérification, téléchargement, installation silencieuse), sans fenêtre ;
+   - lancer l'app dans la session de l'utilisateur (tâche planifiée « interactive ») avec `--remote-debugging-port=9333`, tunnel SSH vers ce port, et la piloter avec Playwright (`connectOverCDP`) : captures, clics sur les vrais boutons.
+
+Ce qu'un Windows neuf a appris (et que la CI ne voit pas, ses machines ayant Visual Studio) : pas de runtime Visual C++ (PyTorch et numba en ont besoin : DLL embarquées dans `resources/bin/msvc`, ajoutées au chemin des DLL du worker par `CUTTIE_DLL_DIRS`) ; un magasin de certificats rempli à la demande (le worker pointe `SSL_CERT_FILE` vers certifi).
 
 ## Publier une version
 

@@ -309,6 +309,8 @@ Fournisseur qui refuse tout (`provider_errors.py`) : credits OpenRouter epuises 
 
 - Electron autour du mode `npm start` : `scripts/launcher.mjs` lance l'API (node.exe embarque, celui du build : `better-sqlite3`) et le worker, attend que les deux repondent.
 - Python n'est pas embarque : `uv.exe` installe Python 3.12 + `backend/uv.lock` (PyTorch CUDA 12.6) au 1er lancement dans `%LOCALAPPDATA%\Cuttie\python-env` ; relance un `uv sync` quand `uv.lock` change. Donnees : `%LOCALAPPDATA%\Cuttie\data`.
+- Windows neuf : runtime Visual C++ embarque (`resources/bin/msvc`, `CUTTIE_DLL_DIRS` lu par `backend/worker.py`), certificats de certifi pour urllib (`SSL_CERT_FILE`). Le CSS ne doit pas doubler `backdrop-filter` avec `-webkit-backdrop-filter` (le minifieur ne garderait que le second : plus de flou dans l'app compilee, teste).
+- Teste en vrai sur un portable Windows (GTX 1650 Max-Q) : live de 7 h 39 analyse en 2 h (transcription locale ~4,6x temps reel), export Remotion OK, mises a jour 0.1.0 -> 0.1.1 -> 0.1.2 (bouton). `--update-test=<rapport>` rejoue le bouton de mise a jour sans fenetre.
 - Mises a jour : `electron-updater` + GitHub Releases (`latest.yml`), pastille dans la TopBar, Parametres > Application ; installation silencieuse apres arret de l'API et du worker.
 - CI `.github/workflows/desktop.yml` (windows-latest) : installeur, installation silencieuse, `--smoke-test=full`, tests sous Windows ; un tag `v*` (= version de `desktop/package.json`) publie la release avec `desktop/release-notes.md`.
 

@@ -53,8 +53,10 @@ function TranscriptionSection() {
 
   const hasGroq = !!settings?.keys.groq_api_key?.configured;
   const choice = settings?.transcription ?? "auto";
-  // What actually runs: "auto", or Groq without its key, means Groq if there's a key, else OpenRouter
-  const active: Exclude<TranscriptionEngine, "auto"> = choice === "auto" || (choice === "groq" && !hasGroq) ? (hasGroq ? "groq" : "openrouter") : choice;
+  // What actually runs: the choice when it can, else the fastest (Groq with its key, then this PC if fast, then OpenRouter)
+  const fastLocal = local?.local_device === "mlx" || local?.local_device === "cuda";
+  const active: Exclude<TranscriptionEngine, "auto"> =
+    choice !== "auto" && !(choice === "groq" && !hasGroq) ? choice : hasGroq ? "groq" : fastLocal ? "local" : "openrouter";
 
   const pick = async (engine: Exclude<TranscriptionEngine, "auto">) => {
     if (engine === active) return;

@@ -530,7 +530,7 @@
       "groq": "Groq",
       "openrouter": "OpenRouter",
       "local": "Sur ce PC",
-      "groqHint": "Très rapide, mais sa version gratuite limite l'audio par heure : un live entier prend du temps.",
+      "groqHint": "Le plus rapide : un live de 7 h en moins d'une minute, environ 4 centimes par heure de live. En version gratuite, sa limite par heure passe le reste à OpenRouter.",
       "groqNeedsKey": "Ajoute une clé Groq ci-dessus pour l'utiliser.",
       "openrouterHint": "Sans clé de plus. Environ 1 centime par heure de live, quelques minutes pour un live entier.",
       "localGpu": "Gratuit et rapide, sur ta carte graphique NVIDIA.",

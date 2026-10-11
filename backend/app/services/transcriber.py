@@ -70,13 +70,18 @@ def has_key(engine: str) -> bool:
 
 
 def chosen_engine() -> str:
-    """The engine the settings ask for, if it can run; else the best one available."""
+    """The engine the settings ask for, if it can run; else the fastest one
+    available: Groq with its key (a 7-hour live in under a minute, ~0.04 $ per
+    hour; its free tier's hourly cap sends the rest to OpenRouter), then this
+    computer when its GPU makes it fast, then OpenRouter."""
     choice = settings.get("transcription", default="auto")
     if choice in ENGINES and has_key(choice):
         return choice
+    if has_key("groq"):
+        return "groq"
     if local_backend() in ("mlx", "cuda"):
         return "local"
-    return "groq" if has_key("groq") else "openrouter"
+    return "openrouter"
 
 
 def fallback_for(engine: str) -> str | None:

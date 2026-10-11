@@ -530,7 +530,7 @@
       "groq": "Groq",
       "openrouter": "OpenRouter",
       "local": "On this PC",
-      "groqHint": "Very fast, but its free tier caps audio per hour: a whole stream takes a while.",
+      "groqHint": "The fastest: a 7-hour stream in under a minute, about 4 cents per hour of stream. On the free tier, its hourly limit hands the rest to OpenRouter.",
       "groqNeedsKey": "Add a Groq key above to use it.",
       "openrouterHint": "No extra key. About 1 cent per hour of stream, a few minutes for a whole stream.",
       "localGpu": "Free and fast, on your NVIDIA graphics card.",

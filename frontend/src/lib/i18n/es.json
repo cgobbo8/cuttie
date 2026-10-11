@@ -530,7 +530,7 @@
       "groq": "Groq",
       "openrouter": "OpenRouter",
       "local": "En este PC",
-      "groqHint": "Muy rápido, pero la versión gratuita limita el audio por hora: un directo entero tarda.",
+      "groqHint": "El más rápido: un directo de 7 h en menos de un minuto, unos 4 céntimos por hora de directo. En la versión gratuita, su límite por hora pasa el resto a OpenRouter.",
       "groqNeedsKey": "Añade una clave de Groq arriba para usarla.",
       "openrouterHint": "Sin clave extra. Cerca de 1 céntimo por hora de directo, unos minutos para un directo entero.",
       "localGpu": "Gratis y rápido, en tu tarjeta gráfica NVIDIA.",

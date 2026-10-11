@@ -11,7 +11,7 @@ Tourne 100 % en local (cible : app desktop Windows pour un ami streamer) : pas d
 - **Frontend** : React 19, TypeScript 5.9, Tailwind CSS 4, Vite 8, React Router 7
 - **Editor** : Remotion 4 (player + renderer), canvas editor custom
 - **ML/Audio** : librosa (11025 Hz), PANNs CNN14 (AudioSet)
-- **Transcription** : Whisper large-v3 turbo, en local quand la machine est rapide (mlx-whisper sur puce Apple, faster-whisper sur NVIDIA), sinon Groq ou OpenRouter — `transcriber.py`, bascule sur OpenRouter si le moteur choisi coince
+- **Transcription** : Whisper large-v3 turbo ; en « auto », le plus rapide : Groq si sa cle est la (un live de 7 h en 25 s, ~0,04 $/h), sinon en local quand la machine est rapide (mlx-whisper sur puce Apple, faster-whisper sur NVIDIA), sinon OpenRouter — `transcriber.py`, bascule sur OpenRouter si le moteur choisi coince (limite horaire du Groq gratuit comprise)
 - **LLM** : OpenRouter — Gemini 3 Flash Preview (audio + vision + analyse + scoring)
 - **Video** : FFmpeg, OpenCV, yt-dlp
 - **Storage** : disque local `<data dir>/storage/{clips,renders,assets}`, servi par l'API via URLs signees

@@ -79,10 +79,14 @@ def test_picks_groq_with_a_key_else_the_chosen_engine(stt):
     assert transcriber.chosen_engine() == "openrouter"
 
 
-def test_auto_runs_on_this_computer_when_it_is_fast(stt, monkeypatch):
+def test_auto_takes_the_fastest_engine(stt, monkeypatch):
     for backend in ("mlx", "cuda"):
         monkeypatch.setattr(transcriber, "local_backend", lambda b=backend: b)
-        assert transcriber.chosen_engine() == "local"
+        # Groq first when its key is there: a whole live in under a minute
+        assert transcriber.chosen_engine() == "groq"
+    # No Groq key: this computer, fast with its GPU
+    del stt["settings"]["groq_api_key"]
+    assert transcriber.chosen_engine() == "local"
     # Asked for explicitly, the cloud wins
     stt["settings"]["transcription"] = "openrouter"
     assert transcriber.chosen_engine() == "openrouter"

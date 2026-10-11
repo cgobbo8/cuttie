@@ -506,8 +506,9 @@ ipcMain.handle("update:install", async () => {
   quitting = true;
   await stack?.stop().catch(() => {});
   stack = null;
-  // Silent install, then Cuttie starts again
-  autoUpdater.quitAndInstall(true, true);
+  // The installer's own progress window (a few minutes: the window closing with
+  // nothing on screen would look like a crash), then Cuttie starts again
+  autoUpdater.quitAndInstall(false, true);
   // Still here after a while: the installer did not start, Cuttie carries on
   setTimeout(() => {
     log("update", "the installer did not start");

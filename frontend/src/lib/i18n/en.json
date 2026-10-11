@@ -555,7 +555,7 @@
       "downloading": "Downloading version {{version}}… {{percent}}%",
       "ready": "Version {{version}} is ready",
       "install": "Restart to install",
-      "installing": "Installing… Cuttie restarts by itself",
+      "installing": "Installing (a few minutes), Cuttie restarts by itself",
       "failed": "The update failed: {{message}}",
       "retry": "Try again",
       "busyTitle": "An analysis is running",

@@ -555,7 +555,7 @@
       "downloading": "Descargando la versión {{version}}… {{percent}} %",
       "ready": "La versión {{version}} está lista",
       "install": "Reiniciar para instalar",
-      "installing": "Instalando… Cuttie se reinicia solo",
+      "installing": "Instalando (unos minutos), Cuttie se reinicia solo",
       "failed": "La actualización falló: {{message}}",
       "retry": "Reintentar",
       "busyTitle": "Hay un análisis en curso",

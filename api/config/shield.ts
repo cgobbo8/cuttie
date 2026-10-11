@@ -16,7 +16,8 @@ const shieldConfig = defineConfig({
       imgSrc: ["'self'", 'data:', 'https:'],
       connectSrc: ["'self'", 'https://accounts.google.com'],
       fontSrc: ["'self'", 'https://fonts.gstatic.com'],
-      mediaSrc: ["'self'", 'blob:'],
+      // data: the silent clip the Remotion player uses to unlock audio
+      mediaSrc: ["'self'", 'blob:', 'data:'],
     },
 
     reportOnly: false,

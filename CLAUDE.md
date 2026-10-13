@@ -10,7 +10,7 @@ Tourne 100 % en local (cible : app desktop Windows pour un ami streamer) : pas d
 - **Worker** : Python 3.12, serveur FastAPI local (file de jobs en memoire), SQLite (WAL), uv
 - **Frontend** : React 19, TypeScript 5.9, Tailwind CSS 4, Vite 8, React Router 7
 - **Editor** : Remotion 4 (player + renderer), canvas editor custom
-- **ML/Audio** : librosa (11025 Hz), PANNs CNN14 (AudioSet)
+- **ML/Audio** : librosa (11025 Hz), PANNs CNN14 (AudioSet) — 358 Mo telecharges au demarrage du worker (`panns_files.py` : Zenodo puis miroir Hugging Face, SHA-256 verifie, reprise) ; facultatif : s'il manque, l'analyse continue sans rires / cris (notice `audio_events`)
 - **Transcription** : Whisper large-v3 turbo ; en « auto », le plus rapide : Groq si sa cle est la (un live de 7 h en 25 s, ~0,04 $/h), sinon en local quand la machine est rapide (mlx-whisper sur puce Apple, faster-whisper sur NVIDIA), sinon OpenRouter — `transcriber.py`, bascule sur OpenRouter si le moteur choisi coince (limite horaire du Groq gratuit comprise)
 - **LLM** : OpenRouter — Gemini 3 Flash Preview (audio + vision + analyse + scoring)
 - **Video** : FFmpeg, OpenCV, yt-dlp

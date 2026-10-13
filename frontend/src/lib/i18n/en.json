@@ -796,7 +796,8 @@
     "backToSuggestedTrim": "AI cut",
     "notice": {
       "transcription": "{{failed}} of {{total}} passages could not be transcribed (Groq key limit?). The AI still listened to them; their subtitles will be made when you open the clip.",
-      "live_transcript": "{{failed}} 10-minute chunks out of {{total}} could not be transcribed: moments in those parts were found less reliably."
+      "live_transcript": "{{failed}} 10-minute chunks out of {{total}} could not be transcribed: moments in those parts were found less reliably.",
+      "audio_events": "Laughs and shouts couldn't be picked up on this live (the audio model didn't download): the moments come from the chat, the voice and the AI. Run the analysis again later to get them."
     },
     "timelineChat": "Chat",
     "chatDots": "chat messages",

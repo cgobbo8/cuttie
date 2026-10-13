@@ -796,7 +796,8 @@
     "backToSuggestedTrim": "Corte de la IA",
     "notice": {
       "transcription": "{{failed}} de {{total}} fragmentos no se pudieron transcribir (¿límite de la clave de Groq?). La IA los escuchó igualmente; sus subtítulos se harán al abrir el clip.",
-      "live_transcript": "{{failed}} fragmentos de 10 minutos de {{total}} no se pudieron transcribir: los momentos de esas partes se detectaron peor."
+      "live_transcript": "{{failed}} fragmentos de 10 minutos de {{total}} no se pudieron transcribir: los momentos de esas partes se detectaron peor.",
+      "audio_events": "No se pudieron detectar las risas y los gritos de este directo (el modelo de audio no se descargó): los momentos vienen del chat, la voz y la IA. Vuelve a lanzar el análisis más tarde para tenerlos."
     },
     "timelineChat": "Chat",
     "chatDots": "mensajes del chat",

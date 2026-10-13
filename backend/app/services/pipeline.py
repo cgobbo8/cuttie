@@ -439,7 +439,13 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
                 features_future = audio_pool.submit(analyze_audio, audio_path)
                 classify_future = audio_pool.submit(classify_audio, audio_path)
                 audio_features = features_future.result()
-                classification_features = classify_future.result()
+                try:
+                    classification_features = classify_future.result()
+                except Exception as e:
+                    # Laughs, shouts and speech only sharpen the score: carry on without them
+                    logger.warning(f"[{job_id[:8]}] Audio events skipped: {e}")
+                    classification_features = []
+                    add_notice(job_id, "audio_events")
             logger.info(f"[{job_id[:8]}] Audio analysis done: {len(audio_features)} windows")
 
             check_cancelled(job_id)

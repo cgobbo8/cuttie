@@ -195,6 +195,12 @@ def _run(req: JobRequest) -> None:
     run_pipeline_sync(req.job_id, req.url or "")
 
 
+def _prefetch_models() -> None:
+    from app.services import panns_files
+
+    panns_files.prefetch()
+
+
 def _cleanup_work_dir() -> None:
     """Remove temp data left by a previous run (crash, killed worker)."""
     if not os.path.isdir(paths.WORK_DIR):
@@ -211,6 +217,8 @@ async def lifespan(_app: FastAPI):
     _cleanup_work_dir()
     paths.ensure_dirs()
     threading.Thread(target=jobs.run_forever, name="job-runner", daemon=True).start()
+    # The audio events model (358 MB) before the first analysis needs it
+    threading.Thread(target=_prefetch_models, name="models", daemon=True).start()
     logger.info("Worker ready — data dir: %s", paths.DATA_DIR)
     yield
 

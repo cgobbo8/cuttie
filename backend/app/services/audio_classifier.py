@@ -12,14 +12,12 @@ Key insight: on Twitch streams, the "Speech" class dominates. What matters is:
 """
 
 import logging
-import os
-from pathlib import Path
 
 import librosa
 import numpy as np
 
 from app.services.device import get_device
-from app.services.downloads import download_if_missing
+from app.services import panns_files
 
 logger = logging.getLogger(__name__)
 
@@ -63,19 +61,6 @@ _GAME_AUDIO_CLASSES = {
 
 _model = None
 
-# panns_inference fetches these with `wget` at import time, which fails on Windows,
-# so we download them ourselves to the paths it expects.
-_PANNS_DIR = os.path.join(str(Path.home()), "panns_data")
-_LABELS_URL = "http://storage.googleapis.com/us_audioset/youtube_corpus/v1/csv/class_labels_indices.csv"
-_CHECKPOINT_URL = "https://zenodo.org/records/3987831/files/Cnn14_16k_mAP=0.438.pth?download=1"
-_CHECKPOINT_PATH = os.path.join(_PANNS_DIR, "Cnn14_16k_mAP=0.438.pth")
-
-
-def _ensure_panns_files() -> None:
-    download_if_missing(_LABELS_URL, os.path.join(_PANNS_DIR, "class_labels_indices.csv"))
-    download_if_missing(_CHECKPOINT_URL, _CHECKPOINT_PATH, min_bytes=350_000_000)
-
-
 def _load_checkpoint(path: str) -> dict:
     """The checkpoint keeps its training sampler state as numpy arrays: allow just
     those types instead of turning off torch's weights-only loading."""
@@ -102,13 +87,13 @@ def _load_checkpoint(path: str) -> dict:
 def _get_model():
     global _model
     if _model is None:
-        _ensure_panns_files()
+        checkpoint = panns_files.ensure()
         from panns_inference.models import Cnn14
 
         device = get_device()
         logger.info(f"Loading PANNs CNN14 (16 kHz) on {device}...")
         model = Cnn14(sample_rate=PANNS_SR, window_size=512, hop_size=160, mel_bins=64, fmin=50, fmax=8000, classes_num=527)
-        model.load_state_dict(_load_checkpoint(_CHECKPOINT_PATH)["model"])
+        model.load_state_dict(_load_checkpoint(checkpoint)["model"])
         model.eval()
         model.to(device)
         _model = (model, device)

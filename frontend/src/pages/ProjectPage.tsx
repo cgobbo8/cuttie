@@ -341,7 +341,7 @@ export default function ProjectPage() {
       )}
 
       {(job.notices ?? []).map((notice) =>
-        notice.kind === "transcription" || notice.kind === "live_transcript" ? (
+        notice.kind === "transcription" || notice.kind === "live_transcript" || notice.kind === "audio_events" ? (
           <div key={notice.kind} className="mt-4 flex items-start gap-3 p-3.5 pl-4 rounded-[14px] max-w-[860px] bg-[rgba(245,177,76,0.10)] border border-[rgba(245,177,76,0.30)]">
             <AlertTriangle className="w-4 h-4 text-[#F5B14C] flex-none mt-0.5" />
             <p className="text-[12.5px] leading-snug text-[#f7d9a8]">{t(`project.notice.${notice.kind}`, { failed: notice.failed ?? 0, total: notice.total ?? 0 })}</p>

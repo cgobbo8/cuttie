@@ -45,3 +45,21 @@ async def test_queue_snapshot(client):
     response = await client.get("/queue", headers={"X-Cuttie-Secret": "test-secret"})
     assert response.status_code == 200
     assert response.json() == {"current": None, "items": []}
+
+
+def test_only_openrouter_is_required(monkeypatch):
+    """Groq is optional: the live is transcribed on this computer or by OpenRouter without it."""
+    from app import main
+    from app.services import settings
+
+    def keys(**values):
+        monkeypatch.setattr(settings, "_load", lambda: values)
+        monkeypatch.delenv("GROQ_API_KEY", raising=False)
+        monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+
+    keys(openrouter_api_key="sk-or-v1-test", transcription="local")
+    assert main._missing_keys() == []
+    keys(openrouter_api_key="sk-or-v1-test", groq_api_key="gsk_test")
+    assert main._missing_keys() == []
+    keys(groq_api_key="gsk_test")
+    assert main._missing_keys() == ["OpenRouter"]

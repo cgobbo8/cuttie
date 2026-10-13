@@ -155,12 +155,10 @@ jobs = JobQueue()
 
 
 def _missing_keys() -> list[str]:
-    missing = []
-    if not settings.get("groq_api_key", "GROQ_API_KEY"):
-        missing.append("Groq")
-    if not settings.get("openrouter_api_key", "OPENROUTER_API_KEY"):
-        missing.append("OpenRouter")
-    return missing
+    """Keys an analysis can't do without: OpenRouter, the AI that listens to and
+    watches the live. Groq is optional: without it the live is transcribed on this
+    computer or by OpenRouter (transcriber.chosen_engine)."""
+    return [] if settings.get("openrouter_api_key", "OPENROUTER_API_KEY") else ["OpenRouter"]
 
 
 def _run(req: JobRequest) -> None:
@@ -185,6 +183,7 @@ def _run(req: JobRequest) -> None:
 
     missing = _missing_keys()
     if missing:
+        logger.warning("Job %s not started: missing key(s) %s", req.job_id, ", ".join(missing))
         update_job(
             req.job_id, status="ERROR", progress="Clés API manquantes.",
             error=f"Clé(s) API manquante(s) : {', '.join(missing)}. Ajoute-les dans Paramètres.",

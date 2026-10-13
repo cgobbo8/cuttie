@@ -1,2 +1,2 @@
-- Correctif : une analyse ne demande plus de clé Groq. Seule la clé OpenRouter est obligatoire : sans Groq, le live est transcrit sur ton PC (ou par OpenRouter).
-- Si une analyse a échoué avec « Clé(s) API manquante(s) : Groq », relance-la depuis Projets.
+- Correctif : une analyse n'échoue plus quand le serveur du modèle audio ne répond pas (erreur « 504 Gateway Time-out »). Le modèle se télécharge au démarrage de Cuttie, depuis un second serveur si besoin, et au pire l'analyse continue sans repérer les rires et les cris.
+- Si une analyse a échoué avec cette erreur, relance-la depuis Projets : la transcription déjà faite est gardée.

@@ -1,5 +1,2 @@
-- Paramètres > Aide à distance : extrais tes journaux (dernière heure, 24 h, 7 jours ou tout) en un fichier à envoyer quand quelque chose coince. Tes clés API n'y sont pas. « Supprimer les journaux » libère leur place.
-- Paramètres > Stockage : ce que Cuttie prend sur ton disque, et le ménage des anciens clips. Ceux des projets sans activité depuis 30 jours partent tout seuls (réglable) : le projet et ses exports restent, et « Récupérer les clips » les fait revenir tant que le live est sur Twitch.
-- Projets : la place prise par chaque projet, et la corbeille propose de libérer l'espace sans tout supprimer.
-- Le widget de chaîne arrive en rebond, et un widget ajouté à un modèle se pose au centre.
-- Correctif : après une analyse interrompue, la section Stockage ne s'affichait pas et le ménage ne passait pas.
+- Correctif : une analyse ne demande plus de clé Groq. Seule la clé OpenRouter est obligatoire : sans Groq, le live est transcrit sur ton PC (ou par OpenRouter).
+- Si une analyse a échoué avec « Clé(s) API manquante(s) : Groq », relance-la depuis Projets.

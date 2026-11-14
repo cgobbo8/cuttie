@@ -1490,6 +1490,54 @@
     "onlyNear_one": "Nada que corresponda de verdad: {{count}} trozo parecido",
     "onlyNear_other": "Nada que corresponda de verdad: {{count}} trozos parecidos",
     "nearTag": "parecido",
-    "nearTitle": "Se parece a lo que buscas sin serlo del todo: la IA dice lo que falta."
+    "nearTitle": "Se parece a lo que buscas sin serlo del todo: la IA dice lo que falta.",
+    "guide": {
+      "open": "Cómo funciona",
+      "skip": "Saltar",
+      "back": "Atrás",
+      "next": "Siguiente",
+      "done": "Vamos allá",
+      "progress": "Paso {{step}} de {{total}}",
+      "find": {
+        "title": "Busca en todo el directo",
+        "text": "Escribe una palabra o una idea. «$t(compilation.searchWords)» encuentra lo que se dice o se escribe en el chat: gratis e inmediato. «$t(compilation.askAi)» busca por el sentido, cuando ninguna palabra exacta sirve."
+      },
+      "ai": {
+        "title": "La IA busca como un editor",
+        "text": "Rastrea lo que se dice, el chat, los sonidos y los mejores momentos del análisis, y luego escucha los trozos para comprobarlos. Cuenta de 15 a 30 segundos y menos de un céntimo. La primera pregunta sobre un directo tarda de 2 a 3 minutos: Cuttie lo escucha entero, una sola vez."
+      },
+      "results": {
+        "title": "Te dice lo que ha encontrado",
+        "text": "La nota dice lo que corresponde de verdad. Un trozo «≈ $t(compilation.nearTag)» se acerca a lo que pides sin serlo del todo. Haz clic en un trozo para verlo, «+» para quedártelo."
+      },
+      "build": {
+        "title": "Monta tu vídeo",
+        "text": "Ordena tus trozos en partes, cambia el orden, recórtalos y ajusta a la duración que quieras. Más rápido: «$t(compilation.tab.describe)», y la IA propone las partes con los trozos. Todo se puede cambiar después."
+      },
+      "sample": {
+        "query": "los momentos en que se lía",
+        "words": "Las palabras",
+        "wordsHint": "dichas o escritas en el chat",
+        "wordsCost": "gratis, inmediato",
+        "idea": "Una idea",
+        "ideaHint": "la IA busca por el sentido",
+        "ideaCost": "menos de un céntimo",
+        "searched": "pelea",
+        "listenedAt": "3:25:40",
+        "time": "15 a 30 s",
+        "firstTime": "1.ª vez en un directo: 2 a 3 min",
+        "note": "El tiroteo corresponde de verdad. La caída solo se parece.",
+        "sureText": "¡Cuidado, que disparan! ¡A cubierto!",
+        "sureWhy": "Estalla un tiroteo delante del hospital",
+        "nearText": "He resbalado un poco, estoy bien…",
+        "nearWhy": "Una caída, no una pelea",
+        "part1": "La calma",
+        "part2": "Luego se lía",
+        "item1": "La verdad, está tranquilo esta noche",
+        "item2": "Un poco aburrido, ¿no?",
+        "item3": "¡Cuidado, que disparan!",
+        "total": "3 trozos"
+      }
+    }
   }
 }

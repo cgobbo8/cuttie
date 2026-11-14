@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { useTranslation } from "react-i18next";
 import { Player } from "@remotion/player";
-import { ArrowLeft, Check, Loader2, Plus } from "lucide-react";
+import { ArrowLeft, Check, CircleQuestionMark, Loader2, Plus } from "lucide-react";
 import {
   clipThumbUrl,
   createCompilation,
@@ -16,6 +16,7 @@ import {
   listCompilations,
   LiveError,
   saveCompilation,
+  setGuideSeen,
   startMontageRender,
   type Compilation,
   type CompilationItem,
@@ -31,6 +32,7 @@ import {
 } from "../lib/api";
 import { useBackdrop } from "../lib/BackdropContext";
 import { useChannel } from "../lib/ChannelContext";
+import { useSettings } from "../lib/SettingsContext";
 import { addItems, allItems, compilationLength, fitToTarget, itemFor, itemFromHit, removeItem, sectionStarts, sectionsFromPlan, updateItem } from "../lib/compilation";
 import { clock } from "../lib/format";
 import { buildMontage, montageFrames, renderPieces, type MontageProps } from "../lib/montage";
@@ -40,6 +42,7 @@ import { buildAny, customTemplates, defaultTemplateKey, findCustom, hookOf, isBu
 import { titleCard } from "../lib/templateSpec";
 import { TEMPLATE_IDS } from "../lib/templates";
 import MontageComposition from "../components/remotion-editor/MontageComposition";
+import CompilationGuide from "../components/compilation/CompilationGuide";
 import CompilationPanel from "../components/compilation/CompilationPanel";
 import PiecePreview from "../components/compilation/PiecePreview";
 import SearchPanel from "../components/compilation/SearchPanel";
@@ -75,6 +78,19 @@ export default function CompilationPage() {
   const navigate = useNavigate();
   const { jobId } = useParams<{ jobId: string }>();
   const { kit, channel } = useChannel();
+  const { settings, refresh: refreshSettings } = useSettings();
+
+  // The screen explains itself on the first visit; "how it works" shows it again
+  const [guide, setGuide] = useState(false);
+  const guideSeen = settings?.guides_seen?.includes("compilation");
+  useEffect(() => {
+    if (settings && !guideSeen) setGuide(true);
+  }, [settings, guideSeen]);
+  const closeGuide = useCallback(() => {
+    setGuide(false);
+    // Remembered with the app's settings: seen once, on this computer, for good
+    if (!guideSeen) setGuideSeen("compilation").then(refreshSettings, () => {});
+  }, [guideSeen, refreshSettings]);
 
   const [job, setJob] = useState<JobResponse | null>(null);
   const [info, setInfo] = useState<LiveSearchInfo | null>(null);
@@ -476,6 +492,9 @@ export default function CompilationPage() {
                 {c.name}
               </button>
             ))}
+          <button onClick={() => setGuide(true)} className="btn btn-ghost btn-sm">
+            <CircleQuestionMark className="w-[15px] h-[15px]" /> {t("compilation.guide.open")}
+          </button>
           <button onClick={startNew} className="btn btn-glass btn-sm">
             <Plus className="w-[15px] h-[15px]" /> {t("compilation.new")}
           </button>
@@ -643,6 +662,7 @@ export default function CompilationPage() {
         onConfirm={confirmDelete}
         onCancel={() => setToDelete(false)}
       />
+      <CompilationGuide open={guide} onClose={closeGuide} />
     </div>
   );
 }

@@ -1490,6 +1490,54 @@
     "onlyNear_one": "Nothing that really matches: {{count}} close passage",
     "onlyNear_other": "Nothing that really matches: {{count}} close passages",
     "nearTag": "close",
-    "nearTitle": "Close to what you are after without really being it: the AI says what is missing."
+    "nearTitle": "Close to what you are after without really being it: the AI says what is missing.",
+    "guide": {
+      "open": "How it works",
+      "skip": "Skip",
+      "back": "Back",
+      "next": "Next",
+      "done": "Let's go",
+      "progress": "Step {{step}} of {{total}}",
+      "find": {
+        "title": "Search the whole live",
+        "text": "Type a word or an idea. \"$t(compilation.searchWords)\" finds what is said or written in the chat: free and instant. \"$t(compilation.askAi)\" searches by meaning, when no precise word fits."
+      },
+      "ai": {
+        "title": "The AI searches like an editor",
+        "text": "It digs through what is said, the chat, the sounds and the analysis's best moments, then listens to the passages to check them. Give it 15 to 30 seconds and less than a cent. The first question on a live takes 2 to 3 minutes: Cuttie listens to the whole of it, once."
+      },
+      "results": {
+        "title": "It tells you what it found",
+        "text": "Its note says what really matches. A \"≈ $t(compilation.nearTag)\" passage looks like what you asked for without quite being it. Click a passage to watch it, \"+\" to keep it."
+      },
+      "build": {
+        "title": "Build your video",
+        "text": "Sort your passages into parts, change the order, trim them, then fit the length you want. Faster: \"$t(compilation.tab.describe)\", and the AI proposes the parts and their passages. Everything stays editable."
+      },
+      "sample": {
+        "query": "the moments when it kicks off",
+        "words": "Words",
+        "wordsHint": "said or written in the chat",
+        "wordsCost": "free, instant",
+        "idea": "An idea",
+        "ideaHint": "the AI searches by meaning",
+        "ideaCost": "less than a cent",
+        "searched": "fight",
+        "listenedAt": "3:25:40",
+        "time": "15 to 30 s",
+        "firstTime": "1st time on a live: 2 to 3 min",
+        "note": "The shootout really matches. The fall is only close.",
+        "sureText": "Watch out, they're shooting! Take cover!",
+        "sureWhy": "A shootout breaks out in front of the hospital",
+        "nearText": "I slipped a bit, I'm fine…",
+        "nearWhy": "A fall, not a fight",
+        "part1": "The calm",
+        "part2": "Then it kicks off",
+        "item1": "Honestly, it's quiet tonight",
+        "item2": "Kind of boring, isn't it?",
+        "item3": "Watch out, they're shooting!",
+        "total": "3 passages"
+      }
+    }
   }
 }

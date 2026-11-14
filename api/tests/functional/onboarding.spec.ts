@@ -16,6 +16,7 @@ test.group('First launch', (group) => {
     saved = readSettings()
     const settings = { ...saved }
     delete settings.onboarded
+    delete settings.guides_seen
     delete settings.groq_api_key
     delete settings.openrouter_api_key
     delete settings.transcription
@@ -38,6 +39,22 @@ test.group('First launch', (group) => {
     assert.isTrue(response.body().onboarded)
     assert.isTrue(readSettings().onboarded as boolean)
     ;(await client.put('/api/settings').loginAs(user).json({ onboarded: 'yes' })).assertStatus(400)
+  })
+
+  test('remembers which screens explained themselves', async ({ client, assert }) => {
+    const user = await makeUser()
+    assert.deepEqual((await client.get('/api/settings').loginAs(user)).body().guides_seen, [])
+    const seen = await client.put('/api/settings').loginAs(user).json({ guide_seen: 'compilation' })
+    seen.assertStatus(200)
+    assert.deepEqual(seen.body().guides_seen, ['compilation'])
+    // Seen twice is seen once; saving something else forgets nothing
+    await client.put('/api/settings').loginAs(user).json({ guide_seen: 'compilation' })
+    assert.deepEqual((await client.put('/api/settings').loginAs(user).json({ onboarded: true })).body().guides_seen, ['compilation'])
+    assert.deepEqual(readSettings().guides_seen, ['compilation'])
+    ;(await client.put('/api/settings').loginAs(user).json({ guide_seen: 'unknown' })).assertStatus(400)
+    // Whatever else sits in the file is not a guide
+    writeSettings({ ...readSettings(), guides_seen: ['compilation', 'nonsense', 3] })
+    assert.deepEqual((await client.get('/api/settings').loginAs(user)).body().guides_seen, ['compilation'])
   })
 
   test('picks the transcription engine (Groq when its key is set, else OpenRouter or this PC)', async ({ client, assert }) => {

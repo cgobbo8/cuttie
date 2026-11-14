@@ -1490,6 +1490,54 @@
     "onlyNear_one": "Rien qui corresponde vraiment : {{count}} passage proche",
     "onlyNear_other": "Rien qui corresponde vraiment : {{count}} passages proches",
     "nearTag": "proche",
-    "nearTitle": "Proche de ce que tu cherches, sans l'être vraiment : l'IA dit ce qui manque."
+    "nearTitle": "Proche de ce que tu cherches, sans l'être vraiment : l'IA dit ce qui manque.",
+    "guide": {
+      "open": "Comment ça marche",
+      "skip": "Passer",
+      "back": "Retour",
+      "next": "Suivant",
+      "done": "C'est parti",
+      "progress": "Étape {{step}} sur {{total}}",
+      "find": {
+        "title": "Cherche dans tout le live",
+        "text": "Tape un mot ou une idée. « $t(compilation.searchWords) » retrouve ce qui est dit ou écrit dans le chat : gratuit et immédiat. « $t(compilation.askAi) » cherche par le sens, quand aucun mot précis ne convient."
+      },
+      "ai": {
+        "title": "L'IA cherche comme un monteur",
+        "text": "Elle fouille ce qui est dit, le chat, les sons et les meilleurs moments de l'analyse, puis écoute les passages pour vérifier. Compte 15 à 30 secondes et moins d'un centime. La première question sur un live prend 2 à 3 minutes : Cuttie l'écoute en entier, une seule fois."
+      },
+      "results": {
+        "title": "Elle te dit ce qu'elle a trouvé",
+        "text": "Sa note dit ce qui correspond vraiment. Un passage « ≈ $t(compilation.nearTag) » ressemble à ta demande sans l'être tout à fait. Clique un passage pour le regarder, « + » pour le garder."
+      },
+      "build": {
+        "title": "Construis ta vidéo",
+        "text": "Range tes passages en parties, change l'ordre, recoupe-les, puis ajuste à la durée voulue. Plus rapide : « $t(compilation.tab.describe) », et l'IA propose les parties et leurs passages. Tout reste modifiable."
+      },
+      "sample": {
+        "query": "les moments où ça pète",
+        "words": "Les mots",
+        "wordsHint": "dits ou écrits dans le chat",
+        "wordsCost": "gratuit, immédiat",
+        "idea": "Une idée",
+        "ideaHint": "l'IA cherche par le sens",
+        "ideaCost": "moins d'un centime",
+        "searched": "bagarre",
+        "listenedAt": "3:25:40",
+        "time": "15 à 30 s",
+        "firstTime": "1re fois sur un live : 2 à 3 min",
+        "note": "La fusillade correspond vraiment. La chute est seulement proche.",
+        "sureText": "Attention, ça tire ! À couvert !",
+        "sureWhy": "Une fusillade éclate devant l'hôpital",
+        "nearText": "J'ai un peu glissé, ça va…",
+        "nearWhy": "Une chute, pas une bagarre",
+        "part1": "Le calme",
+        "part2": "Puis ça pète",
+        "item1": "Franchement, c'est calme ce soir",
+        "item2": "On s'ennuie un peu, non ?",
+        "item3": "Attention, ça tire !",
+        "total": "3 passages"
+      }
+    }
   }
 }

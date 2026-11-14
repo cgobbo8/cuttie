@@ -69,6 +69,21 @@ export interface AppSettings {
   /** First launch done (channel, keys, webcam) */
   onboarded: boolean;
   transcription: TranscriptionEngine;
+  /** Screens whose first-visit explanation was seen */
+  guides_seen?: Guide[];
+}
+
+/** A screen that explains itself the first time it is opened */
+export type Guide = "compilation";
+
+/** Remember that a screen's explanation was seen (kept with the app's settings, not in the browser) */
+export async function setGuideSeen(guide: Guide): Promise<AppSettings> {
+  const res = await fetch(`${BASE}/settings`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ guide_seen: guide }),
+  });
+  return jsonOrThrow(res, "Failed to save settings");
 }
 
 export async function getSettings(): Promise<AppSettings> {

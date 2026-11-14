@@ -19,6 +19,14 @@ const KEY_CHECKS: Partial<Record<KeySetting, string>> = {
   openrouter_api_key: 'https://openrouter.ai/api/v1/key',
 }
 
+/** Screens that explain themselves on the first visit; settings.json keeps which ones were seen */
+const GUIDES = ['compilation'] as const
+
+function guidesSeen(settings: Record<string, unknown>): string[] {
+  const seen = Array.isArray(settings.guides_seen) ? settings.guides_seen : []
+  return GUIDES.filter((guide) => seen.includes(guide))
+}
+
 /** First launch done: explicit flag, or an install that already has analyses */
 async function isOnboarded(settings: Record<string, unknown>): Promise<boolean> {
   if (typeof settings.onboarded === 'boolean') return settings.onboarded
@@ -45,21 +53,32 @@ export default class AppController {
       ),
       onboarded: await isOnboarded(settings),
       transcription: TRANSCRIPTION_ENGINES.includes(settings.transcription as any) ? settings.transcription : 'auto',
+      // First-visit explanations already seen (kept here, not in the browser: the app's address can change)
+      guides_seen: guidesSeen(settings),
     }
   }
 
   /**
    * PUT /api/settings — body: { keys?: { groq_api_key?: string, ... }, onboarded?: boolean,
-   * transcription?: 'auto' | 'groq' | 'openrouter' | 'local' }; empty string or null clears a key
+   * transcription?: 'auto' | 'groq' | 'openrouter' | 'local', guide_seen?: 'compilation' };
+   * empty string or null clears a key
    */
   async updateSettings({ request, response }: HttpContext) {
-    const body = request.body() as { keys?: Partial<Record<KeySetting, unknown>>; onboarded?: unknown; transcription?: unknown }
+    const body = request.body() as {
+      keys?: Partial<Record<KeySetting, unknown>>
+      onboarded?: unknown
+      transcription?: unknown
+      guide_seen?: unknown
+    }
     const keys = body.keys ?? {}
     if (body.onboarded !== undefined && typeof body.onboarded !== 'boolean') {
       return response.badRequest({ error: 'onboarded must be a boolean' })
     }
     if (body.transcription !== undefined && !TRANSCRIPTION_ENGINES.includes(body.transcription as any)) {
       return response.badRequest({ error: `transcription must be one of ${TRANSCRIPTION_ENGINES.join(', ')}` })
+    }
+    if (body.guide_seen !== undefined && !GUIDES.includes(body.guide_seen as any)) {
+      return response.badRequest({ error: `guide_seen must be one of ${GUIDES.join(', ')}` })
     }
 
     const settings = readSettings()
@@ -77,6 +96,7 @@ export default class AppController {
 
     if (typeof body.onboarded === 'boolean') settings.onboarded = body.onboarded
     if (typeof body.transcription === 'string') settings.transcription = body.transcription
+    if (typeof body.guide_seen === 'string') settings.guides_seen = [...new Set([...guidesSeen(settings), body.guide_seen])]
 
     writeSettings(settings)
     return this.showSettings({} as HttpContext)

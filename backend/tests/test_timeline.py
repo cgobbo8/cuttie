@@ -31,7 +31,7 @@ def test_candidate_entry():
         timestamp_seconds=9044.31,
         final_score=0.7469,
         clip_name="Sauvetage Helico Fail",
-        llm=SimpleNamespace(category="fail"),
+        llm=SimpleNamespace(category="fail", summary="  L'hélico rate   le toit et finit dans la piscine.  "),
     )
     assert timeline.candidate(hp, "kept") == {
         "t": 9044.3,
@@ -39,6 +39,11 @@ def test_candidate_entry():
         "score": 0.747,
         "name": "Sauvetage Helico Fail",
         "category": "fail",
+        # What happens there: kept for every rated candidate, the AI searching the live reads it later
+        "what": "L'hélico rate le toit et finit dans la piscine.",
     }
+    # A dropped candidate keeps it too; a long summary is cut
+    dropped = SimpleNamespace(timestamp_seconds=50.0, final_score=0.3, clip_name="Long", llm=SimpleNamespace(category="fun", summary="mot " * 100))
+    assert timeline.candidate(dropped, "dropped")["state"] == "dropped" and len(timeline.candidate(dropped, "dropped")["what"]) == 140
     pending = SimpleNamespace(timestamp_seconds=12.0, final_score=None, clip_name="", llm=None)
     assert timeline.candidate(pending, "pending") == {"t": 12.0, "state": "pending"}

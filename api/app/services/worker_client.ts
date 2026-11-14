@@ -211,12 +211,13 @@ export interface LiveSearchResult {
   note?: string
 }
 
-/** What the AI works from besides the transcript: the live's length, its voice energy, who and what, and the live on Twitch (to listen to it) */
+/** What the AI works from besides the transcript: the live's length, its voice energy, who and what, the live on Twitch (to listen to it), and every candidate the analysis rated */
 export interface LiveContext {
   duration: number
   energy?: number[] | null
   meta: { streamer?: string | null; game?: string | null; title?: string | null }
   url?: string | null
+  moments?: { t: number; state: string; score?: number; name?: string; category?: string; what?: string }[]
 }
 
 /** What can be searched in a live, and about what asking the AI costs (dollars) */

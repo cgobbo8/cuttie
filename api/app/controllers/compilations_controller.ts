@@ -30,6 +30,8 @@ function liveContext(job: Job): LiveContext {
     energy: job.timeline?.energy ?? null,
     meta: { streamer: job.streamer, game: job.vodGame, title: job.customTitle || job.vodTitle },
     url: job.url,
+    // The 50 or so candidates the analysis rated, clipped or not: the worker only kept the clipped ones
+    moments: job.timeline?.candidates ?? [],
   }
 }
 

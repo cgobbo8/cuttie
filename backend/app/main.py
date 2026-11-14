@@ -93,6 +93,8 @@ class SearchRequest(BaseModel):
     meta: dict = {}
     # The live on Twitch: the AI listens to it (nothing to listen to once Twitch dropped it)
     url: str | None = None
+    # Every candidate the analysis rated (the job's timeline): {"t", "state", "score", "name", "category", "what"}
+    moments: list[dict] = []
 
 
 class PlanRequest(BaseModel):
@@ -104,6 +106,7 @@ class PlanRequest(BaseModel):
     energy: list[float] | None = None
     meta: dict = {}
     url: str | None = None
+    moments: list[dict] = []
 
 
 class LivePiece(BaseModel):
@@ -379,7 +382,7 @@ def search_live(job_id: str, req: SearchRequest) -> dict:
     if req.mode != "ai":
         return live_search.search_words(_check_job_id(job_id), query, req.duration)
     try:
-        return live_search.search_ai(_check_job_id(job_id), query, req.meta, req.duration, req.energy, url=req.url)
+        return live_search.search_ai(_check_job_id(job_id), query, req.meta, req.duration, req.energy, url=req.url, moments=req.moments[:400])
     except Exception as e:
         raise _ai_errors(e) from e
 
@@ -401,7 +404,9 @@ def plan_video(job_id: str, req: PlanRequest) -> dict:
     if not brief:
         raise HTTPException(status_code=400, detail="empty description")
     try:
-        return live_search.plan_video(_check_job_id(job_id), brief, max(10.0, min(req.target, 600.0)), req.meta, req.duration, req.energy, url=req.url)
+        return live_search.plan_video(
+            _check_job_id(job_id), brief, max(10.0, min(req.target, 600.0)), req.meta, req.duration, req.energy, url=req.url, moments=req.moments[:400]
+        )
     except Exception as e:
         raise _ai_errors(e) from e
 

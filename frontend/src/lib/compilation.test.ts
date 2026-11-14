@@ -144,6 +144,8 @@ describe("what the AI is doing", () => {
     expect(stepText(t, { step: "thinking", detail: "", count: 1 })).toBe("thinking");
     expect(stepText(t, { step: "hearing", detail: "", count: 1 })).toBe("hearing");
     expect(stepText(t, { step: "overview", detail: "", count: 2 })).toBe("overview");
+    expect(stepText(t, { step: "best_moments", detail: "", count: 2 })).toBe("best_moments");
+    expect(stepText(t, { step: "chat_peaks", detail: "", count: 2 })).toBe("chat_peaks");
     expect(stepText(t, { step: "search_speech", detail: "trop calme", count: 3 })).toBe("search_speech words=trop calme");
     expect(stepText(t, { step: "search_chat", detail: "mdr", count: 4 })).toBe("search_chat words=mdr");
     expect(stepText(t, { step: "find_sounds", detail: "gunfire", count: 5 })).toBe("find_sounds sound=coups de feu");

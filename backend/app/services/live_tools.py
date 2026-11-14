@@ -1,6 +1,7 @@
 """What an AI searching a live can do, one small tool at a time: look for words
-said or written in the chat, for sounds, for loud or quiet moments, read what
-is said somewhere, see what is heard there. Each tool answers little and
+said or written in the chat, for sounds, for loud or quiet moments, for the
+chat's bursts and the moments the analysis rated the best, read what is said
+somewhere, see what is heard there. Each tool answers little and
 exactly (times as H:MM:SS), so a cheap model can call many of them, check what
 it found and only then answer, instead of guessing from one long read.
 
@@ -20,6 +21,8 @@ logger = logging.getLogger(__name__)
 
 MAX_HITS = 40
 MAX_READ_SECONDS = 240.0
+# The moments the first analysis rated, as many as it had an AI watch
+MAX_BEST = 50
 SOUND_KINDS = [g for g in sound_index.GROUPS if g != "speech"]
 LOUD_KINDS = ["raised_voices", "loudest", "quiet"]
 
@@ -27,7 +30,15 @@ LOUD_KINDS = ["raised_voices", "loudest", "quiet"]
 SPECS: list[dict] = [
     {
         "name": "overview",
-        "description": "What this live is: title, game, length, a summary of what happens, and the moments the first analysis already clipped (time, name, summary). Call it first.",
+        "description": "What this live is: title, game, length, a summary of what happens and its phases. Call it first.",
+        "parameters": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "best_moments",
+        "description": f"The {MAX_BEST} moments the first analysis rated the best in the whole live (it weighed the sound and the chat, then an AI watched and "
+        "listened to each one), the best first: time, score (0-100), kind, name, what happens when it is known, and whether a clip of it exists. "
+        "Use it for requests about the best, funniest or strongest moments, and to learn what happens in the live besides what is said: "
+        "a fight, a fail, a chase are named here even when nobody says the word.",
         "parameters": {"type": "object", "properties": {}},
     },
     {
@@ -40,6 +51,13 @@ SPECS: list[dict] = [
         "name": "search_chat",
         "description": "Moments when viewers write ALL the given words in the chat (times already moved back onto the stream).",
         "parameters": {"type": "object", "properties": {"words": {"type": "string"}}, "required": ["words"]},
+    },
+    {
+        "name": "chat_peaks",
+        "description": "The moments when the chat reacts the most: bursts of messages well above its usual pace (times already moved back onto the stream), "
+        "the strongest first, with how many viewers wrote, some of their messages and what was said then. Use it for requests about the chat's reactions, "
+        "and as a sign that something happened: `read` there to see what.",
+        "parameters": {"type": "object", "properties": {}},
     },
     {
         "name": "find_sounds",
@@ -85,8 +103,11 @@ def _said(transcript: VodTranscript | None, start: float, end: float, limit: int
 class LiveTools:
     """The tools over one live. What they read (transcript, chat, sounds) is loaded once."""
 
-    def __init__(self, job_id: str, duration: float = 0.0, chat_lag: float = 5.0) -> None:
+    def __init__(self, job_id: str, duration: float = 0.0, chat_lag: float = 5.0, moments: list[dict] | None = None) -> None:
+        """`moments`: every candidate the analysis rated, as the app keeps them ({"t", "state", "score", "name",
+        "category", "what"}); without them, only the moments it clipped are known."""
         self.job_id = job_id
+        self.moments = moments or []
         self.transcript = load_cached(job_id)
         self.chat = live_search.read_chat(job_id)
         self.sounds = sound_index.load(job_id)
@@ -111,10 +132,6 @@ class LiveTools:
 
         job = get_job(self.job_id)
         context = job.vod_context if job else None
-        clips = []
-        for hp in (job.hot_points or []) if job else []:
-            if hp.clip_filename and hp.llm:
-                clips.append({"at": hms(hp.timestamp_seconds), "name": hp.clip_name, "kind": hp.llm.category, "what": _short(hp.llm.summary, 110)})
         return {
             "title": job.vod_title if job else None,
             "game": job.vod_game if job else None,
@@ -122,8 +139,78 @@ class LiveTools:
             "length": hms(self.duration),
             "summary": context.summary if context else None,
             "phases": [{"from": p.start, "to": p.end, "what": p.description} for p in (context.phases if context else [])],
-            "clipped_already": sorted(clips, key=lambda c: parse_hms(c["at"]) or 0),
             "can_search": {"speech": bool(self.transcript), "chat_messages": len(self.chat), "sounds": bool(self.sounds)},
+            "see_also": "best_moments: what happens in the moments the first analysis rated the best",
+        }
+
+    def tool_best_moments(self) -> dict:
+        from app.services.db import get_job
+
+        job = get_job(self.job_id)
+        # What the worker kept: the moments it clipped, with what the AI saw in each
+        clipped = {round(float(hp.timestamp_seconds)): hp for hp in ((job.hot_points or []) if job else [])}
+
+        def near(t: float):
+            return next((clipped[k] for k in (round(t), round(t) - 1, round(t) + 1) if k in clipped), None)
+
+        rows: list[tuple[float, float, dict]] = []
+        known: set[int] = set()
+        for moment in self.moments:
+            try:
+                t = float(moment["t"])
+            except (KeyError, TypeError, ValueError):
+                continue
+            # Rated by the analysis: kept as a clip, dropped after being watched, or asked for on the stream
+            if moment.get("state") not in ("kept", "dropped", "clip", "rated"):
+                continue
+            hp = near(t)
+            if hp is not None:
+                known.add(round(float(hp.timestamp_seconds)))
+            score = moment.get("score", hp.final_score if hp is not None else None)
+            what = moment.get("what") or (hp.llm.summary if hp is not None and hp.llm else "")
+            rows.append((float(score or 0.0), t, {
+                "at": hms(t),
+                "score": round(100 * float(score)) if score is not None else None,
+                "kind": moment.get("category") or (hp.llm.category if hp is not None and hp.llm else None),
+                "name": moment.get("name") or (hp.clip_name if hp is not None else None),
+                **({"what": _short(str(what), 90)} if what else {}),
+                "clip": moment.get("state") in ("kept", "clip") or bool(hp is not None and hp.clip_filename),
+                **({"asked_for_on_stream": True} if moment.get("state") == "clip" else {}),
+            }))
+        for key, hp in clipped.items():
+            if key in known:
+                continue
+            score = hp.final_score if hp.final_score is not None else hp.score
+            rows.append((float(score or 0.0), float(hp.timestamp_seconds), {
+                "at": hms(hp.timestamp_seconds),
+                "score": round(100 * float(score)) if score is not None else None,
+                "kind": hp.llm.category if hp.llm else None,
+                "name": hp.clip_name,
+                **({"what": _short(hp.llm.summary, 90)} if hp.llm and hp.llm.summary else {}),
+                "clip": bool(hp.clip_filename),
+            }))
+        rows.sort(key=lambda r: (-r[0], r[1]))
+        return {"found": len(rows), "moments": [row for _score, _t, row in rows[:MAX_BEST]]}
+
+    def tool_chat_peaks(self) -> dict:
+        peaks = live_search.chat_peaks(self.chat, self.chat_lag, self.duration)
+        if not peaks:
+            return {"found": 0, "note": "the chat never wrote much at once in this live"}
+        return {
+            "found": len(peaks),
+            "usually": f"about {peaks[0]['usual']} messages in {live_search.BURST_SECONDS:.0f} seconds",
+            "moments": [
+                {
+                    "at": hms(p["start"]),
+                    "seconds": round(p["end"] - p["start"]),
+                    "messages": p["messages"],
+                    "viewers": p["viewers"],
+                    "wrote": p["lines"],
+                    **({"viewers_ask_for_a_clip": True} if p["clip_requests"] else {}),
+                    "said_then": _said(self.transcript, p["start"], p["end"], 100),
+                }
+                for p in peaks
+            ],
         }
 
     def tool_search_speech(self, words: str) -> dict:

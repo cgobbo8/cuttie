@@ -82,6 +82,8 @@ export interface TimelineCandidate {
   score?: number
   name?: string
   category?: string
+  /** What happens there, in a sentence (analyses made since the AI searches the live with tools) */
+  what?: string
 }
 
 export interface JobTimeline {

@@ -1450,6 +1450,8 @@
       "thinking": "The AI is thinking about what you are after",
       "hearing": "Cuttie is listening to the whole live",
       "overview": "It is looking at what this live is about",
+      "best_moments": "It is looking at the best moments the analysis found",
+      "chat_peaks": "It is looking at where the chat goes wild",
       "search_speech": "It is looking for \"{{words}}\" in what is said",
       "search_chat": "It is looking for \"{{words}}\" in the chat",
       "find_sounds": "It is looking for sounds: {{sound}}",

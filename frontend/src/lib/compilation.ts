@@ -189,6 +189,8 @@ export function stepText(t: TFunction, step: LiveSearchStep | null): string {
   switch (step?.step) {
     case "hearing":
     case "overview":
+    case "best_moments":
+    case "chat_peaks":
       return t(`compilation.step.${step.step}`);
     case "search_speech":
     case "search_chat":

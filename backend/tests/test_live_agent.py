@@ -70,7 +70,7 @@ def _tools(monkeypatch, with_sounds=True):
 
 def test_the_tools_answer_little_and_exactly(monkeypatch):
     tools = _tools(monkeypatch)
-    assert [s["name"] for s in tools.specs()] == ["overview", "search_speech", "search_chat", "find_sounds", "loud_moments", "read"]
+    assert [s["name"] for s in tools.specs()] == ["overview", "best_moments", "search_speech", "search_chat", "chat_peaks", "find_sounds", "loud_moments", "read"]
     assert tools.call("search_speech", {"words": "calme"}) == {"found": 1, "moments": [{"at": "0:01:40", "seconds": 3.0, "said": "Bon là franchement c'est calme."}]}
     chat = tools.call("search_chat", {"words": "tire"})
     # Moved back onto the stream, the bot left out, with what was said then
@@ -88,9 +88,80 @@ def test_the_tools_answer_little_and_exactly(monkeypatch):
     assert "gunfire" in tools.call("find_sounds", {"kind": "anger"})["error"] and "raised_voices" in tools.call("loud_moments", {"kind": "angry"})["error"]
 
 
+def test_the_chat_s_bursts_are_found_whatever_its_size(monkeypatch):
+    def chat(*groups):
+        return [{"timestamp": t, "author": author, "text": text} for t, author, text in groups]
+
+    # A small chat (a message every minute and a half): four messages from three viewers in 20 s stand out
+    quiet = [(90.0 * i, f"v{i % 5}", "salut") for i in range(1, 30)]
+    burst = [(1030.0, "lea", "MDRRR"), (1033.0, "bob", "mdrrr"), (1036.0, "zoe", "il est tombé"), (1041.0, "lea", "clip ça"), (1042.0, "Nightbot", "!clip"), (1043.0, "bob", "!clip")]
+    spam = [(2000.0 + i, "solo", f"spam {i}") for i in range(6)]
+    peaks = ls.chat_peaks(chat(*quiet, *burst, *spam), lag=5.0, duration=3600.0)
+    assert len(peaks) == 1
+    peak = peaks[0]
+    # On the stream's clock: what they react to came before their first message; the bot, the commands and one viewer alone don't count
+    assert (peak["start"], peak["end"]) == (1017.0, 1039.0) and (peak["messages"], peak["viewers"]) == (4, 3)
+    assert peak["lines"] == ["lea: MDRRR (x2)", "zoe: il est tombé", "lea: clip ça"] and peak["clip_requests"] == 1 and peak["usual"] == 0.2
+    # A big chat (five messages a second): only what is well over its pace is a burst, the strongest first,
+    # each starting where its messages pour in (not where the 20 s around it begin)
+    busy = [(i / 5, f"v{i % 400}", "gg") for i in range(5 * 600)]
+    wave = [(300.0 + i / 40, f"w{i}", "KEKW") for i in range(400)] + [(450.0 + i / 30, f"x{i}", "LETSGO") for i in range(300)]
+    peaks = ls.chat_peaks(chat(*busy, *wave), lag=5.0, duration=600.0)
+    assert [round(p["start"]) for p in peaks] == [287, 437] and peaks[0]["viewers"] > peaks[1]["viewers"] > 300
+    assert any("KEKW (x400)" in line for line in peaks[0]["lines"]) and any("LETSGO (x300)" in line for line in peaks[1]["lines"])
+    # Nothing to say of a chat that never speeds up, or of no chat at all
+    assert ls.chat_peaks(chat(*quiet), 5.0, 3600.0) == [] and ls.chat_peaks([], 5.0, 3600.0) == []
+
+    tools = _tools(monkeypatch)
+    monkeypatch.setattr(tools, "chat", chat(*quiet, *burst))
+    monkeypatch.setattr(tools, "duration", 3600.0)
+    told = tools.call("chat_peaks", {})
+    assert told["found"] == 1 and told["usually"] == "about 0.2 messages in 20 seconds"
+    assert told["moments"][0] == {"at": "0:16:57", "seconds": 22, "messages": 4, "viewers": 3, "wrote": ["lea: MDRRR (x2)", "zoe: il est tombé", "lea: clip ça"], "viewers_ask_for_a_clip": True, "said_then": ""}
+    monkeypatch.setattr(tools, "chat", [])
+    assert tools.call("chat_peaks", {}) == {"found": 0, "note": "the chat never wrote much at once in this live"}
+
+
+def test_the_moments_the_analysis_rated_are_all_there(monkeypatch):
+    from app.services import db
+
+    def hot_point(t, score, name, category, summary, clip):
+        return SimpleNamespace(timestamp_seconds=t, final_score=score, score=score, clip_name=name, clip_filename=clip, llm=SimpleNamespace(category=category, summary=summary))
+
+    # What the worker kept: the two moments it clipped, with what the AI saw
+    clipped = [hot_point(300.0, 0.86, "Tigre", "fun", "Ils paniquent face à un tigre.", "tigre.mp4"), hot_point(119.4, 0.7, "Fusillade", "action", "Ça tire devant l'hôpital.", "tirs.mp4")]
+    monkeypatch.setattr(db, "get_job", lambda job_id: SimpleNamespace(hot_points=clipped))
+    # What the app kept: every candidate the analysis rated, the dropped ones too (their summary since it is kept)
+    rated = [
+        {"t": 300, "state": "kept", "score": 0.86, "name": "Tigre", "category": "fun"},
+        {"t": 119.4, "state": "kept", "score": 0.7, "name": "Fusillade", "category": "action"},
+        {"t": 450.2, "state": "dropped", "score": 0.46, "name": "Urgence Brulure", "category": "fun"},
+        {"t": 520.0, "state": "dropped", "score": 0.31, "name": "Commande Geante", "category": "fun", "what": "Il commande pour dix."},
+        {"t": 560.0, "state": "clip", "score": 0.5, "name": "Clip 0:09:20"},
+        {"t": 580.0, "state": "pending"},
+        {"state": "kept"},
+    ]
+    tools = _tools(monkeypatch)
+    monkeypatch.setattr(tools, "moments", rated)
+    best = tools.call("best_moments", {})
+    assert best["found"] == 5
+    assert best["moments"][0] == {"at": "0:05:00", "score": 86, "kind": "fun", "name": "Tigre", "what": "Ils paniquent face à un tigre.", "clip": True}
+    assert [(m["at"], m["score"], m["clip"]) for m in best["moments"]] == [("0:05:00", 86, True), ("0:01:59", 70, True), ("0:09:20", 50, True), ("0:07:30", 46, False), ("0:08:40", 31, False)]
+    # Dropped moments: their name always, what happens when the analysis kept it; the one asked for on the stream is said so
+    assert "what" not in best["moments"][3] and best["moments"][4]["what"] == "Il commande pour dix." and best["moments"][2]["asked_for_on_stream"] is True
+    # Without the app's list (an older app), the clipped moments are still known
+    monkeypatch.setattr(tools, "moments", [])
+    alone = tools.call("best_moments", {})
+    assert [m["name"] for m in alone["moments"]] == ["Tigre", "Fusillade"] and alone["moments"][1]["what"] == "Ça tire devant l'hôpital."
+    # No analysis left in the worker: nothing, not a crash
+    monkeypatch.setattr(db, "get_job", lambda job_id: None)
+    assert tools.call("best_moments", {}) == {"found": 0, "moments": []}
+    assert tools.call("overview", {})["title"] is None
+
+
 def test_a_live_never_listened_to_has_no_sound_tools(monkeypatch):
     tools = _tools(monkeypatch, with_sounds=False)
-    assert [s["name"] for s in tools.specs()] == ["overview", "search_speech", "search_chat", "read"]
+    assert [s["name"] for s in tools.specs()] == ["overview", "best_moments", "search_speech", "search_chat", "chat_peaks", "read"]
     assert "error" in tools.call("find_sounds", {"kind": "gunfire"})
     assert "heard" not in tools.call("read", {"start": 100, "end": 110})
 
@@ -259,6 +330,26 @@ def test_asking_the_ai_searches_with_tools_and_is_paid_once(monkeypatch, tmp_pat
     with pytest.raises(ls.NoTranscript):
         ls.search_ai("job", "autre chose", {}, 600.0)
     assert ls.info("job")["ai_cost"] is None
+
+
+def test_the_search_knows_every_moment_the_analysis_rated(monkeypatch, tmp_path):
+    from app.services import db
+
+    monkeypatch.setattr(db, "get_job", lambda job_id: None)
+    model = _live(monkeypatch, tmp_path, [
+        [("best_moments", {}), ("chat_peaks", {})],
+        [("answer", {"moments": [SHOTS], "note": "ok"})],
+    ])
+    # The app sends the candidates it kept from the analysis, dropped ones included
+    rated = [{"t": 119.4, "state": "dropped", "score": 0.46, "name": "Fusillade devant l'hopital", "category": "action", "what": "Ça tire."}]
+    ls.search_ai("job", "les meilleurs moments", {}, 600.0, moments=rated)
+    best, peaks = (json.loads(m["content"]) for m in model.seen[1]["messages"][-2:])
+    assert best == {"found": 1, "moments": [{"at": "0:01:59", "score": 46, "kind": "action", "name": "Fusillade devant l'hopital", "what": "Ça tire.", "clip": False}]}
+    assert peaks["found"] == 0
+    # What it is doing is told to the app by the tool's name
+    assert [d and d["step"] for d in model.doing] == ["thinking", "chat_peaks"]
+    names = [f["function"]["name"] for f in model.seen[0]["tools"]]
+    assert names[:2] == ["overview", "best_moments"] and "chat_peaks" in names
 
 
 def test_a_search_that_fails_says_why_and_leaves_nothing_behind(monkeypatch, tmp_path):

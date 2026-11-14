@@ -496,6 +496,8 @@ export interface TimelineCandidate {
   score?: number;
   name?: string;
   category?: string;
+  /** What happens there, in a sentence (recent analyses) */
+  what?: string;
 }
 
 export interface JobTimeline {

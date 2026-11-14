@@ -1450,6 +1450,8 @@
       "thinking": "L'IA réfléchit à ce que tu cherches",
       "hearing": "Cuttie écoute tout le live",
       "overview": "Elle regarde de quoi parle ce live",
+      "best_moments": "Elle regarde les meilleurs moments repérés par l'analyse",
+      "chat_peaks": "Elle regarde où le chat s'emballe",
       "search_speech": "Elle cherche « {{words}} » dans ce qui est dit",
       "search_chat": "Elle cherche « {{words}} » dans le chat",
       "find_sounds": "Elle cherche des sons : {{sound}}",

@@ -246,6 +246,91 @@ def search_chat(messages: list[dict], terms: list[str], lag: float, duration: fl
     return hits
 
 
+# A burst of the chat: messages within this many seconds, at least this many (and well over its
+# usual pace) from at least two viewers; two bursts are this far apart at least
+BURST_SECONDS = 20.0
+BURST_MESSAGES = 4
+BURST_OVER_USUAL = 2.5
+BURST_APART = 45.0
+# Where a burst really starts: where its messages come closest together, over this many seconds
+BURST_ONSET = 5.0
+
+
+def _onset(times: list[float]) -> float:
+    most, at, end = 0, times[0], 0
+    for i, t in enumerate(times):
+        while end < len(times) and times[end] < t + BURST_ONSET:
+            end += 1
+        if end - i > most:
+            most, at = end - i, t
+    return at
+
+
+def chat_peaks(messages: list[dict], lag: float, duration: float, limit: int = 20) -> list[dict]:
+    """The moments when the chat writes the most at once (bots and commands aside), the strongest first.
+    For each: where it is on the stream (the chat reacts `lag` seconds late, to what came just before),
+    how many messages from how many viewers, how many it usually writes in that time, some of the
+    messages, and whether viewers ask for a clip."""
+    from collections import Counter
+
+    from app.services.chat_analyzer import CLIP_REQUEST
+
+    written: list[tuple[float, str, str]] = []
+    for m in messages:
+        author = str(m.get("author", ""))
+        text = str(m.get("text") or m.get("message") or "").strip()
+        if not text or text.startswith("!") or author.lower() in _BOTS:
+            continue
+        written.append((float(m.get("timestamp", 0.0)), author, text))
+    written.sort()
+    if len(written) < BURST_MESSAGES:
+        return []
+    usual = len(written) / max(duration or written[-1][0], BURST_SECONDS) * BURST_SECONDS
+    needed = max(BURST_MESSAGES, BURST_OVER_USUAL * usual)
+    # From each message, how many are written within the burst's length, by how many viewers
+    bursts: list[tuple[int, int, int, int]] = []  # viewers, messages, first index, one past the last
+    inside: Counter = Counter()
+    end = 0
+    for i, (t, author, _text) in enumerate(written):
+        while end < len(written) and written[end][0] < t + BURST_SECONDS:
+            inside[written[end][1].lower()] += 1
+            end += 1
+        if end - i >= needed and len(inside) >= 2:
+            bursts.append((len(inside), end - i, i, end))
+        inside[author.lower()] -= 1
+        if not inside[author.lower()]:
+            del inside[author.lower()]
+    peaks: list[dict] = []
+    taken: list[float] = []
+    for viewers, count, i, j in sorted(bursts, key=lambda b: (-b[0], -b[1], b[2])):
+        if len(peaks) >= limit:
+            break
+        group = written[i:j]
+        first = _onset([t for t, _a, _x in group])
+        if any(abs(first - other) < BURST_APART for other in taken):
+            continue
+        taken.append(first)
+        said = Counter(text.lower() for _t, _a, text in group)
+        lines: list[str] = []
+        for t, author, text in group:
+            # From where the burst starts; the same message from many viewers (an emote, "clip") is given once
+            if t >= first and said[text.lower()] and len(lines) < 5:
+                lines.append(f"{author}: {text[:80]}" + (f" (x{said[text.lower()]})" if said[text.lower()] > 1 else ""))
+                said[text.lower()] = 0
+        start = max(0.0, first - lag - CHAT_BEFORE)
+        stop = group[-1][0] - lag + CHAT_AFTER
+        peaks.append({
+            "start": start,
+            "end": max(start + MIN_MOMENT, min(duration, stop) if duration else stop),
+            "messages": count,
+            "viewers": viewers,
+            "usual": round(usual, 1),
+            "lines": lines,
+            "clip_requests": sum(1 for _t, _a, text in group if CLIP_REQUEST.search(text)),
+        })
+    return peaks
+
+
 def merge_hits(voice: list[Hit], chat: list[Hit]) -> list[Hit]:
     """One list in the live's order: a chat reaction to something said joins it."""
     merged: list[Hit] = []
@@ -591,7 +676,7 @@ def _step_detail(args: dict) -> str:
     return ""
 
 
-def _ask(job_id: str, duration: float, lag: float, url: str | None, work):
+def _ask(job_id: str, duration: float, lag: float, url: str | None, work, moments: list[dict] | None = None):
     """Have the AI do `work(searcher)` over this live: with its tools and its ears, the live
     listened to first when it never was. When the searching model fails for a reason of its
     own (retired, down, no answer), the fallback model does the work instead.
@@ -605,7 +690,7 @@ def _ask(job_id: str, duration: float, lag: float, url: str | None, work):
         if url and not os.path.isfile(sound_index.index_path(job_id)):
             _tell(job_id, "hearing")
             sound_index.ensure(job_id, url)
-        tools = LiveTools(job_id, duration, lag)
+        tools = LiveTools(job_id, duration, lag, moments)
         models = list(dict.fromkeys(m for m in (live_agent.SEARCH_MODEL, live_agent.FALLBACK_MODEL) if m))
         spent = 0.0
         for attempt, model in enumerate(models):
@@ -635,9 +720,13 @@ def _ask(job_id: str, duration: float, lag: float, url: str | None, work):
             _doing.pop(job_id, None)
 
 
-def search_ai(job_id: str, query: str, meta: dict, duration: float, energy: list[float] | None = None, lag: float = 5.0, url: str | None = None) -> dict:
+def search_ai(
+    job_id: str, query: str, meta: dict, duration: float, energy: list[float] | None = None, lag: float = 5.0,
+    url: str | None = None, moments: list[dict] | None = None,
+) -> dict:
     """Moments that match `query` by meaning: the AI searches the live with tools and checks what it finds.
-    `url`: the live on Twitch, to listen to it (without it, the search reads only)."""
+    `url`: the live on Twitch, to listen to it (without it, the search reads only); `moments`: every
+    candidate the analysis rated, as the app keeps them."""
     transcript = load_cached(job_id)
     if not transcript:
         raise NoTranscript(job_id)
@@ -649,7 +738,7 @@ def search_ai(job_id: str, query: str, meta: dict, duration: float, energy: list
     kept = _cached(path)
     if kept:
         return {**kept, "cached": True, "cost": 0.0}
-    run, tools, cost = _ask(job_id, duration, lag, url, lambda searcher: searcher.search(query))
+    run, tools, cost = _ask(job_id, duration, lag, url, lambda searcher: searcher.search(query), moments)
     hits = live_agent.to_hits(run, tools)
     result = {"hits": _complete(hits, transcript), "total": len(hits), "transcript": True, "note": run.note}
     _keep(path, result)
@@ -657,7 +746,10 @@ def search_ai(job_id: str, query: str, meta: dict, duration: float, energy: list
     return {**result, "cached": False, "cost": round(cost, 4)}
 
 
-def plan_video(job_id: str, brief: str, target: float, meta: dict, duration: float, energy: list[float] | None = None, lag: float = 5.0, url: str | None = None) -> dict:
+def plan_video(
+    job_id: str, brief: str, target: float, meta: dict, duration: float, energy: list[float] | None = None, lag: float = 5.0,
+    url: str | None = None, moments: list[dict] | None = None,
+) -> dict:
     """A whole video from a description: sections (a title, moments in playing order)."""
     transcript = load_cached(job_id)
     if not transcript:
@@ -670,7 +762,7 @@ def plan_video(job_id: str, brief: str, target: float, meta: dict, duration: flo
     kept = _cached(path)
     if kept:
         return {**kept, "cached": True, "cost": 0.0}
-    run, _tools, cost = _ask(job_id, duration, lag, url, lambda searcher: searcher.plan(brief, target))
+    run, _tools, cost = _ask(job_id, duration, lag, url, lambda searcher: searcher.plan(brief, target), moments)
     result = {"title": run.title, "sections": _sections(run.sections, transcript, duration), "note": run.note}
     _keep(path, result)
     total = sum(h["end"] - h["start"] for s in result["sections"] for h in s["hits"])

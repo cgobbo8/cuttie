@@ -63,4 +63,7 @@ def candidate(hp, state: str) -> dict:
         entry["name"] = hp.clip_name
     if hp.llm and hp.llm.category:
         entry["category"] = hp.llm.category
+    if hp.llm and getattr(hp.llm, "summary", None):
+        # What happens there, in a sentence: the AI searching the live later reads it (dropped moments included)
+        entry["what"] = " ".join(hp.llm.summary.split())[:140]
     return entry

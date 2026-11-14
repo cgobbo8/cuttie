@@ -1450,6 +1450,8 @@
       "thinking": "La IA piensa en lo que buscas",
       "hearing": "Cuttie escucha todo el directo",
       "overview": "Mira de qué va este directo",
+      "best_moments": "Mira los mejores momentos que encontró el análisis",
+      "chat_peaks": "Mira dónde se dispara el chat",
       "search_speech": "Busca «{{words}}» en lo que se dice",
       "search_chat": "Busca «{{words}}» en el chat",
       "find_sounds": "Busca sonidos: {{sound}}",

@@ -194,6 +194,7 @@ The streamer already has this video and asks for a change. You are given what th
 - Do what they ask now, with the tools: look for what is to be added like for a new video, and check it.
 - Everything else stays as it is: give back every moment of the video that the request doesn't remove, with the very times it has, in its place. Never drop or reorder what you were not asked to.
 - Where a new moment goes: where they say; else in the part it belongs to, in the order of the live.
+- Asked for tighter or faster cuts: give each moment again with only the lines that carry it (leave out the lines that lead in or trail off; a dead line in the middle: give the moment as two). A line is the finest you can cut: a moment that is already one line stays. In the note, say how many moments you tightened, and never say you tightened what you gave back unchanged.
 - The length asked for at first no longer binds: what they ask now wins (asked to add, the video gets longer).
 - In the note, answer them in one or two sentences: what you added, moved or took out, and what you looked for and didn't find."""
 

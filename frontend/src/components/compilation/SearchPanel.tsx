@@ -193,8 +193,8 @@ export default function SearchPanel({ jobId, storyboard, info, previewed, isAdde
   return (
     <aside
       aria-label={t("compilation.search")}
-      // A conversation needs room to be read: its panel takes more of the row than a search does
-      className={`glass rounded-[20px] p-3 min-w-0 flex flex-col ${talking && tab === "describe" ? "flex-[3_1_560px]" : "flex-[1_1_400px]"}`}
+      // A conversation stays in view while the list of passages scrolls beside it
+      className={`glass rounded-[20px] p-3 min-w-0 flex flex-col ${talking && tab === "describe" ? "flex-[1_1_400px] lg:sticky lg:top-[84px] self-start" : "flex-[1_1_400px]"}`}
     >
       <div role="tablist" className="seg">
         {(["describe", "search"] as const).map((key) => (

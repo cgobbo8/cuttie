@@ -889,6 +889,18 @@ def as_lines(transcript: VodTranscript, start: float, end: float) -> dict:
     return {"start": stamp(lines[0][0]), "end": stamp(lines[-1][0]), "said": _excerpt([t for _s, _e, t in lines], limit=200)}
 
 
+def _other_lines(mine: dict, sent: list[dict]) -> bool:
+    """A moment the AI gave back is one of the video's, but not with the same lines."""
+    a, b = parse_hms(mine["start"]), parse_hms(mine["end"])
+    if a is None or b is None:
+        return False
+    for moment in sent:
+        s, e = parse_hms(moment["start"]), parse_hms(moment["end"])
+        if s is not None and e is not None and a <= e and s <= b:
+            return (mine["start"], mine["end"]) != (moment["start"], moment["end"])
+    return False
+
+
 def revise_video(
     job_id: str, brief: str, current: list[dict], asks: list[str], request: str, duration: float, lag: float = 5.0,
     url: str | None = None, moments: list[dict] | None = None,
@@ -911,6 +923,15 @@ def revise_video(
         models=[live_agent.PLAN_MODEL, live_agent.SEARCH_MODEL, live_agent.FALLBACK_MODEL], max_cost=live_agent.PLAN_MAX_COST,
     )
     result = {"title": run.title, "sections": _sections(run.sections, transcript, duration, by_lines=True), "note": run.note, "look": ""}
+    # A moment of the video given back with other lines (tighter, longer) is to be cut again:
+    # the app would else keep the cut it has
+    sent = [m for part in video for m in part["moments"]]
+    recut = 0
+    for section in result["sections"]:
+        for hit in section["hits"]:
+            hit["recut"] = _other_lines(as_lines(transcript, hit["start"], hit["end"]), sent)
+            recut += hit["recut"]
+    logger.info(f"[{job_id[:8]}] AI change: {recut} moments given with other lines")
     logger.info(f"[{job_id[:8]}] AI change \"{request[:60]}\": {sum(len(s['hits']) for s in result['sections'])} moments with {run.model} (~{cost:.4f} $, {run.seconds:.0f} s)")
     return {**result, "cached": False, "cost": round(cost, 4)}
 

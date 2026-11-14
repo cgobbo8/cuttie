@@ -353,22 +353,25 @@ export default function CompilationPage() {
     const note = plan.note ?? "";
     const revised = revisedSections(compilation, plan, liveDuration);
     // An answer with no video in it (it found nothing, or misread): the video stays, its answer is kept
-    if (revised.sections.length === 0 || (revised.added === 0 && revised.removed === 0 && sameOrder(compilation, revised.sections))) {
+    if (revised.sections.length === 0 || (revised.added === 0 && revised.removed === 0 && revised.recut.length === 0 && sameOrder(compilation, revised.sections))) {
       change({ ...compilation, asks: [...(compilation.asks ?? []), { ask, note }] });
       toast.info(t("compilation.changeNothing"));
       return;
     }
     const turn = compilation.asks?.length ?? 0;
-    const next = { ...compilation, sections: revised.sections, asks: [...(compilation.asks ?? []), { ask, note, added: revised.added, removed: revised.removed }] };
+    const next = { ...compilation, sections: revised.sections, asks: [...(compilation.asks ?? []), { ask, note, added: revised.added, removed: revised.removed, recut: revised.recut.length }] };
     change(next);
     if (!next.sections.some((s) => s.id === activeSection)) setActiveSection(next.sections[0].id);
     // What changed shows in the video: the new passages come in lit, those taken out leave
-    addedBy.current.set(`${compilation.id}:${turn}`, revised.fresh);
-    light(revised.fresh);
+    // A passage to cut again waits for where its new lines are said: what was found for its old ones is forgotten
+    if (revised.recut.length > 0) setTight((prev) => Object.fromEntries(Object.entries(prev).filter(([id]) => !revised.recut.includes(id))));
+    const touched = [...revised.fresh, ...revised.recut];
+    addedBy.current.set(`${compilation.id}:${turn}`, touched);
+    light(touched);
     setGone(revised.gone);
     window.setTimeout(() => setGone([]), LEAVE_MS);
     ensure(allItems(next));
-    toast.success(t("compilation.changeDone", { added: revised.added, removed: revised.removed }));
+    toast.success(t("compilation.changeDone", { added: revised.added, removed: revised.removed, recut: revised.recut.length }));
   };
 
   /** Passages lit in the video for a moment */
@@ -715,7 +718,7 @@ export default function CompilationPage() {
         </div>
       </section>
 
-      {/* While a conversation with the AI is open, the preview and the list give it room */}
+      {/* While a conversation with the AI is open, it and the preview stay in view beside the list */}
       <section className="group/row mt-[18px] flex flex-wrap gap-[18px] items-start">
         <SearchPanel
           jobId={jobId}
@@ -734,7 +737,7 @@ export default function CompilationPage() {
         />
 
         {/* Stage: one moment as it is, or the whole video in its template */}
-        <div className="flex-[1_1_380px] group-has-[.talk-thread]/row:flex-[0_1_320px] min-w-0 flex flex-col items-center gap-3">
+        <div className="flex-[1_1_380px] lg:group-has-[.talk-thread]/row:sticky lg:group-has-[.talk-thread]/row:top-[84px] min-w-0 flex flex-col items-center gap-3">
           <div role="tablist" className="seg w-full">
             {(["piece", "video"] as const).map((key) => (
               <button key={key} role="tab" aria-selected={view === key} onClick={() => setView(key)}>

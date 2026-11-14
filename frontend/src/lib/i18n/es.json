@@ -1556,7 +1556,7 @@
     "changePlaceholder": "Pide un cambio…",
     "changeButton": "Modificar el vídeo",
     "changeHint": "La IA parte del vídeo tal como está (con tus retoques) y de todo lo que ya le pediste. Lo que no le pides cambiar se queda donde está.",
-    "changeDone": "Vídeo modificado: {{added}} añadido(s), {{removed}} quitado(s)",
+    "changeDone": "Vídeo modificado: {{added}} añadido(s), {{removed}} quitado(s), {{recut}} recortado(s)",
     "changeNothing": "La IA no ha cambiado nada. Mira lo que responde.",
     "changeNew": "Describir otro vídeo",
     "changeBack": "Volver a este vídeo",
@@ -1570,6 +1570,9 @@
     "changeRevealGone": "Estos trozos ya no están en el vídeo.",
     "changeEnter": "Ej.: «añade las otras veces que dicen que está tranquilo», «después de este trozo, pon el de cuando…». Intro para enviar.",
     "changeUnfold": "Leer todo",
-    "changeFold": "Plegar"
+    "changeFold": "Plegar",
+    "changeRecut_one": "{{count}} trozo recortado de nuevo",
+    "changeRecut_other": "{{count}} trozos recortados de nuevo",
+    "ownLook": "Diseño de este trozo: {{name}}"
   }
 }

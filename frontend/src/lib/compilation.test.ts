@@ -214,6 +214,14 @@ describe("compilations", () => {
     const late = { sections: [section("s1", [item("z", 102.5, 104.2)])] };
     const again = revisedSections(late, { title: "", sections: [{ title: "", hits: [hit(100, 103), hit(103, 105)] }] }, 5000);
     expect([again.added, again.removed, again.sections[0].items.length]).toEqual([0, 0, 1]);
+    // Asked for tighter cuts, the AI gives a passage back with fewer lines: the same passage (clip, template), to be cut again on them
+    const wide = { sections: [section("s1", [{ ...item("w", 100.2, 109.6), template: "reaction" }, item("k", 200, 203)])] };
+    const cut = revisedSections(wide, { title: "", sections: [{ title: "", hits: [hit(103, 105, { recut: true, spoken: true, text: "plus court" }), hit(107, 109, { recut: true, spoken: true }), hit(200, 203)] }] }, 5000);
+    expect([cut.added, cut.removed, cut.recut]).toEqual([1, 0, ["w"]]);
+    expect(cut.sections[0].items[0]).toMatchObject({ id: "w", template: "reaction", start: 102.65, end: 105.5, fit: [103, 105], text: "plus court" });
+    // Given back in two (a dead line out of its middle): the second half is a new passage
+    expect(cut.sections[0].items[1]).toMatchObject({ fit: [107, 109] });
+    expect(cut.sections[0].items[2]).toBe(wide.sections[0].items[1]);
   });
 
   it("writes a time of the live", () => {

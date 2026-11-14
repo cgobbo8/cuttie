@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { ArrowDown, ArrowRight, ArrowUp, Loader2, Plus, Sparkles, Trash2, X } from "lucide-react";
+import { ArrowDown, ArrowRight, ArrowUp, Loader2, Plus, Sparkles, Trash2, X, LayoutTemplate } from "lucide-react";
 import type { Compilation, CompilationItem, CompilationSection, TwitchStoryboard } from "../../lib/api";
 import {
   addSection,
@@ -124,7 +124,7 @@ export default function CompilationPanel({
   const iconButton = "btn btn-ghost btn-icon w-7 h-7 text-ink-3 hover:text-white disabled:opacity-25";
 
   return (
-    <aside ref={list} aria-label={t("compilation.title")} className="glass rounded-[20px] p-3 flex-[1_1_360px] group-has-[.talk-thread]/row:flex-[1_1_330px] min-w-0 flex flex-col gap-2.5">
+    <aside ref={list} aria-label={t("compilation.title")} className="glass rounded-[20px] p-3 flex-[1_1_360px] min-w-0 flex flex-col gap-2.5">
       <div className="flex items-center gap-1.5">
         <input
           value={compilation.name}
@@ -191,7 +191,7 @@ export default function CompilationPanel({
                     key={fresh?.has(item.id) ? `${item.id}-${freshAt ?? 0}` : item.id}
                     data-item={item.id}
                     data-fresh={fresh?.has(item.id) ? "" : undefined}
-                    className={`group/item flex items-center gap-2 p-1.5 rounded-[10px] transition-colors ${fresh?.has(item.id) ? "passage-arrive" : ""} ${item.id === selectedItem ? "bg-white/10" : "hover:bg-white/[0.05]"}`}
+                    className={`group/item relative flex items-center gap-2 p-1.5 rounded-[10px] transition-colors ${fresh?.has(item.id) ? "passage-arrive" : ""} ${item.id === selectedItem ? "bg-white/10" : "hover:bg-white/[0.05]"}`}
                   >
                     <button
                       type="button"
@@ -202,7 +202,7 @@ export default function CompilationPanel({
                       className="flex-1 min-w-0 flex items-center gap-2.5 text-left"
                     >
                       <span
-                        className="relative w-[64px] aspect-video rounded-[6px] overflow-hidden flex-none bg-white/[0.05]"
+                        className={`relative w-[64px] aspect-video rounded-[6px] overflow-hidden flex-none bg-white/[0.05] ${item.template && item.template !== compilation.template ? "ring-2 ring-accent" : ""}`}
                         style={storyboard ? tileStyle(storyboard, frameAt(storyboard, item.start)) : undefined}
                       >
                         {cutting.has(item.id) && (
@@ -213,14 +213,21 @@ export default function CompilationPanel({
                       </span>
                       <span className="flex-1 min-w-0">
                         <span className="block text-[12.5px] leading-snug text-white truncate">{item.text || item.why || liveClock(item.start)}</span>
-                        <span className="mono block text-[11px] text-ink-3 truncate">
-                          {liveClock(item.start)} · {(item.end - item.start).toFixed(1)} s
-                          {/* Shown in a template of its own */}
-                          {item.template && <span className="text-accent"> · {templateName(item.template)}</span>}
+                        <span className="mono flex items-center gap-1.5 text-[11px] text-ink-3 min-w-0">
+                          {/* Shown in a template of its own: seen at a glance down the list */}
+                          {item.template && item.template !== compilation.template && (
+                            <span className="look-chip flex-none" title={t("compilation.ownLook", { name: templateName(item.template) })}>
+                              <LayoutTemplate className="w-3 h-3" strokeWidth={2.2} />
+                              {templateName(item.template)}
+                            </span>
+                          )}
+                          <span className="truncate">
+                            {liveClock(item.start)} · {(item.end - item.start).toFixed(1)} s
+                          </span>
                         </span>
                       </span>
                     </button>
-                    <span className="flex items-center opacity-0 group-hover/item:opacity-100 focus-within:opacity-100 transition-opacity">
+                    <span className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center rounded-[9px] bg-[#1b1e1c]/95 border border-white/10 opacity-0 pointer-events-none group-hover/item:opacity-100 group-hover/item:pointer-events-auto focus-within:opacity-100 focus-within:pointer-events-auto transition-opacity">
                       <button onClick={() => onChange(moveItem(compilation, item.id, -1))} aria-label={t("compilation.moveUp")} className={iconButton}>
                         <ArrowUp className="w-3.5 h-3.5" />
                       </button>

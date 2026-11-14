@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
-import { ArrowUp, Check, Loader2, Minus, Plus, Sparkles } from "lucide-react";
+import { ArrowUp, Check, Loader2, Minus, Plus, Scissors, Sparkles } from "lucide-react";
 
 export interface TalkTurn {
   ask: string;
@@ -9,6 +9,8 @@ export interface TalkTurn {
   /** Passages it added and took out */
   added?: number;
   removed?: number;
+  /** Passages it cut otherwise (tighter, longer) */
+  recut?: number;
 }
 
 interface Props {
@@ -64,19 +66,25 @@ export default function PlanTalk({ brief, turns, pending, trail, value, onValue,
   const steps = trail.slice(-SHOWN_STEPS);
   return (
     <div className="mt-3 flex flex-col rounded-[14px] border border-white/[0.08] bg-black/20 overflow-hidden">
-      <div ref={thread} role="log" aria-label={t("compilation.changeTitle")} className="talk-thread flex flex-col gap-3.5 min-h-[200px] max-h-[min(58vh,600px)] overflow-y-auto p-4">
+      <div ref={thread} role="log" aria-label={t("compilation.changeTitle")} className="talk-thread flex flex-col gap-3.5 h-[max(360px,calc(100dvh-390px))] overflow-y-auto p-4">
         <Mine label={t("compilation.changeYou")} text={brief} folded />
         {turns.map((turn, i) => (
           <div key={i} className="flex flex-col gap-3">
             <Mine label={t("compilation.changeAsk")} text={turn.ask} />
             <Theirs label={t("compilation.aiNote")}>
               <p className="text-[13.5px] leading-[1.45] text-ink-2">{turn.note || t("compilation.changeNoNote")}</p>
-              {(!!turn.added || !!turn.removed) && (
+              {(!!turn.added || !!turn.removed || !!turn.recut) && (
                 <div className="mt-2 flex flex-wrap gap-1.5">
                   {!!turn.added && (
                     <button type="button" onClick={() => onReveal?.(i)} className="talk-chip talk-chip-added" title={t("compilation.changeReveal")}>
                       <Plus className="w-3 h-3" strokeWidth={2.6} />
                       {t("compilation.changeAdded", { count: turn.added })}
+                    </button>
+                  )}
+                  {!!turn.recut && (
+                    <button type="button" onClick={() => onReveal?.(i)} className="talk-chip talk-chip-added" title={t("compilation.changeReveal")}>
+                      <Scissors className="w-3 h-3" strokeWidth={2.4} />
+                      {t("compilation.changeRecut", { count: turn.recut })}
                     </button>
                   )}
                   {!!turn.removed && (

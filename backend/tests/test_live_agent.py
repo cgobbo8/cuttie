@@ -521,6 +521,8 @@ def test_the_streamer_comes_back_to_a_planned_video(monkeypatch, tmp_path):
     assert [(s["title"], [(h["start"], h["end"]) for h in s["hits"]]) for s in changed["sections"]] == [
         ("C'est calme", [(100.0, 103.0)]), ("Ça pète", [(117.0, 119.0), (300.0, 303.0)]),
     ]
+    # What it gave back as it was is not to be cut again, nor what is new
+    assert [[h["recut"] for h in s["hits"]] for s in changed["sections"]] == [[False], [False, False]]
     # It was told what was first described, the video as lines it can give back as they are, what was asked before and now
     told = model.seen[0]["messages"]
     assert "asks for a change" in told[0]["content"] and model.seen[0]["model"] == live_agent.PLAN_MODEL
@@ -530,6 +532,11 @@ def test_the_streamer_comes_back_to_a_planned_video(monkeypatch, tmp_path):
     assert ls.as_lines(_tools(monkeypatch).transcript, 118.4, 121.0) == {"start": "0:01:57.0", "end": "0:01:59.5", "said": "Attention ça tire ! À couvert, à couvert !"}
     # A passage where nobody speaks keeps its own times
     assert '{"start": "0:07:30.0", "end": "0:07:35.0", "said": ""}' in told[1]["content"]
+    # Asked for tighter cuts, it gives a passage of two lines back with its first line only: that one is to be cut again
+    model.steps = [[("plan", {"sections": [{"title": "C'est calme", "moments": [calm]}, {"title": "Ça pète", "moments": [SHOTS]}], "note": "J'ai resserré un passage."})]]
+    wide = [{"title": "C'est calme", "items": [{"start": 101.0, "end": 102.5}]}, {"title": "Ça pète", "items": [{"start": 117.0, "end": 121.5}]}]
+    tighter = ls.revise_video("job", "x", wide, [], "des cuts plus agressifs", 600.0)
+    assert [[h["recut"] for h in s["hits"]] for s in tighter["sections"]] == [[False], [True]]
     # Asked again: asked again (the video it starts from is never the same twice)
     model.steps = [[("plan", {"sections": [], "note": "Rien."})]]
     assert ls.revise_video("job", "x", current, [], "ajoute le moment où il craque à la fin", 600.0)["sections"] == []

@@ -1556,7 +1556,7 @@
     "changePlaceholder": "Demande un changement…",
     "changeButton": "Modifier la vidéo",
     "changeHint": "L'IA repart de la vidéo telle qu'elle est (tes retouches comprises) et de tout ce que tu lui as déjà demandé. Ce que tu ne lui demandes pas de changer reste en place.",
-    "changeDone": "Vidéo modifiée : {{added}} ajouté(s), {{removed}} retiré(s)",
+    "changeDone": "Vidéo modifiée : {{added}} ajouté(s), {{removed}} retiré(s), {{recut}} recoupé(s)",
     "changeNothing": "L'IA n'a rien changé. Regarde sa réponse.",
     "changeNew": "Décrire une autre vidéo",
     "changeBack": "Revenir à cette vidéo",
@@ -1570,6 +1570,9 @@
     "changeRevealGone": "Ces passages ne sont plus dans la vidéo.",
     "changeEnter": "Ex. : « ajoute les autres moments où ils disent calme », « après ce passage, mets celui où… ». Entrée pour envoyer.",
     "changeUnfold": "Tout lire",
-    "changeFold": "Replier"
+    "changeFold": "Replier",
+    "changeRecut_one": "{{count}} passage recoupé",
+    "changeRecut_other": "{{count}} passages recoupés",
+    "ownLook": "Mise en page de ce passage : {{name}}"
   }
 }

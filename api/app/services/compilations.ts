@@ -58,7 +58,7 @@ export interface Compilation {
   target: number | null
   /** Described to the AI: what the streamer first asked for, then each change asked and what the AI answered */
   brief?: string
-  asks?: { ask: string; note: string; added?: number; removed?: number }[]
+  asks?: { ask: string; note: string; added?: number; removed?: number; recut?: number }[]
   created_at: string
   updated_at: string
 }
@@ -154,6 +154,7 @@ export function parseCompilation(raw: any, liveDuration: number): Omit<Compilati
               // How many passages the change added and took out (shown with the AI's answer)
               ...(Number.isInteger(a.added) && a.added > 0 && a.added <= MAX_ITEMS ? { added: a.added } : {}),
               ...(Number.isInteger(a.removed) && a.removed > 0 && a.removed <= MAX_ITEMS ? { removed: a.removed } : {}),
+              ...(Number.isInteger(a.recut) && a.recut > 0 && a.recut <= MAX_ITEMS ? { recut: a.recut } : {}),
             })),
         }
       : {}),

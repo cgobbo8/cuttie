@@ -1291,6 +1291,8 @@ export interface LiveHit {
    * only): once the moment has its clip, it is cut on where they really are
    */
   spoken?: boolean;
+  /** A change asked to the AI: this moment is one of the video's, given back with other lines (tighter, longer) */
+  recut?: boolean;
 }
 
 export interface LiveSearchResult {
@@ -1474,7 +1476,7 @@ export interface Compilation {
   target: number | null;
   /** Described to the AI: what was first asked for, then each change asked and what the AI answered */
   brief?: string;
-  asks?: { ask: string; note: string; added?: number; removed?: number }[];
+  asks?: { ask: string; note: string; added?: number; removed?: number; recut?: number }[];
   created_at: string;
   updated_at: string;
 }

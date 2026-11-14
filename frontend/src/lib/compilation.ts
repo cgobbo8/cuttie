@@ -277,18 +277,21 @@ export function planCurrent(c: Pick<Compilation, "sections">): { title: string; 
 /**
  * The video once the AI changed it as asked: it gives the whole video again.
  * A passage it kept is the one the video already had (its clip, its cut, its
- * template stay); the others are new. A part keeps its id.
+ * template stay); one it gave back with other lines (`recut`: tighter, longer)
+ * keeps its clip and template and is cut again on these lines; the others are
+ * new. A part keeps its id.
  */
 export function revisedSections(
   c: Pick<Compilation, "sections">,
   plan: VideoPlan,
   liveDuration: number,
-): { sections: CompilationSection[]; added: number; removed: number; fresh: string[]; gone: { item: CompilationItem; section: string; index: number }[] } {
+): { sections: CompilationSection[]; added: number; removed: number; recut: string[]; fresh: string[]; gone: { item: CompilationItem; section: string; index: number }[] } {
   const before = allItems(c);
   const kept = new Set<string>();
   const parts = new Set<string>();
   const sections: CompilationSection[] = [];
   const fresh: string[] = [];
+  const recut: string[] = [];
   let added = 0;
   // The AI names passages by the transcript's lines, whose times hold silence: a passage cut on
   // its words shares little with them. It is the same one as soon as they share a word's worth
@@ -300,8 +303,13 @@ export function revisedSections(
       const known = before.find((item) => !kept.has(item.id) && same(item, hit));
       if (known) {
         kept.add(known.id);
-        items.push(known);
-      } else if (!before.some((item) => same(item, hit)) && !items.some((item) => same(item, hit))) {
+        if (hit.recut) {
+          const { start, end, text, fit } = itemFromHit(hit, liveDuration);
+          items.push({ ...known, start, end, text, fit });
+          recut.push(known.id);
+        } else items.push(known);
+        // A passage given back in two (a dead line taken out of its middle): its second half is new
+      } else if ((hit.recut || !before.some((item) => same(item, hit))) && !items.some((item) => same(item, hit))) {
         const item = itemFromHit(hit, liveDuration);
         items.push(item);
         fresh.push(item.id);
@@ -318,7 +326,7 @@ export function revisedSections(
   }
   // What it took out, and where each one was (the video shows them leaving)
   const gone = c.sections.flatMap((s) => s.items.map((item, index) => ({ item, section: s.id, index })).filter(({ item }) => !kept.has(item.id)));
-  return { sections, added, removed: gone.length, fresh, gone };
+  return { sections, added, removed: gone.length, recut, fresh, gone };
 }
 
 /** "1:23:45" in the live */

@@ -1556,7 +1556,7 @@
     "changePlaceholder": "Ask for a change…",
     "changeButton": "Change the video",
     "changeHint": "The AI starts from the video as it is (your own edits included) and from everything you already asked. What you don't ask it to change stays in place.",
-    "changeDone": "Video changed: {{added}} added, {{removed}} removed",
+    "changeDone": "Video changed: {{added}} added, {{removed}} removed, {{recut}} recut",
     "changeNothing": "The AI changed nothing. Read its answer.",
     "changeNew": "Describe another video",
     "changeBack": "Back to this video",
@@ -1570,6 +1570,9 @@
     "changeRevealGone": "These passages are no longer in the video.",
     "changeEnter": "E.g. \"add the other times they say it's calm\", \"after this passage, put the one where…\". Enter to send.",
     "changeUnfold": "Read all",
-    "changeFold": "Fold"
+    "changeFold": "Fold",
+    "changeRecut_one": "{{count}} passage recut",
+    "changeRecut_other": "{{count}} passages recut",
+    "ownLook": "Layout of this passage: {{name}}"
   }
 }

@@ -1,6 +1,6 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import { randomUUID } from 'node:crypto'
-import { existsSync } from 'node:fs'
+import { existsSync, statSync } from 'node:fs'
 import path from 'node:path'
 import archiver from 'archiver'
 import db from '@adonisjs/lucid/services/db'
@@ -8,6 +8,7 @@ import { renderClip, renderMontage, type MontagePiece, type PlacedLayer } from '
 import { uploadFile, getPresignedDownloadUrl, deleteObject, storagePath } from '#services/storage'
 import { clipDir } from '#services/data_paths'
 import { enqueueRender } from '#services/render_queue'
+import { levelSound } from '#services/sound_level'
 import { loadJobSharedData, resolveEditEnv } from '#services/edit_env_resolver'
 import { resolveThemeForClip, type ThemeLayerTemplate } from '#services/theme_resolver'
 import type { Layer } from '../../remotion/editorTypes.js'
@@ -405,9 +406,23 @@ async function runRender(opts: {
         await updateRender({ progress: pct })
       },
     }
-    const { sizeMb } = montage
+    const rendered = montage
       ? await renderMontage({ ...output, pieces: montage.pieces, overlays: montage.overlays })
       : await renderClip({ ...output, layers, clipFilename, trim })
+
+    // Its sound at the loudness the platforms play, the cuts between the pieces of a montage smoothed
+    // (the picture is copied): a few seconds per minute
+    const fps = renderOptions?.fps ?? 30
+    const cuts: number[] = []
+    let frames = 0
+    for (const piece of (montage?.pieces ?? []).slice(0, -1)) {
+      // As the renderer counts them: whole frames, one after the other
+      frames += Math.max(1, Math.round(piece.duration * fps))
+      cuts.push(frames / fps)
+    }
+    const levelled = await levelSound(outputPath, cuts)
+    if (levelled) console.log(`[Render] ${outputFilename}: sound brought from ${levelled.from.toFixed(1)} to ${levelled.to.toFixed(1)} LUFS`)
+    const sizeMb = levelled ? statSync(outputPath).size / 1024 / 1024 : rendered.sizeMb
 
     // Move the render output into storage
     await uploadFile(`renders/${jobId}/${outputFilename}`, outputPath, 'video/mp4')

@@ -200,28 +200,47 @@ def _usage(run: AgentRun, response) -> None:
     run.cost += float(cost or 0.0)
 
 
+# How the snippets sent to the ears are encoded: MP3 (small), WAV when this ffmpeg has no MP3 encoder
+_snippet = {"format": "mp3"}
+_ENCODERS = {"mp3": ["-c:a", "libmp3lame", "-b:a", "48k", "-f", "mp3"], "wav": ["-c:a", "pcm_s16le", "-f", "wav"]}
+
+
+def snippet_format() -> str:
+    return _snippet["format"]
+
+
 def fetch_audio(audio_url: str, start: float, seconds: float) -> str | None:
-    """A few seconds of the live's sound as a small mono MP3, base64 (None when it can't be fetched).
+    """A few seconds of the live's sound as a small mono file, base64 (None when it can't be fetched);
+    `snippet_format()` says what it is encoded as.
 
     Takes a second or two; a connection that stalls is dropped after 10 s and tried once more."""
     os.makedirs(paths.WORK_DIR, exist_ok=True)
-    fd, path = tempfile.mkstemp(suffix=".mp3", dir=paths.WORK_DIR)
+    fd, path = tempfile.mkstemp(suffix=".snd", dir=paths.WORK_DIR)
     os.close(fd)
-    command = ["ffmpeg", "-nostdin", "-loglevel", "error", "-y", "-rw_timeout", "10000000", "-ss", f"{start:.2f}", "-i", audio_url,
-               "-t", f"{seconds:.2f}", "-vn", "-ac", "1", "-ar", "16000", "-c:a", "libmp3lame", "-b:a", "48k", path]
     try:
-        for attempt in range(FETCH_TRIES):
+        tries = 0
+        while tries < FETCH_TRIES:
+            tries += 1
+            command = ["ffmpeg", "-nostdin", "-loglevel", "error", "-y", "-rw_timeout", "10000000", "-ss", f"{start:.2f}", "-i", audio_url,
+                       "-t", f"{seconds:.2f}", "-vn", "-ac", "1", "-ar", "16000", *_ENCODERS[_snippet["format"]], path]
             try:
                 subprocess.run(command, check=True, timeout=FETCH_TIMEOUT, capture_output=True)
                 with open(path, "rb") as f:
                     data = f.read()
                 if len(data) > 1000:
                     return base64.b64encode(data).decode("ascii")
-                logger.warning(f"Audio of {hms(start)}: nothing to hear there (try {attempt + 1})")
+                logger.warning(f"Audio of {hms(start)}: nothing to hear there (try {tries})")
             except subprocess.TimeoutExpired:
-                logger.warning(f"Audio of {hms(start)} not fetched in {FETCH_TIMEOUT} s (try {attempt + 1})")
+                logger.warning(f"Audio of {hms(start)} not fetched in {FETCH_TIMEOUT} s (try {tries})")
             except subprocess.CalledProcessError as e:
-                logger.warning(f"Audio of {hms(start)} not fetched (try {attempt + 1}): {(e.stderr or b'').decode('utf-8', 'replace').strip()[-200:]}")
+                said = (e.stderr or b"").decode("utf-8", "replace").strip()
+                if _snippet["format"] == "mp3" and "encoder" in said.lower():
+                    # This ffmpeg can't make MP3: WAV from now on (bigger to send, the same to hear)
+                    logger.warning("No MP3 encoder in this ffmpeg: the snippets to listen to are sent as WAV")
+                    _snippet["format"] = "wav"
+                    tries -= 1
+                    continue
+                logger.warning(f"Audio of {hms(start)} not fetched (try {tries}): {said[-200:]}")
             except OSError as e:
                 logger.warning(f"Audio of {hms(start)} not fetched: {e}")
                 return None
@@ -316,7 +335,7 @@ class Searcher:
         try:
             response = self._create(
                 model=self.ears_model,
-                messages=[{"role": "user", "content": [{"type": "text", "text": ask}, {"type": "input_audio", "input_audio": {"data": audio, "format": "mp3"}}]}],
+                messages=[{"role": "user", "content": [{"type": "text", "text": ask}, {"type": "input_audio", "input_audio": {"data": audio, "format": snippet_format()}}]}],
                 temperature=0.2,
                 max_tokens=400,
             )

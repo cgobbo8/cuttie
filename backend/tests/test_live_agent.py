@@ -170,6 +170,35 @@ def test_listening_goes_to_the_model_that_hears(monkeypatch):
     assert "error" in searcher.listen("0:01:00", "0:01:10")
 
 
+def test_a_snippet_is_fetched_whatever_the_ffmpeg(monkeypatch, tmp_path):
+    import subprocess
+
+    monkeypatch.setattr(live_agent.paths, "WORK_DIR", str(tmp_path))
+    monkeypatch.setitem(live_agent._snippet, "format", "mp3")
+    commands = []
+
+    def run(command, **kwargs):
+        commands.append(command)
+        if "libmp3lame" in command:
+            raise subprocess.CalledProcessError(1, command, stderr=b"Unknown encoder 'libmp3lame'")
+        if len(commands) == 2:
+            # A connection that stalls: dropped, tried once more
+            raise subprocess.TimeoutExpired(command, 25)
+        with open(command[-1], "wb") as f:
+            f.write(b"RIFF" + b"0" * 2000)
+        return None
+
+    monkeypatch.setattr(live_agent.subprocess, "run", run)
+    audio = live_agent.fetch_audio("https://vod/audio_only/index.m3u8", 300.0, 12.0)
+    # No MP3 encoder in this ffmpeg: WAV instead, from now on, and the ears are told so
+    assert audio and live_agent.snippet_format() == "wav" and len(commands) == 3
+    assert "pcm_s16le" in commands[1] and "-rw_timeout" in commands[1] and commands[1][commands[1].index("-ss") + 1] == "300.00"
+    assert list(tmp_path.iterdir()) == []
+    # It never answers: given up after two tries, nothing left behind
+    monkeypatch.setattr(live_agent.subprocess, "run", lambda command, **kwargs: (_ for _ in ()).throw(subprocess.TimeoutExpired(command, 25)))
+    assert live_agent.fetch_audio("https://vod/audio_only/index.m3u8", 300.0, 12.0) is None and list(tmp_path.iterdir()) == []
+
+
 # ── The search as the app runs it (live_search), the model still faked ───────
 
 

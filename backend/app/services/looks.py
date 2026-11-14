@@ -212,7 +212,8 @@ def choose(
                 "type": "text",
                 "text": f"Passage {n}: {max(0.0, end - start):.0f} s, someone in the webcam: {'yes' if piece.get('cam') else 'no'}. Said: « {said or '(nothing)'} »",
             })
-            path = os.path.join(clip_dir, os.path.basename(str(piece.get("file") or "")))
+            # A piece of another live (a video made from several) is in that live's folder
+            path = os.path.join(paths.clip_dir(piece["job"]) if piece.get("job") else clip_dir, os.path.basename(str(piece.get("file") or "")))
             for url in frames_of(path, start, end) if os.path.isfile(path) else []:
                 content.append({"type": "image_url", "image_url": {"url": url, "detail": "low"}})
         try:

@@ -215,7 +215,7 @@ export interface LiveSearchResult {
 export interface LiveContext {
   duration: number
   energy?: number[] | null
-  meta: { streamer?: string | null; game?: string | null; title?: string | null }
+  meta: { streamer?: string | null; game?: string | null; title?: string | null; date?: string | null }
   url?: string | null
   moments?: { t: number; state: string; score?: number; name?: string; category?: string; what?: string }[]
 }
@@ -272,13 +272,25 @@ export interface VideoPlan {
 /** A change asked on a video the AI planned: what is asked now, the video as it is (live seconds), what was asked before */
 export interface PlanChange {
   request: string
-  current: { title: string; items: { start: number; end: number }[] }[]
+  /** The video as it is: an item of another live says so (`job`) */
+  current: { title: string; items: { start: number; end: number; job?: string }[] }[]
   asks: string[]
 }
 
+/** One more live a video is made from: the AI works on it too, and each of its moments says which live it is from */
+export interface OtherLive {
+  job_id: string
+  duration: number
+  url?: string | null
+  moments?: LiveContext['moments']
+  date?: string | null
+}
+
 /** A whole video planned by the AI from a description; with `change`, the video it already planned, changed as asked */
-export async function planLiveVideo(jobId: string, brief: string, target: number, context: LiveContext, change?: PlanChange): Promise<VideoPlan> {
-  return call('POST', `/jobs/${encodeURIComponent(jobId)}/plan`, { body: { brief, target, ...context, ...(change ?? {}) }, timeoutMs: 20 * 60_000 })
+
+export async function planLiveVideo(jobId: string, brief: string, target: number, context: LiveContext, change?: PlanChange, lives: OtherLive[] = []): Promise<VideoPlan> {
+  const body = { brief, target, ...context, ...(change ?? {}), ...(lives.length > 0 ? { lives } : {}) }
+  return call('POST', `/jobs/${encodeURIComponent(jobId)}/plan`, { body, timeoutMs: 30 * 60_000 })
 }
 
 /** A template as the AI is told about it: what it shows and what it is good for (written by the app from the template) */
@@ -304,7 +316,7 @@ export interface LooksChoice {
 export async function chooseLooks(
   jobId: string,
   body: {
-    pieces: { id: string; file: string; start: number; end: number; text: string; cam: boolean }[]
+    pieces: { id: string; file: string; start: number; end: number; text: string; cam: boolean; job?: string }[]
     templates: LookTemplate[]
     wish: string
     cam: { x: number; y: number; w: number; h: number; frame_w: number; frame_h: number } | null

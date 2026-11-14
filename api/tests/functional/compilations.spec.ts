@@ -216,6 +216,88 @@ test.group('Compilations', (group) => {
     ;(await client.post(`${url}/nope/duplicate`).loginAs(user)).assertStatus(404)
   })
 
+  test('a compilation takes passages from several lives of the same streamer', async ({ client, assert }) => {
+    const { user, job, dir } = await setup()
+    // Another live of theirs, and one of somebody else
+    const second = await Job.create({ id: randomUUID(), url: 'https://twitch.tv/videos/456', status: 'DONE', userId: user.id, vodDurationSeconds: 1800 })
+    const theirs = clipDir(second.id)
+    cleanup.push(theirs)
+    mkdirSync(theirs, { recursive: true })
+    const stranger = await User.create({ fullName: 'Autre', email: `x-${randomUUID()}@cuttie.app`, password: 'password123' })
+    const foreign = await Job.create({ id: randomUUID(), url: 'https://twitch.tv/videos/789', status: 'DONE', userId: stranger.id, vodDurationSeconds: 1800 })
+    const url = `/api/jobs/${job.id}/compilations`
+    piece(dir, 'ownownowna', 99, 105)
+    piece(theirs, 'theirstheb', 40, 50)
+    piece(theirs, 'theirsoldc', 60, 70)
+
+    const sections = [
+      {
+        id: 'sssssssss1',
+        title: 'Un',
+        items: [
+          item('ownownowna', 100, 103),
+          // In the second live: its own times (up to its own length), its own clip
+          item('theirstheb', 42, 45, { job: second.id }),
+          item('theirsoldc', 1790, 1900, { job: second.id }),
+          // A live that isn't one of the compilation's, or isn't theirs: dropped
+          item('foreignabc', 10, 13, { job: foreign.id }),
+          item('nolivelist', 10, 13, { job: randomUUID() }),
+        ],
+      },
+    ]
+    const made = await client.post(url).loginAs(user).json({ name: 'Deux lives', lives: [second.id, foreign.id, job.id, 'nonsense'], sections })
+    made.assertStatus(201)
+    const compilation = (made.body() as any).compilation
+    assert.deepEqual(compilation.lives, [second.id])
+    const items = compilation.sections[0].items
+    assert.deepEqual(items.map((i: any) => [i.id, i.job ?? null, i.end]), [['ownownowna', null, 103], ['theirstheb', second.id, 45], ['theirsoldc', second.id, 1800]])
+    assert.deepEqual(items.map((i: any) => i.ready), [true, true, false])
+
+    // The library says which lives it is made from
+    const lives = ((await client.get('/api/compilations').loginAs(user)).body() as any).lives
+    const card = lives.find((l: any) => l.job_id === job.id).compilations[0]
+    assert.deepEqual(card.lives, [job.id, second.id])
+    assert.deepInclude(card, { cover: 'piece_ownownowna.mp4', cover_job: job.id })
+    assert.deepEqual(lives.find((l: any) => l.job_id === second.id).compilations, [])
+
+    // The second live's own compilations being saved leave alone the clips this one cut there
+    const hourAgo = new Date(Date.now() - 2 * 3600_000)
+    for (const id of ['theirstheb', 'theirsoldc']) utimesSync(path.join(theirs, `piece_${id}.mp4`), hourAgo, hourAgo)
+    const other = (await client.post(`/api/jobs/${second.id}/compilations`).loginAs(user).json({ name: 'La sienne' })).body() as any
+    await client.put(`/api/jobs/${second.id}/compilations/${other.compilation.id}`).loginAs(user).json(other.compilation)
+    assert.isTrue(existsSync(path.join(theirs, 'piece_theirstheb.mp4')))
+
+    // A passage of the second live taken out: its clip goes, in that live's folder
+    const kept = { ...compilation, sections: [{ ...compilation.sections[0], items: items.slice(0, 2) }] }
+    await client.put(`${url}/${compilation.id}`).loginAs(user).json(kept)
+    assert.isFalse(existsSync(path.join(theirs, 'piece_theirsoldc.mp4')))
+    assert.isTrue(existsSync(path.join(theirs, 'piece_theirstheb.mp4')))
+
+    // A copy has clips of its own in each live
+    const copy = ((await client.post(`${url}/${compilation.id}/duplicate`).loginAs(user)).body() as any).compilation
+    const [mine, far] = copy.sections[0].items
+    assert.deepEqual([far.job, far.ready, copy.lives], [second.id, true, [second.id]])
+    assert.isTrue(existsSync(path.join(dir, `piece_${mine.id}.mp4`)))
+    assert.isTrue(existsSync(path.join(theirs, `piece_${far.id}.mp4`)))
+    await client.delete(`${url}/${copy.id}`).loginAs(user)
+    assert.isFalse(existsSync(path.join(theirs, `piece_${far.id}.mp4`)))
+
+    // An export may play pieces of both lives, never of somebody else's
+    const layers = [{ layer: { id: 'l', name: 'Jeu', type: 'gameplay', visible: true, locked: false, transform: { x: 0, y: 0, width: 1080, height: 1920 }, style: { opacity: 1, blur: 0, borderRadius: 0, fadeIn: 0, fadeOut: 0 } }, z: 0 }]
+    const strangers = await client.post(`/api/jobs/${job.id}/montage-render`).loginAs(user).json({ key: `comp_${compilation.id}.mp4`, pieces: [{ clip: 'piece_x.mp4', job: foreign.id, from: 0, duration: 2, layers }], overlays: [] })
+    strangers.assertStatus(404)
+    assert.deepEqual(strangers.body(), { error: 'job not found' })
+    const absent = await client.post(`/api/jobs/${job.id}/montage-render`).loginAs(user).json({ key: `comp_${compilation.id}.mp4`, pieces: [{ clip: 'piece_absentabc.mp4', job: second.id, from: 0, duration: 2, layers }], overlays: [] })
+    absent.assertStatus(404)
+    assert.deepEqual(absent.body(), { error: 'clip not found', clip: 'piece_absentabc.mp4' })
+
+    // The second live's project deleted: the compilation loses what it took from it
+    ;(await client.delete(`/api/jobs/${second.id}`).loginAs(user)).assertStatus(200)
+    const after = ((await client.get(url).loginAs(user)).body() as any).compilations[0]
+    assert.isUndefined(after.lives)
+    assert.deepEqual(after.sections[0].items.map((i: any) => i.id), ['ownownowna'])
+  })
+
   test('clips already there need no worker; the others say the engine is away', async ({ client, assert }) => {
     const { user, job, dir } = await setup()
     piece(dir, 'readypiece', 92, 110)

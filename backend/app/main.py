@@ -159,6 +159,8 @@ class LookPiece(BaseModel):
     text: str = ""
     # Someone is in the webcam during the passage
     cam: bool = False
+    # The live its clip is in, when it isn't the one the request is about
+    job: str | None = None
 
 
 class LookTemplate(BaseModel):
@@ -511,7 +513,7 @@ def clips_looks(job_id: str, req: LooksRequest) -> dict:
     try:
         return looks.choose(
             _check_job_id(job_id),
-            [p.model_dump() for p in req.pieces[: looks.MAX_PIECES]],
+            [{**p.model_dump(), "job": _check_job_id(p.job) if p.job else None} for p in req.pieces[: looks.MAX_PIECES]],
             [t.model_dump() for t in req.templates[: looks.MAX_TEMPLATES]],
             wish=req.wish[:600],
             cam=req.cam,

@@ -6,12 +6,15 @@ import Job from '#models/job'
 import { dropClipCaches } from '#services/clip_extend'
 import {
   MAX_COMPILATIONS,
+  MAX_LIVES,
   copyPiece,
   deletePiece,
   describeCompilations,
   dropUnusedPieces,
+  isJobId,
   isPieceId,
   isTemplateKey,
+  itemJob,
   parseCompilation,
   parseFit,
   pieceState,
@@ -44,12 +47,30 @@ async function ownJob({ params, auth }: HttpContext): Promise<Job | null> {
   return job && job.userId === user.id ? job : null
 }
 
+/** The user's other analysed lives a compilation of `job` may take passages from: those named in `ids` */
+async function otherLives(job: Job, ids: unknown): Promise<Job[]> {
+  const wanted = [...new Set((Array.isArray(ids) ? ids : []).filter((id) => isJobId(id) && id !== job.id))].slice(0, MAX_LIVES - 1) as string[]
+  if (wanted.length === 0 || job.userId === null) return []
+  const found = await Job.query().where('user_id', job.userId).where('status', 'DONE').whereIn('id', wanted)
+  // In the order they were named: the AI numbers the lives in that order
+  return wanted.map((id) => found.find((other) => other.id === id)).filter((other): other is Job => !!other)
+}
+
+const lengths = (lives: Job[]) => new Map(lives.map((live) => [live.id, live.vodDurationSeconds ?? 0]))
+
+/** Every compilation of the user, wherever it is kept: a piece of a live may be used by a compilation kept with another */
+async function everyCompilation(userId: number | null): Promise<Compilation[]> {
+  if (userId === null) return []
+  const jobs = await Job.query().where('user_id', userId).whereNotNull('compilations')
+  return jobs.flatMap((job) => job.compilations ?? [])
+}
+
 /** What the AI works from besides the transcript: the live's length, its voice energy, who and what, where to listen to it */
 function liveContext(job: Job): LiveContext {
   return {
     duration: job.vodDurationSeconds ?? 0,
     energy: job.timeline?.energy ?? null,
-    meta: { streamer: job.streamer, game: job.vodGame, title: job.customTitle || job.vodTitle },
+    meta: { streamer: job.streamer, game: job.vodGame, title: job.customTitle || job.vodTitle, date: job.streamDate ?? null },
     url: job.url,
     // The 50 or so candidates the analysis rated, clipped or not: the worker only kept the clipped ones
     moments: job.timeline?.candidates ?? [],
@@ -81,7 +102,8 @@ export default class CompilationsController {
     if (existing.length >= MAX_COMPILATIONS) return ctx.response.badRequest({ error: 'too many compilations' })
 
     const body = ctx.request.body()
-    const parsed = parseCompilation({ ...body, sections: Array.isArray(body.sections) ? body.sections : [] }, job.vodDurationSeconds ?? 0)
+    const others = lengths(await otherLives(job, body.lives))
+    const parsed = parseCompilation({ ...body, sections: Array.isArray(body.sections) ? body.sections : [] }, job.vodDurationSeconds ?? 0, others)
     if (!parsed) return ctx.response.badRequest({ error: 'invalid compilation' })
     if (parsed.sections.length === 0) parsed.sections = [{ id: newId(), title: '', query: '', items: [] }]
     const now = new Date().toISOString()
@@ -156,7 +178,7 @@ export default class CompilationsController {
         id: newId(),
         items: s.items.map((item) => {
           const id = newId()
-          copyPiece(job.id, item.id, id)
+          copyPiece(itemJob(job.id, item), item.id, id)
           return { ...item, id }
         }),
       })),
@@ -173,14 +195,18 @@ export default class CompilationsController {
     const existing = job.compilations ?? []
     const index = existing.findIndex((c) => c.id === ctx.params.compId)
     if (index === -1) return ctx.response.notFound({ error: 'compilation not found' })
-    const parsed = parseCompilation(ctx.request.body(), job.vodDurationSeconds ?? 0)
+    const others = lengths(await otherLives(job, ctx.request.input('lives')))
+    const parsed = parseCompilation(ctx.request.body(), job.vodDurationSeconds ?? 0, others)
     if (!parsed) return ctx.response.badRequest({ error: 'invalid compilation' })
 
-    const compilation: Compilation = { ...existing[index], ...parsed, updated_at: new Date().toISOString() }
+    // `lives` is the whole truth: a compilation that no longer names other lives loses the field
+    const { lives: _before, ...kept } = existing[index]
+    const compilation: Compilation = { ...kept, ...parsed, updated_at: new Date().toISOString() }
     job.compilations = existing.map((c, i) => (i === index ? compilation : c))
     await job.save()
-    // Clips of the moments taken out (and of previews nobody added): gone after a while
-    dropUnusedPieces(job.id, job.compilations)
+    // Clips of the moments taken out (and of previews nobody added): gone after a while, in every live it took from
+    const all = await everyCompilation(job.userId)
+    for (const live of new Set([job.id, ...(existing[index].lives ?? []), ...(compilation.lives ?? [])])) dropUnusedPieces(live, all)
     return { compilation: describeCompilations(job.id, [compilation])[0] }
   }
 
@@ -193,7 +219,7 @@ export default class CompilationsController {
     if (!gone) return ctx.response.notFound({ error: 'compilation not found' })
     job.compilations = existing.filter((c) => c !== gone)
     await job.save()
-    for (const item of gone.sections.flatMap((s) => s.items)) deletePiece(job.id, item.id)
+    for (const item of gone.sections.flatMap((s) => s.items)) deletePiece(itemJob(job.id, item), item.id)
     return { success: true }
   }
 
@@ -271,37 +297,51 @@ export default class CompilationsController {
       if (!isTemplateKey(raw?.key) || !description || templates.some((t) => t.key === raw.key)) continue
       templates.push({ key: raw.key, name: String(raw.name ?? '').trim().slice(0, 60) || raw.key, description, needs_cam: raw.needs_cam === true })
     }
-    const items: { id: string; start: number; end: number; text: string }[] = []
+    // A passage of another live says so (`job`): its clip, and who is in the webcam, are that live's
+    const others = new Set((await otherLives(job, (Array.isArray(ctx.request.input('items')) ? ctx.request.input('items') : []).map((raw: any) => raw?.job))).map((live) => live.id))
+    const items: { id: string; start: number; end: number; text: string; job: string }[] = []
     for (const raw of Array.isArray(ctx.request.input('items')) ? ctx.request.input('items').slice(0, 120) : []) {
       const start = Number(raw?.start)
       const end = Number(raw?.end)
       if (!isPieceId(raw?.id) || !Number.isFinite(start) || !Number.isFinite(end) || end <= start || items.some((i) => i.id === raw.id)) continue
-      items.push({ id: raw.id, start, end, text: typeof raw.text === 'string' ? raw.text.slice(0, 300) : '' })
+      if (raw.job && raw.job !== job.id && !others.has(raw.job)) continue
+      items.push({ id: raw.id, start, end, text: typeof raw.text === 'string' ? raw.text.slice(0, 300) : '', job: raw.job && raw.job !== job.id ? raw.job : job.id })
     }
     if (templates.length === 0 || items.length === 0) {
       return ctx.response.badRequest({ error: 'items: [{ id, start, end }] and templates: [{ key, description }] required' })
     }
     // Only passages whose clip is there can be looked at
-    const ready = items.map((item) => ({ item, piece: pieceState(job.id, item) })).filter(({ piece }) => piece.ready && piece.file_start !== null)
+    const ready = items.map((item) => ({ item, piece: pieceState(item.job, item) })).filter(({ piece }) => piece.ready && piece.file_start !== null)
     if (ready.length === 0) return ctx.response.conflict({ error: 'not_cut' })
 
-    // Where the webcam is in this live, and whether someone is in it during each passage. When that
+    // Where the webcam is in each live, and whether someone is in it during each passage. When that
     // can't be told, the AI goes by the frames alone (a template without its webcam falls back by itself)
-    const shared = await loadJobSharedData(job.id, ready[0].piece.file).catch((err) => {
-      logger.warn({ err }, 'Webcam of live %s not resolved for the looks', job.id)
-      return null
-    })
+    const sharedBy = new Map<string, Awaited<ReturnType<typeof loadJobSharedData>> | null>()
+    for (const { item, piece } of ready) {
+      if (sharedBy.has(item.job)) continue
+      sharedBy.set(
+        item.job,
+        await loadJobSharedData(item.job, piece.file).catch((err) => {
+          logger.warn({ err }, 'Webcam of live %s not resolved for the looks', item.job)
+          return null
+        })
+      )
+    }
+    // The video's own live says where the webcam is (the first passage's when it has none there)
+    const shared = sharedBy.get(job.id) ?? sharedBy.get(ready[0].item.job) ?? null
     const rect = shared?.facecam.rect ?? null
     try {
       const pieces = ready.map(({ item, piece }) => {
         const part: [number, number] = [item.start - piece.file_start!, item.end - piece.file_start!]
+        const theirs = sharedBy.get(item.job) ?? null
         return {
           id: item.id,
           file: piece.file,
           start: part[0],
           end: part[1],
           text: item.text,
-          cam: shared ? camVisible(rect, shared.people?.[piece.file], shared.checked?.[piece.file], part) : true,
+          cam: theirs ? camVisible(theirs.facecam.rect ?? null, theirs.people?.[piece.file], theirs.checked?.[piece.file], part) : true,
+          ...(item.job !== job.id ? { job: item.job } : {}),
         }
       })
       const language = ['fr', 'en', 'es'].includes(ctx.request.input('language')) ? ctx.request.input('language') : 'fr'
@@ -357,11 +397,11 @@ export default class CompilationsController {
     if (request) {
       const current: PlanChange['current'] = []
       for (const part of Array.isArray(ctx.request.input('current')) ? ctx.request.input('current').slice(0, 12) : []) {
-        const items: { start: number; end: number }[] = []
+        const items: { start: number; end: number; job?: string }[] = []
         for (const item of Array.isArray(part?.items) ? part.items.slice(0, 80) : []) {
           const start = Number(item?.start)
           const end = Number(item?.end)
-          if (Number.isFinite(start) && Number.isFinite(end) && start >= 0 && end > start) items.push({ start, end })
+          if (Number.isFinite(start) && Number.isFinite(end) && start >= 0 && end > start) items.push({ start, end, ...(isJobId(item?.job) && item.job !== job.id ? { job: item.job } : {}) })
         }
         current.push({ title: String(part?.title ?? '').slice(0, 60), items })
       }
@@ -371,8 +411,16 @@ export default class CompilationsController {
         .map((a: string) => a.trim().slice(0, MAX_BRIEF))
       change = { request, current, asks }
     }
+    // The video may take passages from other lives too ({ lives: [job ids] }): the AI works on all of them at once
+    const others = await otherLives(job, ctx.request.input('lives'))
+    const lives = others.map((live) => {
+      const context = liveContext(live)
+      return { job_id: live.id, duration: context.duration, url: context.url, moments: context.moments, date: live.streamDate ?? null }
+    })
+    // A passage of a live that isn't one of them is not told to the AI
+    if (change) for (const part of change.current) part.items = part.items.filter((item) => !item.job || others.some((live) => live.id === item.job))
     try {
-      return await planLiveVideo(job.id, brief, target, liveContext(job), change)
+      return await planLiveVideo(job.id, brief, target, liveContext(job), change, lives)
     } catch (err) {
       return workerFailure(ctx.response, err)
     }

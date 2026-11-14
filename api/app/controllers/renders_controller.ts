@@ -82,7 +82,10 @@ function parsePieces(raw: unknown): MontagePiece[] | null {
     const duration = Number((item as any)?.duration)
     const layers = parsePlaced((item as any)?.layers)
     if (!clip.endsWith('.mp4') || !Number.isFinite(from) || from < 0 || !Number.isFinite(duration) || duration <= 0 || !layers) return null
-    pieces.push({ clipFilename: clip, from, duration, layers })
+    // A piece of another live (a compilation made from several): `job`, checked to be the user's by the caller
+    const job = (item as any)?.job
+    if (job !== undefined && (typeof job !== 'string' || !/^[0-9a-f-]{36}$/.test(job))) return null
+    pieces.push({ clipFilename: clip, from, duration, layers, ...(job ? { jobId: job } : {}) })
   }
   return pieces
 }
@@ -152,7 +155,13 @@ export default class RendersController {
     if (!pieces || !overlays) {
       return response.badRequest({ error: 'pieces: [{ clip, from, duration, layers }] and overlays: [{ layer, z }] required' })
     }
-    const missing = pieces.find((piece) => !existsSync(path.join(clipDir(jobId), piece.clipFilename)))
+    // Pieces of other lives: the user's own only
+    const others = [...new Set(pieces.map((piece) => piece.jobId).filter((id): id is string => !!id && id !== jobId))]
+    if (others.length > 0) {
+      const owned = await db.from('jobs').where('user_id', user.id).whereIn('id', others).select('id')
+      if (owned.length !== others.length) return response.notFound({ error: 'job not found' })
+    }
+    const missing = pieces.find((piece) => !existsSync(path.join(clipDir(piece.jobId ?? jobId), piece.clipFilename)))
     if (missing) return response.notFound({ error: 'clip not found', clip: missing.clipFilename })
 
     const key = typeof body.key === 'string' && body.key.endsWith('.mp4') ? path.basename(body.key) : pieces[0].clipFilename

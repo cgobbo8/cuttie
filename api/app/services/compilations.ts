@@ -34,6 +34,8 @@ export interface CompilationItem {
   fit?: [number, number]
   /** How well it matches what was asked, when the AI found it (0-1): the weakest go first when a length is to be met */
   score?: number
+  /** The live it is cut from, when it isn't the compilation's own (one of its `lives`): its times and its clip are that live's */
+  job?: string
 }
 
 export interface CompilationSection {
@@ -59,6 +61,8 @@ export interface Compilation {
   /** Described to the AI: what the streamer first asked for, then each change asked and what the AI answered */
   brief?: string
   asks?: { ask: string; note: string; added?: number; removed?: number; recut?: number }[]
+  /** Other lives it takes passages from, besides the one it is kept with (job ids) */
+  lives?: string[]
   created_at: string
   updated_at: string
 }
@@ -82,12 +86,23 @@ const TEMPLATE_KEY = /^[a-z][a-z0-9-]{1,39}$/
 export const isTemplateKey = (value: unknown): value is string => typeof value === 'string' && TEMPLATE_KEY.test(value)
 
 export const isPieceId = (value: unknown): value is string => typeof value === 'string' && ID.test(value)
+
+const JOB_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
+export const isJobId = (value: unknown): value is string => typeof value === 'string' && JOB_ID.test(value)
+/** Lives one compilation can take passages from, its own included */
+export const MAX_LIVES = 5
+/** The live an item is cut from: the one it names, else the compilation's own */
+export const itemJob = (home: string, item: { job?: string }): string => item.job ?? home
 export const pieceFile = (id: string) => `piece_${id}.mp4`
 
 const text = (value: unknown, max: number) => (typeof value === 'string' ? value.trim().slice(0, max) : '')
 const hundredth = (s: number) => Math.round(s * 100) / 100
 
-function parseItem(raw: any, liveDuration: number): CompilationItem | null {
+function parseItem(raw: any, liveDuration: number, others?: Map<string, number>): CompilationItem | null {
+  // From another live: one of the compilation's, with that live's length
+  const job = isJobId(raw?.job) && others?.has(raw.job) ? (raw.job as string) : undefined
+  if (raw?.job && !job) return null
+  if (job) liveDuration = others!.get(job) ?? 0
   const start = Number(raw?.start)
   const end = Number(raw?.end)
   if (!isPieceId(raw?.id) || !Number.isFinite(start) || !Number.isFinite(end) || start < 0) return null
@@ -103,6 +118,7 @@ function parseItem(raw: any, liveDuration: number): CompilationItem | null {
     ...(isTemplateKey(raw.template) ? { template: raw.template } : {}),
     ...(parseFit(raw.fit) ? { fit: parseFit(raw.fit)! } : {}),
     ...(Number.isFinite(raw.score) && raw.score >= 0 && raw.score <= 1 ? { score: Math.round(raw.score * 100) / 100 } : {}),
+    ...(job ? { job } : {}),
   }
 }
 
@@ -118,8 +134,11 @@ export function parseFit(raw: unknown): [number, number] | null {
  * A compilation as the app sends it, made safe to store: null when it isn't
  * one. Items that make no sense are dropped, ids appear once.
  */
-export function parseCompilation(raw: any, liveDuration: number): Omit<Compilation, 'id' | 'created_at' | 'updated_at'> | null {
+export function parseCompilation(raw: any, liveDuration: number, others?: Map<string, number>): Omit<Compilation, 'id' | 'created_at' | 'updated_at'> | null {
   if (!raw || typeof raw !== 'object' || !Array.isArray(raw.sections)) return null
+  // `others`: the lives it may take passages from besides its own (job id -> length); a passage of any other live is dropped
+  const lives = [...new Set<string>((Array.isArray(raw.lives) ? raw.lives : []).filter((id: unknown) => isJobId(id) && others?.has(id as string)))].slice(0, MAX_LIVES - 1)
+  const allowed = new Map(lives.map((id) => [id, others!.get(id) ?? 0]))
   const seen = new Set<string>()
   const sections: CompilationSection[] = []
   for (const section of raw.sections.slice(0, MAX_SECTIONS)) {
@@ -127,7 +146,7 @@ export function parseCompilation(raw: any, liveDuration: number): Omit<Compilati
     seen.add(section.id)
     const items: CompilationItem[] = []
     for (const item of section.items.slice(0, MAX_ITEMS)) {
-      const parsed = parseItem(item, liveDuration)
+      const parsed = parseItem(item, liveDuration, allowed)
       if (!parsed || seen.has(parsed.id)) continue
       seen.add(parsed.id)
       items.push(parsed)
@@ -142,6 +161,7 @@ export function parseCompilation(raw: any, liveDuration: number): Omit<Compilati
     titles: raw.titles !== false,
     hook: text(raw.hook, 120),
     target: Number.isFinite(target) && target >= 5 && target <= 1800 ? Math.round(target) : null,
+    ...(lives.length > 0 ? { lives } : {}),
     ...(text(raw.brief, MAX_BRIEF) ? { brief: text(raw.brief, MAX_BRIEF) } : {}),
     // What the AI answered to the description: what it built and why
     ...(text(raw.brief, MAX_BRIEF) && text(raw.answer, 800) ? { answer: text(raw.answer, 800) } : {}),
@@ -192,7 +212,7 @@ export function pieceState(jobId: string, item: Pick<CompilationItem, 'id' | 'st
 export function describeCompilations(jobId: string, compilations: Compilation[]) {
   return compilations.map((c) => ({
     ...c,
-    sections: c.sections.map((s) => ({ ...s, items: s.items.map((item) => ({ ...item, ...pieceState(jobId, item) })) })),
+    sections: c.sections.map((s) => ({ ...s, items: s.items.map((item) => ({ ...item, ...pieceState(itemJob(jobId, item), item) })) })),
   }))
 }
 
@@ -211,7 +231,7 @@ export function copyPiece(jobId: string, from: string, to: string): void {
 /** A compilation as a card shows it: how long, how many passages, the clip that stands for it */
 export function summarizeCompilation(jobId: string, c: Compilation) {
   const items = c.sections.flatMap((s) => s.items)
-  const cover = items.find((item) => pieceState(jobId, item).ready)
+  const cover = items.find((item) => pieceState(itemJob(jobId, item), item).ready)
   return {
     id: c.id,
     name: c.name,
@@ -220,9 +240,30 @@ export function summarizeCompilation(jobId: string, c: Compilation) {
     parts: c.sections.filter((s) => s.items.length > 0).length,
     described: !!c.brief,
     cover: cover ? pieceFile(cover.id) : null,
+    // The live that clip is in, and every live it takes passages from (its own first)
+    cover_job: cover ? itemJob(jobId, cover) : null,
+    lives: [jobId, ...(c.lives ?? [])],
     created_at: c.created_at,
     updated_at: c.updated_at,
   }
+}
+
+/**
+ * Compilations once a live is gone (its project deleted): the passages they took from it are
+ * dropped, and it is no longer one of their lives. The same array when none took anything from it.
+ */
+export function withoutLive(compilations: Compilation[], jobId: string): Compilation[] {
+  if (!compilations.some((c) => c.lives?.includes(jobId))) return compilations
+  return compilations.map((c) => {
+    if (!c.lives?.includes(jobId)) return c
+    const { lives, ...rest } = c
+    const left = lives.filter((id) => id !== jobId)
+    return {
+      ...rest,
+      sections: c.sections.map((s) => ({ ...s, items: s.items.filter((item) => item.job !== jobId) })),
+      ...(left.length > 0 ? { lives: left } : {}),
+    }
+  })
 }
 
 /** Every file of a piece: its clip, sidecars, frames and backdrop */
@@ -237,7 +278,8 @@ export function deletePiece(jobId: string, id: string): void {
 /**
  * Deletes the pieces no compilation uses any more: at once when `now` is
  * true, else only those cut over an hour ago (a search result being previewed
- * has a clip that no compilation holds yet).
+ * has a clip that no compilation holds yet). `compilations`: every compilation
+ * that may hold a piece of this live, those kept with other lives included.
  */
 export function dropUnusedPieces(jobId: string, compilations: Compilation[], now = false): number {
   const dir = clipDir(jobId)

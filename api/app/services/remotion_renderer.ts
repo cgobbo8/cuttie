@@ -362,8 +362,9 @@ export interface PlacedLayer {
 }
 
 export interface MontagePiece {
-  /** The clip this piece plays */
+  /** The clip this piece plays, and the live it is in when it isn't the montage's own */
   clipFilename: string
+  jobId?: string
   /** Where it starts in the clip, and how long it runs, seconds */
   from: number
   duration: number
@@ -396,21 +397,21 @@ export async function renderMontage(opts: MontageRenderOptions): Promise<{ sizeM
   const outputHeight = opts.height ?? 1920
   if (opts.pieces.length === 0) throw new Error('A montage needs at least one piece')
 
-  const place = async (placed: PlacedLayer[], clipFilename: string, probe: ReturnType<typeof readProbe>) => {
-    const layers = scaleLayers(await enrichLayers(placed.map((p) => p.layer), jobId, clipFilename, probe), outputWidth, outputHeight)
+  const place = async (placed: PlacedLayer[], clipFilename: string, probe: ReturnType<typeof readProbe>, live = jobId) => {
+    const layers = scaleLayers(await enrichLayers(placed.map((p) => p.layer), live, clipFilename, probe), outputWidth, outputHeight)
     return layers.map((layer, i) => ({ layer, z: placed[i].z }))
   }
 
   const segments: { from: number; duration: number; layers: PlacedLayer[] }[] = []
   for (const piece of opts.pieces) {
-    const probe = readProbe(jobId, piece.clipFilename)
+    const probe = readProbe(piece.jobId ?? jobId, piece.clipFilename)
     // Inside the clip's file, whatever was asked
     const from = Math.max(0, Math.min(piece.from, Math.max(0, probe.durationSeconds - 1 / fps)))
     const duration = Math.max(1 / fps, Math.min(piece.duration, probe.durationSeconds - from))
-    segments.push({ from, duration, layers: await place(piece.layers, piece.clipFilename, probe) })
+    segments.push({ from, duration, layers: await place(piece.layers, piece.clipFilename, probe, piece.jobId ?? jobId) })
   }
   const first = opts.pieces[0]
-  const overlays = await place(opts.overlays, first.clipFilename, readProbe(jobId, first.clipFilename))
+  const overlays = await place(opts.overlays, first.clipFilename, readProbe(first.jobId ?? jobId, first.clipFilename), first.jobId ?? jobId)
   const durationInFrames = segments.reduce((sum, s) => sum + Math.max(1, Math.round(s.duration * fps)), 0)
   const inputProps = { segments, overlays }
 

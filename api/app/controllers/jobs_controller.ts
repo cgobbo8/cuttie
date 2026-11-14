@@ -1,3 +1,4 @@
+import { deletePiece, withoutLive } from '#services/compilations'
 import type { HttpContext } from '@adonisjs/core/http'
 import { randomUUID } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
@@ -386,6 +387,20 @@ export default class JobsController {
 
     // Delete related renders from DB
     await db.from('renders').where('job_id', job.id).delete()
+
+    // Compilations kept with other lives lose the passages they took from this one...
+    const others = await Job.query().where('user_id', user.id).whereNot('id', job.id).whereNotNull('compilations')
+    for (const other of others) {
+      const left = withoutLive(other.compilations ?? [], job.id)
+      if (left !== other.compilations) {
+        other.compilations = left
+        await other.save()
+      }
+    }
+    // ...and the clips its own compilations cut in other lives go with it
+    for (const item of (job.compilations ?? []).flatMap((c) => c.sections.flatMap((s) => s.items))) {
+      if (item.job) deletePiece(item.job, item.id)
+    }
 
     // Delete stored files (clips + sidecars, renders)
     for (const prefix of [`clips/${job.id}`, `renders/${job.id}`]) {

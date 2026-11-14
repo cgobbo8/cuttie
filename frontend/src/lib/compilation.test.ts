@@ -200,6 +200,9 @@ describe("compilations", () => {
     const plan = { title: "", sections: [{ title: "Calme", hits: [hit(100, 106), hit(150, 152, { spoken: true })] }, { title: "Vide", hits: [] }, { title: "Les conséquences", hits: [hit(300, 306), hit(301, 305)] }] };
     const revised = revisedSections(c, plan, 5000);
     expect([revised.added, revised.removed]).toEqual([1, 1]);
+    // What is new and what left, to show it in the video
+    expect(revised.fresh).toEqual([revised.sections[0].items[1].id]);
+    expect(revised.gone.map((g) => [g.item.id, g.section, g.index])).toEqual([["b", "s1", 1]]);
     expect(revised.sections.map((s) => [s.id, s.title, s.items.length])).toEqual([
       ["s1", "Calme", 2],
       ["s2", "Les conséquences", 1],

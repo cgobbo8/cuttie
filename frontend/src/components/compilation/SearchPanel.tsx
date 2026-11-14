@@ -17,6 +17,7 @@ import {
 import { isNear, liveClock, stepText } from "../../lib/compilation";
 import { frameAt, tileStyle } from "../../lib/storyboard";
 import { useToast } from "../Toast";
+import PlanTalk, { type TalkTurn } from "./PlanTalk";
 
 interface Props {
   jobId: string;
@@ -33,11 +34,13 @@ interface Props {
   /** The AI planned a whole video from `brief` */
   onPlan: (plan: VideoPlan, target: number, brief: string) => void;
   /** The video on screen was described to the AI: what was asked first, each change since and its answer */
-  talk?: { brief: string; asks: { ask: string; note: string }[] } | null;
+  talk?: { brief: string; asks: TalkTurn[] } | null;
   /** The video as it is now, as the AI is told about it when a change is asked */
   current?: () => PlanChange["current"];
   /** The AI changed the video as asked (`ask`) */
   onChange?: (plan: VideoPlan, ask: string) => void;
+  /** Light up in the video the passages a change added (its place in `talk.asks`) */
+  onReveal?: (turn: number) => void;
   /** The results on screen changed (shown on the live's strip) */
   onResults: (hits: LiveHit[]) => void;
 }
@@ -58,7 +61,7 @@ const head = (text: string) => (text.length > AROUND ? `${text.slice(0, text.las
 const PROGRESS_EVERY = 1200;
 
 /** Looking for moments in the whole live: by words, by asking the AI, or by describing the whole video */
-export default function SearchPanel({ jobId, storyboard, info, previewed, isAdded, onPreview, onAdd, onPlan, onResults, talk, current, onChange }: Props) {
+export default function SearchPanel({ jobId, storyboard, info, previewed, isAdded, onPreview, onAdd, onPlan, onResults, talk, current, onChange, onReveal }: Props) {
   const { t, i18n } = useTranslation();
   const toast = useToast();
   const [tab, setTab] = useState<Tab>("search");
@@ -76,22 +79,30 @@ export default function SearchPanel({ jobId, storyboard, info, previewed, isAdde
   const [request, setRequest] = useState("");
   const [another, setAnother] = useState(false);
   const talking = !!talk && !!onChange && !another;
+  /** The change being worked on, and each thing the AI did for it so far */
+  const [pending, setPending] = useState<string | null>(null);
+  const [trail, setTrail] = useState<string[]>([]);
 
   const asking = busy === "ai" || busy === "plan";
   useEffect(() => {
     if (!asking) return;
     setStep(null);
+    setTrail([]);
     let stopped = false;
     const ask = async () => {
       const doing = await getLiveSearchProgress(jobId);
-      if (!stopped && doing) setStep(doing);
+      if (stopped || !doing) return;
+      setStep(doing);
+      // One line per thing done, in the conversation
+      const line = stepText(t, doing);
+      setTrail((lines) => (lines[lines.length - 1] === line ? lines : [...lines, line]));
     };
     const timer = window.setInterval(ask, PROGRESS_EVERY);
     return () => {
       stopped = true;
       window.clearInterval(timer);
     };
-  }, [asking, jobId]);
+  }, [asking, jobId, t]);
 
   const dollars = (cost: number) => `${new Intl.NumberFormat(i18n.language, { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(cost)} $`;
   /** A question to the AI costs a fraction of a cent: said as such, never as "0.00 $" */
@@ -155,20 +166,23 @@ export default function SearchPanel({ jobId, storyboard, info, previewed, isAdde
   };
 
   /** A change asked on the video the AI planned: it starts from the video as it is and from what was asked before */
-  const change = async (e: FormEvent) => {
-    e.preventDefault();
+  const change = async () => {
     const asked = request.trim();
     if (!asked || busy || !talk || !current || !onChange) return;
     setBusy("plan");
+    setPending(asked);
+    setRequest("");
     setFailure(null);
     try {
       const planned = await planLiveVideo(jobId, talk.brief, target, { request: asked, current: current(), asks: talk.asks.map((a) => a.ask) });
       onChange(planned, asked);
-      setRequest("");
     } catch (err) {
       setFailure(err instanceof LiveError ? err.reason : "failed");
+      // What was typed is not lost
+      setRequest(asked);
     } finally {
       setBusy(null);
+      setPending(null);
     }
   };
 
@@ -220,43 +234,20 @@ export default function SearchPanel({ jobId, storyboard, info, previewed, isAdde
           <p className="mt-2 px-0.5 text-[12px] leading-snug text-ink-3">{t(info && !info.transcript ? "compilation.noTranscript" : "compilation.searchHint")}</p>
         </form>
       ) : talking ? (
-        <div className="mt-3">
-          {/* The conversation so far: what was described, then each change asked and what the AI answered */}
-          <div className="flex flex-col gap-2 max-h-[280px] overflow-y-auto pr-0.5">
-            <p className="self-end max-w-[92%] px-3 py-2 rounded-[12px] rounded-br-[4px] bg-white/10 text-[12.5px] leading-snug text-ink-2 whitespace-pre-line line-clamp-4" title={talk!.brief}>
-              <span className="sr-only">{t("compilation.changeYou")} : </span>
-              {talk!.brief}
-            </p>
-            {talk!.asks.map((a, i) => (
-              <div key={i} className="flex flex-col gap-2">
-                <p className="self-end max-w-[92%] px-3 py-2 rounded-[12px] rounded-br-[4px] bg-white/10 text-[12.5px] leading-snug text-white whitespace-pre-line">{a.ask}</p>
-                {a.note && <AiNote label={t("compilation.aiNote")} note={a.note} className="max-w-[92%]" />}
-              </div>
-            ))}
-          </div>
-          <form className="mt-2.5" onSubmit={change}>
-            <textarea
-              value={request}
-              onChange={(e) => setRequest(e.target.value)}
-              rows={3}
-              maxLength={MAX_BRIEF}
-              placeholder={t("compilation.changePlaceholder")}
-              aria-label={t("compilation.changeTitle")}
-              className="w-full p-3 rounded-[11px] bg-black/30 border border-white/10 text-[14px] leading-snug text-white outline-none focus:border-accent-line placeholder:text-ink-3 resize-y"
-            />
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              <button type="submit" disabled={!request.trim() || !!busy || !info?.transcript} className="btn btn-primary btn-sm">
-                {busy === "plan" ? <Loader2 className="w-3.5 h-3.5 spinner" /> : <Sparkles className="w-3.5 h-3.5" />}
-                {t("compilation.changeButton")}
-                {planCost && <span className="mono text-[11.5px] opacity-60">{planCost}</span>}
-              </button>
-              <button type="button" onClick={() => setAnother(true)} disabled={!!busy} className="btn btn-ghost btn-sm">
-                {t("compilation.changeNew")}
-              </button>
-            </div>
-            <p className="mt-2 px-0.5 text-[12px] leading-snug text-ink-3">{t("compilation.changeHint")}</p>
-          </form>
-        </div>
+        <PlanTalk
+          brief={talk!.brief}
+          turns={talk!.asks}
+          pending={busy === "plan" ? pending : null}
+          trail={trail}
+          value={request}
+          onValue={setRequest}
+          onSend={change}
+          disabled={!info?.transcript || (!!busy && busy !== "plan")}
+          cost={planCost}
+          onReveal={onReveal}
+          onAnother={() => setAnother(true)}
+          failure={failure ? t(`compilation.failure.${failure}`) : null}
+        />
       ) : (
         <form className="mt-3" onSubmit={plan}>
           <textarea
@@ -291,7 +282,7 @@ export default function SearchPanel({ jobId, storyboard, info, previewed, isAdde
         </form>
       )}
 
-      {asking && (
+      {asking && !(talking && tab === "describe") && (
         <div role="status" aria-live="polite" className="mt-3 flex items-start gap-3 p-3 rounded-[12px] inset animate-fade-in">
           <Loader2 className="w-4 h-4 spinner text-accent flex-none mt-0.5" />
           <div className="min-w-0">
@@ -303,7 +294,7 @@ export default function SearchPanel({ jobId, storyboard, info, previewed, isAdde
         </div>
       )}
       {tab === "describe" && !talking && planNote && !asking && <AiNote label={t("compilation.aiNote")} note={planNote} />}
-      {failure && (
+      {failure && !(talking && tab === "describe") && (
         <p role="alert" className="mt-3 p-3 rounded-[12px] bg-[rgba(245,177,76,0.10)] border border-[rgba(245,177,76,0.30)] text-[12.5px] leading-snug text-[#f7d9a8]">
           {t(`compilation.failure.${failure}`)}
         </p>

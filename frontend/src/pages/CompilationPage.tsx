@@ -79,6 +79,10 @@ const STRIP_TILES = 24;
 
 const hitKey = (hit: LiveHit) => `${hit.start}-${hit.end}`;
 
+/** How long a passage the AI added stays lit, and one it took out takes to leave (as the stylesheet animates them) */
+const LIT_MS = 3600;
+const LEAVE_MS = 1100;
+
 /** The same passages in the same parts, in the same order */
 const sameOrder = (c: Pick<Compilation, "sections">, sections: Compilation["sections"]) =>
   JSON.stringify(c.sections.filter((s) => s.items.length > 0).map((s) => s.items.map((i) => i.id))) === JSON.stringify(sections.map((s) => s.items.map((i) => i.id)));
@@ -144,6 +148,12 @@ export default function CompilationPage() {
   const [looksNote, setLooksNote] = useState<{ id: string; note: string } | null>(null);
   // A described video asked for a look: chosen once its clips are cut
   const pendingLooks = useRef<{ id: string; wish: string } | null>(null);
+  // What the AI's last change did to the video: passages just added (lit) and just taken out (leaving)
+  const [fresh, setFresh] = useState<{ ids: Set<string>; at: number } | null>(null);
+  const [gone, setGone] = useState<{ item: CompilationItem; section: string; index: number }[]>([]);
+  const lightTimer = useRef<number | undefined>(undefined);
+  // The passages each change added, by "compilation:turn" (for this visit: lighting them again from the conversation)
+  const addedBy = useRef(new Map<string, string[]>());
   // Where each passage's words are really said (live seconds, null: not found), known once its clip is cut
   const [tight, setTight] = useState<Record<string, [number, number] | null>>({});
   // A described video is brought to its length once its passages are set on their words (their rough times say little)
@@ -341,20 +351,38 @@ export default function CompilationPage() {
   const applyChange = (plan: VideoPlan, ask: string) => {
     if (!compilation) return;
     const note = plan.note ?? "";
-    const asks = [...(compilation.asks ?? []), { ask, note }];
     const revised = revisedSections(compilation, plan, liveDuration);
     // An answer with no video in it (it found nothing, or misread): the video stays, its answer is kept
     if (revised.sections.length === 0 || (revised.added === 0 && revised.removed === 0 && sameOrder(compilation, revised.sections))) {
-      change({ ...compilation, asks });
+      change({ ...compilation, asks: [...(compilation.asks ?? []), { ask, note }] });
       toast.info(t("compilation.changeNothing"));
       return;
     }
-    const next = { ...compilation, sections: revised.sections, asks };
+    const turn = compilation.asks?.length ?? 0;
+    const next = { ...compilation, sections: revised.sections, asks: [...(compilation.asks ?? []), { ask, note, added: revised.added, removed: revised.removed }] };
     change(next);
     if (!next.sections.some((s) => s.id === activeSection)) setActiveSection(next.sections[0].id);
-    setView("video");
+    // What changed shows in the video: the new passages come in lit, those taken out leave
+    addedBy.current.set(`${compilation.id}:${turn}`, revised.fresh);
+    light(revised.fresh);
+    setGone(revised.gone);
+    window.setTimeout(() => setGone([]), LEAVE_MS);
     ensure(allItems(next));
     toast.success(t("compilation.changeDone", { added: revised.added, removed: revised.removed }));
+  };
+
+  /** Passages lit in the video for a moment */
+  const light = (ids: string[]) => {
+    setFresh({ ids: new Set(ids), at: Date.now() });
+    window.clearTimeout(lightTimer.current);
+    lightTimer.current = window.setTimeout(() => setFresh(null), LIT_MS);
+  };
+  /** The passages a past change added, lit again (those still in the video) */
+  const reveal = (turn: number) => {
+    if (!compilation) return;
+    const ids = (addedBy.current.get(`${compilation.id}:${turn}`) ?? []).filter((id) => allItems(compilation).some((item) => item.id === id));
+    if (ids.length > 0) light(ids);
+    else toast.info(t("compilation.changeRevealGone"));
   };
 
   const applyPlan = async (plan: VideoPlan, target: number, brief: string) => {
@@ -700,6 +728,7 @@ export default function CompilationPage() {
           talk={compilation.brief ? { brief: compilation.brief, asks: compilation.asks ?? [] } : null}
           current={() => planCurrent(compilation)}
           onChange={applyChange}
+          onReveal={reveal}
           onResults={setResults}
         />
 
@@ -818,6 +847,9 @@ export default function CompilationPage() {
           looksNote={looksNote?.id === compilation.id ? looksNote.note : ""}
           onLooks={() => chooseByAi(compilation)}
           onSameLook={() => change(clearLooks(compilation))}
+          fresh={fresh?.ids}
+          freshAt={fresh?.at}
+          gone={gone}
         />
       </section>
 

@@ -1,6 +1,7 @@
+import { useEffect, useLayoutEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { ArrowDown, ArrowRight, ArrowUp, Loader2, Plus, Sparkles, Trash2, X } from "lucide-react";
-import type { Compilation, CompilationItem, TwitchStoryboard } from "../../lib/api";
+import type { Compilation, CompilationItem, CompilationSection, TwitchStoryboard } from "../../lib/api";
 import {
   addSection,
   allItems,
@@ -42,11 +43,27 @@ interface Props {
   onLooks: () => void;
   /** Every passage back to the video's template */
   onSameLook: () => void;
+  /** Passages the AI just put in the video: they come in lit (`freshAt` changes each time, to light them again) */
+  fresh?: Set<string>;
+  freshAt?: number;
+  /** Passages it just took out, and where each one was: shown leaving */
+  gone?: { item: CompilationItem; section: string; index: number }[];
 }
 
 const TARGETS = [30, 60, 90, 180];
 /** What the AI looking at one passage costs, dollars (three frames and what is said) */
 const LOOK_COST = 0.0005;
+
+type Leaving = { leaving: true; item: CompilationItem };
+
+/** A part's passages, with those the AI just took out of it back where they were (they are shown leaving) */
+function withGone(section: CompilationSection, gone: Props["gone"]): (CompilationItem | Leaving)[] {
+  const rows: (CompilationItem | Leaving)[] = [...section.items];
+  for (const g of [...(gone ?? [])].filter((x) => x.section === section.id).sort((a, b) => a.index - b.index)) {
+    rows.splice(Math.min(g.index, rows.length), 0, { leaving: true, item: g.item });
+  }
+  return rows;
+}
 
 /** The compilation being built: its sections, their moments in playing order, its length and look */
 export default function CompilationPanel({
@@ -67,8 +84,35 @@ export default function CompilationPanel({
   looksNote,
   onLooks,
   onSameLook,
+  fresh,
+  freshAt,
+  gone,
 }: Props) {
   const { t, i18n } = useTranslation();
+  const list = useRef<HTMLElement>(null);
+  // Where each passage was drawn last, to slide it to its new place when the video changes
+  const tops = useRef(new Map<string, number>());
+  useLayoutEffect(() => {
+    const root = list.current;
+    if (!root) return;
+    const still = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    const now = new Map<string, number>();
+    for (const el of root.querySelectorAll<HTMLElement>("[data-item]")) {
+      const id = el.dataset.item!;
+      const top = el.getBoundingClientRect().top - root.getBoundingClientRect().top;
+      now.set(id, top);
+      const before = tops.current.get(id);
+      if (!still && before !== undefined && Math.abs(before - top) > 2 && !fresh?.has(id)) {
+        el.animate([{ transform: `translateY(${before - top}px)` }, { transform: "none" }], { duration: 420, easing: "cubic-bezier(0.22, 1, 0.36, 1)" });
+      }
+    }
+    tops.current = now;
+  });
+  // What the AI just added comes into view
+  useEffect(() => {
+    const first = fresh && fresh.size > 0 ? list.current?.querySelector<HTMLElement>("[data-fresh]") : null;
+    first?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }, [fresh, freshAt]);
   const ownLooks = allItems(compilation).filter((item) => item.template).length;
   const total = compilationLength(compilation);
   const count = allItems(compilation).length;
@@ -80,7 +124,7 @@ export default function CompilationPanel({
   const iconButton = "btn btn-ghost btn-icon w-7 h-7 text-ink-3 hover:text-white disabled:opacity-25";
 
   return (
-    <aside aria-label={t("compilation.title")} className="glass rounded-[20px] p-3 flex-[1_1_360px] min-w-0 flex flex-col gap-2.5">
+    <aside ref={list} aria-label={t("compilation.title")} className="glass rounded-[20px] p-3 flex-[1_1_360px] min-w-0 flex flex-col gap-2.5">
       <div className="flex items-center gap-1.5">
         <input
           value={compilation.name}
@@ -136,8 +180,19 @@ export default function CompilationPanel({
               <p className="px-2 py-2.5 text-[12.5px] leading-snug text-ink-3">{t(active ? "compilation.emptyActive" : "compilation.emptySection")}</p>
             ) : (
               <ul className="mt-1 flex flex-col gap-0.5">
-                {section.items.map((item) => (
-                  <li key={item.id} className={`group/item flex items-center gap-2 p-1.5 rounded-[10px] transition-colors ${item.id === selectedItem ? "bg-white/10" : "hover:bg-white/[0.05]"}`}>
+                {withGone(section, gone).map((item) =>
+                  "leaving" in item ? (
+                    <li key={`gone-${item.item.id}`} aria-hidden className="passage-leave overflow-hidden flex items-center gap-2 p-1.5 rounded-[10px]">
+                      <span className="w-[64px] aspect-video rounded-[6px] flex-none bg-white/[0.05]" />
+                      <span className="flex-1 min-w-0 text-[12.5px] leading-snug text-ink-3 line-through truncate">{item.item.text || liveClock(item.item.start)}</span>
+                    </li>
+                  ) : (
+                  <li
+                    key={fresh?.has(item.id) ? `${item.id}-${freshAt ?? 0}` : item.id}
+                    data-item={item.id}
+                    data-fresh={fresh?.has(item.id) ? "" : undefined}
+                    className={`group/item flex items-center gap-2 p-1.5 rounded-[10px] transition-colors ${fresh?.has(item.id) ? "passage-arrive" : ""} ${item.id === selectedItem ? "bg-white/10" : "hover:bg-white/[0.05]"}`}
+                  >
                     <button
                       type="button"
                       onClick={(e) => {
@@ -177,7 +232,8 @@ export default function CompilationPanel({
                       </button>
                     </span>
                   </li>
-                ))}
+                  ),
+                )}
               </ul>
             )}
           </section>

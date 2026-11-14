@@ -92,7 +92,7 @@ test.group('Compilations', (group) => {
         hook: 'Le calme avant la tempête',
         target: 100000,
         brief: '  d’abord le calme, puis ça pète ',
-        asks: [{ ask: 'ajoute les autres calme', note: 'Trois ajoutés.' }, { ask: '  ' }, 'nonsense', { ask: 'retire le dernier' }],
+        asks: [{ ask: 'ajoute les autres calme', note: 'Trois ajoutés.', added: 3, removed: 0 }, { ask: '  ' }, 'nonsense', { ask: 'retire le dernier', removed: 'x' }],
         sections: [
           {
             id: 'sectionone',
@@ -120,7 +120,7 @@ test.group('Compilations', (group) => {
     assert.deepEqual(stored.sections.map((s: any) => s.id), ['sectionone', 'sectiontwo'])
     // What was described to the AI and each change asked since stay with the video (the next change starts from them)
     assert.equal(stored.brief, 'd’abord le calme, puis ça pète')
-    assert.deepEqual(stored.asks, [{ ask: 'ajoute les autres calme', note: 'Trois ajoutés.' }, { ask: 'retire le dernier', note: '' }])
+    assert.deepEqual(stored.asks, [{ ask: 'ajoute les autres calme', note: 'Trois ajoutés.', added: 3 }, { ask: 'retire le dernier', note: '' }])
     const items = stored.sections[0].items
     assert.deepEqual(items.map((i: any) => i.id), ['goodoneabc', 'overendabc'])
     assert.deepEqual(items[0].sources, ['voice'])

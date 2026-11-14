@@ -1553,12 +1553,21 @@
     "looksSame": "Même modèle partout",
     "changeTitle": "Modifier cette vidéo",
     "changeYou": "Ta description",
-    "changePlaceholder": "Ex. : ajoute tous les autres moments où ils disent calme. Entre les deux premiers passages, mets celui où il arrive à l'hôpital.",
+    "changePlaceholder": "Demande un changement : « ajoute les autres moments où ils disent calme », « après ce passage, mets celui où… »",
     "changeButton": "Modifier la vidéo",
     "changeHint": "L'IA repart de la vidéo telle qu'elle est (tes retouches comprises) et de tout ce que tu lui as déjà demandé. Ce que tu ne lui demandes pas de changer reste en place.",
     "changeDone": "Vidéo modifiée : {{added}} ajouté(s), {{removed}} retiré(s)",
     "changeNothing": "L'IA n'a rien changé. Regarde sa réponse.",
     "changeNew": "Décrire une autre vidéo",
-    "changeBack": "Revenir à cette vidéo"
+    "changeBack": "Revenir à cette vidéo",
+    "changeAsk": "Ta demande",
+    "changeNoNote": "C'est fait.",
+    "changeAdded_one": "{{count}} passage ajouté",
+    "changeAdded_other": "{{count}} passages ajoutés",
+    "changeRemoved_one": "{{count}} retiré",
+    "changeRemoved_other": "{{count}} retirés",
+    "changeReveal": "Les montrer dans la vidéo",
+    "changeRevealGone": "Ces passages ne sont plus dans la vidéo.",
+    "changeEnter": "Entrée pour envoyer, Maj + Entrée pour aller à la ligne"
   }
 }

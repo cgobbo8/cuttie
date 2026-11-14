@@ -1474,7 +1474,7 @@ export interface Compilation {
   target: number | null;
   /** Described to the AI: what was first asked for, then each change asked and what the AI answered */
   brief?: string;
-  asks?: { ask: string; note: string }[];
+  asks?: { ask: string; note: string; added?: number; removed?: number }[];
   created_at: string;
   updated_at: string;
 }

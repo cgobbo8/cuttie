@@ -1553,12 +1553,21 @@
     "looksSame": "Misma plantilla en todo",
     "changeTitle": "Modificar este vídeo",
     "changeYou": "Tu descripción",
-    "changePlaceholder": "Ej.: añade todas las demás veces que dicen que está tranquilo. Entre los dos primeros trozos, pon el de cuando llega al hospital.",
+    "changePlaceholder": "Pide un cambio: «añade las otras veces que dicen que está tranquilo», «después de este trozo, pon el de cuando…»",
     "changeButton": "Modificar el vídeo",
     "changeHint": "La IA parte del vídeo tal como está (con tus retoques) y de todo lo que ya le pediste. Lo que no le pides cambiar se queda donde está.",
     "changeDone": "Vídeo modificado: {{added}} añadido(s), {{removed}} quitado(s)",
     "changeNothing": "La IA no ha cambiado nada. Mira lo que responde.",
     "changeNew": "Describir otro vídeo",
-    "changeBack": "Volver a este vídeo"
+    "changeBack": "Volver a este vídeo",
+    "changeAsk": "Tu petición",
+    "changeNoNote": "Hecho.",
+    "changeAdded_one": "{{count}} trozo añadido",
+    "changeAdded_other": "{{count}} trozos añadidos",
+    "changeRemoved_one": "{{count}} quitado",
+    "changeRemoved_other": "{{count}} quitados",
+    "changeReveal": "Mostrarlos en el vídeo",
+    "changeRevealGone": "Estos trozos ya no están en el vídeo.",
+    "changeEnter": "Intro para enviar, Mayús + Intro para saltar de línea"
   }
 }

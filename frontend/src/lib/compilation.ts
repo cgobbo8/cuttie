@@ -279,11 +279,16 @@ export function planCurrent(c: Pick<Compilation, "sections">): { title: string; 
  * A passage it kept is the one the video already had (its clip, its cut, its
  * template stay); the others are new. A part keeps its id.
  */
-export function revisedSections(c: Pick<Compilation, "sections">, plan: VideoPlan, liveDuration: number): { sections: CompilationSection[]; added: number; removed: number } {
+export function revisedSections(
+  c: Pick<Compilation, "sections">,
+  plan: VideoPlan,
+  liveDuration: number,
+): { sections: CompilationSection[]; added: number; removed: number; fresh: string[]; gone: { item: CompilationItem; section: string; index: number }[] } {
   const before = allItems(c);
   const kept = new Set<string>();
   const parts = new Set<string>();
   const sections: CompilationSection[] = [];
+  const fresh: string[] = [];
   let added = 0;
   // The AI names passages by the transcript's lines, whose times hold silence: a passage cut on
   // its words shares little with them. It is the same one as soon as they share a word's worth
@@ -297,7 +302,9 @@ export function revisedSections(c: Pick<Compilation, "sections">, plan: VideoPla
         kept.add(known.id);
         items.push(known);
       } else if (!before.some((item) => same(item, hit)) && !items.some((item) => same(item, hit))) {
-        items.push(itemFromHit(hit, liveDuration));
+        const item = itemFromHit(hit, liveDuration);
+        items.push(item);
+        fresh.push(item.id);
         added++;
       }
     }
@@ -309,7 +316,9 @@ export function revisedSections(c: Pick<Compilation, "sections">, plan: VideoPla
     parts.add(id);
     sections.push({ id, title: planned.title, query: old?.query ?? "", items });
   }
-  return { sections, added, removed: before.length - kept.size };
+  // What it took out, and where each one was (the video shows them leaving)
+  const gone = c.sections.flatMap((s) => s.items.map((item, index) => ({ item, section: s.id, index })).filter(({ item }) => !kept.has(item.id)));
+  return { sections, added, removed: gone.length, fresh, gone };
 }
 
 /** "1:23:45" in the live */

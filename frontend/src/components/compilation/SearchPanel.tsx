@@ -64,7 +64,8 @@ const PROGRESS_EVERY = 1200;
 export default function SearchPanel({ jobId, storyboard, info, previewed, isAdded, onPreview, onAdd, onPlan, onResults, talk, current, onChange, onReveal }: Props) {
   const { t, i18n } = useTranslation();
   const toast = useToast();
-  const [tab, setTab] = useState<Tab>("search");
+  // Describing the video to the AI is the main way in; searching by hand comes second
+  const [tab, setTab] = useState<Tab>("describe");
   const [query, setQuery] = useState("");
   const [busy, setBusy] = useState<"words" | "ai" | "plan" | null>(null);
   const [failure, setFailure] = useState<LiveFailure | null>(null);
@@ -192,7 +193,7 @@ export default function SearchPanel({ jobId, storyboard, info, previewed, isAdde
   return (
     <aside aria-label={t("compilation.search")} className="glass rounded-[20px] p-3 flex-[1_1_400px] min-w-0 flex flex-col">
       <div role="tablist" className="seg">
-        {(["search", "describe"] as const).map((key) => (
+        {(["describe", "search"] as const).map((key) => (
           <button key={key} role="tab" aria-selected={tab === key} onClick={() => setTab(key)}>
             <span className="inline-flex items-center justify-center gap-1.5">
               {key === "describe" && <Sparkles className="w-3.5 h-3.5" />}

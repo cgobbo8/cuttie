@@ -1357,13 +1357,13 @@
   },
   "compilation": {
     "title": "Compilation",
-    "subtitle": "Search the whole live, keep the parts you like and play them back to back in one video. Or describe the video: the AI builds it, you adjust.",
+    "subtitle": "Describe the video you want: the AI builds it from passages of the live, and you keep talking to it to adjust it. You can also search for passages by hand and put them together yourself.",
     "defaultName": "My compilation",
     "new": "New compilation",
     "name": "Compilation name",
     "search": "Search the live",
     "tab": {
-      "search": "Search",
+      "search": "Search by hand",
       "describe": "Describe the video"
     },
     "queryPlaceholder": "A word, a phrase: \"calm\", \"tiger squad\"…",

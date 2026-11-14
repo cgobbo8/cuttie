@@ -1357,13 +1357,13 @@
   },
   "compilation": {
     "title": "Compilation",
-    "subtitle": "Cherche dans tout le live, garde les passages qui te plaisent et enchaîne-les en une seule vidéo. Ou décris la vidéo : l'IA la construit, tu ajustes.",
+    "subtitle": "Décris la vidéo que tu veux : l'IA la construit avec les passages du live, et tu continues à lui parler pour l'ajuster. Tu peux aussi chercher les passages à la main et les enchaîner toi-même.",
     "defaultName": "Ma compilation",
     "new": "Nouvelle compilation",
     "name": "Nom de la compilation",
     "search": "Chercher dans le live",
     "tab": {
-      "search": "Chercher",
+      "search": "Chercher à la main",
       "describe": "Décrire la vidéo"
     },
     "queryPlaceholder": "Un mot, une phrase : « calme », « brigade du tigre »…",

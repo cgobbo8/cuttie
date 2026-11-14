@@ -1357,13 +1357,13 @@
   },
   "compilation": {
     "title": "Recopilación",
-    "subtitle": "Busca en todo el directo, quédate con los trozos que te gustan y encadénalos en un solo vídeo. O describe el vídeo: la IA lo construye, tú ajustas.",
+    "subtitle": "Describe el vídeo que quieres: la IA lo construye con trozos del directo, y sigues hablándole para ajustarlo. También puedes buscar los trozos a mano y encadenarlos tú.",
     "defaultName": "Mi recopilación",
     "new": "Nueva recopilación",
     "name": "Nombre de la recopilación",
     "search": "Buscar en el directo",
     "tab": {
-      "search": "Buscar",
+      "search": "Buscar a mano",
       "describe": "Describir el vídeo"
     },
     "queryPlaceholder": "Una palabra, una frase: «tranquilo», «brigada del tigre»…",

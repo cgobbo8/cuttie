@@ -44,6 +44,38 @@ test.group('Jobs | selection', (group) => {
     assert.notProperty((await Job.findOrFail(job.id)).selection, 'b.mp4')
   })
 
+  test('cuts a clip in several pieces', async ({ client, assert }) => {
+    const { user, job } = await setup()
+    const url = `/api/jobs/${job.id}/selection`
+    const pieces = async (body: Record<string, unknown>) => {
+      const response = await client.patch(url).loginAs(user).json({ clip_filename: 'a.mp4', ...body })
+      response.assertStatus(200)
+      return (response.body() as any).selection['a.mp4']
+    }
+
+    // Context, then the punchline: stored in order, the trim spans them
+    assert.deepEqual(await pieces({ state: 'kept', segments: [[40, 55.123], [12.004, 22]] }), {
+      state: 'kept',
+      segments: [[12, 22], [40, 55.12]],
+      trim: [12, 55.1],
+    })
+    // Pieces that touch stay two (the streamer cut there); pieces that overlap are one, and one piece is a plain trim
+    assert.deepEqual(await pieces({ segments: [[12, 22], [22.02, 30]] }), { state: 'kept', segments: [[12, 22], [22, 30]], trim: [12, 30] })
+    assert.deepEqual(await pieces({ segments: [[12, 25], [22, 30]] }), { state: 'kept', trim: [12, 30] })
+    // A plain trim replaces the pieces
+    await pieces({ segments: [[5, 9], [20, 30]] })
+    assert.deepEqual(await pieces({ trim: [3, 31] }), { state: 'kept', trim: [3, 31] })
+    // Back to the AI's cut: no pieces, no trim
+    await pieces({ segments: [[5, 9], [20, 30]] })
+    assert.deepEqual(await pieces({ trim: null }), { state: 'kept' })
+    // Merging the pieces back into one keeps the span
+    await pieces({ segments: [[5, 9], [20, 30]] })
+    assert.deepEqual(await pieces({ segments: null }), { state: 'kept', trim: [5, 30] })
+
+    ;(await client.patch(url).loginAs(user).json({ clip_filename: 'a.mp4', segments: [[5, 5.1]] })).assertStatus(400)
+    ;(await client.patch(url).loginAs(user).json({ clip_filename: 'a.mp4', segments: 'all' })).assertStatus(400)
+  })
+
   test('rejects unknown clips and bad values', async ({ client }) => {
     const { user, job } = await setup()
     const url = `/api/jobs/${job.id}/selection`

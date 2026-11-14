@@ -1,6 +1,7 @@
 import { JobSchema } from '#database/schema'
 import { column } from '@adonisjs/lucid/orm'
 import type { FacecamRect } from '#services/brand_kit'
+import type { Compilation } from '#services/compilations'
 
 export default class Job extends JobSchema {
   static selfAssignPrimaryKey = true
@@ -59,6 +60,13 @@ export default class Job extends JobSchema {
     consume: (value) => (typeof value === 'string' ? JSON.parse(value) : value),
   })
   declare facecam: FacecamRect | false | null
+
+  /** Videos made of pieces of the live found by searching it (see services/compilations.ts) */
+  @column({
+    prepare: (value) => (value !== null && value !== undefined ? JSON.stringify(value) : null),
+    consume: (value) => (typeof value === 'string' ? JSON.parse(value) : value),
+  })
+  declare compilations: Compilation[] | null
 }
 
 /** e.g. { kind: 'transcription', failed: 37, total: 200 } */
@@ -87,5 +95,8 @@ export interface JobTimeline {
 
 export interface ClipSelection {
   state?: 'kept' | 'passed'
+  /** The cut, clip seconds; with `segments`, the span they cover */
   trim?: [number, number]
+  /** The clip cut in several pieces played one after the other (2 or more), clip seconds */
+  segments?: [number, number][]
 }

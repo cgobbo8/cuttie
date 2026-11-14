@@ -1,5 +1,5 @@
 import type { HttpContext } from '@adonisjs/core/http'
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import Job from '#models/job'
 import { getPresignedUrl, storagePath } from '#services/storage'
@@ -14,7 +14,10 @@ import {
   suggestedCut,
   type Side,
 } from '#services/clip_extend'
-import { extendClipFile } from '#services/worker_client'
+import { extendClipFile, suggestClipCut } from '#services/worker_client'
+import { workerFailure } from '#services/worker_failure'
+import { pieceFile } from '#services/compilations'
+import { envelope, extendPieces } from '#services/clip_pieces'
 import { THUMB_WIDTHS, anyThumb, defaultThumbTime, extractFrame, thumbPath } from '#services/clip_thumbs'
 
 // ── Layout constants (mirrors vertical_clipper.py) ───────────────────────────
@@ -79,9 +82,17 @@ export default class ClipsController {
           : h
       )
     }
-    job.selection = { ...(job.selection ?? {}), [filename]: { ...(job.selection?.[filename] ?? {}), trim: plan.trim } }
+    const choice = { ...(job.selection?.[filename] ?? {}), trim: plan.trim }
+    // A clip cut in pieces: its first (or last) piece grows, all of them follow the clip's clock
+    if (choice.segments?.length) {
+      const pieces = extendPieces(choice.segments, side, plan.trim, done?.added_before ?? 0)
+      if (pieces.length > 1) choice.segments = pieces
+      else delete choice.segments
+      choice.trim = envelope(pieces)
+    }
+    job.selection = { ...(job.selection ?? {}), [filename]: choice }
     await job.save()
-    return { extended: !!done, trim: plan.trim }
+    return { extended: !!done, trim: choice.trim, segments: choice.segments ?? null }
   }
 
   // GET /api/clips/:jobId/:filename/edit-env
@@ -131,13 +142,58 @@ export default class ClipsController {
     })
   }
 
+  /**
+   * POST /api/clips/:jobId/:filename/suggest-cut { wish? } — the parts of the clip
+   * the AI would keep for a tight video (clip seconds). Nothing is saved: the app
+   * shows them as pieces the streamer can change or take back.
+   */
+  async suggestCut({ params, request, response, auth }: HttpContext) {
+    const job = await verifyJobOwnership(params.jobId, auth)
+    if (!job) return response.notFound({ error: 'clip not found' })
+    const filename = path.basename(params.filename)
+    const hp = (job.hotPoints ?? []).find((h: any) => h?.clip_filename === filename)
+    if (!hp) return response.notFound({ error: 'clip not found' })
+    const choice = job.selection?.[filename]
+    const current = choice?.segments ?? (choice?.trim ? [choice.trim] : suggestedCut(hp) ? [suggestedCut(hp)!] : [])
+    try {
+      return await suggestClipCut(job.id, filename, {
+        summary: [hp.clip_name, hp.llm?.summary].filter(Boolean).join(' — '),
+        current,
+        wish: String(request.input('wish') ?? '').trim().slice(0, 300),
+      })
+    } catch (err) {
+      return workerFailure(response, err)
+    }
+  }
+
+  // GET /api/clips/:jobId/:filename/words — the words said in the clip (clip seconds), when it was transcribed
+  async words({ params, response, auth }: HttpContext) {
+    const safeJobId = params.jobId.replace(/[^a-zA-Z0-9_-]/g, '')
+    if (!(await verifyJobOwnership(safeJobId, auth))) return response.notFound({ error: 'clip not found' })
+    const base = path.basename(params.filename, path.extname(params.filename))
+    const file = storagePath(`clips/${safeJobId}/${base}_words.json`)
+    let words: unknown = []
+    try {
+      if (existsSync(file)) words = JSON.parse(readFileSync(file, 'utf-8'))
+    } catch {}
+    return { words: Array.isArray(words) ? words : [] }
+  }
+
   // GET /api/clips/:jobId/:filename/thumb?w=480|1280&t=<seconds>
   async thumb({ params, request, response, auth }: HttpContext) {
     const safeJobId = params.jobId.replace(/[^a-zA-Z0-9_-]/g, '')
     if (!(await verifyJobOwnership(safeJobId, auth))) {
       return response.notFound({ error: 'clip not found' })
     }
-    const safeFilename = path.basename(params.filename)
+    let safeFilename = path.basename(params.filename)
+    // A compilation's export shows its first moment while it renders
+    const compId = safeFilename.match(/^comp_([a-z0-9]{6,24})\.mp4$/)?.[1]
+    if (compId) {
+      const owner = await Job.find(safeJobId)
+      const first = owner?.compilations?.find((c) => c.id === compId)?.sections.flatMap((s) => s.items)[0]
+      if (!first) return response.notFound({ error: 'clip not found' })
+      safeFilename = pieceFile(first.id)
+    }
     // Exported videos live next to the clips, under renders/
     const folder = safeFilename.startsWith('render_') ? 'renders' : 'clips'
     if (!safeFilename.endsWith('.mp4')) return response.notFound({ error: 'clip not found' })

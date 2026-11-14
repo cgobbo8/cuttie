@@ -21,6 +21,8 @@ export interface Moment {
   suggested: [number, number] | null;
   /** The streamer set the trim themselves */
   trimmedByUser: boolean;
+  /** What gets exported, clip seconds: the trim, or the pieces the streamer cut the clip into (played one after the other) */
+  pieces: [number, number][];
   /** Better-ranked moment covering the same passage, if any */
   duplicateOf: Moment | null;
 }
@@ -54,6 +56,7 @@ export function buildMoments(hotPoints: HotPoint[], selection: Record<string, Cl
         trim: choice.trim ?? suggested,
         suggested,
         trimmedByUser: !!choice.trim,
+        pieces: choice.segments && choice.segments.length > 1 ? choice.segments : [choice.trim ?? suggested ?? [0, end - start]],
         duplicateOf: null,
       };
     });

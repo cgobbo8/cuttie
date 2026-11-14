@@ -10,6 +10,7 @@ import ProjectsPage from "./pages/ProjectsPage";
 import ProjectPage from "./pages/ProjectPage";
 import MontagePage from "./pages/MontagePage";
 import ExportStepPage from "./pages/ExportStepPage";
+import CompilationPage from "./pages/CompilationPage";
 import EditPageOld from "./pages/EditPage";
 import EditPage from "./pages/RemotionEditPage";
 import ExportsPage from "./pages/ExportsPage";
@@ -86,6 +87,7 @@ function AppRoutes() {
         <Route path=":jobId" element={<ProjectPage />} />
         <Route path=":jobId/montage" element={<MontagePage />} />
         <Route path=":jobId/export" element={<ExportStepPage />} />
+        <Route path=":jobId/compilation" element={<CompilationPage />} />
       </Route>
       {/* Edit pages: fullscreen, outside the standard layout */}
       <Route

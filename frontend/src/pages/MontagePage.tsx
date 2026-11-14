@@ -8,6 +8,7 @@ import {
   getEditEnvironment,
   getJobStatus,
   setLiveFacecam,
+  startMontageRender,
   startRender,
   type EditEnvironment,
   type FacecamRect,
@@ -21,7 +22,9 @@ import { buildMoments, type Moment } from "../lib/moments";
 import { suggestTemplate, type TemplateContext } from "../lib/templates";
 import { buildAny, customTemplates, defaultTemplateKey, findCustom, isBuiltIn, needsWebcam, showsHook, type TemplateKey } from "../lib/templateKeys";
 import { clipTemplateContext } from "../lib/templateContext";
+import { buildMontage, montageFrames, renderPieces } from "../lib/montage";
 import CuttieComposition from "../components/remotion-editor/CuttieComposition";
+import MontageComposition from "../components/remotion-editor/MontageComposition";
 import TemplateSketch from "../components/montage/TemplateSketch";
 import TemplatePicker from "../components/montage/TemplatePicker";
 import CamSheet from "../components/montage/CamSheet";
@@ -162,6 +165,14 @@ export default function MontagePage() {
   const template = current ? templateFor(current) : projectTemplate;
   const customTemplate = findCustom(template, customs);
   const layers = useMemo(() => (ctx ? buildAny(template, ctx, customs) : []), [ctx, template, customs]);
+  // A clip cut in several pieces: they play one after the other, the hook and widgets once over the whole
+  const montage = useMemo(
+    () =>
+      ctx && current && current.pieces.length > 1
+        ? buildMontage(current.pieces.map(([start, end]) => ({ ctx, start, end })), (c) => buildAny(template, c, customs), FPS)
+        : null,
+    [ctx, current, template, customs],
+  );
   const clipCam = current ? camFor(current, env) : null;
   const hasWebcam = !!clipCam;
   const cam = env?.cam;
@@ -230,6 +241,16 @@ export default function MontagePage() {
         const clipEnv = envs[m.filename] ?? (await loadEnv(m.filename));
         const clipCtx = contextFor(m, clipEnv);
         if (!clipCtx) continue;
+        if (m.pieces.length > 1) {
+          const cut = buildMontage(m.pieces.map(([start, end]) => ({ ctx: clipCtx, start, end })), (c) => buildAny(templateFor(m), c, customs), FPS);
+          await startMontageRender(
+            jobId,
+            { key: m.filename, name: m.hp.clip_name, pieces: renderPieces(cut, m.pieces.map(() => m.filename)), overlays: cut.overlays },
+            { width: 1080, height: 1920, fps: FPS },
+          );
+          setExporting({ done: i + 1, total: kept.length });
+          continue;
+        }
         await startRender(
           jobId,
           m.filename,
@@ -371,7 +392,21 @@ export default function MontagePage() {
             </div>
           )}
           <div className="relative w-[396px] max-w-full aspect-[9/16] rounded-[24px] overflow-hidden border border-white/[0.14] shadow-[0_50px_100px_-40px_rgba(0,0,0,0.9)] bg-black">
-            {env ? (
+            {env && montage ? (
+              <Player
+                key={`${current.filename}-${template}-pieces`}
+                component={MontageComposition}
+                inputProps={montage}
+                compositionWidth={1080}
+                compositionHeight={1920}
+                fps={FPS}
+                durationInFrames={montageFrames(montage.segments, FPS)}
+                controls
+                loop
+                clickToPlay
+                style={{ width: "100%", height: "100%" }}
+              />
+            ) : env ? (
               <Player
                 key={`${current.filename}-${template}`}
                 component={CuttieComposition}

@@ -37,9 +37,21 @@ test.group('Clips | 30 s more', (group) => {
 
     const response = await client.post(`/api/clips/${job.id}/a.mp4/extend`).loginAs(user).json({ side: 'end' })
     response.assertStatus(200)
-    assert.deepEqual(response.body(), { extended: false, trim: [20, 80] })
+    assert.deepEqual(response.body(), { extended: false, trim: [20, 80], segments: null })
     await job.refresh()
     assert.deepEqual(job.selection?.['a.mp4'], { state: 'kept', trim: [20, 80] })
+  })
+
+  test('a clip cut in pieces: its last piece grows', async ({ client, assert }) => {
+    const { user, job } = await setup()
+    job.selection = { 'a.mp4': { state: 'kept', trim: [5, 50], segments: [[5, 12], [30, 50]] } }
+    await job.save()
+
+    const response = await client.post(`/api/clips/${job.id}/a.mp4/extend`).loginAs(user).json({ side: 'end' })
+    response.assertStatus(200)
+    assert.deepEqual(response.body(), { extended: false, trim: [5, 80], segments: [[5, 12], [30, 80]] })
+    await job.refresh()
+    assert.deepEqual(job.selection?.['a.mp4'], { state: 'kept', trim: [5, 80], segments: [[5, 12], [30, 80]] })
   })
 
   test('when the clip has to grow and the live cannot be read, nothing changes', async ({ client, assert }) => {

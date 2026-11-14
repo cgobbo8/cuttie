@@ -607,6 +607,102 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/jobs_controller').default['renameClip']>>>
     }
   }
+  'compilations.search_info': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/jobs/:id/search/info'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { id: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/compilations_controller').default['searchInfo']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/compilations_controller').default['searchInfo']>>>
+    }
+  }
+  'compilations.search': {
+    methods: ["POST"]
+    pattern: '/api/jobs/:id/search'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { id: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/compilations_controller').default['search']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/compilations_controller').default['search']>>>
+    }
+  }
+  'compilations.plan': {
+    methods: ["POST"]
+    pattern: '/api/jobs/:id/plan'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { id: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/compilations_controller').default['plan']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/compilations_controller').default['plan']>>>
+    }
+  }
+  'compilations.pieces': {
+    methods: ["POST"]
+    pattern: '/api/jobs/:id/pieces'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { id: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/compilations_controller').default['pieces']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/compilations_controller').default['pieces']>>>
+    }
+  }
+  'compilations.index': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/jobs/:id/compilations'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { id: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/compilations_controller').default['index']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/compilations_controller').default['index']>>>
+    }
+  }
+  'compilations.store': {
+    methods: ["POST"]
+    pattern: '/api/jobs/:id/compilations'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { id: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/compilations_controller').default['store']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/compilations_controller').default['store']>>>
+    }
+  }
+  'compilations.update': {
+    methods: ["PUT"]
+    pattern: '/api/jobs/:id/compilations/:compId'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue, ParamValue]
+      params: { id: ParamValue; compId: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/compilations_controller').default['update']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/compilations_controller').default['update']>>>
+    }
+  }
+  'compilations.destroy': {
+    methods: ["DELETE"]
+    pattern: '/api/jobs/:id/compilations/:compId'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue, ParamValue]
+      params: { id: ParamValue; compId: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/compilations_controller').default['destroy']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/compilations_controller').default['destroy']>>>
+    }
+  }
   'renders.batch_store': {
     methods: ["POST"]
     pattern: '/api/jobs/:jobId/batch-render'
@@ -617,6 +713,18 @@ export interface Registry {
       query: {}
       response: ExtractResponse<Awaited<ReturnType<import('#controllers/renders_controller').default['batchStore']>>>
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/renders_controller').default['batchStore']>>>
+    }
+  }
+  'renders.store_montage': {
+    methods: ["POST"]
+    pattern: '/api/jobs/:jobId/montage-render'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { jobId: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/renders_controller').default['storeMontage']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/renders_controller').default['storeMontage']>>>
     }
   }
   'clips.extend': {
@@ -631,6 +739,18 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/clips_controller').default['extend']>>>
     }
   }
+  'clips.suggest_cut': {
+    methods: ["POST"]
+    pattern: '/api/clips/:jobId/:filename/suggest-cut'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue, ParamValue]
+      params: { jobId: ParamValue; filename: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/clips_controller').default['suggestCut']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/clips_controller').default['suggestCut']>>>
+    }
+  }
   'clips.edit_env': {
     methods: ["GET","HEAD"]
     pattern: '/api/clips/:jobId/:filename/edit-env'
@@ -641,6 +761,18 @@ export interface Registry {
       query: {}
       response: ExtractResponse<Awaited<ReturnType<import('#controllers/clips_controller').default['editEnv']>>>
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/clips_controller').default['editEnv']>>>
+    }
+  }
+  'clips.words': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/clips/:jobId/:filename/words'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue, ParamValue]
+      params: { jobId: ParamValue; filename: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/clips_controller').default['words']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/clips_controller').default['words']>>>
     }
   }
   'clips.thumb': {

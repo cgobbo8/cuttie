@@ -108,6 +108,25 @@ def cached_words(job_id: str, start: float, end: float) -> list[dict] | None:
     return words
 
 
+def load_cached(job_id: str) -> VodTranscript | None:
+    """The live's transcript as far as it was made (searching the live, after the
+    analysis), None when nothing is there. Chunks that failed are just missing."""
+    cache_dir = transcript_dir(job_id)
+    if not os.path.isdir(cache_dir):
+        return None
+    out = VodTranscript()
+    for name in sorted(os.listdir(cache_dir)):
+        if not re.fullmatch(r"chunk_\d+\.json", name):
+            continue
+        chunk = _load_chunk(os.path.join(cache_dir, name))
+        if chunk is None:
+            continue
+        out.total += 1
+        out.segments += [(float(s), float(e), t) for s, e, t in chunk.get("segments", [])]
+        out.words += chunk.get("words", [])
+    return out if out.segments else None
+
+
 def transcribe_vod(
     job_id: str,
     wav_path: str,

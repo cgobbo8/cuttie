@@ -166,25 +166,17 @@ export interface RenderOptions {
   onProgress: (pct: number) => void
 }
 
-export async function renderClip(opts: RenderOptions): Promise<{ sizeMb: number }> {
-  const { layers, jobId, clipFilename, outputPath, trim, onProgress } = opts
-
-  // Read dimensions from probe JSON (no ffprobe, no local clip needed)
-  const { durationSeconds, width: nativeW, height: nativeH } = readProbe(jobId, clipFilename)
-  const fps = opts.fps ?? 30
-  const outputWidth = opts.width ?? 1080
-  const outputHeight = opts.height ?? 1920
-  const fullDurationInFrames = Math.ceil(durationSeconds * fps)
-
-  // Calculate frame range from trim
-  const startFrame = trim ? Math.floor(trim.start * fps) : 0
-  const endFrame = trim ? Math.ceil(trim.end * fps) : fullDurationInFrames
-
-  // Generate presigned S3 URL for the source clip (1 hour, plenty for a render)
+/** A clip's layers ready for the renderer: its videos and assets as signed URLs */
+async function enrichLayers(
+  layers: Layer[],
+  jobId: string,
+  clipFilename: string,
+  probe: { durationSeconds: number; width: number; height: number }
+): Promise<Layer[]> {
+  // Signed URL of the source clip (1 hour, plenty for a render)
   const clipPresignedUrl = await getPresignedUrl(`clips/${jobId}/${clipFilename}`, 3600)
 
-  // Enrich layers: replace video src with presigned S3 URL, resolve asset URLs
-  const enrichedLayers: Layer[] = await Promise.all(
+  return Promise.all(
     layers.map(async (layer) => {
       // Template backdrop → the pre-blurred 9:16 version of the clip
       if (layer.type === 'gameplay' && layer.video?.background) {
@@ -207,8 +199,8 @@ export async function renderClip(opts: RenderOptions): Promise<{ sizeMb: number 
           video: {
             ...layer.video,
             src: clipPresignedUrl,
-            nativeWidth: nativeW,
-            nativeHeight: nativeH,
+            nativeWidth: probe.width,
+            nativeHeight: probe.height,
           },
         }
       }
@@ -225,7 +217,7 @@ export async function renderClip(opts: RenderOptions): Promise<{ sizeMb: number 
             try {
               const gifLoop = layer.asset.gifLoop !== false
               const webmS3Key = `renders/${jobId}/gif_${assetFilename.replace(/\.gif$/i, '')}_${Date.now()}.webm`
-              const webmUrl = await convertGifToWebm(assetPresignedUrl, durationSeconds, gifLoop, webmS3Key)
+              const webmUrl = await convertGifToWebm(assetPresignedUrl, probe.durationSeconds, gifLoop, webmS3Key)
               console.log(`[Remotion] Converted GIF → WebM: ${assetFilename} (loop=${gifLoop})`)
               return {
                 ...layer,
@@ -247,58 +239,77 @@ export async function renderClip(opts: RenderOptions): Promise<{ sizeMb: number 
       return layer
     })
   )
+}
 
-  // Scale layers if output resolution differs from the 1080×1920 canvas
-  const CANVAS_W = 1080
-  const CANVAS_H = 1920
+const CANVAS_W = 1080
+const CANVAS_H = 1920
+
+/** Layers laid out on the 1080×1920 canvas, resized for another output resolution */
+function scaleLayers(layers: Layer[], outputWidth: number, outputHeight: number): Layer[] {
   const scaleX = outputWidth / CANVAS_W
   const scaleY = outputHeight / CANVAS_H
-  const needsScale = Math.abs(scaleX - 1) > 0.001 || Math.abs(scaleY - 1) > 0.001
+  if (Math.abs(scaleX - 1) <= 0.001 && Math.abs(scaleY - 1) <= 0.001) return layers
 
-  const finalLayers = needsScale
-    ? enrichedLayers.map((layer) => {
-        const scaled = {
-          ...layer,
-          transform: {
-            ...layer.transform,
-            x: Math.round(layer.transform.x * scaleX),
-            y: Math.round(layer.transform.y * scaleY),
-            width: Math.round(layer.transform.width * scaleX),
-            height: Math.round(layer.transform.height * scaleY),
-          },
-          style: {
-            ...layer.style,
-            blur: layer.style.blur * scaleX,
-            borderRadius: Math.round(layer.style.borderRadius * scaleX),
-          },
-        }
-        // Scale subtitle font size
-        if (scaled.subtitle) {
-          scaled.subtitle = { ...scaled.subtitle, fontSize: Math.round(scaled.subtitle.fontSize * scaleX) }
-        }
-        // Scale text font size
-        if (scaled.text) {
-          scaled.text = { ...scaled.text, fontSize: Math.round(scaled.text.fontSize * scaleX) }
-        }
-        // Scale chat font size
-        if (scaled.chat) {
-          scaled.chat = { ...scaled.chat, fontSize: Math.round(scaled.chat.fontSize * scaleX) }
-        }
-        // Scale keyframes
-        if (scaled.keyframes) {
-          scaled.keyframes = scaled.keyframes.map((kf) => ({
-            ...kf,
-            x: Math.round(kf.x * scaleX),
-            y: Math.round(kf.y * scaleY),
-            width: Math.round(kf.width * scaleX),
-            height: Math.round(kf.height * scaleY),
-            borderRadius: Math.round(kf.borderRadius * scaleX),
-            blur: kf.blur * scaleX,
-          }))
-        }
-        return scaled
-      })
-    : enrichedLayers
+  return layers.map((layer) => {
+    const scaled = {
+      ...layer,
+      transform: {
+        ...layer.transform,
+        x: Math.round(layer.transform.x * scaleX),
+        y: Math.round(layer.transform.y * scaleY),
+        width: Math.round(layer.transform.width * scaleX),
+        height: Math.round(layer.transform.height * scaleY),
+      },
+      style: {
+        ...layer.style,
+        blur: layer.style.blur * scaleX,
+        borderRadius: Math.round(layer.style.borderRadius * scaleX),
+      },
+    }
+    // Scale subtitle font size
+    if (scaled.subtitle) {
+      scaled.subtitle = { ...scaled.subtitle, fontSize: Math.round(scaled.subtitle.fontSize * scaleX) }
+    }
+    // Scale text font size
+    if (scaled.text) {
+      scaled.text = { ...scaled.text, fontSize: Math.round(scaled.text.fontSize * scaleX) }
+    }
+    // Scale chat font size
+    if (scaled.chat) {
+      scaled.chat = { ...scaled.chat, fontSize: Math.round(scaled.chat.fontSize * scaleX) }
+    }
+    // Scale keyframes
+    if (scaled.keyframes) {
+      scaled.keyframes = scaled.keyframes.map((kf) => ({
+        ...kf,
+        x: Math.round(kf.x * scaleX),
+        y: Math.round(kf.y * scaleY),
+        width: Math.round(kf.width * scaleX),
+        height: Math.round(kf.height * scaleY),
+        borderRadius: Math.round(kf.borderRadius * scaleX),
+        blur: kf.blur * scaleX,
+      }))
+    }
+    return scaled
+  })
+}
+
+export async function renderClip(opts: RenderOptions): Promise<{ sizeMb: number }> {
+  const { layers, jobId, clipFilename, outputPath, trim, onProgress } = opts
+
+  // Read dimensions from probe JSON (no ffprobe, no local clip needed)
+  const probe = readProbe(jobId, clipFilename)
+  const { durationSeconds } = probe
+  const fps = opts.fps ?? 30
+  const outputWidth = opts.width ?? 1080
+  const outputHeight = opts.height ?? 1920
+  const fullDurationInFrames = Math.ceil(durationSeconds * fps)
+
+  // Calculate frame range from trim
+  const startFrame = trim ? Math.floor(trim.start * fps) : 0
+  const endFrame = trim ? Math.ceil(trim.end * fps) : fullDurationInFrames
+
+  const finalLayers = scaleLayers(await enrichLayers(layers, jobId, clipFilename, probe), outputWidth, outputHeight)
 
   const [serveUrl, browser] = await Promise.all([getBundle(), ensureBrowser()])
 
@@ -342,4 +353,94 @@ export async function renderClip(opts: RenderOptions): Promise<{ sizeMb: number 
       `(${(frames / seconds).toFixed(1)} frames/s), ${sizeMb.toFixed(1)} MB`
   )
   return { sizeMb }
+}
+
+/** A layer and where it stacks among all the template's layers (0 = bottom) */
+export interface PlacedLayer {
+  layer: Layer
+  z: number
+}
+
+export interface MontagePiece {
+  /** The clip this piece plays */
+  clipFilename: string
+  /** Where it starts in the clip, and how long it runs, seconds */
+  from: number
+  duration: number
+  /** Its layers, on the clip's clock */
+  layers: PlacedLayer[]
+}
+
+export interface MontageRenderOptions {
+  renderId: string
+  jobId: string
+  /** Pieces played one after the other */
+  pieces: MontagePiece[]
+  /** Layers on the montage's own clock (hook line, widgets, section titles) */
+  overlays: PlacedLayer[]
+  outputPath: string
+  width?: number
+  height?: number
+  fps?: number
+  onProgress: (pct: number) => void
+}
+
+/**
+ * Renders several pieces one after the other in one video (composition
+ * CuttieMontage): a clip cut in pieces, or a compilation of pieces of the live.
+ */
+export async function renderMontage(opts: MontageRenderOptions): Promise<{ sizeMb: number; seconds: number }> {
+  const { jobId, outputPath, onProgress } = opts
+  const fps = opts.fps ?? 30
+  const outputWidth = opts.width ?? 1080
+  const outputHeight = opts.height ?? 1920
+  if (opts.pieces.length === 0) throw new Error('A montage needs at least one piece')
+
+  const place = async (placed: PlacedLayer[], clipFilename: string, probe: ReturnType<typeof readProbe>) => {
+    const layers = scaleLayers(await enrichLayers(placed.map((p) => p.layer), jobId, clipFilename, probe), outputWidth, outputHeight)
+    return layers.map((layer, i) => ({ layer, z: placed[i].z }))
+  }
+
+  const segments: { from: number; duration: number; layers: PlacedLayer[] }[] = []
+  for (const piece of opts.pieces) {
+    const probe = readProbe(jobId, piece.clipFilename)
+    // Inside the clip's file, whatever was asked
+    const from = Math.max(0, Math.min(piece.from, Math.max(0, probe.durationSeconds - 1 / fps)))
+    const duration = Math.max(1 / fps, Math.min(piece.duration, probe.durationSeconds - from))
+    segments.push({ from, duration, layers: await place(piece.layers, piece.clipFilename, probe) })
+  }
+  const first = opts.pieces[0]
+  const overlays = await place(opts.overlays, first.clipFilename, readProbe(jobId, first.clipFilename))
+  const durationInFrames = segments.reduce((sum, s) => sum + Math.max(1, Math.round(s.duration * fps)), 0)
+  const inputProps = { segments, overlays }
+
+  const [serveUrl, browser] = await Promise.all([getBundle(), ensureBrowser()])
+  const composition = await selectComposition({ serveUrl, id: 'CuttieMontage', inputProps, puppeteerInstance: browser })
+
+  const t0 = Date.now()
+  await renderMedia({
+    composition: { ...composition, durationInFrames, fps, width: outputWidth, height: outputHeight },
+    serveUrl,
+    codec: 'h264',
+    videoBitrate: '5M',
+    x264Preset: 'veryfast',
+    hardwareAcceleration: 'if-possible',
+    audioCodec: 'aac',
+    jpegQuality: 80,
+    offthreadVideoCacheSizeInBytes: 2 * 1024 * 1024 * 1024, // 2 GB
+    outputLocation: outputPath,
+    inputProps,
+    puppeteerInstance: browser,
+    onProgress: ({ progress }) => onProgress(Math.round(progress * 100)),
+    timeoutInMilliseconds: 10 * 60 * 1000,
+  })
+  scheduleBrowserClose()
+
+  const sizeMb = statSync(outputPath).size / 1024 / 1024
+  const seconds = (Date.now() - t0) / 1000
+  console.log(
+    `[Remotion] Montage of ${segments.length} piece(s): ${(durationInFrames / fps).toFixed(1)} s at ${outputWidth}x${outputHeight} ${fps} fps ` +
+      `rendered in ${seconds.toFixed(0)} s (${(durationInFrames / seconds).toFixed(1)} frames/s), ${sizeMb.toFixed(1)} MB`
+  )
+  return { sizeMb, seconds: durationInFrames / fps }
 }

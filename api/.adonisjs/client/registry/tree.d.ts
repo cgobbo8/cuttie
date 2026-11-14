@@ -78,8 +78,19 @@ export interface ApiDefinition {
     destroyClip: typeof routes['jobs.destroy_clip']
     renameClip: typeof routes['jobs.rename_clip']
   }
+  compilations: {
+    searchInfo: typeof routes['compilations.search_info']
+    search: typeof routes['compilations.search']
+    plan: typeof routes['compilations.plan']
+    pieces: typeof routes['compilations.pieces']
+    index: typeof routes['compilations.index']
+    store: typeof routes['compilations.store']
+    update: typeof routes['compilations.update']
+    destroy: typeof routes['compilations.destroy']
+  }
   renders: {
     batchStore: typeof routes['renders.batch_store']
+    storeMontage: typeof routes['renders.store_montage']
     store: typeof routes['renders.store']
     index: typeof routes['renders.index']
     batchDownload: typeof routes['renders.batch_download']
@@ -89,7 +100,9 @@ export interface ApiDefinition {
   }
   clips: {
     extend: typeof routes['clips.extend']
+    suggestCut: typeof routes['clips.suggest_cut']
     editEnv: typeof routes['clips.edit_env']
+    words: typeof routes['clips.words']
     thumb: typeof routes['clips.thumb']
     background: typeof routes['clips.background']
     show: typeof routes['clips.show']

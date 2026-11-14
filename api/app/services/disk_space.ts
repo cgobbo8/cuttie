@@ -19,6 +19,7 @@ import { DateTime } from 'luxon'
 import Job from '#models/job'
 import { LOGS_DIR, logsSize } from '#services/app_logs'
 import { readClipMeta } from '#services/clip_extend'
+import { piecesToRestore } from '#services/compilations'
 import { keepThumb } from '#services/clip_thumbs'
 import { CLIPS_DIR, DATA_DIR, STORAGE_DIR, clipDir } from '#services/data_paths'
 import { dbMillis, dbTime } from '#services/db_time'
@@ -196,6 +197,8 @@ export async function restoreProject(job: Job): Promise<{ restored: number; fail
       return { filename: hp.clip_filename as string, start: meta?.vod_start ?? hp.clip_start, end: meta?.vod_end ?? hp.clip_end }
     })
     .filter((c: { start: unknown; end: unknown }) => Number.isFinite(c.start) && Number.isFinite(c.end) && (c.end as number) > (c.start as number))
+    // The compilations' pieces of the live come back too
+    .concat(piecesToRestore(job.id, job.compilations ?? []))
 
   const result = await restoreClipFiles(job.id, job.url, clips)
   if (result.failed.length === 0) {

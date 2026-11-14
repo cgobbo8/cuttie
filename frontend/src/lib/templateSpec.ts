@@ -341,6 +341,24 @@ function hookLayers(ctx: TemplateContext, h: TemplateSpec["hook"]): Layer[] {
   return layers;
 }
 
+/**
+ * A section's title in a compilation, written like the template's hook line
+ * and at its place: pops in at `from` (already there on the first frame: it is
+ * the cover then) and shrinks away at `until`, in the video's seconds.
+ */
+export function titleCard(ctx: TemplateContext, hook: TemplateSpec["hook"], text: string, from: number, until: number, key: string): Layer[] {
+  const layers = hookLayers({ ...ctx, hook: text }, { ...hook, until: null });
+  return layers.map((layer, i) => ({
+    ...layer,
+    id: `tpl-section-${key}${i === layers.length - 1 ? "" : "-bg"}`,
+    animations: [
+      // Before its time it isn't there. The first one has no entrance: it is on the very first frame, the video's cover
+      ...(from > 0.05 ? [{ id: uid("anim"), type: "scaleIn" as const, time: from, duration: ENTERS.pop!.duration, easing: ENTERS.pop!.easing }] : []),
+      { id: uid("anim"), type: EXITS.shrink.type, time: until, duration: EXITS.shrink.duration, easing: EXITS.shrink.easing },
+    ],
+  }));
+}
+
 /** When a widget shows up and how it comes in / goes out */
 function widgetAnimations(w: SpecWidget, ctx: TemplateContext): { appearAt: number; animations: LayerAnimation[] } {
   const { appearAt, leaveAt } = widgetWindow(w, ctx.startAt, ctx.endAt);

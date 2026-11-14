@@ -256,8 +256,11 @@ export async function resolveEditEnv(
     try { words = JSON.parse(readFileSync(wordsPath, 'utf-8')) } catch {}
   }
 
+  // A piece of the live (compilations) was transcribed when it was cut: no words means nobody speaks in it
+  const silentPiece = clipFilename.startsWith('piece_') && existsSync(wordsPath)
+
   // Lazy transcription fallback — the worker transcribes the clip and caches <clip>_words.json
-  if (words.length === 0 && existsSync(path.join(CLIPS_BASE, jobId, clipFilename))) {
+  if (words.length === 0 && !silentPiece && existsSync(path.join(CLIPS_BASE, jobId, clipFilename))) {
     const MAX_RETRIES = 2
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
       try {

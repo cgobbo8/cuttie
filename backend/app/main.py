@@ -82,6 +82,46 @@ class RestoreRequest(BaseModel):
     clips: list[RestoreClip]
 
 
+class SearchRequest(BaseModel):
+    query: str
+    # "words": said or written in the chat (free); "ai": the AI reads the whole live
+    mode: str = "words"
+    duration: float = 0.0
+    # Voice energy across the live (the analysis' timeline), for the AI
+    energy: list[float] | None = None
+    # streamer, game, title
+    meta: dict = {}
+
+
+class PlanRequest(BaseModel):
+    # The video the streamer describes
+    brief: str
+    # Its length, seconds
+    target: float = 90.0
+    duration: float = 0.0
+    energy: list[float] | None = None
+    meta: dict = {}
+
+
+class LivePiece(BaseModel):
+    id: str
+    # Where the piece sits in the live, seconds
+    start: float
+    end: float
+
+
+class PiecesRequest(BaseModel):
+    url: str
+    pieces: list[LivePiece]
+
+
+class CutRequest(BaseModel):
+    # What happens in the clip, the cut kept now (clip seconds), what the streamer asks for
+    summary: str = ""
+    current: list[list[float]] = []
+    wish: str = ""
+
+
 class VodFacecamRequest(BaseModel):
     vod_id: str
     duration: float
@@ -303,6 +343,93 @@ def clips_restore(job_id: str, req: RestoreRequest) -> dict:
         raise HTTPException(status_code=410, detail="the live is no longer on Twitch")
     except RuntimeError as e:
         raise HTTPException(status_code=502, detail=str(e)) from e
+
+
+def _ai_errors(e: Exception) -> HTTPException:
+    """What went wrong with an AI call, as the API reads it."""
+    from app.services.live_search import NoTranscript
+
+    if isinstance(e, NoTranscript):
+        return HTTPException(status_code=409, detail="the live has no transcript")
+    if isinstance(e, ProviderUnavailable):
+        return HTTPException(status_code=402 if e.reason == "credits" else 401, detail=str(e))
+    logger.warning(f"AI call failed: {type(e).__name__}: {e}")
+    return HTTPException(status_code=502, detail=f"{type(e).__name__}: {e}"[:300])
+
+
+@app.get("/jobs/{job_id}/search/info", dependencies=[Depends(require_secret)])
+def search_info(job_id: str, duration: float = 0.0) -> dict:
+    """What can be searched in a live, and about what asking the AI costs."""
+    from app.services import live_search
+
+    return live_search.info(_check_job_id(job_id), duration)
+
+
+@app.post("/jobs/{job_id}/search", dependencies=[Depends(require_secret)])
+def search_live(job_id: str, req: SearchRequest) -> dict:
+    """Moments of the live that match a search: by words (free) or by asking the AI."""
+    from app.services import live_search
+
+    query = req.query.strip()[:300]
+    if not query:
+        raise HTTPException(status_code=400, detail="empty query")
+    if req.mode != "ai":
+        return live_search.search_words(_check_job_id(job_id), query, req.duration)
+    try:
+        return live_search.search_ai(_check_job_id(job_id), query, req.meta, req.duration, req.energy)
+    except Exception as e:
+        raise _ai_errors(e) from e
+
+
+@app.post("/jobs/{job_id}/plan", dependencies=[Depends(require_secret)])
+def plan_video(job_id: str, req: PlanRequest) -> dict:
+    """A whole video planned by the AI from a description: sections of moments."""
+    from app.services import live_search
+
+    brief = req.brief.strip()[:1500]
+    if not brief:
+        raise HTTPException(status_code=400, detail="empty description")
+    try:
+        return live_search.plan_video(_check_job_id(job_id), brief, max(10.0, min(req.target, 600.0)), req.meta, req.duration, req.energy)
+    except Exception as e:
+        raise _ai_errors(e) from e
+
+
+@app.post("/clips/{job_id}/pieces", dependencies=[Depends(require_secret)])
+def clips_pieces(job_id: str, req: PiecesRequest) -> dict:
+    """Cut pieces of the live into small clips (compilations)."""
+    from app.services.clip_tools import LiveGone, extract_pieces
+
+    try:
+        return extract_pieces(_check_job_id(job_id), req.url, [p.model_dump() for p in req.pieces if p.start >= 0])
+    except LiveGone:
+        raise HTTPException(status_code=410, detail="the live is no longer on Twitch")
+    except RuntimeError as e:
+        raise HTTPException(status_code=502, detail=str(e)) from e
+
+
+@app.post("/clips/{job_id}/{clip_filename}/suggest-cut", dependencies=[Depends(require_secret)])
+def clip_suggest_cut(job_id: str, clip_filename: str, req: CutRequest) -> dict:
+    """The parts of a clip worth keeping, chosen by the AI from what is said in it."""
+    import json
+
+    from app.services import live_search
+    from app.services.clip_tools import _duration
+
+    clip_dir = paths.clip_dir(_check_job_id(job_id))
+    name = os.path.basename(clip_filename)
+    clip_path = os.path.join(clip_dir, name)
+    if not os.path.isfile(clip_path):
+        raise HTTPException(status_code=404, detail="clip not found")
+    try:
+        with open(os.path.join(clip_dir, f"{os.path.splitext(name)[0]}_words.json"), encoding="utf-8") as f:
+            words = json.load(f)
+    except (OSError, ValueError):
+        words = []
+    try:
+        return live_search.suggest_cut(words if isinstance(words, list) else [], _duration(clip_path), req.summary[:600], req.current[:20], req.wish[:300])
+    except Exception as e:
+        raise _ai_errors(e) from e
 
 
 @app.post("/jobs/{job_id}/facecam", dependencies=[Depends(require_secret)])

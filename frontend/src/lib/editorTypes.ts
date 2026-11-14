@@ -65,6 +65,8 @@ export interface SubtitleData {
   pop?: boolean;
   /** Words on screen at a time (default 4) */
   maxWords?: number;
+  /** Nothing shown while nobody speaks, not even the preview's placeholder (pieces of a montage: it would flash at every cut) */
+  quiet?: boolean;
 }
 
 /** Distinct colors assigned to speakers when showSpeaker is enabled.

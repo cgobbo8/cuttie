@@ -11,6 +11,7 @@ export const controllers = {
   AuthMe: () => import('#controllers/auth_me_controller'),
   Brand: () => import('#controllers/brand_controller'),
   Clips: () => import('#controllers/clips_controller'),
+  Compilations: () => import('#controllers/compilations_controller'),
   Creators: () => import('#controllers/creators_controller'),
   Dashboard: () => import('#controllers/dashboard_controller'),
   Disk: () => import('#controllers/disk_controller'),

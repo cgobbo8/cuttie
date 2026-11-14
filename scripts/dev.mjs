@@ -8,6 +8,8 @@
  *
  * Usage:  npm run dev            (from the repo root)
  * Env:    CUTTIE_DATA_DIR        override the data directory
+ *         CUTTIE_API_PORT, CUTTIE_WORKER_PORT, CUTTIE_WEB_PORT
+ *                                other ports (a second instance on throwaway data, next to this one)
  */
 
 import { randomBytes } from "node:crypto";
@@ -16,15 +18,16 @@ import { fileURLToPath } from "node:url";
 import concurrently from "concurrently";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const API_PORT = 3333;
-const WORKER_PORT = 3334;
+const API_PORT = Number(process.env.CUTTIE_API_PORT) || 3333;
+const WORKER_PORT = Number(process.env.CUTTIE_WORKER_PORT) || 3334;
+const WEB_PORT = Number(process.env.CUTTIE_WEB_PORT) || 5173;
 
 const shared = {
   CUTTIE_DATA_DIR: process.env.CUTTIE_DATA_DIR || path.join(root, ".data"),
   CUTTIE_INTERNAL_SECRET: randomBytes(24).toString("hex"),
 };
 
-console.log(`\n  Cuttie dev — data dir: ${shared.CUTTIE_DATA_DIR}\n  App: http://localhost:5173\n`);
+console.log(`\n  Cuttie dev — data dir: ${shared.CUTTIE_DATA_DIR}\n  App: http://localhost:${WEB_PORT}\n`);
 
 const { result } = concurrently(
   [
@@ -51,7 +54,7 @@ const { result } = concurrently(
     },
     {
       name: "front",
-      command: "npm run dev",
+      command: `npm run dev -- --port ${WEB_PORT} --strictPort`,
       cwd: path.join(root, "frontend"),
       prefixColor: "green",
       env: { API_URL: `http://127.0.0.1:${API_PORT}` },

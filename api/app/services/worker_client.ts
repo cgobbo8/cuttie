@@ -184,6 +184,92 @@ export async function restoreClipFiles(
   return call('POST', `/clips/${encodeURIComponent(jobId)}/restore`, { body: { url, clips }, timeoutMs: 15 * 60_000 })
 }
 
+// ── Searching the live, compilations ─────────────────────────────────────────
+
+/** A moment of the live that matches a search, live seconds (live_search.py) */
+export interface LiveHit {
+  start: number
+  end: number
+  /** "voice" (said), "chat" (written), "ai" (the AI read it) */
+  sources: string[]
+  text: string
+  before: string
+  after: string
+  chat: string[]
+  why: string
+  score: number
+}
+
+export interface LiveSearchResult {
+  hits: LiveHit[]
+  total: number
+  transcript: boolean
+  /** AI searches: answered from the disk (free), dollars spent otherwise */
+  cached?: boolean
+  cost?: number
+}
+
+/** What the AI reads besides the transcript: the live's length, its voice energy, who and what */
+export interface LiveContext {
+  duration: number
+  energy?: number[] | null
+  meta: { streamer?: string | null; game?: string | null; title?: string | null }
+}
+
+/** What can be searched in a live, and about what asking the AI costs (dollars) */
+export async function liveSearchInfo(
+  jobId: string,
+  duration: number
+): Promise<{ transcript: boolean; segments?: number; chat: number; ai_cost: number | null; dev?: boolean }> {
+  return call('GET', `/jobs/${encodeURIComponent(jobId)}/search/info?duration=${Math.round(duration)}`, { timeoutMs: 30_000 })
+}
+
+/** Moments that match a search: "words" is free and instant, "ai" reads the whole live (a few cents, up to a few minutes) */
+export async function searchLive(jobId: string, query: string, mode: 'words' | 'ai', context: LiveContext): Promise<LiveSearchResult> {
+  return call('POST', `/jobs/${encodeURIComponent(jobId)}/search`, {
+    body: { query, mode, ...context },
+    timeoutMs: mode === 'ai' ? 20 * 60_000 : 60_000,
+  })
+}
+
+export interface VideoPlan {
+  title: string
+  sections: { title: string; hits: LiveHit[] }[]
+  cached?: boolean
+  cost?: number
+}
+
+/** A whole video planned by the AI from a description */
+export async function planLiveVideo(jobId: string, brief: string, target: number, context: LiveContext): Promise<VideoPlan> {
+  return call('POST', `/jobs/${encodeURIComponent(jobId)}/plan`, { body: { brief, target, ...context }, timeoutMs: 20 * 60_000 })
+}
+
+export interface CutPiece {
+  id: string
+  file: string
+  vod_start: number
+  vod_end: number
+  duration: number
+}
+
+/** Cut pieces of the live into small clips (clip_tools.extract_pieces); 410 when the live is gone */
+export async function extractLivePieces(
+  jobId: string,
+  url: string,
+  pieces: { id: string; start: number; end: number }[]
+): Promise<{ pieces: CutPiece[]; failed: string[] }> {
+  return call('POST', `/clips/${encodeURIComponent(jobId)}/pieces`, { body: { url, pieces }, timeoutMs: 10 * 60_000 })
+}
+
+/** The parts of a clip worth keeping, chosen by the AI (clip seconds) */
+export async function suggestClipCut(
+  jobId: string,
+  clipFilename: string,
+  body: { summary: string; current: [number, number][]; wish: string }
+): Promise<{ parts: [number, number][]; note: string; cost: number }> {
+  return call('POST', `/clips/${encodeURIComponent(jobId)}/${encodeURIComponent(clipFilename)}/suggest-cut`, { body, timeoutMs: 10 * 60_000 })
+}
+
 export interface DetectedPalette {
   palette: string[]
   roles: { accent: string; highlight: string; dark: string; light: string }

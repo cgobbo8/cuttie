@@ -3,6 +3,7 @@
 import json
 import logging
 import os
+import re
 import subprocess
 import tempfile
 
@@ -219,17 +220,8 @@ def restore_clips(job_id: str, vod_url: str, clips: list[dict]) -> dict:
     from concurrent.futures import ThreadPoolExecutor
 
     from app.services.clipper import _streamcopy_clip
-    from app.services.frame_extractor import get_vod_direct_url
 
-    try:
-        direct = get_vod_direct_url(vod_url)
-    except subprocess.CalledProcessError as e:
-        said = f"{e.stderr or ''} {e.stdout or ''}".lower()
-        if any(word in said for word in _GONE):
-            raise LiveGone(vod_url) from e
-        raise RuntimeError("the live's video could not be fetched") from e
-    except subprocess.TimeoutExpired as e:
-        raise RuntimeError("the live's video could not be fetched") from e
+    direct = _live_url(vod_url)
 
     clip_dir = paths.clip_dir(job_id)
     os.makedirs(clip_dir, exist_ok=True)
@@ -255,6 +247,216 @@ def restore_clips(job_id: str, vod_url: str, clips: list[dict]) -> dict:
     failed = [os.path.basename(c["filename"]) for c, ok in zip(clips, done) if not ok]
     logger.info(f"[{job_id[:8]}] Clips cut again from the live: {len(restored)}/{len(clips)} in {time.time() - t0:.0f} s")
     return {"restored": restored, "failed": failed}
+
+
+# ── Pieces of the live for a compilation (found by searching it) ─────────────
+
+PIECE_WORKERS = 3
+_PIECE_ID = re.compile(r"^[a-z0-9]{6,24}$")
+
+
+def piece_filename(piece_id: str) -> str:
+    return f"piece_{piece_id}.mp4"
+
+
+# A piece's clip is a little wider than its moment, so its cut can move without fetching again:
+# at least this much on each side, and up to this much when the live's segments already fetched give it
+# (the live comes in 10 s segments, each several MB: one less to fetch is seconds saved)
+PIECE_MARGIN_MIN = 0.6
+PIECE_MARGIN_MAX = 8.0
+# Where a live's video is read from, kept a few minutes: asking Twitch takes a second or two each time
+_LIVE_TTL = 600.0
+_lives: dict[str, tuple[float, str, list | None]] = {}
+
+
+def extract_pieces(job_id: str, vod_url: str, pieces: list[dict]) -> dict:
+    """Cut moments of the live (`pieces`: id, start, end in live seconds) into small
+    clips next to the analysis' ones: piece_<id>.mp4 with the same sidecars
+    (_meta, _probe, _words, cam check), so they edit and export like any clip.
+    Each clip is a little wider than its moment; one that already covers its
+    moment is left alone."""
+    import time
+    from concurrent.futures import ThreadPoolExecutor
+
+    clip_dir = paths.clip_dir(job_id)
+    os.makedirs(clip_dir, exist_ok=True)
+    wanted = [p for p in pieces if _PIECE_ID.match(str(p.get("id", ""))) and float(p["end"]) - float(p["start"]) >= 0.3]
+    todo = [p for p in wanted if not _piece_ready(clip_dir, p)]
+    t0 = time.time()
+    direct, segments = _live(vod_url) if todo else (None, None)
+
+    def extract(piece: dict) -> bool:
+        name = piece_filename(piece["id"])
+        base = os.path.splitext(name)[0]
+        target = os.path.join(clip_dir, name)
+        tmp = os.path.join(clip_dir, f"{base}.cutting.mp4")
+        bounds = _cut_part(direct, segments, float(piece["start"]), float(piece["end"]), tmp)
+        if not bounds:
+            if os.path.isfile(tmp):
+                os.remove(tmp)
+            return False
+        start, end = bounds
+        _replace(tmp, target)
+        _write_json(os.path.join(clip_dir, f"{base}_meta.json"), {"vod_start": round(start, 2), "vod_end": round(end, 2)})
+        _write_json(os.path.join(clip_dir, f"{base}_probe.json"), _probe(target))
+        try:
+            words = sorted(_words_between(job_id, target, start, start, end), key=lambda w: w["start"])
+            try:
+                words = _label_speakers(job_id, target, words) if words else words
+            except Exception as e:
+                logger.warning(f"Speakers not labelled on {name}: {e}")
+            _write_json(os.path.join(clip_dir, f"{base}_words.json"), words)
+        except Exception as e:
+            # The editor transcribes it when the piece opens
+            logger.warning(f"Words of {name} not ready: {e}")
+        try:
+            _recheck_cam(job_id, name, target)
+        except Exception as e:
+            logger.warning(f"Cam of {name} not checked: {e}")
+        return True
+
+    done: dict[str, bool] = {}
+    if todo:
+        with ThreadPoolExecutor(PIECE_WORKERS) as pool:
+            done = dict(zip([p["id"] for p in todo], pool.map(extract, todo)))
+        logger.info(f"[{job_id[:8]}] Pieces of the live: {sum(done.values())}/{len(todo)} cut in {time.time() - t0:.0f} s")
+    ready = []
+    for p in wanted:
+        if done.get(p["id"], True):
+            base = os.path.splitext(piece_filename(p["id"]))[0]
+            meta = _read_json(os.path.join(clip_dir, f"{base}_meta.json")) or {}
+            ready.append({
+                "id": p["id"],
+                "file": piece_filename(p["id"]),
+                "vod_start": meta.get("vod_start", p["start"]),
+                "vod_end": meta.get("vod_end", p["end"]),
+                "duration": _duration(os.path.join(clip_dir, piece_filename(p["id"]))),
+            })
+    return {"pieces": ready, "failed": [p["id"] for p in wanted if not done.get(p["id"], True)]}
+
+
+def _live(vod_url: str) -> tuple[str, list[tuple[float, float, str]] | None]:
+    """Where the live's video is read from and its segments, asked once every few minutes."""
+    import time
+
+    known = _lives.get(vod_url)
+    if known and time.time() - known[0] < _LIVE_TTL:
+        return known[1], known[2]
+    direct = _live_url(vod_url)
+    segments = _live_segments(direct)
+    _lives[vod_url] = (time.time(), direct, segments)
+    return direct, segments
+
+
+def _live_segments(direct_url: str) -> list[tuple[float, float, str]] | None:
+    """The live's video as its playlist lists it: (start, length, url) of each segment.
+    None when the playlist isn't a plain list of segments (ffmpeg then reads it itself)."""
+    from urllib.parse import urljoin
+
+    import requests
+
+    try:
+        text = requests.get(direct_url, timeout=20).text
+    except requests.RequestException:
+        return None
+    if "#EXTINF" not in text or "#EXT-X-MAP" in text or "#EXT-X-KEY" in text or "#EXT-X-BYTERANGE" in text:
+        return None
+    segments: list[tuple[float, float, str]] = []
+    at = 0.0
+    length: float | None = None
+    for line in text.splitlines():
+        line = line.strip()
+        if line.startswith("#EXTINF:"):
+            try:
+                length = float(line[8:].split(",")[0])
+            except ValueError:
+                return None
+        elif line.startswith("#EXT-X-DISCONTINUITY"):
+            # Times after it can't be trusted from the lengths alone
+            return None
+        elif line and not line.startswith("#") and length is not None:
+            segments.append((at, length, urljoin(direct_url, line)))
+            at += length
+            length = None
+    return segments or None
+
+
+def piece_bounds(segments: list[tuple[float, float, str]] | None, start: float, end: float) -> tuple[float, float, int, int]:
+    """The part of the live a moment's clip covers, and the segments it reads
+    (first index, one past the last): the moment with at least PIECE_MARGIN_MIN
+    around it, widened up to PIECE_MARGIN_MAX with what those segments hold
+    anyway (they come whole, 10 s each: the room is free)."""
+    low, high = max(0.0, start - PIECE_MARGIN_MIN), end + PIECE_MARGIN_MIN
+    if not segments:
+        return low, high, 0, 0
+    live_end = segments[-1][0] + segments[-1][1]
+    high = min(high, live_end)
+    first = next((i for i, (at, length, _u) in enumerate(segments) if at + length > low), len(segments) - 1)
+    last = next((i for i in range(len(segments) - 1, -1, -1) if segments[i][0] < high), first)
+    held_from, held_to = segments[first][0], segments[last][0] + segments[last][1]
+    return max(held_from, start - PIECE_MARGIN_MAX, 0.0), min(held_to, end + PIECE_MARGIN_MAX, live_end), first, last + 1
+
+
+def _cut_part(direct_url: str, segments: list[tuple[float, float, str]] | None, start: float, end: float, out: str) -> tuple[float, float] | None:
+    """Cut the moment `start`-`end` of the live (and room around it) into `out` without re-encoding.
+    Returns the part of the live the file covers, None when it couldn't be fetched."""
+    from app.services.clipper import _streamcopy_clip
+
+    low, high, first, stop = piece_bounds(segments, start, end)
+    if segments and stop > first:
+        # Only the segments needed, in a playlist of their own: ffmpeg doesn't read the live's first
+        # segment to know the streams, nor more of the live than the piece
+        part = segments[first:stop]
+        playlist = f"{out}.m3u8"
+        lines = ["#EXTM3U", "#EXT-X-VERSION:3", f"#EXT-X-TARGETDURATION:{int(max(length for _a, length, _u in part)) + 1}", "#EXT-X-MEDIA-SEQUENCE:0", "#EXT-X-PLAYLIST-TYPE:VOD"]
+        for _at, length, url in part:
+            lines += [f"#EXTINF:{length:.3f},", url]
+        lines.append("#EXT-X-ENDLIST")
+        try:
+            with open(playlist, "w", encoding="utf-8") as f:
+                f.write("\n".join(lines) + "\n")
+            subprocess.run(
+                ["ffmpeg", "-y", "-protocol_whitelist", "file,http,https,tcp,tls,crypto", "-ss", f"{low - part[0][0]:.3f}", "-i", playlist,
+                 "-t", f"{high - low:.3f}", "-c", "copy", "-movflags", "+faststart", out],
+                check=True, timeout=120, capture_output=True, text=True,
+            )
+            if _duration(out) >= (high - low) - 2:
+                return low, high
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as e:
+            logger.warning(f"Piece {start:.0f}-{end:.0f} s not cut from its segments ({type(e).__name__}): reading the live's playlist instead")
+        finally:
+            if os.path.isfile(playlist):
+                os.remove(playlist)
+    if _streamcopy_clip(direct_url, low, high - low, out) and _duration(out) >= (high - low) - 2:
+        return low, high
+    return None
+
+
+def _piece_ready(clip_dir: str, piece: dict) -> bool:
+    """The piece's clip is there and covers its moment."""
+    base = os.path.splitext(piece_filename(piece["id"]))[0]
+    meta = _read_json(os.path.join(clip_dir, f"{base}_meta.json"))
+    return (
+        os.path.isfile(os.path.join(clip_dir, f"{base}.mp4"))
+        and isinstance(meta, dict)
+        and float(meta.get("vod_start", 1e12)) <= float(piece["start"]) + 0.05
+        and float(meta.get("vod_end", -1)) >= float(piece["end"]) - 0.05
+    )
+
+
+def _live_url(vod_url: str) -> str:
+    """Where the live's video is read from; LiveGone when Twitch no longer has it."""
+    from app.services.frame_extractor import get_vod_direct_url
+
+    try:
+        return get_vod_direct_url(vod_url)
+    except subprocess.CalledProcessError as e:
+        said = f"{e.stderr or ''} {e.stdout or ''}".lower()
+        if any(word in said for word in _GONE):
+            raise LiveGone(vod_url) from e
+        raise RuntimeError("the live's video could not be fetched") from e
+    except subprocess.TimeoutExpired as e:
+        raise RuntimeError("the live's video could not be fetched") from e
 
 
 def _extend_words(job_id: str, words_path: str, clip_path: str, start: float, end: float, old_start: float, old_end: float) -> None:

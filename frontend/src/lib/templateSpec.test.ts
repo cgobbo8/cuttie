@@ -25,6 +25,38 @@ const ctx: TemplateContext = {
 
 const named = (layers: ReturnType<typeof buildTemplate>, name: string) => layers.find((l) => l.name === name)!.transform;
 
+describe("section titles of a compilation", () => {
+  it("are written like the template's hook, on the first frame for the first one, popping in for the others", async () => {
+    const { titleCard } = await import("./templateSpec");
+    const { evaluateAnimations } = await import("./animations");
+    const hook = specFromLayout("signature").hook;
+
+    const first = titleCard(ctx, hook, "C'est calme", 0, 2.2, "s1");
+    // Signature writes its hook on a box in the channel's color: a shape and the text
+    expect(first.map((l) => [l.id, l.type])).toEqual([
+      ["tpl-section-s1-bg", "shape"],
+      ["tpl-section-s1", "text"],
+    ]);
+    expect(first[1].text!.content).toBe("C'est calme");
+    expect(first[1].transform).toEqual(buildFromSpec(specFromLayout("signature"), ctx).find((l) => l.name === "Accroche")!.transform);
+    // The cover: there on the very first frame, gone after its time
+    expect(evaluateAnimations(first[1], 0, 60).opacity).toBe(1);
+    expect(evaluateAnimations(first[1], 1.5, 60).opacity).toBe(1);
+    expect(evaluateAnimations(first[1], 3, 60).opacity).toBe(0);
+
+    const later = titleCard(ctx, hook, "Ça pète", 31, 33.2, "s2");
+    expect(later.map((l) => l.id)).toEqual(["tpl-section-s2-bg", "tpl-section-s2"]);
+    // Not there before its section, popping in when it starts, gone after
+    expect(evaluateAnimations(later[1], 10, 60).opacity).toBe(0);
+    expect(evaluateAnimations(later[1], 32, 60).opacity).toBe(1);
+    expect(evaluateAnimations(later[1], 34, 60).opacity).toBe(0);
+    expect(later[1].animations!.map((a) => [a.type, a.time])).toEqual([
+      ["scaleIn", 31],
+      ["scaleOut", 33.2],
+    ]);
+  });
+});
+
 describe("element templates", () => {
   it("reads a layout's elements", () => {
     const spec = specFromLayout("signature");

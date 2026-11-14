@@ -54,36 +54,42 @@ function AnimatedLayerWrapper({ layer, children }: { layer: Layer; children: Rea
   );
 }
 
+/** The game and the webcam play the same clip: only one of them is heard (the blurred background is a silent copy) */
+export function audibleLayerId(layers: Layer[]): string | undefined {
+  return layers.find((l) => l.visible && (l.type === "gameplay" || l.type === "facecam") && l.video && !l.video.background)?.id;
+}
+
+/** A layer where the template put it; `z` stacks layers that don't sit in the same list (montages) */
+export function LayerBox({ layer, audible, z }: { layer: Layer; audible: boolean; z?: number }) {
+  if (!layer.visible) return null;
+  return (
+    <div
+      style={{
+        position: "absolute",
+        left: layer.transform.x,
+        top: layer.transform.y,
+        width: layer.transform.width,
+        height: layer.transform.height,
+        transform: layer.transform.rotation ? `rotate(${layer.transform.rotation}deg)` : undefined,
+        transformOrigin: "center center",
+        zIndex: z,
+      }}
+    >
+      <AnimatedLayerWrapper layer={layer}>
+        <LayerContent layer={layer} audible={audible} />
+      </AnimatedLayerWrapper>
+    </div>
+  );
+}
+
 export default function CuttieComposition({ layers }: CuttieCompositionProps) {
-  // The game and the webcam play the same clip: only one of them is heard
-  // (the blurred background is a silent copy)
-  const audioLayerId = layers.find(
-    (l) => l.visible && (l.type === "gameplay" || l.type === "facecam") && l.video && !l.video.background,
-  )?.id;
+  const audioLayerId = audibleLayerId(layers);
 
   return (
     <AbsoluteFill style={{ background: "#000" }}>
-      {layers.map((layer) => {
-        if (!layer.visible) return null;
-        return (
-          <div
-            key={layer.id}
-            style={{
-              position: "absolute",
-              left: layer.transform.x,
-              top: layer.transform.y,
-              width: layer.transform.width,
-              height: layer.transform.height,
-              transform: layer.transform.rotation ? `rotate(${layer.transform.rotation}deg)` : undefined,
-              transformOrigin: "center center",
-            }}
-          >
-            <AnimatedLayerWrapper layer={layer}>
-              <LayerContent layer={layer} audible={layer.id === audioLayerId} />
-            </AnimatedLayerWrapper>
-          </div>
-        );
-      })}
+      {layers.map((layer) => (
+        <LayerBox key={layer.id} layer={layer} audible={layer.id === audioLayerId} />
+      ))}
     </AbsoluteFill>
   );
 }

@@ -807,6 +807,48 @@ video {
   transform: scale(0.9);
 }
 
+/* A piece just made (cut at the playhead, kept from a part that was cut out): lit for a moment */
+.piece[data-fresh] {
+  animation: piece-fresh 1100ms var(--ease-glide) both;
+}
+@keyframes piece-fresh {
+  0% {
+    background: color-mix(in srgb, var(--color-accent) 55%, transparent);
+    box-shadow: 0 0 18px var(--color-accent-glow);
+  }
+  100% {
+    background: transparent;
+    box-shadow: none;
+  }
+}
+
+/* Takes a piece of the cut away: shows when its piece is hovered */
+.piece-remove {
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  border-radius: 9999px;
+  color: #fff;
+  background: rgb(11 11 12 / 0.78);
+  border: 1px solid rgb(255 255 255 / 0.22);
+  opacity: 0;
+  scale: 0.6;
+  transition:
+    opacity 180ms ease,
+    scale 420ms var(--ease-bounce),
+    background-color 160ms ease;
+}
+.group\/piece:hover .piece-remove,
+.piece-remove:focus-visible {
+  opacity: 1;
+  scale: 1;
+}
+.piece-remove:hover {
+  background: rgb(220 60 60 / 0.9);
+  border-color: transparent;
+}
+
 /* The edge of the strip where 30 s are being fetched from the live */
 .extend-glow {
   animation: extend-pulse 1.1s ease-in-out infinite alternate;
@@ -885,6 +927,8 @@ video {
   .machine-bar,
   .extend-plus,
   .extend-glow,
+  .piece[data-fresh],
+  .piece-remove,
   .ring-out,
   .animate-find,
   .animate-bump {

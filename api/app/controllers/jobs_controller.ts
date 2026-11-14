@@ -11,6 +11,7 @@ import { cancelJob, enqueueJob, type WorkerJob } from '#services/worker_client'
 import { chatInClip, readJobChat } from '#services/edit_env_resolver'
 import { freeableBytes } from '#services/disk_space'
 import { dbTime } from '#services/db_time'
+import { envelope, normalizeRanges, parseRanges } from '#services/clip_pieces'
 import { createJobValidator } from '#validators/user'
 
 /** Hand a job to the worker in the background; mark it failed if the worker never answers. */
@@ -282,13 +283,13 @@ export default class JobsController {
     return { clips }
   }
 
-  // PATCH /api/jobs/:id/selection — keep / pass a clip, set its trim
+  // PATCH /api/jobs/:id/selection — keep / pass a clip, set its trim, or cut it in several pieces (segments)
   async updateSelection({ params, request, response, auth }: HttpContext) {
     const user = auth.getUserOrFail()
     const job = await Job.find(params.id)
     if (!job || job.userId !== user.id) return response.notFound({ error: 'job not found' })
 
-    const body = request.body() as { clip_filename?: string; state?: string | null; trim?: unknown }
+    const body = request.body() as { clip_filename?: string; state?: string | null; trim?: unknown; segments?: unknown }
     const filename = typeof body.clip_filename === 'string' ? path.basename(body.clip_filename) : ''
     const known = (job.hotPoints ?? []).some((hp: any) => hp.clip_filename === filename)
     if (!filename || !known) return response.badRequest({ error: 'unknown clip' })
@@ -309,6 +310,19 @@ export default class JobsController {
         }
         current.trim = [Math.round(start * 10) / 10, Math.round(end * 10) / 10]
       }
+      // One cut: no more pieces (unless they come with it, below)
+      delete current.segments
+    }
+    if (body.segments !== undefined && body.segments !== null) {
+      const parsed = parseRanges(body.segments)
+      const pieces = parsed ? normalizeRanges(parsed) : []
+      if (pieces.length === 0) return response.badRequest({ error: 'segments must be [[start, end], ...] in seconds' })
+      // A single piece is a trim; `trim` always spans the pieces
+      if (pieces.length > 1) current.segments = pieces
+      else delete current.segments
+      current.trim = envelope(pieces)
+    } else if (body.segments === null) {
+      delete current.segments
     }
 
     const selection = { ...(job.selection ?? {}) }

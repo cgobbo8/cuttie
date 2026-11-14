@@ -511,8 +511,10 @@ export interface JobTimeline {
 
 export interface ClipSelection {
   state?: "kept" | "passed";
-  /** Trim bounds in clip seconds */
+  /** Trim bounds in clip seconds (with `segments`: the span they cover) */
   trim?: [number, number];
+  /** The clip cut in several pieces played one after the other, clip seconds */
+  segments?: [number, number][];
 }
 
 export interface JobSummary {
@@ -875,7 +877,7 @@ export async function getJobChat(jobId: string): Promise<Record<string, ClipChat
 export async function updateSelection(
   jobId: string,
   clipFilename: string,
-  patch: { state?: ClipSelection["state"] | null; trim?: [number, number] | null },
+  patch: { state?: ClipSelection["state"] | null; trim?: [number, number] | null; segments?: [number, number][] | null },
 ): Promise<Record<string, ClipSelection>> {
   const res = await fetch(`${BASE}/jobs/${jobId}/selection`, {
     method: "PATCH",
@@ -1070,10 +1072,12 @@ export interface TranscriptWord {
   speaker?: string;
 }
 
+/** The words said in a clip, clip seconds (empty when it wasn't transcribed yet): cuts land between them */
 export async function getClipWords(jobId: string, filename: string): Promise<TranscriptWord[]> {
-  const res = await fetch(`${BASE}/clips/${jobId}/${filename}/words`);
+  const res = await fetch(`${BASE}/clips/${jobId}/${encodeURIComponent(filename)}/words`);
   if (!res.ok) return [];
-  return res.json();
+  const json = await res.json().catch(() => null);
+  return Array.isArray(json?.words) ? json.words : [];
 }
 
 export interface EditEnvironment {
@@ -1175,6 +1179,33 @@ export async function startRender(
   return data.render_id;
 }
 
+/** A piece of a montage as the renderer takes it: `duration` seconds of `clip` from `from`, with its layers */
+export interface MontageRenderPiece {
+  clip: string;
+  from: number;
+  duration: number;
+  layers: { layer: unknown; z: number }[];
+}
+
+/**
+ * Renders several pieces one after the other in one video (a clip cut in
+ * pieces, a compilation). `key`: what the export stands for, a clip's filename
+ * or comp_<id>.mp4.
+ */
+export async function startMontageRender(
+  jobId: string,
+  montage: { key: string; name?: string; pieces: MontageRenderPiece[]; overlays: { layer: unknown; z: number }[] },
+  renderOptions?: { width?: number; height?: number; fps?: number },
+): Promise<string> {
+  const res = await fetch(`${BASE}/jobs/${jobId}/montage-render`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...montage, ...(renderOptions ? { render_options: renderOptions } : {}) }),
+  });
+  const json = await jsonOrThrow<{ render_id: string }>(res, "Render failed");
+  return json.render_id;
+}
+
 export async function getRenderStatus(renderId: string): Promise<RenderStatus> {
   const res = await fetch(`${BASE}/renders/${renderId}`);
   if (!res.ok) throw new Error("Failed to fetch render status");
@@ -1219,6 +1250,161 @@ export async function renderClip(
     };
     poll();
   });
+}
+
+// ── Searching the live, compilations ─────────────────────
+
+/** A moment of the live that matches a search, live seconds */
+export interface LiveHit {
+  start: number;
+  end: number;
+  /** "voice" (said), "chat" (written), "ai" (the AI read it) */
+  sources: string[];
+  /** What is said there, and just before / after */
+  text: string;
+  before: string;
+  after: string;
+  /** Chat messages that match, "author: text" */
+  chat: string[];
+  /** The AI's reason, and how sure it is (0-1) */
+  why: string;
+  score: number;
+}
+
+export interface LiveSearchResult {
+  hits: LiveHit[];
+  total: number;
+  /** The live was transcribed (else only the chat is searched) */
+  transcript: boolean;
+  /** AI searches: answered from the disk (free), dollars spent otherwise */
+  cached?: boolean;
+  cost?: number;
+}
+
+export interface LiveSearchInfo {
+  transcript: boolean;
+  chat: number;
+  /** About what asking the AI costs, dollars (null: nothing to read) */
+  ai_cost: number | null;
+  /** Development: another model answers, nothing is billed */
+  dev?: boolean;
+}
+
+export type LiveFailure = "no_transcript" | "credits" | "key" | "live_gone" | "unreachable" | "failed";
+
+/** A search, a plan or a cut from the live that couldn't be done, and why */
+export class LiveError extends Error {
+  constructor(readonly reason: LiveFailure) {
+    super(reason);
+  }
+}
+
+const LIVE_FAILURES: LiveFailure[] = ["no_transcript", "credits", "key", "live_gone", "unreachable", "failed"];
+
+async function liveJson<T>(res: Response): Promise<T> {
+  if (res.ok) return res.json();
+  const body = await res.json().catch(() => null);
+  throw new LiveError(LIVE_FAILURES.includes(body?.error) ? body.error : "failed");
+}
+
+const postJson = (url: string, body: unknown, method = "POST") =>
+  fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+
+export async function getLiveSearchInfo(jobId: string): Promise<LiveSearchInfo> {
+  return liveJson(await fetch(`${BASE}/jobs/${jobId}/search/info`));
+}
+
+/** Moments of the live that match: "words" looks for what is said or written (free), "ai" has the AI read the whole live */
+export async function searchLive(jobId: string, query: string, mode: "words" | "ai"): Promise<LiveSearchResult> {
+  return liveJson(await postJson(`${BASE}/jobs/${jobId}/search`, { query, mode }));
+}
+
+export interface VideoPlan {
+  title: string;
+  sections: { title: string; hits: LiveHit[] }[];
+  cached?: boolean;
+  cost?: number;
+}
+
+/** A whole video planned by the AI from a description, `target` seconds long */
+export async function planLiveVideo(jobId: string, brief: string, target: number): Promise<VideoPlan> {
+  return liveJson(await postJson(`${BASE}/jobs/${jobId}/plan`, { brief, target }));
+}
+
+/** Where a moment's clip stands: cut from the live (with room around the moment) or not yet */
+export interface PieceState {
+  ready: boolean;
+  file: string;
+  /** Where the clip sits in the live, seconds (null: not cut yet) */
+  file_start: number | null;
+  file_end: number | null;
+}
+
+/** A moment of the live in a compilation, [start, end] in live seconds */
+export interface CompilationItem extends Partial<PieceState> {
+  id: string;
+  start: number;
+  end: number;
+  text: string;
+  why: string;
+  sources: string[];
+}
+
+export interface CompilationSection {
+  id: string;
+  /** Shown on screen when the section starts */
+  title: string;
+  /** The search its moments came from */
+  query: string;
+  items: CompilationItem[];
+}
+
+/** A video made of pieces of the live */
+export interface Compilation {
+  id: string;
+  name: string;
+  sections: CompilationSection[];
+  /** Template key (null: the channel's default) */
+  template: string | null;
+  /** Each section's title on screen when it starts (else the hook line, once) */
+  titles: boolean;
+  hook: string;
+  /** Length aimed for, seconds */
+  target: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type CompilationDraft = Pick<Compilation, "name" | "sections" | "template" | "titles" | "hook" | "target">;
+
+export async function listCompilations(jobId: string): Promise<Compilation[]> {
+  const json = await jsonOrThrow<{ compilations: Compilation[] }>(await fetch(`${BASE}/jobs/${jobId}/compilations`), "Failed to load the compilations");
+  return json.compilations;
+}
+
+export async function createCompilation(jobId: string, draft: Partial<CompilationDraft> = {}): Promise<Compilation> {
+  const json = await jsonOrThrow<{ compilation: Compilation }>(await postJson(`${BASE}/jobs/${jobId}/compilations`, draft), "Failed to create the compilation");
+  return json.compilation;
+}
+
+export async function saveCompilation(jobId: string, compilation: Compilation): Promise<Compilation> {
+  const res = await postJson(`${BASE}/jobs/${jobId}/compilations/${compilation.id}`, compilation, "PUT");
+  const json = await jsonOrThrow<{ compilation: Compilation }>(res, "Failed to save the compilation");
+  return json.compilation;
+}
+
+export async function deleteCompilation(jobId: string, compilationId: string): Promise<void> {
+  await jsonOrThrow(await fetch(`${BASE}/jobs/${jobId}/compilations/${compilationId}`, { method: "DELETE" }), "Failed to delete the compilation");
+}
+
+/** Makes sure each moment (live seconds) has its clip, cutting it from the live when needed */
+export async function ensurePieces(jobId: string, pieces: { id: string; start: number; end: number }[]): Promise<{ pieces: (PieceState & { id: string })[]; failed: string[] }> {
+  return liveJson(await postJson(`${BASE}/jobs/${jobId}/pieces`, { pieces }));
+}
+
+/** The parts of a clip the AI would keep for a tight video (clip seconds); nothing is saved */
+export async function suggestClipCut(jobId: string, filename: string, wish = ""): Promise<{ parts: [number, number][]; note: string; cost: number }> {
+  return liveJson(await postJson(`${BASE}/clips/${jobId}/${encodeURIComponent(filename)}/suggest-cut`, { wish }));
 }
 
 // ── Assets ──────────────────────────────────────────────

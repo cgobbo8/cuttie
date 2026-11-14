@@ -114,6 +114,8 @@ export default function SubtitleLayer({ layer }: Props) {
   );
 
   const showPlaceholder = subtitle.words.length === 0 || !activeChunk;
+  // In a montage, a piece where nobody speaks yet shows nothing, like the export
+  if (showPlaceholder && subtitle.quiet) return null;
 
   return (
     <div

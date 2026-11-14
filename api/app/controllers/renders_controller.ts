@@ -4,7 +4,7 @@ import { existsSync } from 'node:fs'
 import path from 'node:path'
 import archiver from 'archiver'
 import db from '@adonisjs/lucid/services/db'
-import { renderClip } from '#services/remotion_renderer'
+import { renderClip, renderMontage, type MontagePiece, type PlacedLayer } from '#services/remotion_renderer'
 import { uploadFile, getPresignedDownloadUrl, deleteObject, storagePath } from '#services/storage'
 import { clipDir } from '#services/data_paths'
 import { enqueueRender } from '#services/render_queue'
@@ -56,6 +56,36 @@ function serializeRender(row: RenderRow) {
   }
 }
 
+/** Most pieces one montage can have (a 3-minute compilation of 2-second pieces) */
+const MAX_PIECES = 120
+
+function parsePlaced(raw: unknown): PlacedLayer[] | null {
+  if (!Array.isArray(raw)) return null
+  const placed: PlacedLayer[] = []
+  for (const item of raw) {
+    const layer = (item as any)?.layer
+    const z = Number((item as any)?.z)
+    if (!layer || typeof layer !== 'object' || !layer.transform || !layer.style || !Number.isFinite(z)) return null
+    placed.push({ layer: layer as Layer, z })
+  }
+  return placed
+}
+
+/** The pieces of a montage as sent by the app: [{ clip, from, duration, layers: [{ layer, z }] }] */
+function parsePieces(raw: unknown): MontagePiece[] | null {
+  if (!Array.isArray(raw) || raw.length === 0 || raw.length > MAX_PIECES) return null
+  const pieces: MontagePiece[] = []
+  for (const item of raw) {
+    const clip = typeof (item as any)?.clip === 'string' ? path.basename((item as any).clip) : ''
+    const from = Number((item as any)?.from)
+    const duration = Number((item as any)?.duration)
+    const layers = parsePlaced((item as any)?.layers)
+    if (!clip.endsWith('.mp4') || !Number.isFinite(from) || from < 0 || !Number.isFinite(duration) || duration <= 0 || !layers) return null
+    pieces.push({ clipFilename: clip, from, duration, layers })
+  }
+  return pieces
+}
+
 // ── controller ───────────────────────────────────────────────────────────────
 
 export default class RendersController {
@@ -95,6 +125,55 @@ export default class RendersController {
     // Enqueue render (sequential queue ensures one at a time)
     enqueueRender(() => runRender({ renderId, jobId, clipFilename: filename, layers: layers as Layer[], outputPath, outputFilename, trim, renderOptions: render_options }))
 
+    return response.created({ render_id: renderId })
+  }
+
+  /**
+   * POST /api/jobs/:jobId/montage-render — several pieces one after the other in one video:
+   * { key, name, pieces: [{ clip, from, duration, layers: [{ layer, z }] }], overlays: [{ layer, z }] }.
+   * `key`: what this export stands for (a clip cut in pieces: its filename; a compilation: comp_<id>.mp4).
+   */
+  async storeMontage({ params, request, response, auth }: HttpContext) {
+    const user = auth.getUserOrFail()
+    const jobId = params.jobId
+    const job = await db.from('jobs').where('id', jobId).where('user_id', user.id).first()
+    if (!job) return response.notFound({ error: 'job not found' })
+
+    const body = request.body() as {
+      key?: unknown
+      name?: unknown
+      pieces?: unknown
+      overlays?: unknown
+      render_options?: { width?: number; height?: number; fps?: number }
+    }
+    const pieces = parsePieces(body.pieces)
+    const overlays = parsePlaced(body.overlays ?? [])
+    if (!pieces || !overlays) {
+      return response.badRequest({ error: 'pieces: [{ clip, from, duration, layers }] and overlays: [{ layer, z }] required' })
+    }
+    const missing = pieces.find((piece) => !existsSync(path.join(clipDir(jobId), piece.clipFilename)))
+    if (missing) return response.notFound({ error: 'clip not found', clip: missing.clipFilename })
+
+    const key = typeof body.key === 'string' && body.key.endsWith('.mp4') ? path.basename(body.key) : pieces[0].clipFilename
+    const renderId = randomUUID()
+    const outputFilename = `render_${renderId}.mp4`
+    const outputPath = path.join(clipDir(jobId), outputFilename)
+    const now = new Date().toISOString()
+    await db.table('renders').insert({
+      id: renderId,
+      job_id: jobId,
+      clip_filename: key,
+      clip_name: typeof body.name === 'string' && body.name.trim() ? body.name.trim().slice(0, 200) : null,
+      status: 'rendering',
+      progress: 0,
+      user_id: user.id,
+      created_at: now,
+      updated_at: now,
+    })
+
+    enqueueRender(() =>
+      runRender({ renderId, jobId, clipFilename: key, layers: [], outputPath, outputFilename, renderOptions: body.render_options, montage: { pieces, overlays } })
+    )
     return response.created({ render_id: renderId })
   }
 
@@ -299,8 +378,10 @@ async function runRender(opts: {
   outputFilename: string
   trim?: { start: number; end: number }
   renderOptions?: { width?: number; height?: number; fps?: number }
+  /** Several pieces one after the other instead of one clip (`layers` and `trim` unused) */
+  montage?: { pieces: MontagePiece[]; overlays: PlacedLayer[] }
 }) {
-  const { renderId, jobId, clipFilename, layers, outputPath, outputFilename, trim, renderOptions } = opts
+  const { renderId, jobId, clipFilename, layers, outputPath, outputFilename, trim, renderOptions, montage } = opts
 
   const updateRender = async (fields: Record<string, unknown>) => {
     await db.from('renders').where('id', renderId).update({
@@ -313,20 +394,20 @@ async function runRender(opts: {
     // Mark as rendering (for batch renders that start as 'pending')
     await updateRender({ status: 'rendering' })
 
-    const { sizeMb } = await renderClip({
+    const output = {
       renderId,
-      layers,
       jobId,
-      clipFilename,
       outputPath,
-      trim,
       width: renderOptions?.width,
       height: renderOptions?.height,
       fps: renderOptions?.fps,
-      onProgress: async (pct) => {
+      onProgress: async (pct: number) => {
         await updateRender({ progress: pct })
       },
-    })
+    }
+    const { sizeMb } = montage
+      ? await renderMontage({ ...output, pieces: montage.pieces, overlays: montage.overlays })
+      : await renderClip({ ...output, layers, clipFilename, trim })
 
     // Move the render output into storage
     await uploadFile(`renders/${jobId}/${outputFilename}`, outputPath, 'video/mp4')

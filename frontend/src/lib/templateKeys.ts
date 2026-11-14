@@ -6,7 +6,7 @@ import type { BrandKit } from "./api";
 import type { Layer } from "./editorTypes";
 import { HAS_HOOK, NEEDS_WEBCAM, TEMPLATE_IDS, type TemplateContext, type TemplateId } from "./templates";
 import { buildFromSpec, type TemplateSpec } from "./templateSpec";
-import { buildTemplate, upgradeTemplate } from "./builtinTemplates";
+import { buildTemplate, builtInSpec, upgradeTemplate } from "./builtinTemplates";
 
 export type TemplateKey = string;
 
@@ -48,4 +48,10 @@ export function showsHook(key: TemplateKey, customs: TemplateSpec[]): boolean {
 /** Built-in layouts made around the webcam can't be used without one; custom ones just drop it */
 export function needsWebcam(key: TemplateKey, customs: TemplateSpec[]): boolean {
   return !findCustom(key, customs) && NEEDS_WEBCAM.includes(baseOf(key, customs));
+}
+
+/** How a template writes its hook line and where (section titles of a compilation are written the same) */
+export function hookOf(key: TemplateKey, ctx: TemplateContext, customs: TemplateSpec[]): TemplateSpec["hook"] {
+  const custom = findCustom(key, customs);
+  return (custom ?? builtInSpec(baseOf(key, customs), { hasCam: !!ctx.facecam, subtitleStyle: ctx.subtitleStyle })).hook;
 }

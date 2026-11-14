@@ -1,16 +1,24 @@
 import { createContext, useContext, useState, useCallback, type ReactNode } from "react";
-import { CheckCircle, AlertCircle, X } from "lucide-react";
+import { CheckCircle, AlertCircle, Info, X } from "lucide-react";
 
 interface Toast {
   id: number;
   message: string;
-  type: "success" | "error";
+  type: "success" | "error" | "info";
 }
 
 interface ToastContextType {
   success: (message: string) => void;
   error: (message: string) => void;
+  /** Something to know that is neither a success nor a failure (nothing to cut here...) */
+  info: (message: string) => void;
 }
+
+const LOOK = {
+  success: { background: "rgba(16, 185, 129, 0.08)", border: "rgba(16, 185, 129, 0.15)", icon: "text-emerald-400", text: "text-emerald-300" },
+  error: { background: "rgba(239, 68, 68, 0.08)", border: "rgba(239, 68, 68, 0.15)", icon: "text-red-400", text: "text-red-300" },
+  info: { background: "rgba(255, 255, 255, 0.06)", border: "rgba(255, 255, 255, 0.12)", icon: "text-zinc-300", text: "text-zinc-200" },
+} as const;
 
 const ToastContext = createContext<ToastContextType | null>(null);
 
@@ -19,7 +27,7 @@ let nextId = 0;
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
 
-  const addToast = useCallback((message: string, type: "success" | "error") => {
+  const addToast = useCallback((message: string, type: Toast["type"]) => {
     const id = ++nextId;
     setToasts((prev) => [...prev, { id, message, type }]);
     setTimeout(() => {
@@ -29,13 +37,14 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
   const success = useCallback((message: string) => addToast(message, "success"), [addToast]);
   const error = useCallback((message: string) => addToast(message, "error"), [addToast]);
+  const info = useCallback((message: string) => addToast(message, "info"), [addToast]);
 
   const dismiss = useCallback((id: number) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
   return (
-    <ToastContext.Provider value={{ success, error }}>
+    <ToastContext.Provider value={{ success, error, info }}>
       {children}
 
       {/* Toast container */}
@@ -45,21 +54,19 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             key={toast.id}
             className="pointer-events-auto flex items-center gap-3 px-4 py-3 rounded-xl shadow-2xl border animate-fade-in min-w-[280px] max-w-[400px]"
             style={{
-              background: toast.type === "success" ? "rgba(16, 185, 129, 0.08)" : "rgba(239, 68, 68, 0.08)",
-              borderColor: toast.type === "success" ? "rgba(16, 185, 129, 0.15)" : "rgba(239, 68, 68, 0.15)",
+              background: LOOK[toast.type].background,
+              borderColor: LOOK[toast.type].border,
               backgroundColor: "rgb(24, 24, 27)",
             }}
           >
             {toast.type === "success" ? (
-              <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
+              <CheckCircle className={`w-4 h-4 shrink-0 ${LOOK.success.icon}`} />
+            ) : toast.type === "error" ? (
+              <AlertCircle className={`w-4 h-4 shrink-0 ${LOOK.error.icon}`} />
             ) : (
-              <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+              <Info className={`w-4 h-4 shrink-0 ${LOOK.info.icon}`} />
             )}
-            <span
-              className={`text-sm flex-1 ${toast.type === "success" ? "text-emerald-300" : "text-red-300"}`}
-            >
-              {toast.message}
-            </span>
+            <span className={`text-sm flex-1 ${LOOK[toast.type].text}`}>{toast.message}</span>
             <button
               onClick={() => dismiss(toast.id)}
               className="p-0.5 text-zinc-500 hover:text-zinc-300 transition-colors shrink-0"

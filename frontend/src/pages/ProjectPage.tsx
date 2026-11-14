@@ -1,28 +1,33 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { useTranslation } from "react-i18next";
-import { AlertTriangle, ArrowLeft, ArrowRight, Check, ChevronDown, Loader2, RotateCcw, Sparkles, Upload, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ArrowRight, Check, ChevronDown, Loader2, RotateCcw, Search, Sparkles, Upload, WandSparkles, X } from "lucide-react";
 import {
   clipThumbUrl,
   deleteClip,
   extendClip,
   ExtendError,
+  getClipWords,
   getJobChat,
   getJobStatus,
+  LiveError,
   listRenders,
   mapSSEHotPoint,
   renameClip,
   retryJob,
+  suggestClipCut,
   updateSelection,
   type ClipChatLine,
   type ClipSelection,
   type JobResponse,
   type TimelineCandidate,
+  type TranscriptWord,
 } from "../lib/api";
 import { useBackdrop } from "../lib/BackdropContext";
 import { useChannel } from "../lib/ChannelContext";
 import { useTransmitChannel } from "../lib/TransmitContext";
 import { buildMoments, countStates, nextTodo, type MomentState } from "../lib/moments";
+import type { Range } from "../lib/montage";
 import { hoursMinutes, shortDate, splitVodTitle } from "../lib/format";
 import { useToast } from "../components/Toast";
 import ConfirmModal from "../components/ConfirmModal";
@@ -34,6 +39,7 @@ import VodTimeline from "../components/project/VodTimeline";
 import MomentPlayer, { type MomentPlayerHandle } from "../components/project/MomentPlayer";
 import MomentDetails from "../components/project/MomentDetails";
 import MomentList from "../components/project/MomentList";
+import { Tooltip } from "../components/ui/Tooltip";
 import FreedNotice from "../components/project/FreedNotice";
 import { latestPerClip } from "../lib/renders";
 
@@ -141,6 +147,22 @@ export default function ProjectPage() {
   }, [jobId, done]);
 
   const current = moments[Math.min(selected, moments.length - 1)];
+  // The clip on screen, for what answers later (the AI's montage)
+  const playing = useRef<string | null>(null);
+  playing.current = current?.filename ?? null;
+
+  // The words said in the clip on screen: cuts land between them, silences can be taken out
+  const [clipWords, setClipWords] = useState<Record<string, TranscriptWord[]>>({});
+  const wordsKey = current ? `${current.filename}@${current.start}-${current.end}` : null;
+  useEffect(() => {
+    if (!jobId || !current || !wordsKey || clipWords[wordsKey]) return;
+    let cancelled = false;
+    getClipWords(jobId, current.filename).then((words) => !cancelled && setClipWords((prev) => ({ ...prev, [wordsKey]: words })));
+    return () => {
+      cancelled = true;
+    };
+  }, [jobId, wordsKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const trimmedByUser = !!current?.suggested && !!current?.trimmedByUser;
   const hasChat = !!current && (clipChat[current.filename]?.length ?? 0) > 0;
   const vodId = vodIdOf(job?.url ?? null);
@@ -175,7 +197,7 @@ export default function ProjectPage() {
   );
 
   const saveChoice = useCallback(
-    async (filename: string, patch: { state?: ClipSelection["state"] | null; trim?: [number, number] | null }) => {
+    async (filename: string, patch: { state?: ClipSelection["state"] | null; trim?: [number, number] | null; segments?: Range[] | null }) => {
       if (!jobId) return;
       // Optimistic, then reconcile with what the server stored
       setJob((prev) => {
@@ -188,6 +210,13 @@ export default function ProjectPage() {
         if (patch.trim !== undefined) {
           if (patch.trim === null) delete entry.trim;
           else entry.trim = patch.trim;
+          // One cut: no more pieces
+          delete entry.segments;
+        }
+        if (patch.segments) {
+          // Several pieces; the trim spans them
+          entry.segments = patch.segments;
+          entry.trim = [patch.segments[0][0], patch.segments[patch.segments.length - 1][1]];
         }
         return { ...prev, selection: { ...prev.selection, [filename]: entry } };
       });
@@ -200,6 +229,32 @@ export default function ProjectPage() {
     },
     [jobId, t, toast],
   );
+
+  /** The cut of a clip: one piece is a trim, several are played one after the other, null is the whole clip */
+  const saveCut = useCallback(
+    (filename: string, pieces: Range[] | null) => saveChoice(filename, !pieces ? { trim: null } : pieces.length > 1 ? { segments: pieces } : { trim: pieces[0] }),
+    [saveChoice],
+  );
+
+  // The AI's montage of the clip on screen: the parts worth keeping, shown as pieces (and taken back with Undo)
+  const [aiCutting, setAiCutting] = useState<string | null>(null);
+  const aiCut = async () => {
+    if (!jobId || !current || aiCutting) return;
+    const filename = current.filename;
+    setAiCutting(filename);
+    try {
+      const { parts, note } = await suggestClipCut(jobId, filename);
+      // The streamer moved on to another clip meanwhile: nothing to show there
+      if (playing.current !== filename) return;
+      if (parts.length === 0 || !playerRef.current?.setCut(parts)) toast.info(t("project.aiCutSame"));
+      else toast.success(note || t("project.aiCutDone", { count: parts.length }));
+    } catch (err) {
+      const reason = err instanceof LiveError ? err.reason : "failed";
+      toast.error(t(reason === "no_transcript" ? "project.tightenNoWords" : `compilation.failure.${reason}`));
+    } finally {
+      setAiCutting(null);
+    }
+  };
 
   const decide = useCallback(
     (state: Exclude<MomentState, "todo">) => {
@@ -220,14 +275,23 @@ export default function ProjectPage() {
   // Keyboard: Space play, G keep, X pass, arrows to move
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (isTyping(e.target) || e.metaKey || e.ctrlKey || e.altKey || moments.length === 0) return;
+      if (isTyping(e.target) || e.altKey || moments.length === 0) return;
       const key = e.key.toLowerCase();
+      // Ctrl / Cmd + Z takes the last change of the cut back
+      if (e.metaKey || e.ctrlKey) {
+        if (key === "z" && !e.shiftKey) {
+          e.preventDefault();
+          playerRef.current?.undo();
+        }
+        return;
+      }
       if (key === " ") {
         e.preventDefault();
         setInteracted(true);
         playerRef.current?.toggle();
       } else if (key === "g") decide("kept");
       else if (key === "x") decide("passed");
+      else if (key === "c") playerRef.current?.cut();
       else if (key === "arrowdown" || key === "arrowright") {
         e.preventDefault();
         select(Math.min(moments.length - 1, selected + 1));
@@ -313,6 +377,12 @@ export default function ProjectPage() {
                 {t("project.liveSummary")}
                 <ChevronDown className={`w-3.5 h-3.5 transition-transform ${contextOpen ? "rotate-180" : ""}`} />
               </button>
+            )}
+            {/* The whole live, searched: compilations */}
+            {!processing && !freed && job.status === "DONE" && (
+              <Link to={`/${jobId}/compilation`} title={t("project.toCompilationHint")} className="btn btn-glass btn-sm h-7 px-2.5">
+                <Search className="w-3.5 h-3.5" /> {t("project.toCompilation")}
+              </Link>
             )}
           </div>
         </div>
@@ -411,8 +481,17 @@ export default function ProjectPage() {
                 categoryLabel={categoryLabel(current.hp.llm?.category)}
                 autoPlay={interacted}
                 chat={clipChat[current.filename]}
+                words={wordsKey ? clipWords[wordsKey] : undefined}
                 onExtend={(side) => extendMoment(current.filename, side)}
-                onTrimChange={(trim) => saveChoice(current.filename, { trim })}
+                onPiecesChange={(pieces) => saveCut(current.filename, pieces)}
+                tools={
+                  <Tooltip content={t("project.aiCutHint")}>
+                    <button type="button" onClick={aiCut} disabled={!!aiCutting || !wordsKey || !clipWords[wordsKey]?.length} className="btn btn-ghost btn-sm h-7 px-2">
+                      {aiCutting === current.filename ? <Loader2 className="w-3.5 h-3.5 spinner" /> : <WandSparkles className="w-3.5 h-3.5 text-accent" />}
+                      {t("project.aiCut")}
+                    </button>
+                  </Tooltip>
+                }
               >
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-2.5 px-1.5 pt-3 pb-1.5">
                   {/* The hint, and the way back to the AI's cut under it */}
@@ -422,7 +501,9 @@ export default function ProjectPage() {
                         ? t("project.duplicateHint", { rank: current.duplicateOf.rank })
                         : current.suggested && !current.trimmedByUser
                           ? t("project.suggestedTrimHint", { seconds: Math.round(current.suggested[1] - current.suggested[0]) })
-                          : t("project.trimHint")}
+                          : current.pieces.length > 1
+                            ? t("project.piecesHint")
+                            : t("project.trimHint")}
                     </span>
                     {(trimmedByUser || hasChat) && (
                       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">

@@ -46,6 +46,7 @@ Positionnees par les lanceurs (`scripts/dev.mjs`, `scripts/launcher.mjs`) :
 - `WORKER_URL` (API) / `CUTTIE_API_URL` + `CUTTIE_WORKER_PORT` (worker)
 - `CUTTIE_AUTO_LOGIN` (defaut true), `FRONTEND_DIST` (API sert le front build)
 - `CUTTIE_APP_VERSION` (version de l'app desktop, dans l'export des journaux), `CUTTIE_CLEANUP_DAYS` (menage par defaut : 30 dans l'app installee, rien en dev)
+- `CUTTIE_LLM_CMD` (dev seulement) : commande qui lit une invite sur stdin et ecrit la reponse, a la place d'OpenRouter pour les appels texte de `llm_text.py` (recherche IA, plan, montage IA) — ex. `claude -p --model sonnet --tools ""` — pour tester sans depenser de credits
 
 Fichier `api/.env` : voir `api/.env.example` (APP_KEY en dev ; l'app packagee genere `<data dir>/app.key`).
 
@@ -68,7 +69,8 @@ cuttie/
 │   │   │   ├── disk_controller.ts            # espace disque, menage des anciens clips, liberer / recuperer un projet
 │   │   │   ├── internal_controller.ts        # evenements de statut pousses par le worker
 │   │   │   ├── spa_controller.ts             # sert frontend/dist (FRONTEND_DIST)
-│   │   │   ├── renders_controller.ts         # Remotion renders
+│   │   │   ├── renders_controller.ts         # Remotion renders (un clip, ou un montage de plusieurs morceaux)
+│   │   │   ├── compilations_controller.ts    # recherche dans le live, plan de video par l'IA, compilations, decoupe des passages
 │   │   │   ├── assets_controller.ts          # Upload/serve assets
 │   │   │   └── profile_controller.ts         # Profil utilisateur
 │   │   ├── models/
@@ -78,7 +80,7 @@ cuttie/
 │   │   ├── services/
 │   │   │   ├── storage.ts                    # stockage local + URLs signees (ex-S3)
 │   │   │   ├── data_paths.ts                 # layout du data dir partage
-│   │   │   ├── worker_client.ts              # client HTTP du worker (jobs, cancel, words, facecam, palette)
+│   │   │   ├── worker_client.ts              # client HTTP du worker (jobs, cancel, words, facecam, palette, recherche, passages)
 │   │   │   ├── local_user.ts                 # utilisateur local + auto-login
 │   │   │   ├── job_status_bus.ts             # evenements worker -> DB + Transmit SSE (statut, timeline, candidats)
 │   │   │   ├── brand_kit.ts                  # kit de marque dans settings.json (couleurs, widget, sous-titres, webcam)
@@ -87,12 +89,15 @@ cuttie/
 │   │   │   ├── twitch.ts                     # GQL public Twitch : chaine, VODs, storyboards
 │   │   │   ├── clip_variants.ts              # fond floute 9:16 pre-calcule (ffmpeg)
 │   │   │   ├── clip_extend.ts                # +30 s sur un cote de la coupe (le fichier grandit si besoin)
+│   │   │   ├── clip_pieces.ts                # un clip coupe en plusieurs morceaux (selection[clip].segments)
+│   │   │   ├── compilations.ts               # compilations (jobs.compilations) : parties, passages, leurs clips piece_<id>.mp4
+│   │   │   ├── worker_failure.ts             # refus du worker -> reponses de l'API (pas de transcript, credits, live parti)
 │   │   │   ├── clip_thumbs.ts                # vignettes (ffmpeg, cache) ; gardees quand les clips sont liberes
 │   │   │   ├── disk_space.ts                 # place prise, projets inactifs, liberer (exports gardes), recuperer, menage auto (6 h)
 │   │   │   ├── app_logs.ts                   # journal de l'app desktop (<data dir>/logs) : periode, cles masquees, vider
 │   │   │   ├── zip.ts                        # petit ecrivain .zip (deflate) pour l'export des journaux
 │   │   │   ├── db_time.ts                    # dates SQLite : `dbTime()` = format Lucid pour les UPDATE bruts de jobs, `dbMillis()` lit les deux formats
-│   │   │   └── remotion_renderer.ts          # Bundle + render Remotion
+│   │   │   └── remotion_renderer.ts          # Bundle + render Remotion (CuttieVideo : un clip ; CuttieMontage : des morceaux bout a bout)
 │   │   ├── validators/user.ts                # VineJS validation
 │   │   └── transformers/user_transformer.ts
 │   ├── database/migrations/                   # migrations SQLite (lancees au boot par start/local_app.ts)
@@ -127,7 +132,9 @@ cuttie/
 │   │       ├── storage.py                     # stockage local (ex-S3)
 │   │       ├── api_events.py                  # envoi ordonne des statuts a l'API
 │   │       ├── settings.py                    # lecture settings.json (cles API)
-│   │       ├── clip_tools.py                  # transcription a la demande + cam d'un live (clips) ou d'une VOD + clip allonge (+30 s) + clips recoupes depuis le live (projet libere)
+│   │       ├── clip_tools.py                  # transcription a la demande + cam d'un live (clips) ou d'une VOD + clip allonge (+30 s) + clips recoupes depuis le live (projet libere) + passages du live decoupes pour les compilations
+│   │       ├── live_search.py                 # chercher dans tout le live : mots dits / ecrits dans le chat, recherche par l'IA, plan de video, montage d'un clip par l'IA
+│   │       ├── llm_text.py                    # appels texte a l'IA (OpenRouter ; CUTTIE_LLM_CMD en dev), cout estime
 │   │       ├── openai_client.py               # Clients multi-provider (Groq, OpenRouter)
 │   │       ├── provider_errors.py             # Refus definitifs (credits, cle) -> arret clair de l'analyse
 │   │       └── db.py                          # SQLite persistence (WAL)
@@ -152,6 +159,7 @@ cuttie/
         │   ├── ProjectsPage.tsx               # Projets (cartes, ouvre l'etape en cours)
         │   ├── ProjectPage.tsx                # /:jobId — Analyse en direct puis Choisir
         │   ├── MontagePage.tsx                # /:jobId/montage — 7 modeles Remotion, cam par live
+        │   ├── CompilationPage.tsx            # /:jobId/compilation — chercher dans le live, compiler des passages, decrire la video a l'IA
         │   ├── TemplateEditorPage.tsx         # /modeles/:id — editeur de modele par elements (glisser, calques, widgets, timing)
         │   ├── ExportStepPage.tsx             # /:jobId/export — exports du projet
         │   ├── ExportsPage.tsx                # Bibliotheque d'exports par live
@@ -165,6 +173,7 @@ cuttie/
         │   ├── welcome/                       # Etapes du premier lancement + mur de lives
         │   ├── project/                       # AnalysisView, MomentPlayer/List/Details, VodTimeline, Stepper, RenderCard
         │   ├── montage/                       # TemplatePicker (onglets Mes modeles / Modeles Cuttie, etoile par defaut), TemplateSketch, CamSheet
+        │   ├── compilation/                   # SearchPanel (mots / IA / decrire la video), PiecePreview (un passage et sa coupe), CompilationPanel (parties, passages, duree)
         │   ├── template-editor/               # EditorCanvas (apercu + poignees), LayerList (calques), Panels (reglages), Scrubber (timeline)
         │   ├── KeyField.tsx                   # Champ de cle API verifie aupres du fournisseur
         │   ├── WebcamFrame.tsx                # Frame + rectangle de cam deplacable
@@ -174,7 +183,7 @@ cuttie/
         │   ├── ProjectRemoveModal.tsx         # Liberer l'espace (clips) ou supprimer le projet
         │   ├── ui/Tooltip.tsx                 # Radix tooltip wrapper
         │   ├── editor/                        # Canvas editor (layers, panels, viewport) ; widgets/kit = widgets de marque (copies cote API)
-        │   └── remotion-editor/               # Remotion composition + layers
+        │   └── remotion-editor/               # Remotion composition + layers ; MontageComposition = des morceaux bout a bout (copie cote API)
         └── lib/
             ├── api.ts                         # Client REST type-safe + SSE
             ├── desktop.ts                     # pont vers l'app desktop : mises a jour (pastille TopBar, Parametres > Application)
@@ -190,6 +199,8 @@ cuttie/
             ├── templateKeys.ts                # cle de modele : une des 7 mises en page ou un modele perso
             ├── fonts.ts                       # polices des clips (@fontsource, copiees cote API)
             ├── moments.ts / renders.ts / projects.ts  # Logique pure des ecrans (testee)
+            ├── montage.ts                     # morceaux d'un clip (couper, garder, enlever les silences, caler sur les mots) -> ce que Remotion joue
+            ├── compilation.ts                 # compilations : resultats -> passages, parties, ordre, ajuster a une duree
             ├── editorTypes.ts                 # Types editeur (layers, state)
             ├── editorThemes.ts                # Themes pre-definis
             ├── animations.ts                  # Animations Remotion
@@ -280,7 +291,7 @@ Fournisseur qui refuse tout (`provider_errors.py`) : credits OpenRouter epuises 
 | `/api/jobs`                           | GET     | Token    | Lister les analyses (du user)    |
 | `/api/jobs/{id}`                      | GET     | Token    | Status + hot points d'un job     |
 | `/api/jobs/{id}/retry`                | POST    | Token    | Relancer depuis un checkpoint    |
-| `/api/jobs/{id}/selection`            | PATCH   | Token    | Garder / passer / trim un clip   |
+| `/api/jobs/{id}/selection`            | PATCH   | Token    | Garder / passer / trim un clip, ou le couper en morceaux (`segments`) |
 | `/api/jobs/{id}/facecam`              | PUT     | Token    | Cam reglee a la main pour ce live|
 | `/api/jobs/{id}/chat`                 | GET     | Token    | Messages du chat de chaque clip  |
 | `/api/jobs/{id}/sse`                  | GET     | SSE Token| SSE temps reel                   |
@@ -289,6 +300,8 @@ Fournisseur qui refuse tout (`provider_errors.py`) : credits OpenRouter epuises 
 | `/api/clips/{id}/{filename}/trim`     | POST    | Token    | Trim clip FFmpeg                 |
 | `/api/clips/{id}/{filename}/extend`   | POST    | Token    | +30 s avant / apres (re-extrait) |
 | `/api/clips/{id}/{filename}/thumb`    | GET     | Token    | Vignette (clip ou render)        |
+| `/api/clips/{id}/{filename}/words`    | GET     | Token    | Mots du clip (cales de coupe)    |
+| `/api/clips/{id}/{filename}/suggest-cut` | POST | Token    | Morceaux a garder selon l'IA (rien n'est enregistre) |
 | `/api/clips/{id}/{filename}/background` | GET   | Token    | Fond floute 9:16 du clip         |
 | `/api/brand-kit`                      | GET/PUT | Token    | Kit de marque                    |
 | `/api/brand-kit/detect-colors`        | POST    | Token    | Couleurs du logo -> kit          |
@@ -300,6 +313,13 @@ Fournisseur qui refuse tout (`provider_errors.py`) : credits OpenRouter epuises 
 | `/api/twitch/vods/{id}/storyboard`    | GET     | Token    | Planches d'apercu d'une VOD      |
 | `/api/renders`                        | GET     | Token    | Liste des exports                |
 | `/api/renders`                        | POST    | Token    | Lancer un export Remotion        |
+| `/api/jobs/{id}/montage-render`       | POST    | Token    | Export de plusieurs morceaux bout a bout (clip coupe, compilation) |
+| `/api/jobs/{id}/search/info`          | GET     | Token    | Ce qui se cherche dans le live, cout d'une question a l'IA |
+| `/api/jobs/{id}/search`               | POST    | Token    | Passages du live : mots (gratuit) ou IA (`mode: "ai"`) |
+| `/api/jobs/{id}/plan`                 | POST    | Token    | Video decrite -> parties et passages (IA) |
+| `/api/jobs/{id}/pieces`               | POST    | Token    | Decoupe les passages demandes dans le live (410 : live parti) |
+| `/api/jobs/{id}/compilations`         | GET/POST | Token   | Compilations du live             |
+| `/api/jobs/{id}/compilations/{compId}` | PUT/DELETE | Token | Enregistrer / supprimer une compilation |
 | `/api/renders/{id}`                   | GET     | Token    | Status d'un export               |
 | `/api/assets`                         | GET     | Token    | Liste des assets                 |
 | `/api/assets/upload`                  | POST    | Token    | Upload asset                     |
@@ -323,6 +343,9 @@ Fournisseur qui refuse tout (`provider_errors.py`) : credits OpenRouter epuises 
 - Premier lancement `/bienvenue` (installation sans analyse ni `onboarded` dans settings.json) : chaine Twitch (lives + couleurs du logo), deux cles (verifiees aupres de Groq / OpenRouter), webcam reperee sur le dernier live pendant ce temps.
 - Projet en 4 etapes : Analyse (en direct) -> Choisir (garder / passer / trim) -> Monter (7 modeles a la DA de la chaine) -> Exporter.
 - Choisir : le chat sur la frise du live (barres, le dixieme le plus actif en blanc vif) et sur celle du clip (un point par message, le texte au survol) ; « + » au survol de la frise du clip = 30 s de plus de ce cote (le clip est re-extrait du live quand la coupe depasse son fichier : mots, cam et vignettes suivent) ; « Pourquoi ce moment » dit d'ou vient un moment (score son + chat, lu par l'IA, demande sur le stream, ajoute a la main).
+- Coupe en plusieurs morceaux (Choisir) : « Couper ici » (C) coupe le morceau sous la tete de lecture, « Garder ce passage » ajoute un morceau la ou le clip est coupe (du contexte avant la coupe de l'IA), « × » au survol retire un morceau, « Enlever les silences » retire les blancs de plus d'1,1 s (mots du clip), « Montage IA » demande a l'IA les morceaux a garder (moins d'un centime), Annuler / Ctrl+Z. Les poignees se calent entre deux mots (Alt : librement). La lecture saute les coupes. `selection[clip].segments` (2 morceaux ou plus, secondes du clip) ; `trim` reste l'enveloppe.
+- Compilation (`/:jobId/compilation`, bouton « Chercher dans le live » de Choisir) : chercher dans tout le live par mots (dits : transcript du live ; ecrits : chat ; gratuit, immediat, phrases serrees quand le transcript a les mots dates) ou en demandant a l'IA (elle lit tout le live, ~0,04 $, reponse gardee sur disque : la meme question ne se paie qu'une fois), ajouter les passages a des parties titrees, ou decrire toute la video (« Decrire la video » : l'IA propose parties + passages pour une duree visee). Chaque passage a son petit clip `piece_<id>.mp4` decoupe dans le live (segments HLS utiles seulement, marge 0,6 a 8 s), avec les memes fichiers annexes qu'un clip. Tout reste modifiable : ordre, coupe de chaque passage, titres, modele, « Ajuster a 1 min 30 ».
+- Montage (plusieurs morceaux dans une video) : composition Remotion `CuttieMontage` (app et rendu). Chaque morceau garde l'horloge de son clip (videos, sous-titres, chat) ; l'accroche, les widgets et les titres de parties tournent une seule fois sur l'horloge de la video. Les exports classiques (un clip, une coupe) passent toujours par `CuttieVideo`.
 - Design : verre fonce pose sur du contenu floute (vignettes, frames), une seule couleur d'accent = couleur de la chaine.
 - Modeles : les 7 mises en page, chacune sa structure (Empile = cam en bandeau / jeu ; Reaction = visage en grand + jeu en vignette ; Discussion RP = scene du jeu + cam ronde, conversation et chat dessous ; Action = jeu plein ecran + cam ronde ; Cinema = ecran du live entier entre deux bandes, titre au-dessus ; Signature = cartes sur fond floute ; Sans cam) + les modeles perso du streamer (`brand_kit.templates`, v2 = elements : fond, jeu (ou ecran entier), cam, chat, sous-titres, accroche, widgets avec arrivee / depart / animations, ordre des calques) ; `brand_kit.default_template` sert aux nouveaux projets. L'editeur a calques reste le mode avance.
 - Zones couvertes par TikTok / Shorts / Reels (1080x1920) : haut y < 200, bas y > 1440, droite x > 930 entre y 760 et 1440. Textes, cam et marque restent hors de ces zones (teste) ; le jeu peut passer dessous, une cam pleine largeur en haut passe sous les onglets.
@@ -338,6 +361,7 @@ Fournisseur qui refuse tout (`provider_errors.py`) : credits OpenRouter epuises 
 - Mises a jour : `electron-updater` + GitHub Releases (`latest.yml`), pastille dans la TopBar, Parametres > Application ; installation silencieuse apres arret de l'API et du worker.
 - Journal : `<data dir>/logs/cuttie.log` (API, worker, app ; une ligne = heure ISO UTC), tourne a 10 Mo (cuttie.1.log, cuttie.2.log : 30 Mo max). Parametres > Aide a distance : export .zip d'une periode (journal, diagnostic, analyses et exports, reglages sans cles), « Supprimer les journaux ». On y trouve la vitesse de chaque morceau de transcription, le bilan de chaque analyse (duree des etapes, estimation contre realite), la vitesse des exports et les erreurs de la page.
 - Dates de `jobs` : Lucid ecrit et ne relit que `2026-10-11 09:23:17` (UTC). Un UPDATE brut doit passer par `dbTime()`, jamais `toISOString()` (le modele verrait une date invalide et `job.save()` echouerait ; la migration 1776100000000 a remis au propre les anciennes). La table `renders`, elle, est en ISO.
+- Compilations et stockage : les passages (`piece_*.mp4`, ~8 Mo par segment de 10 s) partent avec les clips quand un projet est libere et reviennent avec « Recuperer les clips » ; un passage retire d'une compilation (ou seulement regarde) est supprime au bout d'une heure, tous a la suppression de la compilation.
 - Stockage : un projet = ~1 Go de clips. Parametres > Stockage : place prise, menage des projets sans activite (7 / 30 / 90 jours, automatique toutes les 6 h ou a la main). Liberer = supprimer les clips (et fonds floutes) ; le projet, ses exports, vignettes, mots et cam restent, `jobs.clips_freed_at` le dit, et « Recuperer les clips » les recoupe depuis la VOD tant que Twitch l'a (7 a 60 jours).
 - CI `.github/workflows/desktop.yml` (windows-latest) : installeur, installation silencieuse, `--smoke-test=full`, tests sous Windows ; un tag `v*` (= version de `desktop/package.json`) publie la release avec `desktop/release-notes.md`.
 

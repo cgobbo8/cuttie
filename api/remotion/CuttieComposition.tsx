@@ -14,11 +14,11 @@ export interface CuttieCompositionProps {
   layers: Layer[];
 }
 
-function LayerContent({ layer }: { layer: Layer }) {
+function LayerContent({ layer, muted }: { layer: Layer; muted?: boolean }) {
   switch (layer.type) {
     case "gameplay":
     case "facecam":
-      return <VideoLayer layer={layer} />;
+      return <VideoLayer layer={layer} muted={muted} />;
     case "subtitles": return <SubtitleLayer layer={layer} />;
     case "chat":      return <ChatLayer layer={layer} />;
     case "shape":     return <ShapeLayer layer={layer} />;
@@ -54,7 +54,8 @@ function AnimatedLayerWrapper({ layer, kfBorderRadius, kfBlur, children }: { lay
   );
 }
 
-function ResolvedLayer({ layer }: { layer: Layer }) {
+/** A layer where the template put it; `z` stacks layers that don't sit in the same list, `muted` silences a video (montages) */
+export function ResolvedLayer({ layer, z, muted }: { layer: Layer; z?: number; muted?: boolean }) {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const currentTime = frame / fps;
@@ -90,10 +91,11 @@ function ResolvedLayer({ layer }: { layer: Layer }) {
         height: h,
         transform: transformParts.length > 0 ? transformParts.join(" ") : undefined,
         transformOrigin: "center center",
+        zIndex: z,
       }}
     >
       <AnimatedLayerWrapper layer={resolvedLayer} kfBorderRadius={borderRadius} kfBlur={blur}>
-        <LayerContent layer={layer} />
+        <LayerContent layer={layer} muted={muted} />
       </AnimatedLayerWrapper>
     </div>
   );

@@ -5,6 +5,8 @@ import type { Layer } from "../editorTypes";
 
 interface Props {
   layer: Layer;
+  /** No sound from this video (montages: the game and the webcam play the same clip, one of them is heard) */
+  muted?: boolean;
 }
 
 /**
@@ -12,12 +14,12 @@ interface Props {
  * Remotion's fastest path for rendering (OffthreadVideo round-trips every frame
  * through its compositor). The editor preview keeps OffthreadVideo.
  */
-function ClipVideo({ src, style }: { src: string; style: React.CSSProperties }) {
+function ClipVideo({ src, style, muted }: { src: string; style: React.CSSProperties; muted?: boolean }) {
   const { isRendering } = useRemotionEnvironment();
-  return isRendering ? <Video src={src} style={style} /> : <OffthreadVideo src={src} style={style} />;
+  return isRendering ? <Video src={src} style={style} muted={muted} /> : <OffthreadVideo src={src} style={style} muted={muted} />;
 }
 
-export default function VideoLayer({ layer }: Props) {
+export default function VideoLayer({ layer, muted }: Props) {
   const { video, transform } = layer;
   if (!video) return null;
 
@@ -27,6 +29,7 @@ export default function VideoLayer({ layer }: Props) {
     return (
       <ClipVideo
         src={video.src}
+        muted={muted}
         style={{
           width: transform.width,
           height: transform.height,
@@ -46,6 +49,7 @@ export default function VideoLayer({ layer }: Props) {
     <div style={{ width: transform.width, height: transform.height, overflow: "hidden" }}>
       <ClipVideo
         src={video.src}
+        muted={muted}
         style={{
           display: "block",
           width: nw,

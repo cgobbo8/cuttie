@@ -11,17 +11,42 @@ import {
   type ReactNode,
 } from "react";
 import { useTranslation } from "react-i18next";
-import { Loader2, Maximize, Pause, Play, Plus, Volume2, VolumeX } from "lucide-react";
-import { clipThumbUrl, clipUrl, type ClipChatLine } from "../../lib/api";
+import { AudioLines, Loader2, Maximize, Pause, Play, Plus, Scissors, Undo2, Volume2, VolumeX, X } from "lucide-react";
+import { clipThumbUrl, clipUrl, type ClipChatLine, type TranscriptWord } from "../../lib/api";
 import { clock } from "../../lib/format";
 import type { Moment } from "../../lib/moments";
+import {
+  addPiece,
+  gapsOf,
+  joinTouching,
+  MIN_PIECE,
+  moveEdge,
+  normalizeRanges,
+  pieceAt,
+  rangesLength,
+  removePiece,
+  sameRanges,
+  snapToWords,
+  splitAt,
+  tighten,
+  TOUCH,
+  type Range,
+} from "../../lib/montage";
 import { stackChat } from "../../lib/chatActivity";
+import { dragRatio } from "../../lib/drag";
 import { Tooltip } from "../ui/Tooltip";
+import { useToast } from "../Toast";
 
 export interface MomentPlayerHandle {
   toggle: () => void;
   /** Jump to a time of the clip and play */
   playFrom: (seconds: number) => void;
+  /** Cut at the playhead, or keep the part under it when it is cut out */
+  cut: () => void;
+  /** Take the last change of the cut back */
+  undo: () => void;
+  /** Replace the cut with these pieces (the AI's montage); it can be taken back like any change */
+  setCut: (pieces: Range[]) => boolean;
 }
 
 interface Props {
@@ -30,64 +55,85 @@ interface Props {
   categoryLabel: string | null;
   /** Start playing as soon as the clip is ready (after a user action) */
   autoPlay: boolean;
-  onTrimChange: (trim: [number, number] | null) => void;
+  /** The cut changed: one piece (a trim) or several played one after the other; null = the whole clip */
+  onPiecesChange: (pieces: Range[] | null) => void;
   /** The chat's messages during the clip, shown on the trim strip */
   chat?: ClipChatLine[];
+  /** The words said in the clip: cuts land between them, silences can be taken out */
+  words?: TranscriptWord[];
   /** 30 s more cut on one side (the clip's file grows from the live when needed) */
   onExtend?: (side: "start" | "end") => Promise<void>;
+  /** More cutting tools, after the built-in ones */
+  tools?: ReactNode;
   /** Decision row, under the trim bar */
   children?: ReactNode;
 }
 
 const FILMSTRIP_FRAMES = 10;
+/** A lone cut stays at least this long, seconds */
 const MIN_TRIM = 1;
 const CHAT_STACK_MAX = 4;
-
-/** Pointer drag helper: calls `onMove` with the pointer's position as a 0-1 ratio of `el` */
-function dragRatio(e: ReactPointerEvent, el: HTMLElement, onMove: (ratio: number) => void, onEnd?: () => void) {
-  e.preventDefault();
-  e.stopPropagation();
-  const update = (clientX: number) => {
-    const rect = el.getBoundingClientRect();
-    onMove(Math.min(1, Math.max(0, (clientX - rect.left) / rect.width)));
-  };
-  update(e.clientX);
-  // Listen on the window so the drag survives leaving the element
-  const move = (ev: PointerEvent) => update(ev.clientX);
-  const up = () => {
-    window.removeEventListener("pointermove", move);
-    window.removeEventListener("pointerup", up);
-    window.removeEventListener("pointercancel", up);
-    onEnd?.();
-  };
-  window.addEventListener("pointermove", move);
-  window.addEventListener("pointerup", up);
-  window.addEventListener("pointercancel", up);
-}
+const UNDO_STEPS = 30;
+/** How long a piece just made stays lit, ms */
+const FRESH_MS = 1100;
+/** Said once: what to do after the first cut */
+const CUT_HINT_KEY = "cuttie_cut_hint";
 
 const MomentPlayer = forwardRef<MomentPlayerHandle, Props>(function MomentPlayer(
-  { jobId, moment, categoryLabel, autoPlay, onTrimChange, chat, onExtend, children },
+  { jobId, moment, categoryLabel, autoPlay, onPiecesChange, chat, words, onExtend, tools, children },
   ref,
 ) {
   const { t } = useTranslation();
+  const toast = useToast();
   const videoRef = useRef<HTMLVideoElement>(null);
   const boxRef = useRef<HTMLDivElement>(null);
   const scrubRef = useRef<HTMLDivElement>(null);
   const stripRef = useRef<HTMLDivElement>(null);
 
   const [duration, setDuration] = useState(moment.duration);
+  const durationRef = useRef(duration);
+  durationRef.current = duration;
   const [current, setCurrent] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [muted, setMuted] = useState(false);
-  const [trim, setTrim] = useState<[number, number]>(moment.trim ?? [0, moment.duration]);
-  const trimRef = useRef(trim);
-  trimRef.current = trim;
+  // What gets exported: one piece (a trim) or several, played one after the other
+  const [pieces, setPieces] = useState<Range[]>(moment.pieces);
+  const piecesRef = useRef(pieces);
+  piecesRef.current = pieces;
+  // The cuts before each change, to take them back (the count is state: the Undo button shows)
+  const undoRef = useRef<Range[][]>([]);
+  const [undoCount, setUndoCount] = useState(0);
+  const remember = (before: Range[]) => {
+    undoRef.current = [...undoRef.current.slice(-(UNDO_STEPS - 1)), before];
+    setUndoCount(undoRef.current.length);
+  };
+  const forget = () => {
+    undoRef.current = [];
+    setUndoCount(0);
+  };
+  const wordsRef = useRef(words);
+  wordsRef.current = words;
+  // Pieces just made (by a cut, or kept from a part that was cut out): lit for a moment so they are seen
+  const [fresh, setFresh] = useState<number[]>([]);
+  const freshTimer = useRef(0);
+  const light = (indexes: number[]) => {
+    setFresh(indexes);
+    window.clearTimeout(freshTimer.current);
+    freshTimer.current = window.setTimeout(() => setFresh([]), FRESH_MS);
+  };
+  useEffect(() => () => window.clearTimeout(freshTimer.current), []);
+
+  const show = (next: Range[]) => {
+    piecesRef.current = next;
+    setPieces(next);
+  };
 
   // New moment: reset everything (the <video> is keyed on the file)
   useEffect(() => {
     setDuration(moment.duration);
-    setCurrent(moment.trim?.[0] ?? 0);
-    setTrim(moment.trim ?? [0, moment.duration]);
+    setCurrent(moment.pieces[0]?.[0] ?? 0);
+    show(moment.pieces);
+    forget();
     setPlaying(false);
   }, [moment.filename]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -96,31 +142,29 @@ const MomentPlayer = forwardRef<MomentPlayerHandle, Props>(function MomentPlayer
     setDuration(moment.duration);
   }, [moment.duration]);
 
-  // Same moment, trim changed from outside (back to the AI's cut, 30 s more): the handles glide there
+  // Same moment, cut changed from outside (back to the AI's cut, 30 s more, the AI's montage): the handles glide there
   const [glide, setGlide] = useState(false);
-  const trimFile = useRef(moment.filename);
-  const outsideTrim = moment.trim ? `${moment.trim[0]}-${moment.trim[1]}` : "";
+  const cutFile = useRef(moment.filename);
+  const outsideCut = JSON.stringify(moment.pieces);
   useEffect(() => {
     // A new moment is the reset's job
-    if (trimFile.current !== moment.filename) {
-      trimFile.current = moment.filename;
+    if (cutFile.current !== moment.filename) {
+      cutFile.current = moment.filename;
       return;
     }
-    const next: [number, number] = moment.trim ?? [0, duration];
-    const [a, b] = trimRef.current;
+    const next = moment.trim || moment.pieces.length > 1 ? moment.pieces : [[0, durationRef.current] as Range];
     // The server rounds a trim to 0.1 s: not a change
-    if (Math.abs(a - next[0]) < 0.15 && Math.abs(b - next[1]) < 0.15) return;
-    trimRef.current = next;
-    setTrim(next);
+    if (sameRanges(piecesRef.current, next, 0.15)) return;
+    show(next);
     setGlide(true);
     const video = videoRef.current;
-    if (video && (video.currentTime < next[0] - 0.2 || video.currentTime > next[1] + 0.2)) {
-      video.currentTime = next[0];
-      setCurrent(next[0]);
+    if (video && pieceAt(next, video.currentTime) === -1) {
+      video.currentTime = next[0][0];
+      setCurrent(next[0][0]);
     }
     const settled = window.setTimeout(() => setGlide(false), 750);
     return () => window.clearTimeout(settled);
-  }, [moment.filename, outsideTrim]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [moment.filename, outsideCut]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // "+30 s" on one side, one at a time
   const [extending, setExtending] = useState<"start" | "end" | null>(null);
@@ -129,6 +173,8 @@ const MomentPlayer = forwardRef<MomentPlayerHandle, Props>(function MomentPlayer
     setExtending(side);
     try {
       await onExtend(side);
+      // The clip's clock may have moved: the steps before it no longer stand
+      forget();
     } finally {
       setExtending(null);
     }
@@ -155,12 +201,94 @@ const MomentPlayer = forwardRef<MomentPlayerHandle, Props>(function MomentPlayer
     );
   };
 
+  /** Save the cut as it stands: tidy pieces, the whole clip when nothing is cut */
+  const commit = useCallback(() => {
+    const length = durationRef.current;
+    const clean = normalizeRanges(piecesRef.current, length);
+    if (clean.length === 0) return;
+    if (!sameRanges(clean, piecesRef.current)) show(clean);
+    const [a, b] = clean[0];
+    const whole = clean.length === 1 && a <= 0.05 && b >= length - 0.05;
+    // With a suggested cut, "the whole clip" is a choice of its own (null would bring the suggestion back)
+    onPiecesChange(whole && !moment.suggested ? null : clean);
+  }, [moment.suggested, onPiecesChange]);
+
+  /** A change of the cut made in one go (cut, keep, remove, tighten): shown, saved, and it can be taken back */
+  const change = useCallback(
+    (next: Range[]): boolean => {
+      const before = piecesRef.current;
+      if (sameRanges(before, next)) return false;
+      remember(before);
+      show(next);
+      commit();
+      return true;
+    },
+    [commit],
+  );
+
+  const undo = useCallback(() => {
+    const before = undoRef.current.pop();
+    if (!before) return;
+    setUndoCount(undoRef.current.length);
+    show(before);
+    commit();
+  }, [commit]);
+
+  /** At the playhead: cut the piece playing there in two, or keep the part under it when it is cut out */
+  const cut = useCallback(() => {
+    const time = videoRef.current?.currentTime ?? 0;
+    const list = piecesRef.current;
+    const heard = wordsRef.current;
+    const playing = pieceAt(list, time);
+    if (playing === -1) {
+      // A new piece from here: 8 s, or up to the next piece
+      const next = addPiece(list, time, durationRef.current);
+      if (!change(next)) {
+        toast.info(t("project.keepTooClose"));
+        return;
+      }
+      light([piecesRef.current.findIndex(([a]) => Math.abs(a - time) < 0.02)]);
+      return;
+    }
+    // Between two words rather than through one
+    if (!change(splitAt(list, heard?.length ? snapToWords(time, heard) : time))) {
+      toast.info(t("project.cutTooClose"));
+      return;
+    }
+    light([playing, playing + 1]);
+    // The first time: what a cut is for
+    try {
+      if (!localStorage.getItem(CUT_HINT_KEY)) {
+        localStorage.setItem(CUT_HINT_KEY, "1");
+        toast.info(t("project.cutDone"));
+      }
+    } catch {
+      // No storage: no hint
+    }
+  }, [change, t, toast]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const tightenUp = () => {
+    const before = piecesRef.current;
+    const next = tighten(before, wordsRef.current ?? [], durationRef.current);
+    const saved = rangesLength(before) - rangesLength(next);
+    if (saved < 0.3 || !change(next)) {
+      toast.info(t("project.nothingToTighten"));
+      return;
+    }
+    toast.success(t("project.tightened", { seconds: Math.round(saved) }));
+  };
+
   const toggle = useCallback(() => {
     const video = videoRef.current;
     if (!video) return;
     if (video.paused) {
-      const [a, b] = trimRef.current;
-      if (video.currentTime < a || video.currentTime >= b - 0.1) video.currentTime = a;
+      const list = piecesRef.current;
+      const i = pieceAt(list, video.currentTime);
+      // At the end of a piece: on with the next one (the first after the last). In a part
+      // that is cut out, it plays from there: that's how you hear what you would add
+      const next = list[i + 1];
+      if (i !== -1 && video.currentTime >= list[i][1] - 0.1 && !(next && next[0] - list[i][1] <= TOUCH)) video.currentTime = (next ?? list[0])[0];
+      beforeRef.current = video.currentTime;
       video.play().catch(() => {});
     } else {
       video.pause();
@@ -169,29 +297,107 @@ const MomentPlayer = forwardRef<MomentPlayerHandle, Props>(function MomentPlayer
   const playFrom = useCallback((seconds: number) => {
     const video = videoRef.current;
     if (!video) return;
-    const [a, b] = trimRef.current;
-    video.currentTime = Math.min(Math.max(seconds, a), b - 0.1);
+    video.currentTime = Math.min(Math.max(seconds, 0), Math.max(0, durationRef.current - 0.1));
+    beforeRef.current = video.currentTime;
     video.play().catch(() => {});
   }, []);
-  useImperativeHandle(ref, () => ({ toggle, playFrom }), [toggle, playFrom]);
+  const setCut = useCallback(
+    (next: Range[]) => {
+      const clean = normalizeRanges(next, durationRef.current);
+      if (clean.length === 0 || !change(clean)) return false;
+      // The handles glide to the new cut, the video goes to its start
+      setGlide(true);
+      window.setTimeout(() => setGlide(false), 750);
+      const video = videoRef.current;
+      if (video && pieceAt(clean, video.currentTime) === -1) {
+        video.currentTime = clean[0][0];
+        setCurrent(clean[0][0]);
+      }
+      return true;
+    },
+    [change],
+  );
+  useImperativeHandle(ref, () => ({ toggle, playFrom, cut, undo, setCut }), [toggle, playFrom, cut, undo, setCut]);
+
+  // While it plays, the end of a piece goes straight on to the next one: the cuts as they will be
+  const beforeRef = useRef(0);
+  const follow = useCallback((video: HTMLVideoElement): boolean => {
+    const time = video.currentTime;
+    const before = beforeRef.current;
+    const list = piecesRef.current;
+    const i = pieceAt(list, before);
+    // Played up to the end of its piece (a jump elsewhere is the streamer's)
+    if (!video.paused && i !== -1 && time >= list[i][1] - 0.03 && time >= before && time - before < 1) {
+      const next = list[i + 1];
+      // The next piece starts right here: nothing to jump over
+      if (next && next[0] - list[i][1] <= TOUCH) {
+        beforeRef.current = Math.max(time, next[0]);
+        return false;
+      }
+      const to = (next ?? list[0])[0];
+      if (!next) video.pause();
+      video.currentTime = to;
+      beforeRef.current = to;
+      setCurrent(to);
+      return true;
+    }
+    beforeRef.current = time;
+    return false;
+  }, []);
+  // Checked on every frame drawn (the video's own time events come 4 times a second: a cut would be late)
+  useEffect(() => {
+    if (!playing) return;
+    let frame = 0;
+    let count = 0;
+    const tick = () => {
+      const video = videoRef.current;
+      // The playhead moves smoothly without redrawing 60 times a second
+      if (video && !video.paused && !follow(video) && ++count % 4 === 0) setCurrent(video.currentTime);
+      frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [playing, follow]);
 
   const seek = (time: number) => {
     const video = videoRef.current;
     if (!video) return;
-    const [a, b] = trimRef.current;
-    video.currentTime = Math.min(Math.max(time, a), b);
+    video.currentTime = Math.min(Math.max(time, 0), duration);
+    beforeRef.current = video.currentTime;
     setCurrent(video.currentTime);
   };
 
-  const commitTrim = () => {
-    const [a, b] = trimRef.current;
-    const full = a <= 0.05 && b >= duration - 0.05;
-    // With a suggested cut, "the whole clip" is a choice of its own (null would bring the suggestion back)
-    onTrimChange(full && !moment.suggested ? null : [a, b]);
+  /** Drag an edge of piece `index`: lands between two words (Alt: anywhere) */
+  const dragEdge = (e: ReactPointerEvent, index: number, side: "start" | "end") => {
+    const before = piecesRef.current;
+    dragRatio(
+      e,
+      stripRef.current!,
+      (ratio, alt) => {
+        const heard = wordsRef.current;
+        const time = ratio * duration;
+        const next = moveEdge(piecesRef.current, index, side, !alt && heard?.length ? snapToWords(time, heard) : time, duration, before.length === 1 ? MIN_TRIM : MIN_PIECE);
+        // Keep the ref in step: the drag can end before React renders
+        show(next);
+        if (videoRef.current) videoRef.current.currentTime = side === "start" ? next[index][0] : next[index][1];
+      },
+      () => {
+        if (sameRanges(before, piecesRef.current)) return;
+        // Dragged onto its neighbor: the two become one
+        show(joinTouching(piecesRef.current, index, side));
+        remember(before);
+        commit();
+      },
+    );
   };
 
   const pct = (time: number) => `${(time / Math.max(duration, 0.1)) * 100}%`;
   const keys = moment.hp.llm?.key_moments ?? [];
+  const first = pieces[0] ?? [0, duration];
+  const last = pieces[pieces.length - 1] ?? first;
+  const total = rangesLength(pieces);
+  const inPiece = pieceAt(pieces, current) !== -1;
+  const gaps = gapsOf(pieces, duration);
 
   // The chat: a dot per message (bots aside), stacked when they come together
   const chatColumns = useMemo(() => stackChat(chat ?? []), [chat]);
@@ -213,20 +419,20 @@ const MomentPlayer = forwardRef<MomentPlayerHandle, Props>(function MomentPlayer
             const d = e.currentTarget.duration;
             if (Number.isFinite(d) && d > 0) {
               setDuration(d);
-              if (!moment.trim) setTrim([0, d]);
-              e.currentTarget.currentTime = moment.trim?.[0] ?? 0;
+              durationRef.current = d;
+              if (!moment.trim && moment.pieces.length === 1) show([[0, d]]);
+              e.currentTarget.currentTime = piecesRef.current[0]?.[0] ?? 0;
             }
             if (autoPlay) e.currentTarget.play().catch(() => {});
           }}
           onTimeUpdate={(e) => {
-            const time = e.currentTarget.currentTime;
-            setCurrent(time);
-            if (time >= trimRef.current[1] - 0.05 && !e.currentTarget.paused) {
-              e.currentTarget.pause();
-              e.currentTarget.currentTime = trimRef.current[0];
-            }
+            // Also follows the cuts when no frame is drawn (window in the background)
+            if (!follow(e.currentTarget)) setCurrent(e.currentTarget.currentTime);
           }}
-          onPlay={() => setPlaying(true)}
+          onPlay={(e) => {
+            beforeRef.current = e.currentTarget.currentTime;
+            setPlaying(true);
+          }}
           onPause={() => setPlaying(false)}
         />
 
@@ -253,7 +459,9 @@ const MomentPlayer = forwardRef<MomentPlayerHandle, Props>(function MomentPlayer
             onPointerDown={(e) => dragRatio(e, scrubRef.current!, (r) => seek(r * duration))}
           >
             <div className="absolute inset-x-0 top-[9px] h-1 rounded-full bg-white/[0.22]" />
-            <div className="absolute top-[9px] h-1 rounded-full bg-white/[0.18]" style={{ left: pct(trim[0]), width: pct(trim[1] - trim[0]) }} />
+            {pieces.map(([a, b], i) => (
+              <div key={i} className="absolute top-[9px] h-1 rounded-full bg-white/[0.18]" style={{ left: pct(a), width: pct(b - a) }} />
+            ))}
             <div className="absolute left-0 top-[9px] h-1 rounded-full bg-ink" style={{ width: pct(current) }} />
             {keys.map((k) => (
               <span
@@ -274,11 +482,11 @@ const MomentPlayer = forwardRef<MomentPlayerHandle, Props>(function MomentPlayer
         </div>
       </div>
 
-      {/* Trim: drag the handles to cut the start / end; click or drag elsewhere to move through the clip; + for 30 s more */}
+      {/* The cut: drag the handles of a piece; click or drag elsewhere to move through the clip; + for 30 s more */}
       <div className="group/trim flex items-center gap-3 px-1.5 pt-3 pb-1">
         <div className="relative w-[92px] flex-none">
           <div className="text-[11.5px] text-ink-3">{t("project.start")}</div>
-          <div className="mono text-[13px] font-medium text-white">{clock(trim[0])}</div>
+          <div className="mono text-[13px] font-medium text-white">{clock(first[0])}</div>
           {plus("start")}
         </div>
         <div
@@ -297,9 +505,35 @@ const MomentPlayer = forwardRef<MomentPlayerHandle, Props>(function MomentPlayer
               />
             ))}
           </div>
-          <div className={`absolute inset-y-0 left-0 bg-black/70 ${gliding}`} style={{ width: pct(trim[0]) }} />
-          <div className={`absolute inset-y-0 right-0 bg-black/70 ${gliding}`} style={{ width: `calc(100% - ${pct(trim[1])})` }} />
-          <div className={`absolute inset-y-0 border-y-2 border-accent pointer-events-none ${gliding}`} style={{ left: pct(trim[0]), width: pct(trim[1] - trim[0]) }} />
+          {/* What is cut out, darkened */}
+          {gaps.map(([a, b], i) => (
+            <div key={`gap-${i}`} className={`absolute inset-y-0 bg-black/70 ${gliding}`} style={{ left: pct(a), width: pct(b - a) }} />
+          ))}
+          {pieces.map(([a, b], i) => (
+            <div
+              key={`piece-${i}`}
+              data-fresh={fresh.includes(i) || undefined}
+              className={`group/piece piece absolute inset-y-0 border-y-2 border-accent ${gliding}`}
+              style={{ left: pct(a), width: pct(b - a) }}
+            >
+              {pieces.length > 1 && (
+                <Tooltip content={t("project.removePiece")}>
+                  <button
+                    type="button"
+                    aria-label={t("project.removePiece")}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      change(removePiece(piecesRef.current, i));
+                    }}
+                    className="piece-remove absolute top-1 left-1/2 -translate-x-1/2"
+                  >
+                    <X className="w-3 h-3" strokeWidth={2.6} />
+                  </button>
+                </Tooltip>
+              )}
+            </div>
+          ))}
           {extending && <div className="extend-glow absolute inset-y-0 w-1/4 pointer-events-none" data-side={extending} />}
           {keys.map((k) => (
             <span
@@ -323,55 +557,66 @@ const MomentPlayer = forwardRef<MomentPlayerHandle, Props>(function MomentPlayer
           <span className="absolute inset-y-0 w-0.5 -ml-px bg-white shadow-[0_0_6px_rgba(0,0,0,0.6)] pointer-events-none" style={{ left: pct(current) }}>
             <span className="absolute -top-px left-1/2 -translate-x-1/2 w-2.5 h-2.5 rounded-full bg-white" />
           </span>
-          {(["start", "end"] as const).map((side) => (
-            <span
-              key={side}
-              role="slider"
-              aria-label={side === "start" ? t("project.trimStart") : t("project.trimEnd")}
-              aria-valuemin={0}
-              aria-valuemax={Math.round(duration)}
-              aria-valuenow={Math.round(side === "start" ? trim[0] : trim[1])}
-              tabIndex={0}
-              onPointerDown={(e) =>
-                dragRatio(
-                  e,
-                  stripRef.current!,
-                  (r) => {
-                    const time = r * duration;
-                    const [a, b] = trimRef.current;
-                    const next: [number, number] = side === "start" ? [Math.min(time, b - MIN_TRIM), b] : [a, Math.max(time, a + MIN_TRIM)];
-                    // Keep the ref in step: the drag can end before React renders
-                    trimRef.current = next;
-                    setTrim(next);
-                    if (videoRef.current) videoRef.current.currentTime = side === "start" ? next[0] : next[1];
-                  },
-                  commitTrim,
-                )
-              }
-              onKeyDown={(e) => {
-                if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
-                e.preventDefault();
-                e.stopPropagation();
-                const step = e.key === "ArrowLeft" ? -1 : 1;
-                const [a, b] = trimRef.current;
-                const next: [number, number] =
-                  side === "start" ? [Math.min(Math.max(0, a + step), b - MIN_TRIM), b] : [a, Math.max(Math.min(duration, b + step), a + MIN_TRIM)];
-                trimRef.current = next;
-                setTrim(next);
-                commitTrim();
-              }}
-              className={`absolute inset-y-0 w-3 rounded-[4px] bg-accent cursor-ew-resize grid place-items-center ${side === "start" ? "" : "-translate-x-full"} ${gliding}`}
-              style={{ left: pct(side === "start" ? trim[0] : trim[1]) }}
-            >
-              <span className="w-0.5 h-4 rounded-full bg-accent-ink/60" />
-            </span>
-          ))}
+          {pieces.flatMap(([a, b], i) =>
+            (["start", "end"] as const).map((side) => (
+              <span
+                key={`${i}-${side}`}
+                role="slider"
+                aria-label={side === "start" ? t("project.trimStart") : t("project.trimEnd")}
+                aria-valuemin={0}
+                aria-valuemax={Math.round(duration)}
+                aria-valuenow={Math.round(side === "start" ? a : b)}
+                tabIndex={0}
+                onPointerDown={(e) => dragEdge(e, i, side)}
+                onKeyDown={(e) => {
+                  if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+                  e.preventDefault();
+                  e.stopPropagation();
+                  const step = e.key === "ArrowLeft" ? -1 : 1;
+                  const list = piecesRef.current;
+                  if (!list[i]) return;
+                  change(moveEdge(list, i, side, (side === "start" ? list[i][0] : list[i][1]) + step, duration, list.length === 1 ? MIN_TRIM : MIN_PIECE));
+                }}
+                // Several pieces: slim handles, the frames stay visible between them
+                className={`absolute inset-y-0 ${pieces.length > 1 ? "w-[7px] rounded-[3px]" : "w-3 rounded-[4px]"} bg-accent shadow-[0_0_0_1px_rgba(11,11,12,0.7)] cursor-ew-resize grid place-items-center ${side === "start" ? "" : "-translate-x-full"} ${gliding}`}
+                style={{ left: pct(side === "start" ? a : b) }}
+              >
+                <span className={`${pieces.length > 1 ? "w-px h-3" : "w-0.5 h-4"} rounded-full bg-accent-ink/60`} />
+              </span>
+            )),
+          )}
         </div>
         <div className="relative w-[92px] flex-none text-right">
           <div className="text-[11.5px] text-ink-3">{t("project.end")}</div>
-          <div className="mono text-[13px] font-medium text-white">{clock(trim[1])}</div>
+          <div className="mono text-[13px] font-medium text-white">{clock(last[1])}</div>
           {plus("end")}
         </div>
+      </div>
+
+      {/* Cutting tools: at the playhead, on the silences; what the cut makes in the end */}
+      <div className="flex flex-wrap items-center gap-x-1 gap-y-1.5 px-1.5 pt-1.5">
+        <Tooltip content={t(inPiece ? "project.cutHereHint" : "project.keepHereHint")}>
+          <button type="button" onClick={cut} className="btn btn-ghost btn-sm h-7 px-2 -ml-2">
+            {inPiece ? <Scissors className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" strokeWidth={2.4} />}
+            {t(inPiece ? "project.cutHere" : "project.keepHere")}
+            <kbd className="bg-white/[0.08] border-white/10 text-ink-2">C</kbd>
+          </button>
+        </Tooltip>
+        <Tooltip content={t(words?.length ? "project.tightenHint" : "project.tightenNoWords")}>
+          <button type="button" onClick={tightenUp} disabled={!words?.length} className="btn btn-ghost btn-sm h-7 px-2">
+            <AudioLines className="w-3.5 h-3.5" /> {t("project.tighten")}
+          </button>
+        </Tooltip>
+        {tools}
+        {undoCount > 0 && (
+          <button type="button" onClick={undo} className="btn btn-ghost btn-sm h-7 px-2">
+            <Undo2 className="w-3.5 h-3.5" /> {t("project.undo")}
+          </button>
+        )}
+        <span className="ml-auto pl-2 text-[12.5px] text-ink-3 whitespace-nowrap">
+          {pieces.length > 1 && <>{t("project.pieces", { count: pieces.length })} · </>}
+          <span className="mono text-ink-2">{clock(total)}</span>
+        </span>
       </div>
 
       {children}

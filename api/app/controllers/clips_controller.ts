@@ -15,7 +15,7 @@ import {
   trimOnFile,
   type Side,
 } from '#services/clip_extend'
-import { extendClipFile, suggestClipCut } from '#services/worker_client'
+import { extendClipFile, suggestClipCut, transcribeClipWords } from '#services/worker_client'
 import { workerFailure } from '#services/worker_failure'
 import { pieceFile } from '#services/compilations'
 import { envelope, extendPieces } from '#services/clip_pieces'
@@ -37,6 +37,9 @@ async function verifyJobOwnership(jobId: string, auth: HttpContext['auth']) {
   if (!job || job.userId !== user.id) return null
   return job
 }
+
+/** Clips being transcribed because they had no words, one request each ("job/clip") */
+const transcribing = new Map<string, Promise<unknown>>()
 
 /** Clips being extracted again, one at a time each ("job/file") */
 const extending = new Set<string>()
@@ -179,6 +182,21 @@ export default class ClipsController {
     try {
       if (existsSync(file)) words = JSON.parse(readFileSync(file, 'utf-8'))
     } catch {}
+    // A clip the analysis never transcribed (one asked for on the stream, added by hand): done now,
+    // once (the worker writes the file). Without its words, no "Enlever les silences", no "Montage IA"
+    if (!existsSync(file) && existsSync(storagePath(`clips/${safeJobId}/${base}.mp4`))) {
+      const key = `${safeJobId}/${base}`
+      let pending = transcribing.get(key)
+      if (!pending) {
+        pending = transcribeClipWords(safeJobId, `${base}.mp4`).finally(() => transcribing.delete(key))
+        transcribing.set(key, pending)
+      }
+      try {
+        words = await pending
+      } catch (err) {
+        logger.warn({ err }, 'Words of %s not transcribed', key)
+      }
+    }
     return { words: Array.isArray(words) ? words : [] }
   }
 

@@ -233,6 +233,11 @@ test.group('Compilations', (group) => {
 
     writeFileSync(path.join(dir, 'a_words.json'), JSON.stringify([{ word: 'calme', start: 1, end: 1.4 }]))
     assert.deepEqual((await client.get(`/api/clips/${job.id}/a.mp4/words`).loginAs(user)).body(), { words: [{ word: 'calme', start: 1, end: 1.4 }] })
+    // A clip that has no words yet is transcribed by the engine when they are asked for; no engine here: none, and no error
+    writeFileSync(path.join(dir, 'nowords.mp4'), '')
+    const none = await client.get(`/api/clips/${job.id}/nowords.mp4/words`).loginAs(user)
+    none.assertStatus(200)
+    assert.deepEqual(none.body(), { words: [] })
     assert.deepEqual((await client.get(`/api/clips/${job.id}/zzz.mp4/words`).loginAs(user)).body(), { words: [] })
   })
 

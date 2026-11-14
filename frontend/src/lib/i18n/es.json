@@ -1581,7 +1581,17 @@
     "changeRecut_other": "{{count}} trozos recortados de nuevo",
     "ownLook": "Diseño de este trozo: {{name}}",
     "changePassages_one": "{{count}} trozo en el vídeo",
-    "changePassages_other": "{{count}} trozos en el vídeo"
+    "changePassages_other": "{{count}} trozos en el vídeo",
+    "lives": {
+      "add": "Añadir un directo",
+      "addHint": "Tomar también trozos de otro directo: la IA trabaja entonces en todos a la vez",
+      "added": "«{{name}}» añadido: la IA busca ahora también en este directo",
+      "remove": "Quitar este directo",
+      "removeBlocked": "Quita primero los trozos que tiene en el vídeo",
+      "searchIn": "Buscar en",
+      "pickTitle": "¿Qué directo añadir?",
+      "pickHint": "El vídeo podrá tomar trozos de este directo también. Cuando describes el vídeo o pides un cambio, la IA busca en todos los directos."
+    }
   },
   "compilations": {
     "title": "Compilaciones",
@@ -1617,11 +1627,17 @@
     "allLives": "Todos los directos",
     "untitledLive": "Directo sin título",
     "pickLive": "¿De qué directo?",
-    "pickLiveHint": "Una compilación se hace con trozos de un directo ya analizado.",
+    "pickLiveHint": "Marca un directo, o varios para un vídeo que toma de todos: la IA trabaja entonces en todos a la vez.",
     "has_one": "{{count}} compilación",
     "has_other": "{{count}} compilaciones",
     "noLive": "Aún no hay directo analizado",
     "noLiveHint": "Una compilación se hace con trozos de un directo. Analiza un directo y vuelve aquí.",
-    "analyse": "Analizar un directo"
+    "analyse": "Analizar un directo",
+    "fromLives_one": "{{count}} directo",
+    "fromLives_other": "{{count}} directos",
+    "pickSeveral": "Hasta {{max}} directos",
+    "createFrom_one": "Crear con {{count}} directo",
+    "createFrom_other": "Crear con {{count}} directos",
+    "noOtherLive": "Ningún otro directo analizado."
   }
 }

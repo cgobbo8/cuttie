@@ -372,6 +372,18 @@ const routes = {
     tokens: [{"old":"/api/jobs/:id/compilations/:compId","type":0,"val":"api","end":""},{"old":"/api/jobs/:id/compilations/:compId","type":0,"val":"jobs","end":""},{"old":"/api/jobs/:id/compilations/:compId","type":1,"val":"id","end":""},{"old":"/api/jobs/:id/compilations/:compId","type":0,"val":"compilations","end":""},{"old":"/api/jobs/:id/compilations/:compId","type":1,"val":"compId","end":""}],
     types: placeholder as Registry['compilations.destroy']['types'],
   },
+  'compilations.duplicate': {
+    methods: ["POST"],
+    pattern: '/api/jobs/:id/compilations/:compId/duplicate',
+    tokens: [{"old":"/api/jobs/:id/compilations/:compId/duplicate","type":0,"val":"api","end":""},{"old":"/api/jobs/:id/compilations/:compId/duplicate","type":0,"val":"jobs","end":""},{"old":"/api/jobs/:id/compilations/:compId/duplicate","type":1,"val":"id","end":""},{"old":"/api/jobs/:id/compilations/:compId/duplicate","type":0,"val":"compilations","end":""},{"old":"/api/jobs/:id/compilations/:compId/duplicate","type":1,"val":"compId","end":""},{"old":"/api/jobs/:id/compilations/:compId/duplicate","type":0,"val":"duplicate","end":""}],
+    types: placeholder as Registry['compilations.duplicate']['types'],
+  },
+  'compilations.library': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/compilations',
+    tokens: [{"old":"/api/compilations","type":0,"val":"api","end":""},{"old":"/api/compilations","type":0,"val":"compilations","end":""}],
+    types: placeholder as Registry['compilations.library']['types'],
+  },
   'renders.batch_store': {
     methods: ["POST"],
     pattern: '/api/jobs/:jobId/batch-render',

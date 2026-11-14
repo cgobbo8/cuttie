@@ -739,6 +739,30 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/compilations_controller').default['destroy']>>>
     }
   }
+  'compilations.duplicate': {
+    methods: ["POST"]
+    pattern: '/api/jobs/:id/compilations/:compId/duplicate'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue, ParamValue]
+      params: { id: ParamValue; compId: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/compilations_controller').default['duplicate']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/compilations_controller').default['duplicate']>>>
+    }
+  }
+  'compilations.library': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/compilations'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/compilations_controller').default['library']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/compilations_controller').default['library']>>>
+    }
+  }
   'renders.batch_store': {
     methods: ["POST"]
     pattern: '/api/jobs/:jobId/batch-render'

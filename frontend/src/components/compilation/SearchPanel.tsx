@@ -21,7 +21,10 @@ import PlanTalk, { type TalkTurn } from "./PlanTalk";
 
 interface Props {
   jobId: string;
-  storyboard: TwitchStoryboard | null;
+  /** Each live's preview frames, by job id */
+  storyboards: Record<string, TwitchStoryboard>;
+  /** The lives the compilation takes passages from, its own first: the AI works on all of them, a search by hand looks in one */
+  lives: { job: string; label: string }[];
   /** What can be searched in this live, and what asking the AI costs */
   info: LiveSearchInfo | null;
   /** The result shown in the preview */
@@ -61,12 +64,16 @@ const head = (text: string) => (text.length > AROUND ? `${text.slice(0, text.las
 const PROGRESS_EVERY = 1200;
 
 /** Looking for moments in the whole live: by words, by asking the AI, or by describing the whole video */
-export default function SearchPanel({ jobId, storyboard, info, previewed, isAdded, onPreview, onAdd, onPlan, onResults, talk, current, onChange, onReveal }: Props) {
+export default function SearchPanel({ jobId, storyboards, lives, info, previewed, isAdded, onPreview, onAdd, onPlan, onResults, talk, current, onChange, onReveal }: Props) {
   const { t, i18n } = useTranslation();
   const toast = useToast();
   // Describing the video to the AI is the main way in; searching by hand comes second
   const [tab, setTab] = useState<Tab>("describe");
   const [query, setQuery] = useState("");
+  // The live a search by hand looks in (the compilation's own unless another one is chosen)
+  const [where, setWhere] = useState(jobId);
+  const searched = lives.some((live) => live.job === where) ? where : jobId;
+  const others = lives.filter((live) => live.job !== jobId).map((live) => live.job);
   const [busy, setBusy] = useState<"words" | "ai" | "plan" | null>(null);
   const [failure, setFailure] = useState<LiveFailure | null>(null);
   const [results, setResults] = useState<{ hits: LiveHit[]; total: number; query: string; mode: "words" | "ai"; note?: string } | null>(null);
@@ -112,7 +119,8 @@ export default function SearchPanel({ jobId, storyboard, info, previewed, isAdde
   /** A question to the AI costs a fraction of a cent: said as such, never as "0.00 $" */
   const about = (cost?: number | null) => (cost == null ? null : cost < 0.01 ? `< ${dollars(0.01)}` : `≈ ${dollars(cost)}`);
   const aiCost = about(info?.ai_cost);
-  const planCost = about(info?.plan_cost ?? info?.ai_cost);
+  // A video made from several lives costs a little more: about a quarter for each live more (measured: 0.044 $ for two)
+  const planCost = about(info?.plan_cost != null || info?.ai_cost != null ? (info?.plan_cost ?? info?.ai_cost ?? 0) * (1 + 0.25 * (lives.length - 1)) : null);
   /** "Asked before: free" or what it cost */
   const paid = (answer: { cached?: boolean; cost?: number }) =>
     answer.cached ? t("compilation.alreadyAsked") : answer.cost ? (answer.cost < 0.01 ? t("compilation.underCent") : dollars(answer.cost)) : "";
@@ -132,9 +140,11 @@ export default function SearchPanel({ jobId, storyboard, info, previewed, isAdde
     setBusy(mode);
     setFailure(null);
     try {
-      const found = await searchLive(jobId, asked, mode);
-      setResults({ hits: found.hits, total: found.total, query: asked, mode, note: mode === "ai" ? found.note : undefined });
-      onResults(found.hits);
+      const found = await searchLive(searched, asked, mode);
+      // What is found in another live says so: its times are that live's
+      const hits = searched === jobId ? found.hits : found.hits.map((hit) => ({ ...hit, job: searched }));
+      setResults({ hits, total: found.total, query: asked, mode, note: mode === "ai" ? found.note : undefined });
+      onResults(hits);
       if (mode === "ai") toast.success([summary(found.hits), paid(found)].filter(Boolean).join(" · "));
     } catch (err) {
       setFailure(err instanceof LiveError ? err.reason : "failed");
@@ -150,7 +160,7 @@ export default function SearchPanel({ jobId, storyboard, info, previewed, isAdde
     setBusy("plan");
     setFailure(null);
     try {
-      const planned = await planLiveVideo(jobId, asked, target);
+      const planned = await planLiveVideo(jobId, asked, target, undefined, others);
       const count = planned.sections.reduce((sum, s) => sum + s.hits.length, 0);
       setPlanNote(planned.note ?? "");
       if (count === 0) {
@@ -178,7 +188,7 @@ export default function SearchPanel({ jobId, storyboard, info, previewed, isAdde
     setRequest("");
     setFailure(null);
     try {
-      const planned = await planLiveVideo(jobId, talk.brief, target, { request: asked, current: current(), asks: talk.asks.map((a) => a.ask) });
+      const planned = await planLiveVideo(jobId, talk.brief, target, { request: asked, current: current(), asks: talk.asks.map((a) => a.ask) }, others);
       onChange(planned, asked);
     } catch (err) {
       setFailure(err instanceof LiveError ? err.reason : "failed");
@@ -218,6 +228,20 @@ export default function SearchPanel({ jobId, storyboard, info, previewed, isAdde
             run("words");
           }}
         >
+          {lives.length > 1 && (
+            <select
+              value={searched}
+              onChange={(e) => setWhere(e.target.value)}
+              aria-label={t("compilation.lives.searchIn")}
+              className="w-full h-9 mb-2 px-2.5 rounded-[10px] bg-black/30 border border-white/10 text-[13px] text-white outline-none focus:border-accent-line"
+            >
+              {lives.map((live) => (
+                <option key={live.job} value={live.job}>
+                  {t("compilation.lives.searchIn")} : {live.label}
+                </option>
+              ))}
+            </select>
+          )}
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-3 pointer-events-none" />
             <input
@@ -336,7 +360,7 @@ export default function SearchPanel({ jobId, storyboard, info, previewed, isAdde
                     onClick={() => onPreview(hit)}
                     aria-label={t("compilation.watch")}
                     className="group/frame relative w-[96px] aspect-video rounded-[8px] overflow-hidden flex-none bg-white/[0.05] self-start"
-                    style={storyboard ? tileStyle(storyboard, frameAt(storyboard, hit.start)) : undefined}
+                    style={storyboards[hit.job ?? jobId] ? tileStyle(storyboards[hit.job ?? jobId], frameAt(storyboards[hit.job ?? jobId], hit.start)) : undefined}
                   >
                     <span className="absolute inset-0 grid place-items-center bg-black/35 opacity-0 group-hover/frame:opacity-100 transition-opacity">
                       <Play className="w-4 h-4 text-white" fill="currentColor" />

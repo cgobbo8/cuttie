@@ -294,7 +294,11 @@ export function buildMontage(
   return { segments, overlays: [...overlays, ...extra(total).map((layer, i) => ({ layer, z: top + i }))] };
 }
 
-/** The montage as the renderer takes it: `clips[i]` is the clip piece `i` plays */
-export function renderPieces(montage: MontageProps, clips: string[]): { clip: string; from: number; duration: number; layers: PlacedLayer[] }[] {
-  return montage.segments.map((segment, i) => ({ clip: clips[i], from: segment.from, duration: segment.duration, layers: segment.layers }));
+/** The montage as the renderer takes it: `clips[i]` is the clip piece `i` plays, `jobs[i]` the live it is in when it isn't the export's own */
+export function renderPieces(
+  montage: MontageProps,
+  clips: string[],
+  jobs: (string | undefined)[] = [],
+): { clip: string; from: number; duration: number; layers: PlacedLayer[]; job?: string }[] {
+  return montage.segments.map((segment, i) => ({ clip: clips[i], from: segment.from, duration: segment.duration, layers: segment.layers, ...(jobs[i] ? { job: jobs[i] } : {}) }));
 }

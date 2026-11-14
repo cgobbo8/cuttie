@@ -90,6 +90,8 @@ export interface ApiDefinition {
     store: typeof routes['compilations.store']
     update: typeof routes['compilations.update']
     destroy: typeof routes['compilations.destroy']
+    duplicate: typeof routes['compilations.duplicate']
+    library: typeof routes['compilations.library']
   }
   renders: {
     batchStore: typeof routes['renders.batch_store']

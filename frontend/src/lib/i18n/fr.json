@@ -1581,7 +1581,17 @@
     "changeRecut_other": "{{count}} passages recoupés",
     "ownLook": "Mise en page de ce passage : {{name}}",
     "changePassages_one": "{{count}} passage dans la vidéo",
-    "changePassages_other": "{{count}} passages dans la vidéo"
+    "changePassages_other": "{{count}} passages dans la vidéo",
+    "lives": {
+      "add": "Ajouter un live",
+      "addHint": "Prendre aussi des passages d'un autre live : l'IA travaille alors sur tous à la fois",
+      "added": "« {{name}} » ajouté : l'IA cherche maintenant dans ce live aussi",
+      "remove": "Retirer ce live",
+      "removeBlocked": "Retire d'abord ses passages de la vidéo",
+      "searchIn": "Chercher dans",
+      "pickTitle": "Quel live ajouter ?",
+      "pickHint": "La vidéo pourra prendre des passages de ce live aussi. Quand tu décris la vidéo ou demandes un changement, l'IA cherche dans tous ses lives."
+    }
   },
   "compilations": {
     "title": "Compilations",
@@ -1617,11 +1627,17 @@
     "allLives": "Tous les lives",
     "untitledLive": "Live sans titre",
     "pickLive": "De quel live ?",
-    "pickLiveHint": "Une compilation se fait avec les passages d'un live déjà analysé.",
+    "pickLiveHint": "Coche un live, ou plusieurs pour une vidéo qui pioche dans tous : l'IA travaille alors sur tous à la fois.",
     "has_one": "{{count}} compilation",
     "has_other": "{{count}} compilations",
     "noLive": "Pas encore de live analysé",
     "noLiveHint": "Une compilation se fait avec les passages d'un live. Analyse un live, puis reviens ici.",
-    "analyse": "Analyser un live"
+    "analyse": "Analyser un live",
+    "fromLives_one": "{{count}} live",
+    "fromLives_other": "{{count}} lives",
+    "pickSeveral": "Jusqu'à {{max}} lives",
+    "createFrom_one": "Créer avec {{count}} live",
+    "createFrom_other": "Créer avec {{count}} lives",
+    "noOtherLive": "Aucun autre live analysé."
   }
 }

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { useTranslation } from "react-i18next";
-import { ArrowLeft, ArrowRight, Layers, Loader2, Plus, Sparkles, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, Layers, Loader2, Plus, Sparkles } from "lucide-react";
 import {
   clipThumbUrl,
   deleteCompilation,
@@ -16,6 +16,7 @@ import { useChannel } from "../lib/ChannelContext";
 import { copyName, libraryGroups, liveWhen, plainDate } from "../lib/compilationLibrary";
 import { hoursMinutes, splitVodTitle } from "../lib/format";
 import CompilationCard from "../components/compilation/CompilationCard";
+import LivePicker from "../components/compilation/LivePicker";
 import ModeSwitch from "../components/project/ModeSwitch";
 import ConfirmModal from "../components/ConfirmModal";
 import { useToast } from "../components/Toast";
@@ -212,38 +213,17 @@ export default function CompilationsPage() {
       )}
 
       {picking && (
-        <div className="fixed inset-0 z-50 grid place-items-center p-6">
-          <div className="absolute inset-0 bg-black/55 backdrop-blur-[6px] animate-fade-in" onClick={() => setPicking(false)} />
-          <div role="dialog" aria-modal="true" aria-label={t("compilations.pickLive")} className="relative glass-strong rounded-[20px] p-5 w-full max-w-[520px] max-h-[80vh] flex flex-col animate-rise">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h3 className="text-[16px] font-semibold tracking-[-0.01em] text-white">{t("compilations.pickLive")}</h3>
-                <p className="mt-1 text-[13px] text-ink-2">{t("compilations.pickLiveHint")}</p>
-              </div>
-              <button onClick={() => setPicking(false)} aria-label={t("common.cancel")} className="w-8 h-8 grid place-items-center rounded-[9px] text-ink-3 hover:text-white hover:bg-white/10">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            <ul className="mt-4 -mx-1.5 overflow-y-auto flex flex-col gap-0.5">
-              {[...lives]
-                .sort((a, b) => Date.parse(liveWhen(b) ?? "") - Date.parse(liveWhen(a) ?? ""))
-                .map((live) => (
-                  <li key={live.job_id}>
-                    <button onClick={() => startIn(live.job_id)} className="w-full flex items-center gap-3 p-1.5 rounded-[12px] text-left hover:bg-white/[0.07] transition-colors">
-                      <span className="w-[96px] aspect-video rounded-[8px] overflow-hidden flex-none bg-white/[0.05]">
-                        {liveCover(live) && <img src={liveCover(live)!} alt="" loading="lazy" className="w-full h-full object-cover" />}
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block text-[13.5px] font-[550] text-white truncate">{liveTitle(live)}</span>
-                        <span className="block text-[12px] text-ink-3 truncate">{liveLine(live)}</span>
-                      </span>
-                      {live.compilations.length > 0 && <span className="chip chip-neutral h-[22px] flex-none">{t("compilations.has", { count: live.compilations.length })}</span>}
-                    </button>
-                  </li>
-                ))}
-            </ul>
-          </div>
-        </div>
+        <LivePicker
+          title={t("compilations.pickLive")}
+          hint={t("compilations.pickLiveHint")}
+          lives={lives}
+          coverOf={liveCover}
+          multiple
+          confirm={(count) => (count > 1 ? t("compilations.createFrom", { count }) : t("compilation.new"))}
+          // The newest live keeps the compilation; the others are the lives it also takes from
+          onPick={([first, ...rest]) => navigate(`/${first}/compilation?new=1${rest.length > 0 ? `&lives=${rest.join(",")}` : ""}`)}
+          onClose={() => setPicking(false)}
+        />
       )}
 
       <ConfirmModal

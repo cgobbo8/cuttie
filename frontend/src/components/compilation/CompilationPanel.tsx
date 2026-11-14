@@ -19,7 +19,11 @@ import { frameAt, tileStyle } from "../../lib/storyboard";
 
 interface Props {
   compilation: Compilation;
-  storyboard: TwitchStoryboard | null;
+  /** Each live's preview frames, by job id; `home`: the live the compilation is kept with */
+  storyboards: Record<string, TwitchStoryboard>;
+  home: string;
+  /** Made from several lives: each one's number, by job id (a passage then shows which it is from) */
+  liveNumbers?: Record<string, number>;
   /** The section search results are added to */
   activeSection: string;
   /** The item shown in the preview */
@@ -68,7 +72,9 @@ function withGone(section: CompilationSection, gone: Props["gone"]): (Compilatio
 /** The compilation being built: its sections, their moments in playing order, its length and look */
 export default function CompilationPanel({
   compilation,
-  storyboard,
+  storyboards,
+  home,
+  liveNumbers,
   activeSection,
   selectedItem,
   cutting,
@@ -203,8 +209,9 @@ export default function CompilationPanel({
                     >
                       <span
                         className={`relative w-[64px] aspect-video rounded-[6px] overflow-hidden flex-none bg-white/[0.05] ${item.template && item.template !== compilation.template ? "ring-2 ring-accent" : ""}`}
-                        style={storyboard ? tileStyle(storyboard, frameAt(storyboard, item.start)) : undefined}
+                        style={storyboards[item.job ?? home] ? tileStyle(storyboards[item.job ?? home], frameAt(storyboards[item.job ?? home], item.start)) : undefined}
                       >
+                        {liveNumbers && <span className="live-dot absolute top-0.5 left-0.5">{liveNumbers[item.job ?? home] ?? "?"}</span>}
                         {cutting.has(item.id) && (
                           <span className="absolute inset-0 grid place-items-center bg-black/55">
                             <Loader2 className="w-3.5 h-3.5 spinner text-white" />

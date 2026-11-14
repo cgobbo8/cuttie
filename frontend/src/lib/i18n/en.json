@@ -1581,7 +1581,17 @@
     "changeRecut_other": "{{count}} passages recut",
     "ownLook": "Layout of this passage: {{name}}",
     "changePassages_one": "{{count}} passage in the video",
-    "changePassages_other": "{{count}} passages in the video"
+    "changePassages_other": "{{count}} passages in the video",
+    "lives": {
+      "add": "Add a live",
+      "addHint": "Take passages from another live too: the AI then works on all of them at once",
+      "added": "“{{name}}” added: the AI now searches this live too",
+      "remove": "Remove this live",
+      "removeBlocked": "Take its passages out of the video first",
+      "searchIn": "Search in",
+      "pickTitle": "Which live to add?",
+      "pickHint": "The video can take passages from this live too. When you describe the video or ask for a change, the AI searches all its lives."
+    }
   },
   "compilations": {
     "title": "Compilations",
@@ -1617,11 +1627,17 @@
     "allLives": "All lives",
     "untitledLive": "Untitled live",
     "pickLive": "From which live?",
-    "pickLiveHint": "A compilation is made of passages of a live already analysed.",
+    "pickLiveHint": "Tick one live, or several for a video that draws on all of them: the AI then works on all at once.",
     "has_one": "{{count}} compilation",
     "has_other": "{{count}} compilations",
     "noLive": "No live analysed yet",
     "noLiveHint": "A compilation is made of passages of a live. Analyse a live, then come back here.",
-    "analyse": "Analyse a live"
+    "analyse": "Analyse a live",
+    "fromLives_one": "{{count}} live",
+    "fromLives_other": "{{count}} lives",
+    "pickSeveral": "Up to {{max}} lives",
+    "createFrom_one": "Create with {{count}} live",
+    "createFrom_other": "Create with {{count}} lives",
+    "noOtherLive": "No other analysed live."
   }
 }

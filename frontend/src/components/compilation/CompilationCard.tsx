@@ -24,7 +24,7 @@ export default function CompilationCard({ jobId, compilation: c, fallback, busy 
   const [naming, setNaming] = useState(false);
   const [name, setName] = useState(c.name);
   const status = compilationStatus(c);
-  const cover = c.cover ? clipThumbUrl(jobId, c.cover, { width: 480 }) : fallback;
+  const cover = c.cover ? clipThumbUrl(c.cover_job ?? jobId, c.cover, { width: 480 }) : fallback;
   const to = `/${jobId}/compilation?c=${c.id}`;
 
   const act = (e: MouseEvent, action: () => void) => {
@@ -86,6 +86,7 @@ export default function CompilationCard({ jobId, compilation: c, fallback, busy 
         )}
         <p className="text-[12.5px] text-ink-2 flex items-center gap-1.5 min-w-0">
           {c.described && <Sparkles className="w-3.5 h-3.5 text-accent flex-none" aria-label={t("compilations.described")} />}
+          {c.lives.length > 1 && <span className="chip chip-accent h-[20px] px-1.5 text-[11px] flex-none">{t("compilations.fromLives", { count: c.lives.length })}</span>}
           <span className="truncate">
             {c.passages === 0 ? t("compilations.noPassage") : [t("compilations.passages", { count: c.passages }), c.parts > 1 ? t("compilations.parts", { count: c.parts }) : null].filter(Boolean).join(" · ")}
           </span>

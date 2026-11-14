@@ -224,6 +224,32 @@ describe("compilations", () => {
     expect(cut.sections[0].items[2]).toBe(wide.sections[0].items[1]);
   });
 
+  it("keeps the passages of several lives apart", () => {
+    // The same times in two lives are two moments
+    const here = itemFromHit(hit(100, 103), 5000);
+    const there = itemFromHit(hit(100, 103, { job: "other" }), 5000);
+    expect([here.job, there.job]).toEqual([undefined, "other"]);
+    const c = { sections: [section("s1", [here])] };
+    expect(itemFor(c, hit(100, 103))?.id).toBe(here.id);
+    expect(itemFor(c, hit(100, 103, { job: "other" }))).toBeUndefined();
+    expect(addItems(c, "s1", [there]).added).toBe(1);
+
+    // A plan over two lives: each passage keeps its live, and ends where its own live ends
+    const lengths = (job?: string) => (job === "other" ? 200 : 5000);
+    const plan = { title: "", sections: [{ title: "Calme", hits: [hit(100, 103), hit(100, 103, { job: "other" }), hit(198, 199.9, { job: "other" }), hit(198, 199.9)] }] };
+    const [part] = sectionsFromPlan(plan, lengths);
+    expect(part.items.map((i) => [i.job ?? null, i.end])).toEqual([[null, 103.5], ["other", 103.5], ["other", 200], [null, 200.4]]);
+    // The AI is told which live each passage is from
+    expect(planCurrent({ sections: [part] })[0].items.slice(0, 2)).toEqual([{ start: 99.65, end: 103.5 }, { start: 99.65, end: 103.5, job: "other" }]);
+
+    // Changing the video: a passage given back is the one of the same live, not its twin in the other
+    const video = { sections: [section("s1", [item("a", 100, 103), { ...item("b", 100, 103), job: "other" }])] };
+    const kept = revisedSections(video, { title: "", sections: [{ title: "", hits: [hit(100, 103, { job: "other" }), hit(300, 303, { job: "other" })] }] }, lengths);
+    expect([kept.added, kept.removed]).toEqual([1, 1]);
+    expect(kept.sections[0].items.map((i) => [i.id === "b" ? "b" : "new", i.job])).toEqual([["b", "other"], ["new", "other"]]);
+    expect(kept.gone.map((g) => g.item.id)).toEqual(["a"]);
+  });
+
   it("writes a time of the live", () => {
     expect(liveClock(5025.7)).toBe("1:23:45");
     expect(liveClock(59)).toBe("0:00:59");

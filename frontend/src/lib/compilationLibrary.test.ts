@@ -3,7 +3,7 @@ import type { CompilationSummary, LiveCompilations } from "./api";
 import { compilationStatus, copyName, libraryGroups } from "./compilationLibrary";
 
 const card = (id: string, more: Partial<CompilationSummary> = {}): CompilationSummary => ({
-  id, name: id, length: 60, passages: 8, parts: 2, described: false, cover: null,
+  id, name: id, length: 60, passages: 8, parts: 2, described: false, cover: null, cover_job: null, lives: ["live"],
   created_at: "2026-11-10T10:00:00.000Z", updated_at: "2026-11-10T10:00:00.000Z", exported_at: null, render_id: null, ...more,
 });
 const live = (job_id: string, stream_date: string | null, compilations: CompilationSummary[]): LiveCompilations => ({

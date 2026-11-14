@@ -1202,6 +1202,8 @@ export interface MontageRenderPiece {
   from: number;
   duration: number;
   layers: { layer: unknown; z: number }[];
+  /** The live the clip is in, when it isn't the one the export is kept with */
+  job?: string;
 }
 
 /**
@@ -1293,6 +1295,8 @@ export interface LiveHit {
   spoken?: boolean;
   /** A change asked to the AI: this moment is one of the video's, given back with other lines (tighter, longer) */
   recut?: boolean;
+  /** The live it is in, when several are worked on at once and it isn't the compilation's own */
+  job?: string;
 }
 
 export interface LiveSearchResult {
@@ -1380,8 +1384,11 @@ export interface VideoPlan {
 }
 
 /** A whole video planned by the AI from a description, `target` seconds long */
-export async function planLiveVideo(jobId: string, brief: string, target: number, change?: PlanChange): Promise<VideoPlan> {
-  return liveJson(await postJson(`${BASE}/jobs/${jobId}/plan`, { brief, target, ...(change ?? {}) }));
+export async function planLiveVideo(jobId: string, brief: string, target: number, change?: PlanChange, lives: string[] = []): Promise<VideoPlan> {
+  // `lives`: other lives the video may take passages from (the AI works on all of them at once)
+  const plan = await liveJson<VideoPlan>(await postJson(`${BASE}/jobs/${jobId}/plan`, { brief, target, ...(change ?? {}), ...(lives.length > 0 ? { lives } : {}) }));
+  // A passage says its live only when it isn't this one
+  return { ...plan, sections: plan.sections.map((s) => ({ ...s, hits: s.hits.map(({ job, ...hit }) => (job && job !== jobId ? { ...hit, job } : hit)) })) };
 }
 
 /** Where a moment's clip stands: cut from the live (with room around the moment) or not yet */
@@ -1410,6 +1417,8 @@ export interface CompilationItem extends Partial<PieceState> {
   fit?: [number, number];
   /** How well it matches what was asked, when the AI found it (0-1) */
   score?: number;
+  /** The live it is cut from, when it isn't the compilation's own (one of its `lives`): its times and its clip are that live's */
+  job?: string;
 }
 
 /** A template as the AI is told about it (see templateGuide.ts) */
@@ -1436,7 +1445,7 @@ export interface LooksChoice {
 export async function chooseLooks(
   jobId: string,
   body: {
-    items: Pick<CompilationItem, "id" | "start" | "end" | "text">[];
+    items: Pick<CompilationItem, "id" | "start" | "end" | "text" | "job">[];
     templates: LookTemplate[];
     /** What the streamer asked about the look, in their words */
     wish?: string;
@@ -1479,16 +1488,18 @@ export interface Compilation {
   /** What the AI answered to the description: what it built and why */
   answer?: string;
   asks?: { ask: string; note: string; added?: number; removed?: number; recut?: number }[];
+  /** Other lives it takes passages from, besides the one it is kept with (job ids) */
+  lives?: string[];
   created_at: string;
   updated_at: string;
 }
 
-export type CompilationDraft = Pick<Compilation, "name" | "sections" | "template" | "titles" | "hook" | "target" | "brief" | "answer" | "asks">;
+export type CompilationDraft = Pick<Compilation, "name" | "sections" | "template" | "titles" | "hook" | "target" | "brief" | "answer" | "asks" | "lives">;
 
 /** A change asked on a video the AI planned: what is asked now, the video as it is (live seconds), what was asked before */
 export interface PlanChange {
   request: string;
-  current: { title: string; items: { start: number; end: number }[] }[];
+  current: { title: string; items: { start: number; end: number; job?: string }[] }[];
   asks: string[];
 }
 
@@ -1518,8 +1529,11 @@ export interface CompilationSummary {
   parts: number;
   /** Built by describing it to the AI */
   described: boolean;
-  /** A passage's clip that stands for it (null: none is cut yet) */
+  /** A passage's clip that stands for it (null: none is cut yet), and the live that clip is in */
   cover: string | null;
+  cover_job: string | null;
+  /** Every live it takes passages from, its own first */
+  lives: string[];
   created_at: string;
   updated_at: string;
   /** Its last finished export */

@@ -61,6 +61,7 @@ export function itemFromHit(hit: LiveHit, liveDuration: number): CompilationItem
     // Words said: these are the transcript's times for them, the real ones come with the clip
     ...(hit.spoken && hit.end > hit.start ? { fit: [hundredth(hit.start), hundredth(hit.end)] as [number, number] } : {}),
     ...(hit.sources.includes("ai") ? { score: hit.score } : {}),
+    ...(hit.job ? { job: hit.job } : {}),
   };
 }
 
@@ -86,14 +87,18 @@ export const allItems = (c: Pick<Compilation, "sections">): CompilationItem[] =>
 export const sectionLength = (s: CompilationSection): number => s.items.reduce((sum, item) => sum + (item.end - item.start), 0);
 export const compilationLength = (c: Pick<Compilation, "sections">): number => c.sections.reduce((sum, s) => sum + sectionLength(s), 0);
 
-function sameMoment(a: { start: number; end: number }, b: { start: number; end: number }): boolean {
+/** Two moments of the same live (times of two lives say nothing of each other) */
+const sameLive = (a: { job?: string }, b: { job?: string }) => (a.job ?? "") === (b.job ?? "");
+
+function sameMoment(a: { start: number; end: number; job?: string }, b: { start: number; end: number; job?: string }): boolean {
+  if (!sameLive(a, b)) return false;
   const shared = Math.min(a.end, b.end) - Math.max(a.start, b.start);
   const shorter = Math.min(a.end - a.start, b.end - b.start);
   return shared > 0 && shorter > 0 && shared / shorter >= SAME_MOMENT;
 }
 
 /** The item of the compilation that shows this moment, if any (search results already added) */
-export function itemFor(c: Pick<Compilation, "sections">, moment: { start: number; end: number }): CompilationItem | undefined {
+export function itemFor(c: Pick<Compilation, "sections">, moment: { start: number; end: number; job?: string }): CompilationItem | undefined {
   return allItems(c).find((item) => sameMoment(item, moment));
 }
 
@@ -253,13 +258,13 @@ export function looksCount(c: Pick<Compilation, "sections" | "template">, fallba
 }
 
 /** The AI's plan as sections of items, in the order it gave */
-export function sectionsFromPlan(plan: VideoPlan, liveDuration: number): CompilationSection[] {
+export function sectionsFromPlan(plan: VideoPlan, liveDuration: LiveLength): CompilationSection[] {
   const sections: CompilationSection[] = [];
   const taken: CompilationItem[] = [];
   for (const planned of plan.sections) {
     const items: CompilationItem[] = [];
     for (const hit of planned.hits) {
-      const item = itemFromHit(hit, liveDuration);
+      const item = itemFromHit(hit, lengthOf(liveDuration, hit.job));
       if (taken.some((t) => sameMoment(t, item))) continue;
       taken.push(item);
       items.push(item);
@@ -270,9 +275,13 @@ export function sectionsFromPlan(plan: VideoPlan, liveDuration: number): Compila
 }
 
 /** The video as the AI is told about it when a change is asked: its parts and where their passages are in the live */
-export function planCurrent(c: Pick<Compilation, "sections">): { title: string; items: { start: number; end: number }[] }[] {
-  return c.sections.filter((s) => s.items.length > 0).map((s) => ({ title: s.title, items: s.items.map(({ start, end }) => ({ start, end })) }));
+export function planCurrent(c: Pick<Compilation, "sections">): { title: string; items: { start: number; end: number; job?: string }[] }[] {
+  return c.sections.filter((s) => s.items.length > 0).map((s) => ({ title: s.title, items: s.items.map(({ start, end, job }) => ({ start, end, ...(job ? { job } : {}) })) }));
 }
+
+/** How long a live is: one length for all, or by live when the compilation takes from several (`job`: absent for its own) */
+export type LiveLength = number | ((job?: string) => number);
+const lengthOf = (length: LiveLength, job?: string): number => (typeof length === "function" ? length(job) : length);
 
 /**
  * The video once the AI changed it as asked: it gives the whole video again.
@@ -284,7 +293,7 @@ export function planCurrent(c: Pick<Compilation, "sections">): { title: string; 
 export function revisedSections(
   c: Pick<Compilation, "sections">,
   plan: VideoPlan,
-  liveDuration: number,
+  liveDuration: LiveLength,
 ): { sections: CompilationSection[]; added: number; removed: number; recut: string[]; fresh: string[]; gone: { item: CompilationItem; section: string; index: number }[] } {
   const before = allItems(c);
   const kept = new Set<string>();
@@ -295,8 +304,8 @@ export function revisedSections(
   let added = 0;
   // The AI names passages by the transcript's lines, whose times hold silence: a passage cut on
   // its words shares little with them. It is the same one as soon as they share a word's worth
-  const same = (item: CompilationItem, hit: { start: number; end: number }) =>
-    sameMoment(item, hit) || Math.min(item.end, hit.end) - Math.max(item.start, hit.start) >= SAME_LINE;
+  const same = (item: CompilationItem, hit: { start: number; end: number; job?: string }) =>
+    sameMoment(item, hit) || (sameLive(item, hit) && Math.min(item.end, hit.end) - Math.max(item.start, hit.start) >= SAME_LINE);
   for (const planned of plan.sections) {
     const items: CompilationItem[] = [];
     for (const hit of planned.hits) {
@@ -304,13 +313,13 @@ export function revisedSections(
       if (known) {
         kept.add(known.id);
         if (hit.recut) {
-          const { start, end, text, fit } = itemFromHit(hit, liveDuration);
+          const { start, end, text, fit } = itemFromHit(hit, lengthOf(liveDuration, hit.job));
           items.push({ ...known, start, end, text, fit });
           recut.push(known.id);
         } else items.push(known);
         // A passage given back in two (a dead line taken out of its middle): its second half is new
       } else if ((hit.recut || !before.some((item) => same(item, hit))) && !items.some((item) => same(item, hit))) {
-        const item = itemFromHit(hit, liveDuration);
+        const item = itemFromHit(hit, lengthOf(liveDuration, hit.job));
         items.push(item);
         fresh.push(item.id);
         added++;

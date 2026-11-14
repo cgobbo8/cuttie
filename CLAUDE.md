@@ -137,7 +137,7 @@ cuttie/
 │   │       ├── clip_tools.py                  # transcription a la demande + cam d'un live (clips) ou d'une VOD + clip allonge (+30 s) + clips recoupes depuis le live (projet libere) + passages du live decoupes pour les compilations
 │   │       ├── live_search.py                 # chercher dans tout le live : mots dits / ecrits dans le chat, recherche et plan de video par l'IA (cache disque, suivi des etapes, modele de repli), montage d'un clip par l'IA
 │   │       ├── live_agent.py                  # l'IA qui cherche avec des outils : boucle d'appels (OpenRouter), ecoute d'un passage, reponse verifiee, plafond de cout
-│   │       ├── live_tools.py                  # les outils de cette IA : apercu du live, 50 meilleurs moments de l'analyse, mots dits, chat et ses rafales, sons, voix qui montent, lire un passage (une ligne = son heure au dixieme et le temps qu'elle prend a dire)
+│   │       ├── live_tools.py                  # (`ManyLives` : les memes outils sur plusieurs lives a la fois, chaque appel dit « live 1, 2... ») les outils de cette IA : apercu du live, 50 meilleurs moments de l'analyse, mots dits, chat et ses rafales, sons, voix qui montent, lire un passage (une ligne = son heure au dixieme et le temps qu'elle prend a dire)
 │   │       ├── tight_cut.py                   # un passage coupe sur ses mots : son texte retrouve parmi les mots dates de son clip, la coupe posee la ou la voix commence et s'arrete (niveau du son)
 │   │       ├── sound_index.py                 # ce qu'on entend dans tout le live, seconde par seconde (PANNs, 23 familles de sons, ~1 Mo par live)
 │   │       ├── looks.py                       # le modele de chaque passage d'une video, choisi par l'IA qui regarde 3 images de chacun ; « a quoi sert » un modele perso
@@ -181,7 +181,7 @@ cuttie/
         │   ├── welcome/                       # Etapes du premier lancement + mur de lives
         │   ├── project/                       # AnalysisView, MomentPlayer/List/Details, VodTimeline, Stepper, RenderCard, ModeSwitch (Clips | Compilations)
         │   ├── montage/                       # TemplatePicker (onglets Mes modeles / Modeles Cuttie, etoile par defaut), TemplateSketch, CamSheet
-        │   ├── compilation/                   # SearchPanel (mots / IA / decrire la video), PiecePreview (un passage et sa coupe), PlanTalk (la conversation avec l'IA sur une video decrite), CompilationPanel (parties, passages, duree), CompilationGuide (l'ecran explique en 4 etapes a la premiere visite)
+        │   ├── compilation/                   # LivePicker (choisir un live, ou plusieurs), CompilationCard (une compilation dans la bibliotheque), SearchPanel (mots / IA / decrire la video), PiecePreview (un passage et sa coupe), PlanTalk (la conversation avec l'IA sur une video decrite), CompilationPanel (parties, passages, duree), CompilationGuide (l'ecran explique en 4 etapes a la premiere visite)
         │   ├── template-editor/               # EditorCanvas (apercu + poignees), LayerList (calques), Panels (reglages), Scrubber (timeline)
         │   ├── KeyField.tsx                   # Champ de cle API verifie aupres du fournisseur
         │   ├── WebcamFrame.tsx                # Frame + rectangle de cam deplacable
@@ -306,6 +306,17 @@ Un passage trouve dans le live (mots ou IA) a d'abord les heures que le transcri
 - Compare aux 31 points de coupe d'un monteur sur le meme live : fins a moins de 0,15 s dans 93 % des cas, debuts souvent 0,2-0,3 s plus serres (il avait laisse le silence que l'heure du premier mot contenait).
 - « Ajuster a 1 min 30 » ne raccourcit plus une phrase : les longs passages (plus de 6 s) raccourcissent, puis les plus faibles s'en vont (note de l'IA ; sinon le dernier de la partie la plus longue), jamais le seul d'une partie. Une video decrite n'est ajustee qu'une fois ses passages recales, et aucun n'y est raccourci (rogner un passage coupe sur ses mots, c'est couper un mot) : jusqu'a 10 % de plus que demande elle reste telle quelle, au-dela les passages les moins bien notes sortent.
 
+## Compilations sur plusieurs lives
+
+Une compilation peut prendre des passages dans plusieurs lives du streamer (5 au plus, le sien compris) ; l'IA travaille alors sur tous a la fois.
+
+- **Donnees** : la compilation reste rangee avec un live (`jobs.compilations` de celui-la, le plus recent des lives coches) et nomme les autres (`compilation.lives` : ids de jobs). Un passage d'un autre live le dit (`item.job`) : ses heures, sa duree maximale, son clip `piece_<id>.mp4`, ses mots, sa webcam et ses vignettes sont ceux de ce live-la, dans le dossier de ce live. Sans `job`, rien ne change (un seul live : memes donnees qu'avant).
+- **IA** (`live_tools.ManyLives`) : les memes outils, mais chaque appel dit le live (`live` : 1, 2...) et `overview` sans `live` les liste avec leur date ; les heures sont celles de chaque live. Chaque moment rendu dit son `live`, est relu dans le transcript de ce live et revient avec son `job`. Consigne ajoutee (`live_agent.MANY`) : chercher dans chaque live, faire jouer les passages live apres live dans une partie, piocher dans chacun quand la demande parle de ce qui revient d'un live a l'autre. 12 etapes de plus et moitie de plafond en plus par live ajoute. Un seul live : consigne et reponses inchangees.
+- **API** : seuls les lives analyses de l'utilisateur sont acceptes (`otherLives`) ; `/pieces`, `/words`, `edit-env`, les vignettes restent par live (l'app les appelle avec le live du passage) ; `/looks` et `montage-render` lisent chaque clip dans son live ; le menage des clips inutilises regarde toutes les compilations de l'utilisateur (un live ne supprime plus les clips qu'une compilation rangee ailleurs y a decoupes) ; un projet supprime retire ses passages des compilations rangees avec d'autres lives (`withoutLive`).
+- **Ecran** : dans la bibliotheque, « Nouvelle compilation » laisse cocher plusieurs lives (`LivePicker`) ; dans l'editeur, une frise par live (numero, titre, date, passages pris), « Ajouter un live », un live sans passage se retire ; chaque passage porte le numero de son live ; « Chercher a la main » choisit le live ou chercher ; « Decrire la video » et la conversation cherchent dans tous.
+- Essai reel (14/11/2026, lives du 9/11 de 6 h 49 et du 11/10 de 4 h 43) : video de 1 min decrite sur les deux -> 2 parties, 9 passages du premier et 5 du second, 0,044 $ et 31 s ; un changement demande dans le fil (retirer un passage, en ajouter un du deuxieme live) : 0,025 $ et 23 s ; export de 63 s, les clips lus dans deux dossiers.
+- Limites : les passages d'un live dont la VOD a quitte Twitch ne peuvent plus etre decoupes (ceux deja decoupes restent) ; la recherche a la main se fait un live a la fois ; le jeu affiche par les widgets est celui du live de la compilation.
+
 ## Decoupe : un fichier demarre sur sa premiere image
 
 Une copie sans reencodage ne peut commencer que sur une image cle. Demande a 1:23:45,4, ffmpeg gardait le temps 0 a 1:23:45,4 mais l'image ne commencait qu'a l'image cle suivante (jusqu'a 2 s plus tard sur Twitch), et le fichier le disait par une attente avant ses pistes. Resultat, vu sur un vrai export : image figee au debut d'un passage, et sous-titres en avance (les mots sont transcrits sur le son du fichier, qui ignore cette attente).
@@ -373,7 +384,7 @@ Dans une compilation, chaque passage peut avoir son propre modele (`item.templat
 | `/api/jobs/{id}/search/info`          | GET     | Token    | Ce qui se cherche dans le live, cout d'une question a l'IA |
 | `/api/jobs/{id}/search`               | POST    | Token    | Passages du live : mots (gratuit) ou IA (`mode: "ai"`) |
 | `/api/jobs/{id}/search/progress`      | GET     | Token    | Ce que fait l'IA pendant qu'elle cherche (outil appele, sur quoi) |
-| `/api/jobs/{id}/plan`                 | POST    | Token    | Video decrite -> parties et passages (IA) ; avec `request`, `current`, `asks` : la video deja construite, changee comme demande |
+| `/api/jobs/{id}/plan`                 | POST    | Token    | Video decrite -> parties et passages (IA) ; avec `request`, `current`, `asks` : la video deja construite, changee comme demande ; avec `lives` (ids d'autres lives) : l'IA travaille sur tous, chaque passage dit son live (`job`) |
 | `/api/jobs/{id}/pieces`               | POST    | Token    | Decoupe les passages demandes dans le live (410 : live parti) ; avec `fit`, repond `tight` : ou ces mots sont vraiment dits |
 | `/api/jobs/{id}/looks`                | POST    | Token    | L'IA regarde les passages decoupes et choisit le modele de chacun (409 : rien de decoupe) |
 | `/api/jobs/{id}/compilations`         | GET/POST | Token   | Compilations du live             |

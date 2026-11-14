@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { useTranslation } from "react-i18next";
 import { Player } from "@remotion/player";
-import { ArrowLeft, Check, CircleQuestionMark, Loader2, Plus } from "lucide-react";
+import { ArrowLeft, Check, CircleQuestionMark, Loader2, Plus, X } from "lucide-react";
 import {
   chooseLooks,
   clipThumbUrl,
@@ -14,6 +14,7 @@ import {
   getJobStatus,
   getLiveSearchInfo,
   getStoryboard,
+  listAllCompilations,
   listCompilations,
   LiveError,
   saveCompilation,
@@ -23,6 +24,7 @@ import {
   type CompilationItem,
   type EditEnvironment,
   type JobResponse,
+  type LiveCompilations,
   type LiveFailure,
   type LiveHit,
   type LiveSearchInfo,
@@ -53,7 +55,8 @@ import {
   tightened,
   updateItem,
 } from "../lib/compilation";
-import { clock } from "../lib/format";
+import { liveWhen, plainDate } from "../lib/compilationLibrary";
+import { clock, splitVodTitle } from "../lib/format";
 import { buildMontage, montageFrames, renderPieces, type MontageCut, type MontageProps } from "../lib/montage";
 import { evenFrames, tileStyle } from "../lib/storyboard";
 import { clipTemplateContext } from "../lib/templateContext";
@@ -63,6 +66,7 @@ import { titleCard } from "../lib/templateSpec";
 import { TEMPLATE_IDS } from "../lib/templates";
 import MontageComposition from "../components/remotion-editor/MontageComposition";
 import ModeSwitch from "../components/project/ModeSwitch";
+import LivePicker from "../components/compilation/LivePicker";
 import CompilationGuide from "../components/compilation/CompilationGuide";
 import CompilationPanel from "../components/compilation/CompilationPanel";
 import PiecePreview from "../components/compilation/PiecePreview";
@@ -78,7 +82,12 @@ const TITLE_SECONDS = 2.2;
 const SAVE_DELAY = 500;
 const STRIP_TILES = 24;
 
-const hitKey = (hit: LiveHit) => `${hit.start}-${hit.end}`;
+const hitKey = (hit: LiveHit) => `${hit.job ?? ""}:${hit.start}-${hit.end}`;
+
+/** A passage's clip, and the live it is in (a compilation may take passages from several) */
+type Piece = PieceState & { job: string };
+/** Other lives one compilation can take passages from */
+const MAX_OTHER_LIVES = 4;
 
 /** How long a passage the AI added stays lit, and one it took out takes to leave (as the stylesheet animates them) */
 const LIT_MS = 3600;
@@ -92,7 +101,7 @@ const sameOrder = (c: Pick<Compilation, "sections">, sections: Compilation["sect
 const PLAN_OVER = 1.1;
 
 /** The item's clip is there and covers the moment as it is now */
-function covers(piece: PieceState | undefined, item: CompilationItem): piece is PieceState & { file_start: number; file_end: number } {
+function covers<P extends PieceState>(piece: P | undefined, item: CompilationItem): piece is P & { file_start: number; file_end: number } {
   return !!piece?.ready && piece.file_start != null && piece.file_end != null && piece.file_start <= item.start + 0.05 && piece.file_end >= item.end - 0.05;
 }
 
@@ -128,12 +137,15 @@ export default function CompilationPage() {
 
   const [job, setJob] = useState<JobResponse | null>(null);
   const [info, setInfo] = useState<LiveSearchInfo | null>(null);
-  const [storyboard, setStoryboard] = useState<TwitchStoryboard | null>(null);
+  // Each live's preview frames, by job id; the analysed lives (title, date, length), to name those a compilation takes from
+  const [storyboards, setStoryboards] = useState<Record<string, TwitchStoryboard>>({});
+  const [library, setLibrary] = useState<LiveCompilations[]>([]);
+  const [addingLive, setAddingLive] = useState(false);
   const [compilations, setCompilations] = useState<Compilation[] | null>(null);
   const [currentId, setCurrentId] = useState<string | null>(null);
   const [activeSection, setActiveSection] = useState("");
   // Each moment's clip, by item id
-  const [pieces, setPieces] = useState<Record<string, PieceState>>({});
+  const [pieces, setPieces] = useState<Record<string, Piece>>({});
   const piecesRef = useRef(pieces);
   piecesRef.current = pieces;
   const [cutting, setCutting] = useState<Set<string>>(new Set());
@@ -167,13 +179,16 @@ export default function CompilationPage() {
   const drafts = useRef(new Map<string, CompilationItem>());
 
   const loaded = useRef<{ job: string; all: Promise<Compilation[]> } | null>(null);
-  const remember = useCallback((list: Compilation[]) => {
-    const states: Record<string, PieceState> = {};
-    for (const item of list.flatMap(allItems)) {
-      if (item.file) states[item.id] = { ready: !!item.ready, file: item.file, file_start: item.file_start ?? null, file_end: item.file_end ?? null };
-    }
-    setPieces((prev) => ({ ...prev, ...states }));
-  }, []);
+  const remember = useCallback(
+    (list: Compilation[]) => {
+      const states: Record<string, Piece> = {};
+      for (const item of list.flatMap(allItems)) {
+        if (item.file) states[item.id] = { ready: !!item.ready, file: item.file, file_start: item.file_start ?? null, file_end: item.file_end ?? null, job: item.job ?? jobId! };
+      }
+      setPieces((prev) => ({ ...prev, ...states }));
+    },
+    [jobId],
+  );
 
   useEffect(() => {
     if (!jobId) return;
@@ -183,10 +198,13 @@ export default function CompilationPage() {
         if (cancelled) return;
         setJob(j);
         const vodId = j.url?.match(/videos\/(\d+)/)?.[1];
-        if (vodId) getStoryboard(vodId).then((sb) => !cancelled && setStoryboard(sb)).catch(() => {});
+        if (vodId) getStoryboard(vodId).then((sb) => !cancelled && sb && setStoryboards((prev) => ({ ...prev, [jobId]: sb }))).catch(() => {});
       })
       .catch(() => !cancelled && navigate("/"));
     getLiveSearchInfo(jobId).then((i) => !cancelled && setInfo(i)).catch(() => {});
+    listAllCompilations().then((lives) => !cancelled && setLibrary(lives)).catch(() => {});
+    // ?lives=a,b: a new compilation that takes passages from these lives too (picked in the library)
+    const wantsLives = (search.get("lives") ?? "").split(",").filter((id) => id && id !== jobId).slice(0, MAX_OTHER_LIVES);
     // Asked once per live, even when this runs twice (development): a new compilation is created once
     const wantsNew = search.get("new") === "1";
     if (loaded.current?.job !== jobId) {
@@ -196,8 +214,13 @@ export default function CompilationPage() {
         all: listCompilations(jobId).then(async (list) => {
           // A new one is asked for: the empty one left from last time does, rather than piling them up
           const blank = list.find((c) => allItems(c).length === 0 && !c.brief);
-          if (wantsNew && blank) return [...list.filter((c) => c !== blank), blank];
-          return list.length === 0 || wantsNew ? [...list, await createCompilation(jobId, { name: t("compilation.defaultName") })] : list;
+          if (wantsNew && blank) {
+            const same = (blank.lives ?? []).join() === wantsLives.join();
+            const { lives: _before, ...rest } = blank;
+            return [...list.filter((c) => c !== blank), same ? blank : await saveCompilation(jobId, { ...rest, ...(wantsLives.length > 0 ? { lives: wantsLives } : {}) })];
+          }
+          const draft = { name: t("compilation.defaultName"), ...(wantsNew && wantsLives.length > 0 ? { lives: wantsLives } : {}) };
+          return list.length === 0 || wantsNew ? [...list, await createCompilation(jobId, draft)] : list;
         }),
       };
     }
@@ -224,6 +247,27 @@ export default function CompilationPage() {
   const compilationsRef = useRef(compilations);
   compilationsRef.current = compilations;
   const liveDuration = job?.vod_duration_seconds ?? 0;
+
+  /* ── The lives it takes passages from ───────────────────── */
+
+  // Its own first, then the others: the order the AI numbers them in
+  const liveIds = useMemo(() => (jobId ? [jobId, ...(compilation?.lives ?? [])] : []), [jobId, compilation?.lives]);
+  const several = liveIds.length > 1;
+  const liveInfo = useCallback((job?: string) => library.find((live) => live.job_id === (job ?? jobId)), [library, jobId]);
+  /** How long a live is (a passage's own when it names one) */
+  const lengthOf = useCallback((job?: string) => (job && job !== jobId ? (liveInfo(job)?.duration ?? 0) : liveDuration), [jobId, liveDuration, liveInfo]);
+  // The other lives' preview frames
+  useEffect(() => {
+    let cancelled = false;
+    for (const id of compilation?.lives ?? []) {
+      const vodId = liveInfo(id)?.vod_id;
+      if (!vodId || storyboards[id]) continue;
+      getStoryboard(vodId).then((sb) => !cancelled && sb && setStoryboards((prev) => (prev[id] ? prev : { ...prev, [id]: sb }))).catch(() => {});
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [compilation?.lives, liveInfo]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ── Saving ─────────────────────────────────────────────── */
 
@@ -252,7 +296,7 @@ export default function CompilationPage() {
   /* ── Clips of the moments, cut from the live ────────────── */
 
   const ensure = useCallback(
-    async (items: CompilationItem[]): Promise<Record<string, PieceState>> => {
+    async (items: CompilationItem[]): Promise<Record<string, Piece>> => {
       if (!jobId) return piecesRef.current;
       // Those without a clip, and those whose words are still to be found in theirs
       const todo = items.filter((item) => item.fit || !covers(piecesRef.current[item.id], item));
@@ -260,12 +304,17 @@ export default function CompilationPage() {
       setCutting((prev) => new Set([...prev, ...todo.map((i) => i.id)]));
       let known = piecesRef.current;
       try {
-        for (let i = 0; i < todo.length; i += CUT_BATCH) {
-          const batch = todo.slice(i, i + CUT_BATCH);
+        // Each live cuts its own passages, a few at a time
+        const batches: { live: string; batch: CompilationItem[] }[] = [];
+        for (const live of new Set(todo.map((item) => item.job ?? jobId))) {
+          const theirs = todo.filter((item) => (item.job ?? jobId) === live);
+          for (let i = 0; i < theirs.length; i += CUT_BATCH) batches.push({ live, batch: theirs.slice(i, i + CUT_BATCH) });
+        }
+        for (const { live, batch } of batches) {
           // A passage still on the transcript's rough times: its clip holds those lines whole, and tells where they are really said
           const asked = batch.map(({ id, start, end, fit }) => (fit ? { id, start: Math.min(start, fit[0]), end: Math.max(end, fit[1]), fit } : { id, start, end }));
-          const done = await ensurePieces(jobId, asked);
-          const states = Object.fromEntries(done.pieces.map(({ id, tight: _found, ...state }) => [id, state]));
+          const done = await ensurePieces(live, asked);
+          const states = Object.fromEntries(done.pieces.map(({ id, tight: _found, ...state }) => [id, { ...state, job: live }]));
           const found = Object.fromEntries(done.pieces.filter((piece) => piece.tight !== undefined).map((piece) => [piece.id, piece.tight ?? null]));
           known = { ...known, ...states };
           piecesRef.current = { ...piecesRef.current, ...states };
@@ -318,16 +367,16 @@ export default function CompilationPage() {
   }, [change, compilation, cutting, pendingFit, tight]);
 
   const loadEnv = useCallback(
-    async (piece: PieceState): Promise<EditEnvironment> => {
+    async (piece: Piece): Promise<EditEnvironment> => {
       const key = pieceVersion(piece);
       const known = envsRef.current[key];
       if (known) return known;
-      const env = await getEditEnvironment(jobId!, piece.file);
+      const env = await getEditEnvironment(piece.job, piece.file);
       envsRef.current = { ...envsRef.current, [key]: env };
       setEnvs((prev) => ({ ...prev, [key]: env }));
       return env;
     },
-    [jobId],
+    [],
   );
 
   /* ── Search results and the compilation ─────────────────── */
@@ -337,11 +386,11 @@ export default function CompilationPage() {
       const key = hitKey(hit);
       const known = drafts.current.get(key);
       if (known) return known;
-      const item = itemFromHit(hit, liveDuration);
+      const item = itemFromHit(hit, lengthOf(hit.job));
       drafts.current.set(key, item);
       return item;
     },
-    [liveDuration],
+    [lengthOf],
   );
 
   const watch = (hit: LiveHit) => {
@@ -372,7 +421,7 @@ export default function CompilationPage() {
   const applyChange = (plan: VideoPlan, ask: string) => {
     if (!compilation) return;
     const note = plan.note ?? "";
-    const revised = revisedSections(compilation, plan, liveDuration);
+    const revised = revisedSections(compilation, plan, lengthOf);
     // An answer with no video in it (it found nothing, or misread): the video stays, its answer is kept
     if (revised.sections.length === 0 || (revised.added === 0 && revised.removed === 0 && revised.recut.length === 0 && sameOrder(compilation, revised.sections))) {
       change({ ...compilation, asks: [...(compilation.asks ?? []), { ask, note }] });
@@ -411,7 +460,7 @@ export default function CompilationPage() {
 
   const applyPlan = async (plan: VideoPlan, target: number, brief: string) => {
     if (!jobId || !compilation) return;
-    const sections = sectionsFromPlan(plan, liveDuration);
+    const sections = sectionsFromPlan(plan, lengthOf);
     if (sections.length === 0) return;
     try {
       let planned: Compilation;
@@ -420,7 +469,9 @@ export default function CompilationPage() {
         planned = { ...compilation, name: plan.title || compilation.name, sections, target, titles: sections.length > 1 || compilation.titles, brief, answer: plan.note ?? "", asks: [] };
         change(planned);
       } else {
-        planned = { ...(await createCompilation(jobId, { name: plan.title || t("compilation.defaultName"), target, titles: true })), sections, brief, answer: plan.note ?? "", asks: [] };
+        // Another video from the same lives
+        const draft = { name: plan.title || t("compilation.defaultName"), target, titles: true, ...(compilation.lives?.length ? { lives: compilation.lives } : {}) };
+        planned = { ...(await createCompilation(jobId, draft)), sections, brief, answer: plan.note ?? "", asks: [] };
         setCompilations((prev) => [...(prev ?? []), planned]);
         setCurrentId(planned.id);
         change(planned);
@@ -488,11 +539,13 @@ export default function CompilationPage() {
 
   /** What Remotion plays for these items (all with their clip and its data), null when something is missing */
   const build = useCallback(
-    (source: Compilation, states: Record<string, PieceState>, known: Record<string, EditEnvironment>): { montage: MontageProps; files: string[] } | null => {
+    (source: Compilation, states: Record<string, Piece>, known: Record<string, EditEnvironment>): { montage: MontageProps; files: string[]; jobs: (string | undefined)[] } | null => {
       if (!kit || !jobId) return null;
       const items = allItems(source);
       const cuts: MontageCut[] = [];
       const files: string[] = [];
+      // The live each clip is in, when it isn't this one
+      const jobs: (string | undefined)[] = [];
       // Each passage in its own template when it has one, else the video's
       const keys = items.map((item) => (item.template && (isBuiltIn(item.template) || findCustom(item.template, customs)) ? item.template : templateKey));
       for (const item of items) {
@@ -500,7 +553,7 @@ export default function CompilationPage() {
         const env = piece && known[pieceVersion(piece)];
         if (!covers(piece, item) || !env) return null;
         const ctx = clipTemplateContext({
-          jobId,
+          jobId: piece.job,
           filename: piece.file,
           env,
           kit,
@@ -518,6 +571,7 @@ export default function CompilationPage() {
           end: item.end - piece.file_start,
         });
         files.push(piece.file);
+        jobs.push(piece.job !== jobId ? piece.job : undefined);
       }
       if (cuts.length === 0) return null;
       // Where each part starts in the list of passages
@@ -543,7 +597,7 @@ export default function CompilationPage() {
                 })
             : [],
       );
-      return { montage, files };
+      return { montage, files, jobs };
     },
     [channel, customs, job, jobId, kit, templateKey],
   );
@@ -562,7 +616,7 @@ export default function CompilationPage() {
       try {
         const guides = templateGuides(customs, { nameOf: (id) => t(`montage.template.${id}.name`), subtitleStyle: kit.subtitles.style, widget: kit.widget });
         const choice = await chooseLooks(jobId, {
-          items: items.map(({ id, start, end, text }) => ({ id, start, end, text })),
+          items: items.map(({ id, start, end, text, job }) => ({ id, start, end, text, ...(job ? { job } : {}) })),
           templates: guides,
           wish,
           usual: templateKey,
@@ -627,7 +681,7 @@ export default function CompilationPage() {
       await saveCompilation(jobId, compilation);
       await startMontageRender(
         jobId,
-        { key: `comp_${compilation.id}.mp4`, name: compilation.name, pieces: renderPieces(built.montage, built.files), overlays: built.montage.overlays },
+        { key: `comp_${compilation.id}.mp4`, name: compilation.name, pieces: renderPieces(built.montage, built.files, built.jobs), overlays: built.montage.overlays },
         { width: 1080, height: 1920, fps: FPS },
       );
       navigate(`/${jobId}/export`);
@@ -647,14 +701,14 @@ export default function CompilationPage() {
   useEffect(() => {
     if (!jobId || !shownReady || !wordsKey || words[wordsKey]) return;
     let cancelled = false;
-    getClipWords(jobId, shownReady.file).then((list) => !cancelled && setWords((prev) => ({ ...prev, [wordsKey]: list })));
+    getClipWords(shownReady.job, shownReady.file).then((list) => !cancelled && setWords((prev) => ({ ...prev, [wordsKey]: list })));
     return () => {
       cancelled = true;
     };
   }, [jobId, wordsKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const firstReady = readyItems[0];
-  useBackdrop(jobId && firstReady ? clipThumbUrl(jobId, pieces[firstReady.id].file) : null);
+  useBackdrop(jobId && firstReady ? clipThumbUrl(pieces[firstReady.id].job, pieces[firstReady.id].file) : null);
 
   if (!jobId || !job || !compilations || !compilation || !kit) {
     return (
@@ -664,8 +718,24 @@ export default function CompilationPage() {
     );
   }
 
-  const at = (seconds: number) => `${Math.min(100, Math.max(0, (seconds / Math.max(liveDuration, 1)) * 100))}%`;
+  const at = (seconds: number, job?: string) => `${Math.min(100, Math.max(0, (seconds / Math.max(lengthOf(job), 1)) * 100))}%`;
   const items = allItems(compilation);
+  const liveTitle = (id: string) => splitVodTitle(liveInfo(id)?.title ?? (id === jobId ? job.custom_title || job.vod_title : null)).title || t("compilations.untitledLive");
+  const liveDay = (id: string) => {
+    const when = liveInfo(id) ? liveWhen(liveInfo(id)!) : null;
+    return when ? plainDate(when, i18n.language) : "";
+  };
+  const addLive = (id: string) => {
+    setAddingLive(false);
+    if (liveIds.includes(id) || liveIds.length > MAX_OTHER_LIVES) return;
+    change({ ...compilation, lives: [...(compilation.lives ?? []), id] });
+    toast.success(t("compilation.lives.added", { name: liveTitle(id) }));
+  };
+  const removeLive = (id: string) => {
+    const left = (compilation.lives ?? []).filter((other) => other !== id);
+    const { lives: _before, ...rest } = compilation;
+    change({ ...rest, ...(left.length > 0 ? { lives: left } : {}) });
+  };
 
   return (
     <div className="animate-fade-in">
@@ -694,19 +764,51 @@ export default function CompilationPage() {
         </p>
       )}
 
-      {/* The whole live: what the search found, what the compilation takes */}
+      {/* Each live it takes from: what the search found there, what the compilation takes */}
       <section className="mt-5 glass rounded-[16px] px-3 pt-2.5 pb-2">
-        <div className="relative h-10 rounded-[8px] overflow-hidden flex bg-white/[0.04]">
-          {storyboard && evenFrames(storyboard, STRIP_TILES).map((frame, k) => <div key={k} className="flex-1 h-full brightness-[0.5] saturate-[0.9]" style={tileStyle(storyboard, frame)} />)}
-          {results.map((hit) => (
-            <span key={hitKey(hit)} aria-hidden className="absolute bottom-0 w-[3px] -ml-px h-3 rounded-t-full bg-white/80" style={{ left: at(hit.start) }} />
-          ))}
-          {items.map((item) => (
-            <span key={item.id} aria-hidden className="absolute top-0 w-[3px] -ml-px h-full bg-accent shadow-[0_0_8px_var(--color-accent-glow)]" style={{ left: at(item.start) }} />
-          ))}
+        <div className="flex flex-col gap-2.5">
+          {liveIds.map((live, n) => {
+            const frames = storyboards[live];
+            const theirs = items.filter((item) => (item.job ?? jobId) === live);
+            return (
+              <div key={live}>
+                {several && (
+                  <div className="mb-1 flex items-center gap-2 text-[12px] text-ink-2 min-w-0">
+                    <span className="live-dot flex-none">{n + 1}</span>
+                    <span className="truncate font-[550] text-white">{liveTitle(live)}</span>
+                    <span className="flex-none text-ink-3">{[liveDay(live), clock(lengthOf(live === jobId ? undefined : live))].filter(Boolean).join(" · ")}</span>
+                    <span className="flex-none text-ink-3">· {t("compilation.inCompilation", { count: theirs.length })}</span>
+                    {live !== jobId && (
+                      <button
+                        type="button"
+                        onClick={() => removeLive(live)}
+                        disabled={theirs.length > 0}
+                        aria-label={t("compilation.lives.remove")}
+                        title={theirs.length > 0 ? t("compilation.lives.removeBlocked") : t("compilation.lives.remove")}
+                        className="ml-auto flex-none w-6 h-6 grid place-items-center rounded-[7px] text-ink-3 hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:hover:bg-transparent"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                )}
+                <div className="relative h-10 rounded-[8px] overflow-hidden flex bg-white/[0.04]">
+                  {frames && evenFrames(frames, STRIP_TILES).map((frame, k) => <div key={k} className="flex-1 h-full brightness-[0.5] saturate-[0.9]" style={tileStyle(frames, frame)} />)}
+                  {results
+                    .filter((hit) => (hit.job ?? jobId) === live)
+                    .map((hit) => (
+                      <span key={hitKey(hit)} aria-hidden className="absolute bottom-0 w-[3px] -ml-px h-3 rounded-t-full bg-white/80" style={{ left: at(hit.start, hit.job) }} />
+                    ))}
+                  {theirs.map((item) => (
+                    <span key={item.id} aria-hidden className="absolute top-0 w-[3px] -ml-px h-full bg-accent shadow-[0_0_8px_var(--color-accent-glow)]" style={{ left: at(item.start, item.job) }} />
+                  ))}
+                </div>
+              </div>
+            );
+          })}
         </div>
         <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11.5px] text-ink-3">
-          <span className="mono">0:00</span>
+          {!several && <span className="mono">0:00</span>}
           {results.length > 0 && (
             <span className="inline-flex items-center gap-1.5">
               <span className="w-[3px] h-2.5 rounded-t-full bg-white/80" /> {t("compilation.found", { count: results.length })}
@@ -717,7 +819,13 @@ export default function CompilationPage() {
               <span className="w-[3px] h-2.5 bg-accent" /> {t("compilation.inCompilation", { count: items.length })}
             </span>
           )}
-          <span className="mono ml-auto">{clock(liveDuration)}</span>
+          {/* One more live to take passages from: the AI then works on all of them at once */}
+          {liveIds.length <= MAX_OTHER_LIVES && library.some((live) => !liveIds.includes(live.job_id)) && (
+            <button type="button" onClick={() => setAddingLive(true)} title={t("compilation.lives.addHint")} className="ml-auto inline-flex items-center gap-1 text-ink-2 hover:text-white underline decoration-white/20 underline-offset-2">
+              <Plus className="w-3 h-3" strokeWidth={2.6} /> {t("compilation.lives.add")}
+            </button>
+          )}
+          {!several && <span className={`mono ${liveIds.length <= MAX_OTHER_LIVES && library.some((live) => !liveIds.includes(live.job_id)) ? "" : "ml-auto"}`}>{clock(liveDuration)}</span>}
         </div>
       </section>
 
@@ -725,7 +833,8 @@ export default function CompilationPage() {
       <section className="group/row mt-[18px] flex flex-wrap gap-[18px] items-start">
         <SearchPanel
           jobId={jobId}
-          storyboard={storyboard}
+          storyboards={storyboards}
+          lives={liveIds.map((id, n) => ({ job: id, label: several ? `${n + 1} · ${[liveDay(id), liveTitle(id)].filter(Boolean).join(" · ")}` : liveTitle(id) }))}
           info={info}
           previewed={null}
           isAdded={(hit) => !!itemFor(compilation, draftOf(hit))}
@@ -753,7 +862,7 @@ export default function CompilationPage() {
             shownItem ? (
               <div className="glass-strong rounded-[20px] p-2.5 w-full">
                 <PiecePreview
-                  jobId={jobId}
+                  jobId={shownItem.job ?? jobId}
                   item={shownItem}
                   piece={shownReady}
                   cutting={cutting.has(shownItem.id)}
@@ -834,7 +943,9 @@ export default function CompilationPage() {
 
         <CompilationPanel
           compilation={compilation}
-          storyboard={storyboard}
+          storyboards={storyboards}
+          home={jobId}
+          liveNumbers={several ? Object.fromEntries(liveIds.map((id, n) => [id, n + 1])) : undefined}
           activeSection={activeSection}
           selectedItem={view === "piece" ? (shownItem?.id ?? null) : null}
           cutting={cutting}
@@ -867,6 +978,16 @@ export default function CompilationPage() {
         onConfirm={confirmDelete}
         onCancel={() => setToDelete(false)}
       />
+      {addingLive && (
+        <LivePicker
+          title={t("compilation.lives.pickTitle")}
+          hint={t("compilation.lives.pickHint")}
+          lives={library.filter((live) => !liveIds.includes(live.job_id))}
+          coverOf={(live) => (live.cover_clip ? clipThumbUrl(live.job_id, live.cover_clip, { width: 480 }) : null)}
+          onPick={([id]) => addLive(id)}
+          onClose={() => setAddingLive(false)}
+        />
+      )}
       <CompilationGuide open={guide} onClose={closeGuide} />
     </div>
   );

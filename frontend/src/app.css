@@ -978,6 +978,22 @@ video {
   transform: translateY(-1px);
   box-shadow: 0 0 12px var(--color-accent-glow);
 }
+/* The number of the live a passage is from, when a compilation takes from several */
+.live-dot {
+  display: inline-grid;
+  place-items: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 5px;
+  background: var(--color-accent);
+  color: var(--color-ground);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1;
+}
+
 /* A passage shown in a template of its own, in the list of the video */
 .look-chip {
   display: inline-flex;

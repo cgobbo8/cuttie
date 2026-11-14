@@ -101,6 +101,21 @@ class SearchRequest(BaseModel):
 MAX_BRIEF = 4000
 
 
+class OtherLive(BaseModel):
+    """One more live a video is made from, besides the one the request is about."""
+
+    job_id: str
+    duration: float = 0.0
+    url: str | None = None
+    moments: list[dict] = []
+    # When it was streamed
+    date: str | None = None
+
+
+# Lives a video can be made from at once, the first one included
+MAX_LIVES = 5
+
+
 class PlanRequest(BaseModel):
     # The video the streamer describes
     brief: str
@@ -116,6 +131,9 @@ class PlanRequest(BaseModel):
     request: str = ""
     current: list[dict] = []
     asks: list[str] = []
+    # More lives the video takes moments from (each moment of the answer then says its live: `job`;
+    # in `current`, an item of another live says so the same way)
+    lives: list[OtherLive] = []
 
 
 class LivePiece(BaseModel):
@@ -451,14 +469,20 @@ def plan_video(job_id: str, req: PlanRequest) -> dict:
     brief = req.brief.strip()[:MAX_BRIEF]
     if not brief:
         raise HTTPException(status_code=400, detail="empty description")
+    others = [
+        {"job_id": _check_job_id(live.job_id), "duration": live.duration, "url": live.url, "moments": live.moments[:400], "date": live.date}
+        for live in req.lives[: MAX_LIVES - 1]
+        if live.job_id != job_id
+    ] or None
     try:
         if req.request.strip():
             return live_search.revise_video(
                 _check_job_id(job_id), brief, req.current[:12], [a[:MAX_BRIEF] for a in req.asks[-8:]], req.request.strip()[:MAX_BRIEF],
-                req.duration, url=req.url, moments=req.moments[:400],
+                req.duration, url=req.url, moments=req.moments[:400], others=others, date=req.meta.get("date"),
             )
         return live_search.plan_video(
-            _check_job_id(job_id), brief, max(10.0, min(req.target, 600.0)), req.meta, req.duration, req.energy, url=req.url, moments=req.moments[:400]
+            _check_job_id(job_id), brief, max(10.0, min(req.target, 600.0)), req.meta, req.duration, req.energy, url=req.url, moments=req.moments[:400],
+            others=others,
         )
     except Exception as e:
         raise _ai_errors(e) from e

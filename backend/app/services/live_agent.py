@@ -12,6 +12,7 @@ bill: the tokens of every step are counted.
 """
 
 import base64
+import copy
 import json
 import logging
 import os
@@ -21,7 +22,7 @@ import time
 from dataclasses import dataclass, field
 
 from app.services import live_search, paths
-from app.services.live_tools import LiveTools
+from app.services.live_tools import LiveTools, ManyLives
 from app.services.presort import hms, parse_hms
 
 logger = logging.getLogger(__name__)
@@ -187,6 +188,22 @@ How to work:
 )
 
 
+# Several lives searched at once (live_tools.ManyLives): added to the instructions
+MANY = """
+
+You work on {count} live streams of the same channel at once, numbered 1 to {count}: `overview` without `live` lists them (title, date, what happens in each). Every tool takes `live`, the stream to look in, and its times are that stream's own: a time means nothing without its `live`. Search every stream the request may concern, the same search on each one (several calls at once). Every moment you give says its `live`. A video may mix moments of several streams: inside a part they play stream after stream in the order of their numbers, each stream's moments in its own order, unless the description says otherwise. When the request is about something that comes back from one stream to the next (a running joke, a habit, the same thing said or done again), take moments from each stream that has it rather than all from one."""
+
+
+def _for_lives(spec: dict, count: int) -> dict:
+    """A final tool (`answer`, `plan`) whose moments also say which live they are from."""
+    spec = copy.deepcopy(spec)
+    props = spec["parameters"]["properties"]
+    moment = props["sections"]["items"]["properties"]["moments"]["items"] if "sections" in props else props["moments"]["items"]
+    moment["properties"] = {"live": {"type": "integer", "description": f"The live this moment is from: 1 to {count}"}, **moment["properties"]}
+    moment["required"] = ["live", *moment["required"]]
+    return spec
+
+
 # The streamer comes back to a video the AI planned: the same work, from the video as it is now
 REVISE = """
 
@@ -310,23 +327,35 @@ class Searcher:
 
     `on_step(tool, args)` is told what the search is doing, as it does it."""
 
-    def __init__(self, tools: LiveTools, client, model: str, vod_url: str | None = None, ears_model: str = EARS_MODEL,
+    def __init__(self, tools: LiveTools | ManyLives, client, model: str, vod_url: str | list[str | None] | None = None, ears_model: str = EARS_MODEL,
                  on_step=None, max_cost: float = MAX_COST) -> None:
+        """`tools`: one live's, or several lives' (`vod_url` is then each live's address, in their order)."""
         self.tools = tools
+        self.many = len(tools.lives) if isinstance(tools, ManyLives) else 0
         self.client = client
         self.model = model
         self.ears_model = ears_model
         self.vod_url = vod_url
         self.on_step = on_step
         self.max_cost = max_cost
-        self._audio_url: str | None | bool = False  # False: not asked yet
+        # Where each live's sound is read from, once asked (None: it can't be)
+        self._audio_urls: dict[int, str | None] = {}
         self.run = AgentRun(model=model)
 
     def specs(self, final: dict = ANSWER_SPEC) -> list[dict]:
         specs = list(self.tools.specs())
-        if self.vod_url and self.ears_model:
-            specs.append(LISTEN_SPEC)
-        return [*specs, final]
+        urls = self.vod_url if isinstance(self.vod_url, list) else [self.vod_url]
+        if any(urls) and self.ears_model:
+            listen = LISTEN_SPEC
+            if self.many:
+                listen = copy.deepcopy(LISTEN_SPEC)
+                listen["parameters"]["properties"]["live"] = {"type": "integer", "description": f"Which live: 1 to {self.many}"}
+                listen["parameters"]["required"] = ["live", *listen["parameters"]["required"]]
+            specs.append(listen)
+        return [*specs, _for_lives(final, self.many) if self.many else final]
+
+    def _system(self, system: str) -> str:
+        return system + MANY.format(count=self.many) if self.many else system
 
     def _create(self, **kwargs):
         """One call to a model. A dropped connection is tried again; a provider that refuses for good
@@ -352,18 +381,25 @@ class Searcher:
                 logger.warning(f"AI search: {type(e).__name__} from {kwargs.get('model')}, trying again ({attempt + 2}/{STEP_TRIES})")
                 time.sleep(1.5 * (attempt + 1))
 
-    def listen(self, start, end, question: str = "") -> dict:
+    def listen(self, start, end, question: str = "", live=None) -> dict:
         if self.run.listens >= MAX_LISTENS:
             return {"error": "no listens left: decide with what you have"}
+        tools, which = self.tools, 0
+        if isinstance(tools, ManyLives):
+            picked = tools.of(live)
+            if not picked:
+                return {"error": f"`live` must be a number from 1 to {self.many}"}
+            which, tools = picked[0] - 1, picked[1]
+        urls = self.vod_url if isinstance(self.vod_url, list) else [self.vod_url]
         a = parse_hms(start) or 0.0
-        if self.tools.duration:
-            a = min(a, max(0.0, self.tools.duration - 2.0))
+        if tools.duration:
+            a = min(a, max(0.0, tools.duration - 2.0))
         b = min(parse_hms(end) or a + 10.0, a + LISTEN_SECONDS)
-        if self._audio_url is False:
-            self._audio_url = live_audio_url(self.vod_url or "")
-        if not self._audio_url:
+        if which not in self._audio_urls:
+            self._audio_urls[which] = live_audio_url((urls[which] if which < len(urls) else None) or "")
+        if not self._audio_urls[which]:
             return {"error": "the live's sound can't be reached any more"}
-        audio = fetch_audio(str(self._audio_url), a, max(2.0, b - a))
+        audio = fetch_audio(str(self._audio_urls[which]), a, max(2.0, b - a))
         if not audio:
             return {"error": "this part of the live could not be fetched"}
         self.run.listens += 1
@@ -387,7 +423,7 @@ class Searcher:
             # The ears failing doesn't end the search: it decides with what it read
             logger.warning(f"AI search: listening to {hms(a)} failed: {type(e).__name__}: {e}")
             return {"error": "this part of the live could not be listened to"}
-        return {"from": hms(a), "to": hms(b), "heard": (response.choices[0].message.content or "").strip()[:600]}
+        return {**({"live": which + 1} if self.many else {}), "from": hms(a), "to": hms(b), "heard": (response.choices[0].message.content or "").strip()[:600]}
 
     def call(self, name: str, args: dict) -> dict:
         self.run.tool_calls += 1
@@ -406,7 +442,7 @@ class Searcher:
 
     def search(self, request: str, max_steps: int = MAX_STEPS) -> AgentRun:
         """The moments of the live that match `request` (run.moments, run.note)."""
-        given = self._work(SYSTEM, f"The streamer's request: « {request} »", ANSWER_SPEC, max_steps)
+        given = self._work(self._system(SYSTEM), f"The streamer's request: « {request} »", ANSWER_SPEC, max_steps)
         moments = given.get("moments")
         self.run.moments = [m for m in moments if isinstance(m, dict)][:MAX_MOMENTS] if isinstance(moments, list) else []
         self._log(f"{len(self.run.moments)} moments")
@@ -415,7 +451,7 @@ class Searcher:
     def plan(self, brief: str, target: float, max_steps: int = PLAN_STEPS) -> AgentRun:
         """A whole video from its description: its parts and their moments (run.title, run.sections, run.note)."""
         ask = f"The video the streamer describes: « {brief} »\nIts length: about {target:.0f} seconds in all."
-        given = self._work(PLAN_SYSTEM, ask, PLAN_SPEC, max_steps, review=lambda plan: _short_plan(plan, target, self.tools.spoken))
+        given = self._work(self._system(PLAN_SYSTEM), ask, PLAN_SPEC, max_steps, review=lambda plan: _short_plan(plan, target, self.tools.spoken))
         sections = given.get("sections")
         for raw in sections if isinstance(sections, list) else []:
             if isinstance(raw, dict) and isinstance(raw.get("moments"), list):
@@ -434,7 +470,7 @@ class Searcher:
             + (f"What they asked before, already done: {json.dumps(asks[-8:], ensure_ascii=False)}\n\n" if asks else "")
             + f"What they ask now: « {request} »"
         )
-        given = self._work(PLAN_SYSTEM + REVISE, ask, PLAN_SPEC, max_steps)
+        given = self._work(self._system(PLAN_SYSTEM + REVISE), ask, PLAN_SPEC, max_steps)
         sections = given.get("sections")
         for raw in sections if isinstance(sections, list) else []:
             if isinstance(raw, dict) and isinstance(raw.get("moments"), list):
@@ -454,6 +490,7 @@ class Searcher:
         `review(answer)` may send a first answer back once, with what is wrong with it."""
         t0 = time.time()
         specs = self.specs(final)
+        final = specs[-1]
         can_listen = any(s["name"] == "listen" for s in specs)
         messages: list[dict] = [
             {"role": "system", "content": system.format(listen=", and with `listen` when the words don't tell. " + _SOUNDS if can_listen else ".")},
@@ -478,7 +515,7 @@ class Searcher:
             calls = message.tool_calls or []
             if not calls:
                 # Answered in plain text instead of the tool: taken as it is when it is the JSON asked for
-                in_text = _answer_in_text(message.content or "", "sections" if final is PLAN_SPEC else "moments")
+                in_text = _answer_in_text(message.content or "", "sections" if final["name"] == PLAN_SPEC["name"] else "moments")
                 if in_text is not None:
                     given = in_text
                     self.run.finished = True
@@ -532,7 +569,7 @@ def _short_plan(plan: dict, target: float, spoken=None) -> str | None:
         for moment in section["moments"]:
             if isinstance(moment, dict):
                 if spoken:
-                    total += spoken(moment.get("start"), moment.get("end"))
+                    total += spoken(moment.get("start"), moment.get("end"), moment.get("live"))
                     continue
                 start, end = parse_hms(moment.get("start")), parse_hms(moment.get("end"))
                 total += max(0.0, (end or 0.0) - (start or 0.0)) if start is not None else 0.0

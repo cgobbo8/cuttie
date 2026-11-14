@@ -9,6 +9,7 @@ Also a command line, to try the tools by hand:
     python -m app.services.live_tools <job id> <tool> '<json arguments>'
 """
 
+import copy
 import json
 import logging
 import sys
@@ -105,11 +106,13 @@ def _said(transcript: VodTranscript | None, start: float, end: float, limit: int
 class LiveTools:
     """The tools over one live. What they read (transcript, chat, sounds) is loaded once."""
 
-    def __init__(self, job_id: str, duration: float = 0.0, chat_lag: float = 5.0, moments: list[dict] | None = None) -> None:
+    def __init__(self, job_id: str, duration: float = 0.0, chat_lag: float = 5.0, moments: list[dict] | None = None, date: str | None = None) -> None:
         """`moments`: every candidate the analysis rated, as the app keeps them ({"t", "state", "score", "name",
         "category", "what"}); without them, only the moments it clipped are known."""
         self.job_id = job_id
         self.moments = moments or []
+        # When it was streamed (told apart from the other lives when several are searched at once)
+        self.date = date
         self.transcript = load_cached(job_id)
         self.chat = live_search.read_chat(job_id)
         self.sounds = sound_index.load(job_id)
@@ -136,6 +139,7 @@ class LiveTools:
         context = job.vod_context if job else None
         return {
             "title": job.vod_title if job else None,
+            **({"streamed_on": self.date} if self.date else {}),
             "game": job.vod_game if job else None,
             "streamer": job.streamer if job else None,
             "length": hms(self.duration),
@@ -215,7 +219,7 @@ class LiveTools:
             ],
         }
 
-    def spoken(self, first, last) -> float:
+    def spoken(self, first, last, live=None) -> float:
         """How long the lines from the one stamped `first` to the one stamped `last` take to say: what a
         moment given by its lines lasts once cut on its words. Nobody speaks there: the time between the two."""
         lines = live_search._lines_between(self.transcript, first, last) if self.transcript else []
@@ -304,6 +308,59 @@ class LiveTools:
             "chat": chat[:25],
             **({"heard": self.sounds.heard(a, b)} if self.sounds else {}),
         }
+
+
+
+class ManyLives:
+    """The tools over several lives at once. Every tool says which live it is about (`live`: 1, 2...)
+    and answers with that number; times are each live's own. `overview` without `live` lists them."""
+
+    def __init__(self, lives: list[LiveTools]) -> None:
+        self.lives = lives
+
+    def of(self, live) -> tuple[int, LiveTools] | None:
+        """The live a model named, with its number (None when it named none of them)."""
+        try:
+            n = int(live)
+        except (TypeError, ValueError):
+            return None
+        return (n, self.lives[n - 1]) if 1 <= n <= len(self.lives) else None
+
+    def specs(self) -> list[dict]:
+        own = {s["name"] for tools in self.lives for s in tools.specs()}
+        specs = []
+        for spec in SPECS:
+            if spec["name"] not in own:
+                continue
+            spec = copy.deepcopy(spec)
+            spec["parameters"].setdefault("properties", {})["live"] = {"type": "integer", "description": f"Which live: 1 to {len(self.lives)}"}
+            if spec["name"] == "overview":
+                spec["description"] = (
+                    "Without `live`: the lives you work on, each with its number, title, date, game, length and a summary of what happens. "
+                    "With `live`: that one in full, with its phases. Call it first, without `live`."
+                )
+            else:
+                spec["parameters"]["required"] = ["live", *spec["parameters"].get("required", [])]
+            specs.append(spec)
+        return specs
+
+    def call(self, name: str, args: dict) -> dict:
+        args = dict(args or {})
+        live = args.pop("live", None)
+        if name == "overview" and live in (None, "", 0):
+            return {
+                "lives": [{"live": n + 1, **{k: v for k, v in tools.tool_overview().items() if k not in ("phases", "see_also")}} for n, tools in enumerate(self.lives)],
+                "next": "`overview` with `live` gives a live's phases; every other tool takes `live`, and its times are that live's own",
+            }
+        picked = self.of(live)
+        if not picked:
+            return {"error": f"`live` must be a number from 1 to {len(self.lives)}"}
+        result = picked[1].call(name, args)
+        return {"live": picked[0], **result} if isinstance(result, dict) else result
+
+    def spoken(self, first, last, live=None) -> float:
+        picked = self.of(live if live is not None else 1)
+        return picked[1].spoken(first, last) if picked else 0.0
 
 
 def main(argv: list[str]) -> int:

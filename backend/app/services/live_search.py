@@ -767,27 +767,33 @@ def _step_detail(args: dict) -> str:
 
 
 def _ask(job_id: str, duration: float, lag: float, url: str | None, work, moments: list[dict] | None = None,
-         models: list[str] | None = None, max_cost: float | None = None):
+         models: list[str] | None = None, max_cost: float | None = None, others: list[dict] | None = None, date: str | None = None):
     """Have the AI do `work(searcher)` over this live: with its tools and its ears, the live
     listened to first when it never was. When the model fails for a reason of its own (retired,
     down, no answer), the next one does the work instead (`models`: the searching model then its
-    fallback, unless given). Returns the run, the tools, and what all the tries cost."""
+    fallback, unless given). Returns the run, the tools, and what all the tries cost.
+    `others`: more lives to work on at once ({"job_id", "duration", "url", "moments", "date"}); the
+    tools then say which live each call is about (live 1 is `job_id`)."""
     from app.services import live_agent, sound_index
-    from app.services.live_tools import LiveTools
+    from app.services.live_tools import LiveTools, ManyLives
     from app.services.openai_client import get_openrouter_client
     from app.services.provider_errors import ProviderUnavailable
 
     try:
-        if url and not os.path.isfile(sound_index.index_path(job_id)):
-            _tell(job_id, "hearing")
-            sound_index.ensure(job_id, url)
-        tools = LiveTools(job_id, duration, lag, moments)
+        lives = [{"job_id": job_id, "duration": duration, "url": url, "moments": moments, "date": date}, *(others or [])]
+        for live in lives:
+            if live.get("url") and not os.path.isfile(sound_index.index_path(live["job_id"])):
+                _tell(job_id, "hearing")
+                sound_index.ensure(live["job_id"], live["url"])
+        each = [LiveTools(live["job_id"], live.get("duration") or 0.0, lag, live.get("moments"), date=live.get("date")) for live in lives]
+        tools = ManyLives(each) if others else each[0]
+        urls = [live.get("url") for live in lives] if others else url
         models = list(dict.fromkeys(m for m in (models or (live_agent.SEARCH_MODEL, live_agent.FALLBACK_MODEL)) if m))
         spent = 0.0
         for attempt, model in enumerate(models):
             _tell(job_id, "thinking")
             searcher = live_agent.Searcher(
-                tools, get_openrouter_client(), model, vod_url=url,
+                tools, get_openrouter_client(), model, vod_url=urls,
                 on_step=lambda name, args: _tell(job_id, name, _step_detail(args)),
                 max_cost=max_cost if max_cost is not None else live_agent.MAX_COST,
             )
@@ -838,29 +844,55 @@ def search_ai(
     return {**result, "cached": False, "cost": round(cost, 4)}
 
 
+def _lives(job_id: str, transcript: VodTranscript, duration: float, others: list[dict] | None) -> list[tuple[str, VodTranscript, float]]:
+    """The lives a video is made from, in the order the AI numbers them: (job id, transcript, length)."""
+    lives = [(job_id, transcript, duration)]
+    for other in others or []:
+        theirs = load_cached(other["job_id"])
+        if not theirs:
+            raise NoTranscript(other["job_id"])
+        lives.append((other["job_id"], theirs, float(other.get("duration") or 0.0)))
+    return lives
+
+
+def _many_cost(others: list[dict] | None) -> float:
+    """The most a described video may cost: half as much again for each live more, three times at most."""
+    from app.services import live_agent
+
+    return live_agent.PLAN_MAX_COST * min(3.0, 1.0 + 0.5 * len(others or []))
+
+
 def plan_video(
     job_id: str, brief: str, target: float, meta: dict, duration: float, energy: list[float] | None = None, lag: float = 5.0,
-    url: str | None = None, moments: list[dict] | None = None,
+    url: str | None = None, moments: list[dict] | None = None, others: list[dict] | None = None,
 ) -> dict:
-    """A whole video from a description: sections (a title, moments in playing order)."""
+    """A whole video from a description: sections (a title, moments in playing order).
+    `others`: more lives the video may take moments from; each hit then says its live (`job`)."""
     transcript = load_cached(job_id)
     if not transcript:
         raise NoTranscript(job_id)
+    lives = _lives(job_id, transcript, duration, others)
     if llm_text.dev_command():
         return _plan_by_reading(job_id, brief, target, meta, duration, energy, lag)
     from app.services import live_agent
 
-    path = _cache_path(job_id, "agent_plan", " ".join(tokens(brief)), f"{target:.0f}", _signature(transcript), live_agent.PLAN_MODEL, live_agent.ANSWERS_VERSION, "answer")
+    path = _cache_path(
+        job_id, "agent_plan", " ".join(tokens(brief)), f"{target:.0f}", _signature(transcript), live_agent.PLAN_MODEL, live_agent.ANSWERS_VERSION, "answer",
+        *[f"{other}:{_signature(theirs)}" for other, theirs, _length in lives[1:]],
+    )
     kept = _cached(path)
     if kept:
         return {**kept, "cached": True, "cost": 0.0}
     # A model of its own (sorting moments between the parts of a description takes more than finding them),
     # then those of the search when it fails
+    # More lives to go through: more steps, and more to spend at most
+    steps = live_agent.PLAN_STEPS + MORE_STEPS * len(others or [])
     run, _tools, cost = _ask(
-        job_id, duration, lag, url, lambda searcher: searcher.plan(brief, target), moments,
-        models=[live_agent.PLAN_MODEL, live_agent.SEARCH_MODEL, live_agent.FALLBACK_MODEL], max_cost=live_agent.PLAN_MAX_COST,
+        job_id, duration, lag, url, lambda searcher: searcher.plan(brief, target, max_steps=steps), moments,
+        models=[live_agent.PLAN_MODEL, live_agent.SEARCH_MODEL, live_agent.FALLBACK_MODEL], max_cost=_many_cost(others),
+        others=others, date=meta.get("date"),
     )
-    result = {"title": run.title, "sections": _sections(run.sections, transcript, duration, by_lines=True), "note": run.note, "look": run.look}
+    result = {"title": run.title, "sections": _sections(run.sections, transcript, duration, by_lines=True, lives=lives if others else None), "note": run.note, "look": run.look}
     _keep(path, result)
     total = sum(h["end"] - h["start"] for s in result["sections"] for h in s["hits"])
     logger.info(f"[{job_id[:8]}] AI plan \"{brief[:60]}\": {len(result['sections'])} sections, {total:.0f} s for a target of {target:.0f} s with {run.model} (~{cost:.4f} $, {run.seconds:.0f} s)")
@@ -869,6 +901,8 @@ def plan_video(
 
 # A line shares at least this much with a passage that holds it (seconds)
 LINE_SHARED = 0.4
+# Steps the AI gets on top of its own for each live more it works on
+MORE_STEPS = 12
 
 
 def as_lines(transcript: VodTranscript, start: float, end: float) -> dict:
@@ -903,7 +937,7 @@ def _other_lines(mine: dict, sent: list[dict]) -> bool:
 
 def revise_video(
     job_id: str, brief: str, current: list[dict], asks: list[str], request: str, duration: float, lag: float = 5.0,
-    url: str | None = None, moments: list[dict] | None = None,
+    url: str | None = None, moments: list[dict] | None = None, others: list[dict] | None = None, date: str | None = None,
 ) -> dict:
     """A video the AI planned, changed as the streamer now asks: the whole video again (sections of
     hits), what is kept given back at its place. `current`: its parts as they are now,
@@ -914,34 +948,68 @@ def revise_video(
         raise NoTranscript(job_id)
     from app.services import live_agent
 
-    video = [
-        {"title": str(part.get("title") or ""), "moments": [as_lines(transcript, float(i["start"]), float(i["end"])) for i in part.get("items") or []]}
-        for part in current
-    ]
+    # With several lives (`others`), each passage says which one it is from (`job`: a live's id, absent: this one)
+    lives = _lives(job_id, transcript, duration, others)
+    number = {live: n + 1 for n, (live, _theirs, _length) in enumerate(lives)}
+
+    def told(item: dict) -> dict:
+        n = number.get(str(item.get("job") or job_id), 1)
+        lines = as_lines(lives[n - 1][1], float(item["start"]), float(item["end"]))
+        return {"live": n, **lines} if others else lines
+
+    video = [{"title": str(part.get("title") or ""), "moments": [told(i) for i in part.get("items") or []]} for part in current]
+    steps = live_agent.PLAN_STEPS + MORE_STEPS * len(others or [])
     run, _tools, cost = _ask(
-        job_id, duration, lag, url, lambda searcher: searcher.revise(brief, video, asks, request), moments,
-        models=[live_agent.PLAN_MODEL, live_agent.SEARCH_MODEL, live_agent.FALLBACK_MODEL], max_cost=live_agent.PLAN_MAX_COST,
+        job_id, duration, lag, url, lambda searcher: searcher.revise(brief, video, asks, request, max_steps=steps), moments,
+        models=[live_agent.PLAN_MODEL, live_agent.SEARCH_MODEL, live_agent.FALLBACK_MODEL], max_cost=_many_cost(others),
+        others=others, date=date,
     )
-    result = {"title": run.title, "sections": _sections(run.sections, transcript, duration, by_lines=True), "note": run.note, "look": ""}
+    result = {"title": run.title, "sections": _sections(run.sections, transcript, duration, by_lines=True, lives=lives if others else None), "note": run.note, "look": ""}
     # A moment of the video given back with other lines (tighter, longer) is to be cut again:
     # the app would else keep the cut it has
     sent = [m for part in video for m in part["moments"]]
     recut = 0
     for section in result["sections"]:
         for hit in section["hits"]:
-            hit["recut"] = _other_lines(as_lines(transcript, hit["start"], hit["end"]), sent)
+            n = number.get(hit.get("job", job_id), 1)
+            hit["recut"] = _other_lines(as_lines(lives[n - 1][1], hit["start"], hit["end"]), [m for m in sent if m.get("live", 1) == n])
             recut += hit["recut"]
     logger.info(f"[{job_id[:8]}] AI change: {recut} moments given with other lines")
     logger.info(f"[{job_id[:8]}] AI change \"{request[:60]}\": {sum(len(s['hits']) for s in result['sections'])} moments with {run.model} (~{cost:.4f} $, {run.seconds:.0f} s)")
     return {**result, "cached": False, "cost": round(cost, 4)}
 
 
-def _sections(raw_sections, transcript: VodTranscript, duration: float, by_lines: bool = False) -> list[dict]:
+def _sections(raw_sections, transcript: VodTranscript, duration: float, by_lines: bool = False,
+              lives: list[tuple[str, VodTranscript, float]] | None = None) -> list[dict]:
     """The AI's sections as the app shows them: a title and hits, in playing order (the AI's, not the stream's);
-    a moment given twice is kept once. `by_lines`: its moments name lines of the transcript (the AI with tools)."""
+    a moment given twice is kept once. `by_lines`: its moments name lines of the transcript (the AI with tools).
+    `lives`: the video is made from several lives; each moment says which (`live`: 1, 2...) and its hit
+    says that live's id (`job`)."""
     sections = []
     taken: list[tuple[float, float]] = []
     parse = parse_line_moments if by_lines else parse_moments
+    if lives:
+        used: list[tuple[str, float, float]] = []
+        for raw in raw_sections if isinstance(raw_sections, list) else []:
+            if not isinstance(raw, dict):
+                continue
+            hits = []
+            for moment in raw.get("moments", []) if isinstance(raw.get("moments"), list) else []:
+                try:
+                    n = int(moment.get("live") or 1) if isinstance(moment, dict) else 0
+                except (TypeError, ValueError):
+                    n = 0
+                if not 1 <= n <= len(lives):
+                    continue
+                live, theirs, length = lives[n - 1]
+                for hit in parse([moment], theirs, length, limit=1, longest=MAX_PLANNED):
+                    if any(job == live and min(hit.end, b) - max(hit.start, a) > 0.5 * min(hit.end - hit.start, b - a) for job, a, b in used):
+                        continue
+                    used.append((live, hit.start, hit.end))
+                    hits.append({**_complete([hit], theirs)[0], "job": live})
+            if hits:
+                sections.append({"title": str(raw.get("title") or "")[:60], "hits": hits[:60]})
+        return sections
     for raw in raw_sections if isinstance(raw_sections, list) else []:
         if not isinstance(raw, dict):
             continue

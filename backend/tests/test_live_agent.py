@@ -645,3 +645,67 @@ def test_a_live_analysed_before_is_listened_to_when_asked(monkeypatch, tmp_path)
 
     monkeypatch.setattr(downloader, "download_audio", gone)
     assert sound_index.ensure("other", "https://www.twitch.tv/videos/2") is None
+
+
+def test_a_video_is_planned_and_changed_over_several_lives(monkeypatch, tmp_path):
+    first = VodTranscript(segments=[(100.0, 103.0, " Bon là franchement c'est calme."), (300.0, 303.0, " Mais c'est pas possible putain !")])
+    second = VodTranscript(segments=[(50.0, 52.0, " Ce soir c'est très calme."), (53.0, 55.0, " Trop calme même."), (400.0, 403.0, " Encore une fusillade !")])
+    lives = {"job": first, "other": second}
+    calm_1 = {"live": 1, "start": "0:01:40.0", "end": "0:01:40.0", "quote": "c'est calme", "why": "Il le dit", "score": 85}
+    calm_2 = {"live": 2, "start": "0:00:50.0", "end": "0:00:53.0", "quote": "très calme", "why": "Il le redit", "score": 85}
+    model = _live(monkeypatch, tmp_path, [
+        [("overview", {}), ("search_speech", {"live": 1, "words": "calme"}), ("search_speech", {"live": 2, "words": "calme"})],
+        [("read", {"live": 2, "start": "0:00:45", "end": "0:01:00"}), ("read", {"live": 3, "start": "0:00:45", "end": "0:01:00"}), ("read", {"start": "0:00:45", "end": "0:01:00"})],
+        # A moment of a live that isn't one of them is left out
+        [("plan", {"title": "Calme", "sections": [{"title": "C'est calme", "moments": [calm_1, calm_2, {**calm_1, "live": 9}]}], "note": "Le calme revient d'un live à l'autre."})],
+    ])
+    monkeypatch.setattr(live_tools, "load_cached", lambda job_id: lives[job_id])
+    monkeypatch.setattr(ls, "load_cached", lambda job_id: lives.get(job_id))
+    others = [{"job_id": "other", "duration": 500.0, "date": "2026-10-11"}]
+
+    planned = ls.plan_video("job", "Les fois où je dis que c'est calme, dans mes lives", 4.0, {"date": "2026-11-09"}, 600.0, others=others)
+    # Each passage says the live it is from, and is read in that live's transcript
+    assert [(h["job"], h["start"], h["end"], h["text"]) for h in planned["sections"][0]["hits"]] == [
+        ("job", 100.0, 103.0, "Bon là franchement c'est calme."), ("other", 50.0, 55.0, "Ce soir c'est très calme. Trop calme même."),
+    ]
+    assert planned["note"] == "Le calme revient d'un live à l'autre." and planned["cached"] is False
+
+    # The model was told it works on two lives, and every tool takes the live to look in
+    first_step = model.seen[0]
+    assert "You work on 2 live streams" in first_step["messages"][0]["content"]
+    tools = {t["function"]["name"]: t["function"]["parameters"] for t in first_step["tools"]}
+    assert tools["search_speech"]["required"] == ["live", "words"] and tools["read"]["required"] == ["live", "start", "end"]
+    assert "live" in tools["overview"]["properties"] and "required" not in tools["overview"]
+    assert tools["plan"]["properties"]["sections"]["items"]["properties"]["moments"]["items"]["required"][0] == "live"
+    answers = [json.loads(m["content"]) for m in model.seen[1]["messages"] if m["role"] == "tool"]
+    # The lives, numbered and dated; then each search in its own live
+    assert [(live["live"], live.get("streamed_on")) for live in answers[0]["lives"]] == [(1, "2026-11-09"), (2, "2026-10-11")]
+    assert answers[1]["live"] == 1 and answers[1]["moments"][0]["said"] == "Bon là franchement c'est calme."
+    assert answers[2]["live"] == 2 and [m["at"] for m in answers[2]["moments"]] == ["0:00:50.0", "0:00:53.0"]
+    reads = [json.loads(m["content"]) for m in model.seen[2]["messages"] if m["role"] == "tool"][3:]
+    assert reads[0]["live"] == 2 and reads[0]["said"][0].startswith("[0:00:50.0]")
+    # A live that isn't one of them, or none named: said so
+    assert reads[1] == reads[2] == {"error": "`live` must be a number from 1 to 2"}
+
+    # The same video asked again is free; with another set of lives it is another question
+    assert ls.plan_video("job", "Les fois où je dis que c'est calme, dans mes lives", 4.0, {}, 600.0, others=others)["cached"] is True
+    model.steps = [[("plan", {"sections": [{"title": "Seul", "moments": [{k: v for k, v in calm_1.items() if k != "live"}]}], "note": "Un seul live."})]]
+    alone = ls.plan_video("job", "Les fois où je dis que c'est calme, dans mes lives", 1.0, {}, 600.0)
+    # One live: nothing says which, as before
+    assert alone["cached"] is False and "job" not in alone["sections"][0]["hits"][0]
+    assert "live streams of the same channel" not in model.seen[-1]["messages"][0]["content"]
+
+    # Changing the video: each passage is told with its live, and what comes back tighter is to be cut again in its own live
+    model.steps = [[("plan", {"sections": [{"title": "C'est calme", "moments": [calm_1, {**calm_2, "end": "0:00:50.0"}]}], "note": "Resserré."})]]
+    current = [{"title": "C'est calme", "items": [{"start": 100.5, "end": 102.0}, {"start": 50.2, "end": 54.8, "job": "other"}]}]
+    changed = ls.revise_video("job", "x", current, [], "des cuts plus serrés", 600.0, others=others)
+    told = model.seen[-1]["messages"][1]["content"]
+    assert '{"live": 1, "start": "0:01:40.0", "end": "0:01:40.0", "said": "Bon là franchement c\'est calme."}' in told
+    assert '{"live": 2, "start": "0:00:50.0", "end": "0:00:53.0", "said": "Ce soir c\'est très calme. Trop calme même."}' in told
+    assert [(h["job"], h["start"], h["end"], h["recut"]) for h in changed["sections"][0]["hits"]] == [("job", 100.0, 103.0, False), ("other", 50.0, 52.0, True)]
+    # A live that was never transcribed can't be worked on
+    try:
+        ls.plan_video("job", "x", 10.0, {}, 600.0, others=[{"job_id": "nope"}])
+        raise AssertionError("planned over a live without a transcript")
+    except ls.NoTranscript:
+        pass

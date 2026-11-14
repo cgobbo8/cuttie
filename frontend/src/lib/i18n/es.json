@@ -1553,7 +1553,7 @@
     "looksSame": "Misma plantilla en todo",
     "changeTitle": "Modificar este vídeo",
     "changeYou": "Tu descripción",
-    "changePlaceholder": "Pide un cambio: «añade las otras veces que dicen que está tranquilo», «después de este trozo, pon el de cuando…»",
+    "changePlaceholder": "Pide un cambio…",
     "changeButton": "Modificar el vídeo",
     "changeHint": "La IA parte del vídeo tal como está (con tus retoques) y de todo lo que ya le pediste. Lo que no le pides cambiar se queda donde está.",
     "changeDone": "Vídeo modificado: {{added}} añadido(s), {{removed}} quitado(s)",
@@ -1568,6 +1568,8 @@
     "changeRemoved_other": "{{count}} quitados",
     "changeReveal": "Mostrarlos en el vídeo",
     "changeRevealGone": "Estos trozos ya no están en el vídeo.",
-    "changeEnter": "Intro para enviar, Mayús + Intro para saltar de línea"
+    "changeEnter": "Ej.: «añade las otras veces que dicen que está tranquilo», «después de este trozo, pon el de cuando…». Intro para enviar.",
+    "changeUnfold": "Leer todo",
+    "changeFold": "Plegar"
   }
 }

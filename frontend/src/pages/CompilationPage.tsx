@@ -715,7 +715,8 @@ export default function CompilationPage() {
         </div>
       </section>
 
-      <section className="mt-[18px] flex flex-wrap gap-[18px] items-start">
+      {/* While a conversation with the AI is open, the preview and the list give it room */}
+      <section className="group/row mt-[18px] flex flex-wrap gap-[18px] items-start">
         <SearchPanel
           jobId={jobId}
           storyboard={storyboard}
@@ -733,7 +734,7 @@ export default function CompilationPage() {
         />
 
         {/* Stage: one moment as it is, or the whole video in its template */}
-        <div className="flex-[1_1_380px] min-w-0 flex flex-col items-center gap-3">
+        <div className="flex-[1_1_380px] group-has-[.talk-thread]/row:flex-[0_1_320px] min-w-0 flex flex-col items-center gap-3">
           <div role="tablist" className="seg w-full">
             {(["piece", "video"] as const).map((key) => (
               <button key={key} role="tab" aria-selected={view === key} onClick={() => setView(key)}>

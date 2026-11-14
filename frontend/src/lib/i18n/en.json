@@ -1553,7 +1553,7 @@
     "looksSame": "Same template everywhere",
     "changeTitle": "Change this video",
     "changeYou": "Your description",
-    "changePlaceholder": "Ask for a change: \"add the other times they say it's calm\", \"after this passage, put the one where…\"",
+    "changePlaceholder": "Ask for a change…",
     "changeButton": "Change the video",
     "changeHint": "The AI starts from the video as it is (your own edits included) and from everything you already asked. What you don't ask it to change stays in place.",
     "changeDone": "Video changed: {{added}} added, {{removed}} removed",
@@ -1568,6 +1568,8 @@
     "changeRemoved_other": "{{count}} removed",
     "changeReveal": "Show them in the video",
     "changeRevealGone": "These passages are no longer in the video.",
-    "changeEnter": "Enter to send, Shift + Enter for a new line"
+    "changeEnter": "E.g. \"add the other times they say it's calm\", \"after this passage, put the one where…\". Enter to send.",
+    "changeUnfold": "Read all",
+    "changeFold": "Fold"
   }
 }

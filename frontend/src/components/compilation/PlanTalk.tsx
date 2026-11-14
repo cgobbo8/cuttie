@@ -1,4 +1,4 @@
-import { useEffect, useRef, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { ArrowUp, Check, Loader2, Minus, Plus, Sparkles } from "lucide-react";
 
@@ -64,13 +64,13 @@ export default function PlanTalk({ brief, turns, pending, trail, value, onValue,
   const steps = trail.slice(-SHOWN_STEPS);
   return (
     <div className="mt-3 flex flex-col rounded-[14px] border border-white/[0.08] bg-black/20 overflow-hidden">
-      <div ref={thread} role="log" aria-label={t("compilation.changeTitle")} className="talk-thread flex flex-col gap-3 max-h-[340px] overflow-y-auto p-3">
+      <div ref={thread} role="log" aria-label={t("compilation.changeTitle")} className="talk-thread flex flex-col gap-3.5 min-h-[200px] max-h-[min(58vh,600px)] overflow-y-auto p-4">
         <Mine label={t("compilation.changeYou")} text={brief} folded />
         {turns.map((turn, i) => (
           <div key={i} className="flex flex-col gap-3">
             <Mine label={t("compilation.changeAsk")} text={turn.ask} />
             <Theirs label={t("compilation.aiNote")}>
-              <p className="text-[13px] leading-snug text-ink-2">{turn.note || t("compilation.changeNoNote")}</p>
+              <p className="text-[13.5px] leading-[1.45] text-ink-2">{turn.note || t("compilation.changeNoNote")}</p>
               {(!!turn.added || !!turn.removed) && (
                 <div className="mt-2 flex flex-wrap gap-1.5">
                   {!!turn.added && (
@@ -111,7 +111,7 @@ export default function PlanTalk({ brief, turns, pending, trail, value, onValue,
       </div>
 
       <form
-        className="talk-composer m-2 mt-0 flex items-end gap-2 rounded-[12px] border border-white/10 bg-black/35 p-1.5 pl-3 focus-within:border-accent-line transition-colors"
+        className="talk-composer m-3 mt-0 flex items-end gap-2 rounded-[14px] border border-white/10 bg-black/35 p-2 pl-3.5 focus-within:border-accent-line transition-colors"
         onSubmit={(e) => {
           e.preventDefault();
           if (value.trim() && !disabled && !busy) onSend();
@@ -121,17 +121,17 @@ export default function PlanTalk({ brief, turns, pending, trail, value, onValue,
           value={value}
           onChange={(e) => onValue(e.target.value)}
           onKeyDown={key}
-          rows={2}
+          rows={3}
           maxLength={4000}
           placeholder={t("compilation.changePlaceholder")}
           aria-label={t("compilation.changeTitle")}
-          className="flex-1 min-w-0 py-1.5 bg-transparent text-[13.5px] leading-snug text-white outline-none placeholder:text-ink-3 resize-none"
+          className="flex-1 min-w-0 py-1 bg-transparent text-[14px] leading-[1.45] text-white outline-none placeholder:text-ink-3 resize-none"
         />
         <button type="submit" disabled={!value.trim() || disabled || busy} aria-label={t("compilation.changeButton")} title={t("compilation.changeButton")} className="talk-send flex-none">
           {busy ? <Loader2 className="w-4 h-4 spinner" /> : <ArrowUp className="w-4 h-4" strokeWidth={2.6} />}
         </button>
       </form>
-      <div className="px-3 pb-2.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[11.5px] text-ink-3">
+      <div className="px-4 pb-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[11.5px] text-ink-3">
         <span>
           {t("compilation.changeEnter")}
           {cost && <span className="mono"> · {cost}</span>}
@@ -144,27 +144,36 @@ export default function PlanTalk({ brief, turns, pending, trail, value, onValue,
   );
 }
 
-/** What the streamer wrote */
+/** Lines of a long first description shown before it is unfolded */
+const FOLD_OVER = 220;
+
+/** What the streamer wrote. `folded`: a long text shows its first lines, and unfolds when clicked */
 function Mine({ label, text, folded = false }: { label: string; text: string; folded?: boolean }) {
+  const { t } = useTranslation();
+  const [open, setOpen] = useState(false);
+  const long = folded && text.length > FOLD_OVER;
   return (
-    <p
-      className={`self-end max-w-[88%] px-3 py-2 rounded-[14px] rounded-br-[5px] bg-accent-soft border border-accent-line/40 text-[13px] leading-snug text-white whitespace-pre-line break-words ${folded ? "line-clamp-3" : ""}`}
-      title={folded ? text : undefined}
-    >
+    <div className="self-end max-w-[85%] px-3.5 py-2.5 rounded-[16px] rounded-br-[5px] bg-accent-soft border border-accent-line/40 text-[13.5px] leading-[1.45] text-white">
       <span className="sr-only">{label} : </span>
-      {text}
-    </p>
+      {/* The clamp sits on the text itself: on the padded box, half a line would show under the last one */}
+      <p className={`whitespace-pre-line break-words ${long && !open ? "line-clamp-3" : ""}`}>{text}</p>
+      {long && (
+        <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} className="mt-1 text-[12px] text-ink-2 underline decoration-white/25 underline-offset-2 hover:text-white">
+          {t(open ? "compilation.changeFold" : "compilation.changeUnfold")}
+        </button>
+      )}
+    </div>
   );
 }
 
 /** What the AI answers, or what it is doing */
 function Theirs({ label, working = false, children }: { label: string; working?: boolean; children: React.ReactNode }) {
   return (
-    <div className="self-start max-w-[92%] flex gap-2">
+    <div className="self-start max-w-[90%] flex gap-2.5">
       <span className={`talk-avatar flex-none ${working ? "talk-avatar-working" : ""}`} aria-hidden>
         <Sparkles className="w-3.5 h-3.5" />
       </span>
-      <div className="min-w-0 px-3 py-2 rounded-[14px] rounded-tl-[5px] bg-white/[0.06] border border-white/[0.07]">
+      <div className="min-w-0 px-3.5 py-2.5 rounded-[16px] rounded-tl-[5px] bg-white/[0.06] border border-white/[0.07]">
         <span className="sr-only">{label} : </span>
         {children}
       </div>

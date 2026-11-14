@@ -1553,7 +1553,7 @@
     "looksSame": "Même modèle partout",
     "changeTitle": "Modifier cette vidéo",
     "changeYou": "Ta description",
-    "changePlaceholder": "Demande un changement : « ajoute les autres moments où ils disent calme », « après ce passage, mets celui où… »",
+    "changePlaceholder": "Demande un changement…",
     "changeButton": "Modifier la vidéo",
     "changeHint": "L'IA repart de la vidéo telle qu'elle est (tes retouches comprises) et de tout ce que tu lui as déjà demandé. Ce que tu ne lui demandes pas de changer reste en place.",
     "changeDone": "Vidéo modifiée : {{added}} ajouté(s), {{removed}} retiré(s)",
@@ -1568,6 +1568,8 @@
     "changeRemoved_other": "{{count}} retirés",
     "changeReveal": "Les montrer dans la vidéo",
     "changeRevealGone": "Ces passages ne sont plus dans la vidéo.",
-    "changeEnter": "Entrée pour envoyer, Maj + Entrée pour aller à la ligne"
+    "changeEnter": "Ex. : « ajoute les autres moments où ils disent calme », « après ce passage, mets celui où… ». Entrée pour envoyer.",
+    "changeUnfold": "Tout lire",
+    "changeFold": "Replier"
   }
 }

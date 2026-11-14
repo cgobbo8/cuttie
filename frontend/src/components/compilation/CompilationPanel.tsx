@@ -124,7 +124,7 @@ export default function CompilationPanel({
   const iconButton = "btn btn-ghost btn-icon w-7 h-7 text-ink-3 hover:text-white disabled:opacity-25";
 
   return (
-    <aside ref={list} aria-label={t("compilation.title")} className="glass rounded-[20px] p-3 flex-[1_1_360px] min-w-0 flex flex-col gap-2.5">
+    <aside ref={list} aria-label={t("compilation.title")} className="glass rounded-[20px] p-3 flex-[1_1_360px] group-has-[.talk-thread]/row:flex-[1_1_330px] min-w-0 flex flex-col gap-2.5">
       <div className="flex items-center gap-1.5">
         <input
           value={compilation.name}

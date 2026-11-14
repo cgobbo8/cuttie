@@ -12,7 +12,7 @@ Tourne 100 % en local (cible : app desktop Windows pour un ami streamer) : pas d
 - **Editor** : Remotion 4 (player + renderer), canvas editor custom
 - **ML/Audio** : librosa (11025 Hz), PANNs CNN14 (AudioSet) — 358 Mo telecharges au demarrage du worker (`panns_files.py` : Zenodo puis miroir Hugging Face, SHA-256 verifie, reprise) ; facultatif : s'il manque, l'analyse continue sans rires / cris (notice `audio_events`)
 - **Transcription** : Whisper large-v3 turbo ; en « auto », le plus rapide : Groq si sa cle est la (un live de 7 h en 25 s, ~0,04 $/h), sinon en local quand la machine est rapide (mlx-whisper sur puce Apple, faster-whisper sur NVIDIA), sinon OpenRouter — `transcriber.py`, bascule sur OpenRouter si le moteur choisi coince (limite horaire du Groq gratuit comprise)
-- **LLM** : OpenRouter — Gemini 3 Flash Preview (audio + vision + analyse + scoring)
+- **LLM** : OpenRouter — Gemini 3 Flash Preview (audio + vision + analyse + scoring) ; recherche dans le live : GPT-6 Luna avec des outils (repli : Claude Haiku 5.5), Gemini 3.1 Flash Lite pour ecouter un passage (voir « Recherche par l'IA »)
 - **Video** : FFmpeg, OpenCV, yt-dlp
 - **Storage** : disque local `<data dir>/storage/{clips,renders,assets}`, servi par l'API via URLs signees
 - **Tests** : Vitest (frontend + backend unit/functional)
@@ -46,7 +46,8 @@ Positionnees par les lanceurs (`scripts/dev.mjs`, `scripts/launcher.mjs`) :
 - `WORKER_URL` (API) / `CUTTIE_API_URL` + `CUTTIE_WORKER_PORT` (worker)
 - `CUTTIE_AUTO_LOGIN` (defaut true), `FRONTEND_DIST` (API sert le front build)
 - `CUTTIE_APP_VERSION` (version de l'app desktop, dans l'export des journaux), `CUTTIE_CLEANUP_DAYS` (menage par defaut : 30 dans l'app installee, rien en dev)
-- `CUTTIE_LLM_CMD` (dev seulement) : commande qui lit une invite sur stdin et ecrit la reponse, a la place d'OpenRouter pour les appels texte de `llm_text.py` (recherche IA, plan, montage IA) — ex. `claude -p --model sonnet --tools ""` — pour tester sans depenser de credits
+- `CUTTIE_LLM_CMD` (dev seulement) : commande qui lit une invite sur stdin et ecrit la reponse, a la place d'OpenRouter pour les appels texte de `llm_text.py` (recherche IA, plan, montage IA) — ex. `claude -p --model sonnet --tools ""` — pour tester sans depenser de credits. Une commande ne peut pas appeler d'outils : avec elle, la recherche et le plan lisent tout le transcript en une fois (l'ancienne methode)
+- `CUTTIE_SEARCH_MODEL`, `CUTTIE_SEARCH_FALLBACK`, `CUTTIE_EARS_MODEL` : modeles de la recherche dans le live (celui qui cherche, celui qui prend le relais, celui qui ecoute) ; `CUTTIE_SEARCH_MAX_COST` : plafond d'une question en dollars (0,05)
 
 Fichier `api/.env` : voir `api/.env.example` (APP_KEY en dev ; l'app packagee genere `<data dir>/app.key`).
 
@@ -133,7 +134,10 @@ cuttie/
 │   │       ├── api_events.py                  # envoi ordonne des statuts a l'API
 │   │       ├── settings.py                    # lecture settings.json (cles API)
 │   │       ├── clip_tools.py                  # transcription a la demande + cam d'un live (clips) ou d'une VOD + clip allonge (+30 s) + clips recoupes depuis le live (projet libere) + passages du live decoupes pour les compilations
-│   │       ├── live_search.py                 # chercher dans tout le live : mots dits / ecrits dans le chat, recherche par l'IA, plan de video, montage d'un clip par l'IA
+│   │       ├── live_search.py                 # chercher dans tout le live : mots dits / ecrits dans le chat, recherche et plan de video par l'IA (cache disque, suivi des etapes, modele de repli), montage d'un clip par l'IA
+│   │       ├── live_agent.py                  # l'IA qui cherche avec des outils : boucle d'appels (OpenRouter), ecoute d'un passage, reponse verifiee, plafond de cout
+│   │       ├── live_tools.py                  # les outils de cette IA : apercu du live, mots dits, chat, sons, voix qui montent, lire un passage
+│   │       ├── sound_index.py                 # ce qu'on entend dans tout le live, seconde par seconde (PANNs, 23 familles de sons, ~1 Mo par live)
 │   │       ├── llm_text.py                    # appels texte a l'IA (OpenRouter ; CUTTIE_LLM_CMD en dev), cout estime
 │   │       ├── openai_client.py               # Clients multi-provider (Groq, OpenRouter)
 │   │       ├── provider_errors.py             # Refus definitifs (credits, cle) -> arret clair de l'analyse
@@ -214,6 +218,7 @@ cuttie/
                           puis transcription du live entier en arriere-plan (morceaux de 10 min,
                           moteur local si rapide, repli OpenRouter par morceau ; ~11 min pour 5 h sur M1 Max)
 2. ANALYZING_AUDIO     -> librosa features (5s/2.5s hop) + PANNs CNN14 16 kHz (rires, cris, parole ; en parallele)
+                          puis index sonore du live pour les recherches (sound_index.py, ~30 s pour 5 h sur M1 Max)
 3. ANALYZING_CHAT      -> Sentiment, emotes, burst, demandes de clip des viewers ;
                           decalage du chat estime (correlation son/chat, defaut 5 s)
 4. SCORING             -> Score composite pondere + peak detection -> top 200
@@ -270,6 +275,16 @@ Fournisseur qui refuse tout (`provider_errors.py`) : credits OpenRouter epuises 
 
 **Coupe conseillee** : le clip extrait garde ses marges (45-90 s) ; le LLM propose `cut_start` / `cut_end` (15-45 s en general), appliques comme trim par defaut dans Choisir et Monter tant que le streamer n'a pas coupe lui-meme.
 
+## Recherche par l'IA
+
+« Demander a l'IA » et « Decrire la video » (ecran Compilation) : un modele qui appelle des outils, pas une lecture du transcript en une fois (essayee d'abord : 1 bon passage sur 4, et rien sur « les moments ou ca pete »).
+
+- **Outils** (`live_tools.py`, chacun repond peu et exactement, heures en H:MM:SS) : `overview` (titre, jeu, resume, moments deja clippes), `search_speech` et `search_chat` (mots dits / ecrits), `find_sounds` (22 familles : coups de feu, cris, rires, sirenes...), `loud_moments` (voix qui montent, plus fort, silences), `read` (ce qui se dit entre deux heures, le chat, ce qu'on entend), `listen` (30 s du live envoyees a un petit modele qui entend, 12 ecoutes au plus), puis `answer` (ou `plan` pour une video) qui termine.
+- **Index sonore** (`sound_index.py`) : PANNs ecoute tout le live par fenetres de 2 s, une par seconde ; fait pendant l'analyse, ou a la premiere question pour les lives analyses avant (son retelecharge : 2 a 3 min, une seule fois). Il se trompe (une moto passe pour des coups de feu) : il dit ou regarder, l'IA confirme en ecoutant.
+- **Consignes** (`live_agent.py`) : comprendre l'argot comme le streamer l'entend (« ca pete » = l'action eclate), verifier chaque passage (`read`, `listen`), noter honnetement (80-100 exact, 50-79 plus doux, moins de 50 seulement proche), ne jamais remplir ; s'il n'y a rien, donner les passages les plus proches avec ce qui manque. Un plan de video bien plus court que demande est renvoye une fois au modele.
+- **Garde-fous** : 28 etapes (36 pour un plan), 0,05 $ par question au plus (la reponse est alors forcee), connexion coupee reessayee 3 fois, modele de repli si le premier echoue, credits epuises ou cle refusee dits tels quels. Les tests ne peuvent joindre aucun fournisseur (`tests/conftest.py`).
+- **Choix du modele** (14/11/2026, 9 modeles, 8 requetes sur un live de 4 h 43, 68 recherches, chaque passage juge ; 1,02 $ en tout) : GPT-6 Luna, precision 0,91, 76 % des bons passages trouves, 0,002 $ et ~20 s par recherche ; Claude Haiku 5.5 0,84 / 71 % / 0,005 $ ; Gemini 3 Flash 0,83 / 62 % / 0,014 $ (jusqu'a 0,07 $) ; GLM 5.3 0,78 / 58 % / 0,010 $ ; DeepSeek V4.1 Flash 0,78 / 40 % / 0,014 $ et 2 min ; Kimi K3 0,73 / 58 % / 0,083 $. Aucun de ces modeles n'a besoin d'entendre : l'ecoute passe par Gemini 3.1 Flash Lite (~0,0004 $ les 15 s).
+
 ## Authentification
 
 - App locale mono-utilisateur : les requetes venant de l'app sur cette machine (IP loopback, Host loopback, `Sec-Fetch-Site` same-origin/none) sont connectees automatiquement a l'utilisateur local (`local@cuttie.app`, permission `*`) — pas d'ecran de login. Desactivable avec `CUTTIE_AUTO_LOGIN=false` (cas des tests).
@@ -316,6 +331,7 @@ Fournisseur qui refuse tout (`provider_errors.py`) : credits OpenRouter epuises 
 | `/api/jobs/{id}/montage-render`       | POST    | Token    | Export de plusieurs morceaux bout a bout (clip coupe, compilation) |
 | `/api/jobs/{id}/search/info`          | GET     | Token    | Ce qui se cherche dans le live, cout d'une question a l'IA |
 | `/api/jobs/{id}/search`               | POST    | Token    | Passages du live : mots (gratuit) ou IA (`mode: "ai"`) |
+| `/api/jobs/{id}/search/progress`      | GET     | Token    | Ce que fait l'IA pendant qu'elle cherche (outil appele, sur quoi) |
 | `/api/jobs/{id}/plan`                 | POST    | Token    | Video decrite -> parties et passages (IA) |
 | `/api/jobs/{id}/pieces`               | POST    | Token    | Decoupe les passages demandes dans le live (410 : live parti) |
 | `/api/jobs/{id}/compilations`         | GET/POST | Token   | Compilations du live             |
@@ -344,7 +360,7 @@ Fournisseur qui refuse tout (`provider_errors.py`) : credits OpenRouter epuises 
 - Projet en 4 etapes : Analyse (en direct) -> Choisir (garder / passer / trim) -> Monter (7 modeles a la DA de la chaine) -> Exporter.
 - Choisir : le chat sur la frise du live (barres, le dixieme le plus actif en blanc vif) et sur celle du clip (un point par message, le texte au survol) ; « + » au survol de la frise du clip = 30 s de plus de ce cote (le clip est re-extrait du live quand la coupe depasse son fichier : mots, cam et vignettes suivent) ; « Pourquoi ce moment » dit d'ou vient un moment (score son + chat, lu par l'IA, demande sur le stream, ajoute a la main).
 - Coupe en plusieurs morceaux (Choisir) : « Couper ici » (C) coupe le morceau sous la tete de lecture, « Garder ce passage » ajoute un morceau la ou le clip est coupe (du contexte avant la coupe de l'IA), « × » au survol retire un morceau, « Enlever les silences » retire les blancs de plus d'1,1 s (mots du clip), « Montage IA » demande a l'IA les morceaux a garder (moins d'un centime), Annuler / Ctrl+Z. Les poignees se calent entre deux mots (Alt : librement). La lecture saute les coupes. `selection[clip].segments` (2 morceaux ou plus, secondes du clip) ; `trim` reste l'enveloppe.
-- Compilation (`/:jobId/compilation`, bouton « Chercher dans le live » de Choisir) : chercher dans tout le live par mots (dits : transcript du live ; ecrits : chat ; gratuit, immediat, phrases serrees quand le transcript a les mots dates) ou en demandant a l'IA (elle lit tout le live, ~0,04 $, reponse gardee sur disque : la meme question ne se paie qu'une fois), ajouter les passages a des parties titrees, ou decrire toute la video (« Decrire la video » : l'IA propose parties + passages pour une duree visee). Chaque passage a son petit clip `piece_<id>.mp4` decoupe dans le live (segments HLS utiles seulement, marge 0,6 a 8 s), avec les memes fichiers annexes qu'un clip. Tout reste modifiable : ordre, coupe de chaque passage, titres, modele, « Ajuster a 1 min 30 ».
+- Compilation (`/:jobId/compilation`, bouton « Chercher dans le live » de Choisir) : chercher dans tout le live par mots (dits : transcript du live ; ecrits : chat ; gratuit, immediat, phrases serrees quand le transcript a les mots dates) ou en demandant a l'IA (elle fouille le live avec des outils, ecoute et verifie chaque passage : moins d'un centime, 10 a 30 s, reponse gardee sur disque : la meme question ne se paie qu'une fois ; ce qu'elle fait s'affiche en direct, sa note dit ce qui correspond vraiment, les passages seulement « proches » sont marques), ajouter les passages a des parties titrees, ou decrire toute la video (« Decrire la video » : l'IA propose parties + passages pour une duree visee). Chaque passage a son petit clip `piece_<id>.mp4` decoupe dans le live (segments HLS utiles seulement, marge 0,6 a 8 s), avec les memes fichiers annexes qu'un clip. Tout reste modifiable : ordre, coupe de chaque passage, titres, modele, « Ajuster a 1 min 30 ».
 - Montage (plusieurs morceaux dans une video) : composition Remotion `CuttieMontage` (app et rendu). Chaque morceau garde l'horloge de son clip (videos, sous-titres, chat) ; l'accroche, les widgets et les titres de parties tournent une seule fois sur l'horloge de la video. Les exports classiques (un clip, une coupe) passent toujours par `CuttieVideo`.
 - Design : verre fonce pose sur du contenu floute (vignettes, frames), une seule couleur d'accent = couleur de la chaine.
 - Modeles : les 7 mises en page, chacune sa structure (Empile = cam en bandeau / jeu ; Reaction = visage en grand + jeu en vignette ; Discussion RP = scene du jeu + cam ronde, conversation et chat dessous ; Action = jeu plein ecran + cam ronde ; Cinema = ecran du live entier entre deux bandes, titre au-dessus ; Signature = cartes sur fond floute ; Sans cam) + les modeles perso du streamer (`brand_kit.templates`, v2 = elements : fond, jeu (ou ecran entier), cam, chat, sous-titres, accroche, widgets avec arrivee / depart / animations, ordre des calques) ; `brand_kit.default_template` sert aux nouveaux projets. L'editeur a calques reste le mode avance.

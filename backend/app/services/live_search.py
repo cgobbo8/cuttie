@@ -1,11 +1,15 @@
 """Looking for moments in the whole live, after the analysis.
 
 By words: what was said (the live's transcript) or written in the chat, free
-and instant. By asking the AI: one text call reads the whole transcript with
-the chat's and the sound's high points and points at what matches a
-description ("the moments when it kicks off"): a few cents, kept on disk so
-the same question is never paid twice. The AI can also plan a whole video
-from a description (sections of moments), for the compilations.
+and instant. By asking the AI: it searches like an editor would, with small
+tools (words said, chat, sounds, loud moments, reading a passage, listening
+to it: live_tools.py, live_agent.py), checks each moment and only then
+answers; about a cent, kept on disk so the same question is never paid twice.
+The AI can also plan a whole video from a description (sections of moments),
+for the compilations.
+
+With the development command (CUTTIE_LLM_CMD), which can't call tools, the AI
+reads the whole transcript once instead, as it did before the tools.
 """
 
 import hashlib
@@ -13,6 +17,8 @@ import json
 import logging
 import os
 import re
+import threading
+import time
 import unicodedata
 from bisect import bisect_left
 from dataclasses import asdict, dataclass, field
@@ -526,24 +532,175 @@ def _reading(job_id: str, duration: float, energy: list[float] | None, lag: floa
 
 def info(job_id: str, duration: float = 0.0) -> dict:
     """What can be searched in this live, and about what asking the AI costs (dollars)."""
+    from app.services import live_agent, sound_index
+
     transcript = load_cached(job_id)
     chat = read_chat(job_id)
     if not transcript:
-        return {"transcript": False, "chat": len(chat), "ai_cost": None}
-    lines = ai_lines(transcript, None, duration)
-    chars = sum(len(line) + 1 for line in lines) + 2500
+        return {"transcript": False, "chat": len(chat), "ai_cost": None, "plan_cost": None, "sounds": False}
+    dev = bool(llm_text.dev_command())
+    if dev:
+        lines = ai_lines(transcript, None, duration)
+        cost = plan = llm_text.estimate_cost(sum(len(line) + 1 for line in lines) + 2500)
+    else:
+        cost, plan = live_agent.TYPICAL_COST, live_agent.TYPICAL_PLAN_COST
     return {
         "transcript": True,
         "segments": len(transcript.segments),
         "chat": len(chat),
-        "ai_cost": llm_text.estimate_cost(chars),
+        "ai_cost": cost,
+        "plan_cost": plan,
+        # The most a question can cost: the search stops there and answers with what it has
+        "max_cost": None if dev else live_agent.MAX_COST,
+        # The live was listened to (its sounds can be searched); else the first question does it
+        "sounds": os.path.isfile(sound_index.index_path(job_id)),
         # Tried with another model than the one that will be billed
-        "dev": bool(llm_text.dev_command()),
+        "dev": dev,
     }
 
 
-def search_ai(job_id: str, query: str, meta: dict, duration: float, energy: list[float] | None = None, lag: float = 5.0) -> dict:
-    """Moments that match `query` by meaning, found by the AI reading the whole live."""
+# ── The AI searches with tools ───────────────────────────────────────────────
+
+# What the AI is doing for each live being searched: {"step", "detail", "count", "at"}
+_doing: dict[str, dict] = {}
+_doing_lock = threading.Lock()
+# Shown this long after its last step at most (a search that died leaves nothing behind)
+DOING_TTL = 180.0
+
+
+def doing(job_id: str) -> dict | None:
+    """What the AI searching this live is doing right now, None when nothing is being searched."""
+    with _doing_lock:
+        now = _doing.get(job_id)
+    if not now or time.time() - now["at"] > DOING_TTL:
+        return None
+    return {"step": now["step"], "detail": now["detail"], "count": now["count"]}
+
+
+def _tell(job_id: str, step: str, detail: str = "") -> None:
+    with _doing_lock:
+        count = _doing.get(job_id, {}).get("count", 0) + 1
+        _doing[job_id] = {"step": step, "detail": str(detail)[:80], "count": count, "at": time.time()}
+
+
+def _step_detail(args: dict) -> str:
+    """The one argument that says what a tool call is about: the words, the kind of sound, the time."""
+    for key in ("words", "kind", "start"):
+        if args.get(key):
+            return str(args[key])
+    return ""
+
+
+def _ask(job_id: str, duration: float, lag: float, url: str | None, work):
+    """Have the AI do `work(searcher)` over this live: with its tools and its ears, the live
+    listened to first when it never was. When the searching model fails for a reason of its
+    own (retired, down, no answer), the fallback model does the work instead.
+    Returns the run, the tools, and what both tries cost."""
+    from app.services import live_agent, sound_index
+    from app.services.live_tools import LiveTools
+    from app.services.openai_client import get_openrouter_client
+    from app.services.provider_errors import ProviderUnavailable
+
+    try:
+        if url and not os.path.isfile(sound_index.index_path(job_id)):
+            _tell(job_id, "hearing")
+            sound_index.ensure(job_id, url)
+        tools = LiveTools(job_id, duration, lag)
+        models = list(dict.fromkeys(m for m in (live_agent.SEARCH_MODEL, live_agent.FALLBACK_MODEL) if m))
+        spent = 0.0
+        for attempt, model in enumerate(models):
+            _tell(job_id, "thinking")
+            searcher = live_agent.Searcher(
+                tools, get_openrouter_client(), model, vod_url=url,
+                on_step=lambda name, args: _tell(job_id, name, _step_detail(args)),
+            )
+            failure: Exception | None = None
+            try:
+                work(searcher)
+            except ProviderUnavailable:
+                # No credits, a refused key: the other model would be refused too
+                raise
+            except Exception as e:
+                failure = e
+            spent += searcher.run.cost
+            if failure is None and searcher.run.finished:
+                return searcher.run, tools, spent
+            reason = f"{type(failure).__name__}: {failure}" if failure else f"no answer after {searcher.run.steps} steps"
+            if attempt == len(models) - 1:
+                raise RuntimeError(f"the AI ({model}) failed: {reason}"[:300]) from failure
+            logger.warning(f"[{job_id[:8]}] AI search: {model} failed ({reason[:200]}), trying {models[attempt + 1]}")
+        raise RuntimeError("no model to search with")
+    finally:
+        with _doing_lock:
+            _doing.pop(job_id, None)
+
+
+def search_ai(job_id: str, query: str, meta: dict, duration: float, energy: list[float] | None = None, lag: float = 5.0, url: str | None = None) -> dict:
+    """Moments that match `query` by meaning: the AI searches the live with tools and checks what it finds.
+    `url`: the live on Twitch, to listen to it (without it, the search reads only)."""
+    transcript = load_cached(job_id)
+    if not transcript:
+        raise NoTranscript(job_id)
+    if llm_text.dev_command():
+        return _search_by_reading(job_id, query, meta, duration, energy, lag)
+    from app.services import live_agent
+
+    path = _cache_path(job_id, "agent", " ".join(tokens(query)), _signature(transcript), live_agent.SEARCH_MODEL, live_agent.ANSWERS_VERSION)
+    kept = _cached(path)
+    if kept:
+        return {**kept, "cached": True, "cost": 0.0}
+    run, tools, cost = _ask(job_id, duration, lag, url, lambda searcher: searcher.search(query))
+    hits = live_agent.to_hits(run, tools)
+    result = {"hits": _complete(hits, transcript), "total": len(hits), "transcript": True, "note": run.note}
+    _keep(path, result)
+    logger.info(f"[{job_id[:8]}] AI search \"{query[:60]}\": {len(hits)} moments with {run.model} (~{cost:.4f} $, {run.seconds:.0f} s)")
+    return {**result, "cached": False, "cost": round(cost, 4)}
+
+
+def plan_video(job_id: str, brief: str, target: float, meta: dict, duration: float, energy: list[float] | None = None, lag: float = 5.0, url: str | None = None) -> dict:
+    """A whole video from a description: sections (a title, moments in playing order)."""
+    transcript = load_cached(job_id)
+    if not transcript:
+        raise NoTranscript(job_id)
+    if llm_text.dev_command():
+        return _plan_by_reading(job_id, brief, target, meta, duration, energy, lag)
+    from app.services import live_agent
+
+    path = _cache_path(job_id, "agent_plan", " ".join(tokens(brief)), f"{target:.0f}", _signature(transcript), live_agent.SEARCH_MODEL, live_agent.ANSWERS_VERSION)
+    kept = _cached(path)
+    if kept:
+        return {**kept, "cached": True, "cost": 0.0}
+    run, _tools, cost = _ask(job_id, duration, lag, url, lambda searcher: searcher.plan(brief, target))
+    result = {"title": run.title, "sections": _sections(run.sections, transcript, duration), "note": run.note}
+    _keep(path, result)
+    total = sum(h["end"] - h["start"] for s in result["sections"] for h in s["hits"])
+    logger.info(f"[{job_id[:8]}] AI plan \"{brief[:60]}\": {len(result['sections'])} sections, {total:.0f} s for a target of {target:.0f} s with {run.model} (~{cost:.4f} $, {run.seconds:.0f} s)")
+    return {**result, "cached": False, "cost": round(cost, 4)}
+
+
+def _sections(raw_sections, transcript: VodTranscript, duration: float) -> list[dict]:
+    """The AI's sections as the app shows them: a title and hits, in playing order (the AI's, not the stream's);
+    a moment given twice is kept once."""
+    sections = []
+    taken: list[tuple[float, float]] = []
+    for raw in raw_sections if isinstance(raw_sections, list) else []:
+        if not isinstance(raw, dict):
+            continue
+        hits = []
+        for hit in parse_moments(raw.get("moments", []), transcript, duration, limit=60, longest=MAX_PLANNED):
+            if any(min(hit.end, b) - max(hit.start, a) > 0.5 * min(hit.end - hit.start, b - a) for a, b in taken):
+                continue
+            taken.append((hit.start, hit.end))
+            hits.append(hit)
+        if hits:
+            sections.append({"title": str(raw.get("title") or "")[:60], "hits": _complete(hits, transcript)})
+    return sections
+
+
+# ── The AI reads the whole live once (development command only) ──────────────
+
+
+def _search_by_reading(job_id: str, query: str, meta: dict, duration: float, energy: list[float] | None, lag: float) -> dict:
     transcript, lines, chat = _reading(job_id, duration, energy, lag)
     path = _cache_path(job_id, "ai", " ".join(tokens(query)), _signature(transcript))
     kept = _cached(path)
@@ -554,12 +711,11 @@ def search_ai(job_id: str, query: str, meta: dict, duration: float, energy: list
     hits.sort(key=lambda h: h.start)
     result = {"hits": _complete(hits, transcript), "total": len(hits), "transcript": True}
     _keep(path, result)
-    logger.info(f"[{job_id[:8]}] AI search \"{query[:60]}\": {len(hits)} moments (~{answer.cost:.3f} $, {answer.seconds:.0f} s)")
+    logger.info(f"[{job_id[:8]}] AI search by reading \"{query[:60]}\": {len(hits)} moments (~{answer.cost:.3f} $, {answer.seconds:.0f} s)")
     return {**result, "cached": False, "cost": answer.cost}
 
 
-def plan_video(job_id: str, brief: str, target: float, meta: dict, duration: float, energy: list[float] | None = None, lag: float = 5.0) -> dict:
-    """A whole video from a description: sections (a title, moments in playing order)."""
+def _plan_by_reading(job_id: str, brief: str, target: float, meta: dict, duration: float, energy: list[float] | None, lag: float) -> dict:
     transcript, lines, chat = _reading(job_id, duration, energy, lag)
     path = _cache_path(job_id, "plan", " ".join(tokens(brief)), f"{target:.0f}", _signature(transcript))
     kept = _cached(path)
@@ -567,18 +723,10 @@ def plan_video(job_id: str, brief: str, target: float, meta: dict, duration: flo
         return {**kept, "cached": True, "cost": 0.0}
     answer = llm_text.complete(plan_prompt(lines, chat, brief, target, meta))
     data = llm_text.parse_json(answer.text)
-    sections = []
-    for raw in data.get("sections", []) if isinstance(data.get("sections"), list) else []:
-        if not isinstance(raw, dict):
-            continue
-        # In playing order: the AI's order, not the stream's
-        hits = parse_moments(raw.get("moments", []), transcript, duration, limit=60, longest=MAX_PLANNED)
-        if hits:
-            sections.append({"title": str(raw.get("title") or "")[:60], "hits": _complete(hits, transcript)})
-    result = {"title": str(data.get("title") or "")[:80], "sections": sections}
+    result = {"title": str(data.get("title") or "")[:80], "sections": _sections(data.get("sections"), transcript, duration)}
     _keep(path, result)
-    total = sum(h["end"] - h["start"] for s in sections for h in s["hits"])
-    logger.info(f"[{job_id[:8]}] AI plan \"{brief[:60]}\": {len(sections)} sections, {total:.0f} s for a target of {target:.0f} s (~{answer.cost:.3f} $)")
+    total = sum(h["end"] - h["start"] for s in result["sections"] for h in s["hits"])
+    logger.info(f"[{job_id[:8]}] AI plan by reading \"{brief[:60]}\": {len(result['sections'])} sections, {total:.0f} s for a target of {target:.0f} s (~{answer.cost:.3f} $)")
     return {**result, "cached": False, "cost": answer.cost}
 
 

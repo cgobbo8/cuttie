@@ -207,24 +207,49 @@ export interface LiveSearchResult {
   /** AI searches: answered from the disk (free), dollars spent otherwise */
   cached?: boolean
   cost?: number
+  /** AI searches: what it looked for and how sure it is, in its words */
+  note?: string
 }
 
-/** What the AI reads besides the transcript: the live's length, its voice energy, who and what */
+/** What the AI works from besides the transcript: the live's length, its voice energy, who and what, and the live on Twitch (to listen to it) */
 export interface LiveContext {
   duration: number
   energy?: number[] | null
   meta: { streamer?: string | null; game?: string | null; title?: string | null }
+  url?: string | null
 }
 
 /** What can be searched in a live, and about what asking the AI costs (dollars) */
-export async function liveSearchInfo(
-  jobId: string,
-  duration: number
-): Promise<{ transcript: boolean; segments?: number; chat: number; ai_cost: number | null; dev?: boolean }> {
+export interface LiveSearchInfo {
+  transcript: boolean
+  segments?: number
+  chat: number
+  /** About what a question costs, and a whole video planned */
+  ai_cost: number | null
+  plan_cost?: number | null
+  /** The most a question can cost */
+  max_cost?: number | null
+  /** The live was listened to: its sounds can be searched (else the first question does it, a few minutes) */
+  sounds?: boolean
+  dev?: boolean
+}
+
+export async function liveSearchInfo(jobId: string, duration: number): Promise<LiveSearchInfo> {
   return call('GET', `/jobs/${encodeURIComponent(jobId)}/search/info?duration=${Math.round(duration)}`, { timeoutMs: 30_000 })
 }
 
-/** Moments that match a search: "words" is free and instant, "ai" reads the whole live (a few cents, up to a few minutes) */
+/** What the AI searching a live is doing right now: the tool it called and on what (null: nothing being searched) */
+export interface LiveSearchStep {
+  step: string
+  detail: string
+  count: number
+}
+
+export async function liveSearchProgress(jobId: string): Promise<{ doing: LiveSearchStep | null }> {
+  return call('GET', `/jobs/${encodeURIComponent(jobId)}/search/progress`, { timeoutMs: 5_000 })
+}
+
+/** Moments that match a search: "words" is free and instant, "ai" searches the live with tools and checks what it finds (about a cent, up to a few minutes) */
 export async function searchLive(jobId: string, query: string, mode: 'words' | 'ai', context: LiveContext): Promise<LiveSearchResult> {
   return call('POST', `/jobs/${encodeURIComponent(jobId)}/search`, {
     body: { query, mode, ...context },
@@ -237,6 +262,8 @@ export interface VideoPlan {
   sections: { title: string; hits: LiveHit[] }[]
   cached?: boolean
   cost?: number
+  /** What the AI found for each part and what is missing, in its words */
+  note?: string
 }
 
 /** A whole video planned by the AI from a description */

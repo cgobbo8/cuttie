@@ -188,6 +188,10 @@ test.group('Compilations', (group) => {
     assert.deepEqual(search.body(), { error: 'unreachable' })
     ;(await client.post(`/api/jobs/${job.id}/plan`).loginAs(user).json({ brief: 'les moments calmes', target: 90 })).assertStatus(503)
     ;(await client.get(`/api/jobs/${job.id}/search/info`).loginAs(user)).assertStatus(503)
+    // What the AI is doing is only for show: no engine, nothing being searched
+    const progress = await client.get(`/api/jobs/${job.id}/search/progress`).loginAs(user)
+    progress.assertStatus(200)
+    assert.deepEqual(progress.body(), { doing: null })
     ;(await client.post(`/api/clips/${job.id}/a.mp4/suggest-cut`).loginAs(user).json({})).assertStatus(503)
     ;(await client.post(`/api/clips/${job.id}/b.mp4/suggest-cut`).loginAs(user).json({})).assertStatus(404)
   })
@@ -216,6 +220,7 @@ test.group('Compilations', (group) => {
     ;(await client.get(`/api/jobs/${job.id}/compilations`).loginAs(other)).assertStatus(404)
     ;(await client.post(`/api/jobs/${job.id}/compilations`).loginAs(other).json({})).assertStatus(404)
     ;(await client.post(`/api/jobs/${job.id}/search`).loginAs(other).json({ query: 'calme' })).assertStatus(404)
+    ;(await client.get(`/api/jobs/${job.id}/search/progress`).loginAs(other)).assertStatus(404)
     ;(await client.post(`/api/jobs/${job.id}/pieces`).loginAs(other).json({ pieces: [] })).assertStatus(404)
     ;(await client.get(`/api/clips/${job.id}/a.mp4/words`).loginAs(other)).assertStatus(404)
     ;(await client.post(`/api/jobs/${job.id}/montage-render`).loginAs(other).json({ pieces: [] })).assertStatus(404)

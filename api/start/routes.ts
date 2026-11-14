@@ -95,6 +95,7 @@ router
         router.patch('/jobs/:id/clips/:clipFilename/name', [() => import('#controllers/jobs_controller'), 'renameClip'])
         // Searching the live, compilations (videos made of pieces of the live)
         router.get('/jobs/:id/search/info', [() => import('#controllers/compilations_controller'), 'searchInfo'])
+        router.get('/jobs/:id/search/progress', [() => import('#controllers/compilations_controller'), 'searchProgress'])
         router.post('/jobs/:id/search', [() => import('#controllers/compilations_controller'), 'search'])
         router.post('/jobs/:id/plan', [() => import('#controllers/compilations_controller'), 'plan'])
         router.post('/jobs/:id/pieces', [() => import('#controllers/compilations_controller'), 'pieces'])

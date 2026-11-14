@@ -312,6 +312,12 @@ const routes = {
     tokens: [{"old":"/api/jobs/:id/search/info","type":0,"val":"api","end":""},{"old":"/api/jobs/:id/search/info","type":0,"val":"jobs","end":""},{"old":"/api/jobs/:id/search/info","type":1,"val":"id","end":""},{"old":"/api/jobs/:id/search/info","type":0,"val":"search","end":""},{"old":"/api/jobs/:id/search/info","type":0,"val":"info","end":""}],
     types: placeholder as Registry['compilations.search_info']['types'],
   },
+  'compilations.search_progress': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/jobs/:id/search/progress',
+    tokens: [{"old":"/api/jobs/:id/search/progress","type":0,"val":"api","end":""},{"old":"/api/jobs/:id/search/progress","type":0,"val":"jobs","end":""},{"old":"/api/jobs/:id/search/progress","type":1,"val":"id","end":""},{"old":"/api/jobs/:id/search/progress","type":0,"val":"search","end":""},{"old":"/api/jobs/:id/search/progress","type":0,"val":"progress","end":""}],
+    types: placeholder as Registry['compilations.search_progress']['types'],
+  },
   'compilations.search': {
     methods: ["POST"],
     pattern: '/api/jobs/:id/search',

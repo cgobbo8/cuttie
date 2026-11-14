@@ -5,7 +5,8 @@
  * each gets its own small clip (see api/app/services/compilations.ts).
  */
 
-import type { Compilation, CompilationItem, CompilationSection, LiveHit, VideoPlan } from "./api";
+import type { TFunction } from "i18next";
+import type { Compilation, CompilationItem, CompilationSection, LiveHit, LiveSearchStep, VideoPlan } from "./api";
 
 /** Air kept around what is said when a result becomes an item, seconds */
 const PAD_BEFORE = 0.35;
@@ -16,7 +17,13 @@ const MIN_FITTED = 1.2;
 /** Two moments sharing this much of the shorter one are the same moment */
 const SAME_MOMENT = 0.5;
 
+/** Under this score (0-1), a moment the AI gave is only close to what was asked: it says what is missing */
+const NEAR_SCORE = 0.5;
+
 const hundredth = (s: number) => Math.round(s * 100) / 100;
+
+/** A moment the AI gave as only close to the request, not as a match */
+export const isNear = (hit: Pick<LiveHit, "sources" | "score">): boolean => hit.sources.includes("ai") && hit.score < NEAR_SCORE;
 
 /** 10 letters and digits: names a section, an item and its clip */
 export function newId(): string {
@@ -35,7 +42,9 @@ export function itemFromHit(hit: LiveHit, liveDuration: number): CompilationItem
   }
   start = Math.max(0, start);
   if (liveDuration > 0) end = Math.min(liveDuration, end);
-  return { id: newId(), start: hundredth(start), end: hundredth(end), text: hit.text || hit.chat[0] || "", why: hit.why, sources: hit.sources };
+  // A near-miss stays marked as one in the compilation ("≈ what is missing")
+  const why = isNear(hit) && hit.why ? `≈ ${hit.why}` : hit.why;
+  return { id: newId(), start: hundredth(start), end: hundredth(end), text: hit.text || hit.chat[0] || "", why, sources: hit.sources };
 }
 
 export const allItems = (c: Pick<Compilation, "sections">): CompilationItem[] => c.sections.flatMap((s) => s.items);
@@ -172,4 +181,27 @@ export function liveClock(seconds: number): string {
   const h = Math.floor(s / 3600);
   const m = Math.floor((s % 3600) / 60);
   return `${h}:${String(m).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+}
+
+/** What the AI is doing, in the streamer's words: the tool it just called and on what */
+export function stepText(t: TFunction, step: LiveSearchStep | null): string {
+  const detail = step?.detail ?? "";
+  switch (step?.step) {
+    case "hearing":
+    case "overview":
+      return t(`compilation.step.${step.step}`);
+    case "search_speech":
+    case "search_chat":
+      return detail ? t(`compilation.step.${step.step}`, { words: detail }) : t("compilation.step.thinking");
+    case "find_sounds":
+      return t("compilation.step.find_sounds", { sound: t(`compilation.sound.${detail}`, { defaultValue: detail }) });
+    case "loud_moments":
+      return t(`compilation.step.${["raised_voices", "quiet"].includes(detail) ? detail : "loudest"}`);
+    case "read":
+    case "listen":
+      // The models give times as H:MM:SS, sometimes as seconds
+      return t(`compilation.step.${step.step}`, { at: /^\d+(\.\d+)?$/.test(detail) ? liveClock(Number(detail)) : detail });
+    default:
+      return t("compilation.step.thinking");
+  }
 }

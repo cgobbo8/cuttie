@@ -1279,15 +1279,30 @@ export interface LiveSearchResult {
   /** AI searches: answered from the disk (free), dollars spent otherwise */
   cached?: boolean;
   cost?: number;
+  /** AI searches: what it looked for and how sure it is, in its words */
+  note?: string;
 }
 
 export interface LiveSearchInfo {
   transcript: boolean;
   chat: number;
-  /** About what asking the AI costs, dollars (null: nothing to read) */
+  /** About what asking the AI costs, dollars (null: nothing to read), and a whole video planned */
   ai_cost: number | null;
+  plan_cost?: number | null;
+  /** The most a question can cost: the AI stops there and answers with what it has */
+  max_cost?: number | null;
+  /** The live was listened to: its sounds can be searched (else the first question does it, a few minutes) */
+  sounds?: boolean;
   /** Development: another model answers, nothing is billed */
   dev?: boolean;
+}
+
+/** What the AI searching the live is doing: the tool it called (`step`), on what (`detail`: words, a kind of sound, a time) */
+export interface LiveSearchStep {
+  step: string;
+  detail: string;
+  /** How many steps it has made */
+  count: number;
 }
 
 export type LiveFailure = "no_transcript" | "credits" | "key" | "live_gone" | "unreachable" | "failed";
@@ -1314,7 +1329,17 @@ export async function getLiveSearchInfo(jobId: string): Promise<LiveSearchInfo> 
   return liveJson(await fetch(`${BASE}/jobs/${jobId}/search/info`));
 }
 
-/** Moments of the live that match: "words" looks for what is said or written (free), "ai" has the AI read the whole live */
+/** What the AI is doing while a search or a plan is awaited (null: nothing being searched, or the engine is away) */
+export async function getLiveSearchProgress(jobId: string): Promise<LiveSearchStep | null> {
+  try {
+    const res = await fetch(`${BASE}/jobs/${jobId}/search/progress`);
+    return res.ok ? ((await res.json()).doing ?? null) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Moments of the live that match: "words" looks for what is said or written (free), "ai" has the AI search the live and check what it finds */
 export async function searchLive(jobId: string, query: string, mode: "words" | "ai"): Promise<LiveSearchResult> {
   return liveJson(await postJson(`${BASE}/jobs/${jobId}/search`, { query, mode }));
 }
@@ -1324,6 +1349,8 @@ export interface VideoPlan {
   sections: { title: string; hits: LiveHit[] }[];
   cached?: boolean;
   cost?: number;
+  /** What the AI found for each part and what is missing, in its words */
+  note?: string;
 }
 
 /** A whole video planned by the AI from a description, `target` seconds long */

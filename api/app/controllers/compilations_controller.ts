@@ -12,7 +12,7 @@ import {
   pieceState,
   type Compilation,
 } from '#services/compilations'
-import { extractLivePieces, liveSearchInfo, planLiveVideo, searchLive, type LiveContext } from '#services/worker_client'
+import { extractLivePieces, liveSearchInfo, liveSearchProgress, planLiveVideo, searchLive, type LiveContext } from '#services/worker_client'
 import { workerFailure } from '#services/worker_failure'
 
 const newId = () => randomBytes(8).toString('base64url').toLowerCase().replace(/[^a-z0-9]/g, 'x').slice(0, 10)
@@ -23,12 +23,13 @@ async function ownJob({ params, auth }: HttpContext): Promise<Job | null> {
   return job && job.userId === user.id ? job : null
 }
 
-/** What the AI reads besides the transcript: the live's length, its voice energy, who and what */
+/** What the AI works from besides the transcript: the live's length, its voice energy, who and what, where to listen to it */
 function liveContext(job: Job): LiveContext {
   return {
     duration: job.vodDurationSeconds ?? 0,
     energy: job.timeline?.energy ?? null,
     meta: { streamer: job.streamer, game: job.vodGame, title: job.customTitle || job.vodTitle },
+    url: job.url,
   }
 }
 
@@ -144,6 +145,18 @@ export default class CompilationsController {
       return await liveSearchInfo(job.id, job.vodDurationSeconds ?? 0)
     } catch (err) {
       return workerFailure(ctx.response, err)
+    }
+  }
+
+  // GET /api/jobs/:id/search/progress — what the AI searching this live is doing right now
+  async searchProgress(ctx: HttpContext) {
+    const job = await ownJob(ctx)
+    if (!job) return ctx.response.notFound({ error: 'job not found' })
+    try {
+      return await liveSearchProgress(job.id)
+    } catch {
+      // Only for show: the search itself says what went wrong
+      return { doing: null }
     }
   }
 

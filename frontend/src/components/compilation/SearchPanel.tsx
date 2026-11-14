@@ -1,17 +1,19 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { Check, Loader2, MessageCircle, Mic, Play, Plus, Search, Sparkles } from "lucide-react";
 import {
   LiveError,
+  getLiveSearchProgress,
   planLiveVideo,
   searchLive,
   type LiveFailure,
   type LiveHit,
   type LiveSearchInfo,
+  type LiveSearchStep,
   type TwitchStoryboard,
   type VideoPlan,
 } from "../../lib/api";
-import { liveClock } from "../../lib/compilation";
+import { isNear, liveClock, stepText } from "../../lib/compilation";
 import { frameAt, tileStyle } from "../../lib/storyboard";
 import { useToast } from "../Toast";
 
@@ -43,6 +45,9 @@ const AROUND = 64;
 const tail = (text: string) => (text.length > AROUND ? `…${text.slice(text.indexOf(" ", text.length - AROUND) + 1)}` : text);
 const head = (text: string) => (text.length > AROUND ? `${text.slice(0, text.lastIndexOf(" ", AROUND))}…` : text);
 
+/** How often the AI is asked what it is doing while its answer is awaited */
+const PROGRESS_EVERY = 1200;
+
 /** Looking for moments in the whole live: by words, by asking the AI, or by describing the whole video */
 export default function SearchPanel({ jobId, storyboard, info, previewed, isAdded, onPreview, onAdd, onPlan, onResults }: Props) {
   const { t, i18n } = useTranslation();
@@ -51,14 +56,47 @@ export default function SearchPanel({ jobId, storyboard, info, previewed, isAdde
   const [query, setQuery] = useState("");
   const [busy, setBusy] = useState<"words" | "ai" | "plan" | null>(null);
   const [failure, setFailure] = useState<LiveFailure | null>(null);
-  const [results, setResults] = useState<{ hits: LiveHit[]; total: number; query: string; mode: "words" | "ai" } | null>(null);
+  const [results, setResults] = useState<{ hits: LiveHit[]; total: number; query: string; mode: "words" | "ai"; note?: string } | null>(null);
   const [brief, setBrief] = useState("");
   const [target, setTarget] = useState(90);
+  /** What the AI is doing while its answer is awaited */
+  const [step, setStep] = useState<LiveSearchStep | null>(null);
+  /** What the AI said of the last video it planned */
+  const [planNote, setPlanNote] = useState("");
+
+  const asking = busy === "ai" || busy === "plan";
+  useEffect(() => {
+    if (!asking) return;
+    setStep(null);
+    let stopped = false;
+    const ask = async () => {
+      const doing = await getLiveSearchProgress(jobId);
+      if (!stopped && doing) setStep(doing);
+    };
+    const timer = window.setInterval(ask, PROGRESS_EVERY);
+    return () => {
+      stopped = true;
+      window.clearInterval(timer);
+    };
+  }, [asking, jobId]);
 
   const dollars = (cost: number) => `${new Intl.NumberFormat(i18n.language, { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(cost)} $`;
-  const aiCost = info?.ai_cost != null ? `≈ ${dollars(info.ai_cost)}` : null;
+  /** A question to the AI costs a fraction of a cent: said as such, never as "0.00 $" */
+  const about = (cost?: number | null) => (cost == null ? null : cost < 0.01 ? `< ${dollars(0.01)}` : `≈ ${dollars(cost)}`);
+  const aiCost = about(info?.ai_cost);
+  const planCost = about(info?.plan_cost ?? info?.ai_cost);
   /** "Asked before: free" or what it cost */
-  const paid = (answer: { cached?: boolean; cost?: number }) => (answer.cached ? t("compilation.alreadyAsked") : answer.cost ? dollars(answer.cost) : "");
+  const paid = (answer: { cached?: boolean; cost?: number }) =>
+    answer.cached ? t("compilation.alreadyAsked") : answer.cost ? (answer.cost < 0.01 ? t("compilation.underCent") : dollars(answer.cost)) : "";
+
+  /** "3 passages found · 2 close", or that nothing really matches */
+  const summary = (hits: LiveHit[], total = hits.length) => {
+    const near = hits.filter(isNear).length;
+    const sure = total - near;
+    if (total === 0) return "";
+    if (sure === 0) return t("compilation.onlyNear", { count: near });
+    return [t("compilation.found", { count: sure }), near > 0 && t("compilation.near", { count: near })].filter(Boolean).join(" · ");
+  };
 
   const run = async (mode: "words" | "ai") => {
     const asked = query.trim();
@@ -67,9 +105,9 @@ export default function SearchPanel({ jobId, storyboard, info, previewed, isAdde
     setFailure(null);
     try {
       const found = await searchLive(jobId, asked, mode);
-      setResults({ hits: found.hits, total: found.total, query: asked, mode });
+      setResults({ hits: found.hits, total: found.total, query: asked, mode, note: mode === "ai" ? found.note : undefined });
       onResults(found.hits);
-      if (mode === "ai") toast.success([t("compilation.found", { count: found.hits.length }), paid(found)].filter(Boolean).join(" · "));
+      if (mode === "ai") toast.success([summary(found.hits), paid(found)].filter(Boolean).join(" · "));
     } catch (err) {
       setFailure(err instanceof LiveError ? err.reason : "failed");
     } finally {
@@ -86,6 +124,7 @@ export default function SearchPanel({ jobId, storyboard, info, previewed, isAdde
     try {
       const planned = await planLiveVideo(jobId, asked, target);
       const count = planned.sections.reduce((sum, s) => sum + s.hits.length, 0);
+      setPlanNote(planned.note ?? "");
       if (count === 0) {
         toast.info(t("compilation.planEmpty"));
         return;
@@ -99,7 +138,8 @@ export default function SearchPanel({ jobId, storyboard, info, previewed, isAdde
     }
   };
 
-  const fresh = results?.hits.filter((hit) => !isAdded(hit)) ?? [];
+  // "Add all" takes what matches, not what is only close
+  const fresh = results?.hits.filter((hit) => !isAdded(hit) && !isNear(hit)) ?? [];
 
   return (
     <aside aria-label={t("compilation.search")} className="glass rounded-[20px] p-3 flex-[1_1_400px] min-w-0 flex flex-col">
@@ -167,18 +207,24 @@ export default function SearchPanel({ jobId, storyboard, info, previewed, isAdde
           <button type="submit" disabled={!brief.trim() || !!busy || !info?.transcript} className="btn btn-primary btn-sm mt-2.5">
             {busy === "plan" ? <Loader2 className="w-3.5 h-3.5 spinner" /> : <Sparkles className="w-3.5 h-3.5" />}
             {t("compilation.buildVideo")}
-            {aiCost && <span className="mono text-[11.5px] opacity-60">{aiCost}</span>}
+            {planCost && <span className="mono text-[11.5px] opacity-60">{planCost}</span>}
           </button>
           <p className="mt-2 px-0.5 text-[12px] leading-snug text-ink-3">{t(info && !info.transcript ? "compilation.noTranscript" : "compilation.describeHint")}</p>
         </form>
       )}
 
-      {(busy === "ai" || busy === "plan") && (
-        <div className="mt-3 flex items-center gap-3 p-3 rounded-[12px] inset animate-fade-in">
-          <Loader2 className="w-4 h-4 spinner text-accent flex-none" />
-          <p className="text-[12.5px] leading-snug text-ink-2">{t("compilation.aiReading")}</p>
+      {asking && (
+        <div role="status" aria-live="polite" className="mt-3 flex items-start gap-3 p-3 rounded-[12px] inset animate-fade-in">
+          <Loader2 className="w-4 h-4 spinner text-accent flex-none mt-0.5" />
+          <div className="min-w-0">
+            <p className="text-[13px] leading-snug text-white break-words">{stepText(t, step)}</p>
+            <p className="mt-0.5 text-[12px] leading-snug text-ink-3">
+              {t(step?.step === "hearing" ? "compilation.aiHearing" : busy === "plan" ? "compilation.aiPlanning" : "compilation.aiReading")}
+            </p>
+          </div>
         </div>
       )}
+      {tab === "describe" && planNote && !asking && <AiNote label={t("compilation.aiNote")} note={planNote} />}
       {failure && (
         <p role="alert" className="mt-3 p-3 rounded-[12px] bg-[rgba(245,177,76,0.10)] border border-[rgba(245,177,76,0.30)] text-[12.5px] leading-snug text-[#f7d9a8]">
           {t(`compilation.failure.${failure}`)}
@@ -187,11 +233,10 @@ export default function SearchPanel({ jobId, storyboard, info, previewed, isAdde
 
       {tab === "search" && results && (
         <div className="mt-3 pt-3 border-t border-white/[0.08] flex-1 min-h-0 flex flex-col">
+          {results.note && <AiNote label={t("compilation.aiNote")} note={results.note} className="mb-2.5" />}
           <div className="flex items-center justify-between gap-2 px-0.5 pb-2">
             <span className="text-[13px] text-ink-2">
-              {results.total === 0
-                ? t(results.mode === "ai" ? "compilation.nothingAi" : "compilation.nothingWords")
-                : t("compilation.found", { count: results.total })}
+              {results.total === 0 ? t(results.mode === "ai" ? "compilation.nothingAi" : "compilation.nothingWords") : summary(results.hits, results.total)}
               {results.total > results.hits.length && <span className="text-ink-3"> · {t("compilation.firstShown", { count: results.hits.length })}</span>}
             </span>
             {fresh.length > 1 && (
@@ -235,7 +280,16 @@ export default function SearchPanel({ jobId, storyboard, info, previewed, isAdde
                       <span className="text-white font-[550]">{hit.text}</span>
                       {hit.after && <span className="text-ink-3"> {head(hit.after)}</span>}
                     </span>
-                    {hit.why && <span className="mt-0.5 block text-[12px] leading-snug text-accent">{hit.why}</span>}
+                    {hit.why && (
+                      <span className={`mt-0.5 block text-[12px] leading-snug ${isNear(hit) ? "text-ink-2" : "text-accent"}`}>
+                        {isNear(hit) && (
+                          <span title={t("compilation.nearTitle")} className="mr-1.5 inline-block px-1.5 rounded-[6px] border border-white/15 text-[11px] text-ink-3 align-[1px]">
+                            ≈ {t("compilation.nearTag")}
+                          </span>
+                        )}
+                        {hit.why}
+                      </span>
+                    )}
                     {hit.chat.length > 0 && <span className="mt-0.5 block text-[12px] text-ink-3 truncate">{hit.chat.join("  ·  ")}</span>}
                   </button>
                   <button
@@ -255,5 +309,18 @@ export default function SearchPanel({ jobId, storyboard, info, previewed, isAdde
         </div>
       )}
     </aside>
+  );
+}
+
+/** What the AI says of its own search: what it looked for, how sure it is, what is missing */
+function AiNote({ label, note, className = "mt-3" }: { label: string; note: string; className?: string }) {
+  return (
+    <p className={`${className} flex gap-2 p-2.5 rounded-[11px] bg-accent-soft border border-accent-line/50 text-[12.5px] leading-snug text-ink-2 animate-fade-in`}>
+      <Sparkles className="w-3.5 h-3.5 text-accent flex-none mt-0.5" aria-hidden />
+      <span>
+        <span className="sr-only">{label} : </span>
+        {note}
+      </span>
+    </p>
   );
 }

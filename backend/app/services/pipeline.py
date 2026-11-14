@@ -347,6 +347,21 @@ def _check_facecam(job_id: str, hot_points: list) -> None:
         logger.warning(f"[{job_id[:8]}] Webcam check skipped: {e}")
 
 
+def _classify_and_listen(job_id: str, audio_path: str) -> list[dict]:
+    """The audio events that sharpen the score, then the live's sound index for the AI's searches
+    (same model, one after the other: both would fight over the GPU)."""
+    features = classify_audio(audio_path)
+    try:
+        from app.services import sound_index
+
+        if not os.path.isfile(sound_index.index_path(job_id)):
+            sound_index.build(audio_path, job_id)
+    except Exception as e:
+        # Only the searches use it: they make it again when asked, or go without sounds
+        logger.warning(f"[{job_id[:8]}] Sound index skipped: {type(e).__name__}: {e}")
+    return features
+
+
 def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> None:
     """Synchronous pipeline — FastAPI runs this in a threadpool automatically.
 
@@ -437,7 +452,7 @@ def run_pipeline_sync(job_id: str, url: str, resume_from: str | None = None) -> 
             update_job(job_id, status="ANALYZING_AUDIO", progress="Analyzing audio signals + classification...", step_timings=timer.timings)
             with ThreadPoolExecutor(max_workers=2) as audio_pool:
                 features_future = audio_pool.submit(analyze_audio, audio_path)
-                classify_future = audio_pool.submit(classify_audio, audio_path)
+                classify_future = audio_pool.submit(_classify_and_listen, job_id, audio_path)
                 audio_features = features_future.result()
                 try:
                     classification_features = classify_future.result()

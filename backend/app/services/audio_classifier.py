@@ -174,16 +174,16 @@ def _infer(net, device, batch_audio) -> np.ndarray:
         return net(torch.from_numpy(np.stack(batch_audio)).to(device))["clipwise_output"].cpu().numpy()
 
 
-def _process_batch(model, batch_audio, batch_times, windows):
-    """Process a batch of audio chunks through PANNs. When the GPU's memory runs
+def infer(batch_audio, model=None) -> np.ndarray:
+    """The classes' scores of a batch of audio chunks. When the GPU's memory runs
     out (a 4 GB card also holds Whisper, transcribing the live alongside), the
     model moves to the CPU for good: slower, but the analysis goes on."""
     global _model
     import torch
 
-    net, device = _model or model
+    net, device = _model or model or _get_model()
     try:
-        clipwise_output = _infer(net, device, batch_audio)
+        return _infer(net, device, batch_audio)
     except RuntimeError as e:
         if device.type != "cuda" or "out of memory" not in str(e).lower():
             raise
@@ -191,7 +191,12 @@ def _process_batch(model, batch_audio, batch_times, windows):
         torch.cuda.empty_cache()
         net.to("cpu")
         _model = (net, torch.device("cpu"))
-        clipwise_output = _infer(net, _model[1], batch_audio)
+        return _infer(net, _model[1], batch_audio)
+
+
+def _process_batch(model, batch_audio, batch_times, windows):
+    """Process a batch of audio chunks through PANNs."""
+    clipwise_output = infer(batch_audio, model)
 
     for j, time in enumerate(batch_times):
         scores = _compute_window_scores(clipwise_output[j])

@@ -80,6 +80,7 @@ export interface ApiDefinition {
   }
   compilations: {
     searchInfo: typeof routes['compilations.search_info']
+    searchProgress: typeof routes['compilations.search_progress']
     search: typeof routes['compilations.search']
     plan: typeof routes['compilations.plan']
     pieces: typeof routes['compilations.pieces']

@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 MAX_HITS = 40
 MAX_READ_SECONDS = 240.0
 SOUND_KINDS = [g for g in sound_index.GROUPS if g != "speech"]
+LOUD_KINDS = ["raised_voices", "loudest", "quiet"]
 
 # What the tools are, as a model is told (OpenAI-style function calling)
 SPECS: list[dict] = [
@@ -50,7 +51,7 @@ SPECS: list[dict] = [
         "name": "loud_moments",
         "description": "Moments that stand out by their loudness: 'raised_voices' (people speaking much louder than usual: shouting, anger, excitement), "
         "'loudest' (the loudest moments whatever makes the noise), 'quiet' (nobody speaks for a while).",
-        "parameters": {"type": "object", "properties": {"kind": {"type": "string", "enum": ["raised_voices", "loudest", "quiet"]}}, "required": ["kind"]},
+        "parameters": {"type": "object", "properties": {"kind": {"type": "string", "enum": LOUD_KINDS}}, "required": ["kind"]},
     },
     {
         "name": "read",
@@ -144,6 +145,9 @@ class LiveTools:
     def tool_find_sounds(self, kind: str) -> dict:
         if not self.sounds:
             return {"error": "this live's sounds were not analysed"}
+        if kind not in SOUND_KINDS:
+            # A model sometimes makes a kind up ("anger"): told what exists, it picks one that does
+            return {"error": f"no such kind of sound: {kind}. The kinds are: {', '.join(SOUND_KINDS)}. For how people sound (angry, excited), use loud_moments then listen."}
         peaks = self.sounds.peaks(kind)
         return {
             "found": len(peaks),
@@ -156,6 +160,8 @@ class LiveTools:
     def tool_loud_moments(self, kind: str) -> dict:
         if not self.sounds:
             return {"error": "this live's sounds were not analysed"}
+        if kind not in LOUD_KINDS:
+            return {"error": f"no such kind: {kind}. The kinds are: {', '.join(LOUD_KINDS)}."}
         if kind == "quiet":
             runs = self.sounds.quiet()
             return {"found": len(runs), "moments": [{"at": hms(r["time"]), "seconds": r["seconds"]} for r in runs]}

@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
+import type { TFunction } from "i18next";
 import type { CompilationItem, CompilationSection, LiveHit } from "./api";
 import {
   addItems,
   addSection,
   compilationLength,
   fitToTarget,
+  isNear,
   itemFor,
   itemFromHit,
   liveClock,
@@ -15,6 +17,7 @@ import {
   removeSection,
   sectionStarts,
   sectionsFromPlan,
+  stepText,
   updateItem,
 } from "./compilation";
 
@@ -39,6 +42,18 @@ describe("compilations", () => {
     expect(itemFromHit(hit(4998, 5000), 5000).end).toBe(5000);
     // Found in the chat only: its first message stands for it
     expect(itemFromHit(hit(50, 61, { text: "", chat: ["bob: trop calme", "lea: calme"], sources: ["chat"] }), 5000).text).toBe("bob: trop calme");
+  });
+
+  it("keeps apart what matches and what the AI gave as only close", () => {
+    const sure = hit(100, 110, { sources: ["ai"], score: 0.85, why: "La bagarre démarre" });
+    const near = hit(200, 210, { sources: ["ai"], score: 0.43, why: "Une chute, pas une bagarre" });
+    expect([isNear(sure), isNear(near)]).toEqual([false, true]);
+    // Words that were said are what was looked for, whatever their score
+    expect(isNear(hit(100, 103))).toBe(false);
+    // Added to a compilation, a near-miss still says it is one
+    expect(itemFromHit(sure, 5000).why).toBe("La bagarre démarre");
+    expect(itemFromHit(near, 5000).why).toBe("≈ Une chute, pas une bagarre");
+    expect(itemFromHit(hit(200, 210, { sources: ["ai"], score: 0.2 }), 5000).why).toBe("");
   });
 
   it("adds moments once", () => {
@@ -113,5 +128,35 @@ describe("compilations", () => {
   it("writes a time of the live", () => {
     expect(liveClock(5025.7)).toBe("1:23:45");
     expect(liveClock(59)).toBe("0:00:59");
+  });
+});
+
+describe("what the AI is doing", () => {
+  // The key and what it is filled with, as the translations would get them
+  const t = ((key: string, options?: Record<string, unknown>) => {
+    if (key.startsWith("compilation.sound.")) return key === "compilation.sound.gunfire" ? "coups de feu" : String(options?.defaultValue);
+    const filled = Object.entries(options ?? {}).map(([name, value]) => `${name}=${value}`);
+    return [key.replace("compilation.step.", ""), ...filled].join(" ");
+  }) as unknown as TFunction;
+
+  it("says each step in plain words", () => {
+    expect(stepText(t, null)).toBe("thinking");
+    expect(stepText(t, { step: "thinking", detail: "", count: 1 })).toBe("thinking");
+    expect(stepText(t, { step: "hearing", detail: "", count: 1 })).toBe("hearing");
+    expect(stepText(t, { step: "overview", detail: "", count: 2 })).toBe("overview");
+    expect(stepText(t, { step: "search_speech", detail: "trop calme", count: 3 })).toBe("search_speech words=trop calme");
+    expect(stepText(t, { step: "search_chat", detail: "mdr", count: 4 })).toBe("search_chat words=mdr");
+    expect(stepText(t, { step: "find_sounds", detail: "gunfire", count: 5 })).toBe("find_sounds sound=coups de feu");
+    expect(stepText(t, { step: "loud_moments", detail: "raised_voices", count: 6 })).toBe("raised_voices");
+    expect(stepText(t, { step: "read", detail: "3:04:30", count: 7 })).toBe("read at=3:04:30");
+  });
+
+  it("copes with what a model may send", () => {
+    // Seconds instead of a clock, a sound it made up, a tool the app doesn't know, no words
+    expect(stepText(t, { step: "listen", detail: "11070", count: 8 })).toBe("listen at=3:04:30");
+    expect(stepText(t, { step: "find_sounds", detail: "thunder", count: 9 })).toBe("find_sounds sound=thunder");
+    expect(stepText(t, { step: "loud_moments", detail: "whatever", count: 10 })).toBe("loudest");
+    expect(stepText(t, { step: "answer", detail: "", count: 11 })).toBe("thinking");
+    expect(stepText(t, { step: "search_speech", detail: "", count: 12 })).toBe("thinking");
   });
 });

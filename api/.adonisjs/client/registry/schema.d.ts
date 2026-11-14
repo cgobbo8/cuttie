@@ -619,6 +619,18 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/compilations_controller').default['searchInfo']>>>
     }
   }
+  'compilations.search_progress': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/jobs/:id/search/progress'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { id: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/compilations_controller').default['searchProgress']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/compilations_controller').default['searchProgress']>>>
+    }
+  }
   'compilations.search': {
     methods: ["POST"]
     pattern: '/api/jobs/:id/search'

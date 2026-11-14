@@ -15,6 +15,8 @@ reading what is said there or by listening.
 import csv
 import logging
 import os
+import shutil
+import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -172,34 +174,66 @@ def _peaks(values: np.ndarray, hop: float, limit: int, floor: float, apart: floa
     return out
 
 
-def build(wav_path: str, job_id: str) -> SoundIndex:
-    """Listen to the whole live (its 16 kHz WAV) and keep what is heard next to its transcript."""
+def _stretches(wav_path: str, window: int, hop: int):
+    """The file's sound by stretches of BATCH windows (a 7-hour WAV is never loaded whole);
+    yields (how many windows there are in all, the stretch's samples)."""
+    import soundfile
+
+    with soundfile.SoundFile(wav_path) as f:
+        if f.samplerate == _rate() and f.channels == 1:
+            total = max(1, (f.frames - window) // hop + 1)
+            for block in f.blocks(blocksize=(BATCH - 1) * hop + window, overlap=window - hop, dtype="float32"):
+                yield total, block
+            return
+    # Not the analysis' own WAV (another rate, stereo): resampled in one go
     import librosa
 
+    y, _sr = librosa.load(wav_path, sr=_rate(), mono=True)
+    total = max(1, (len(y) - window) // hop + 1)
+    for a in range(0, total * hop, BATCH * hop):
+        yield total, y[a : a + (BATCH - 1) * hop + window].astype(np.float32)
+
+
+def _rate() -> int:
+    from app.services import audio_classifier
+
+    return audio_classifier.PANNS_SR
+
+
+def build(wav_path: str, job_id: str) -> SoundIndex:
+    """Listen to the whole live (its 16 kHz WAV) and keep what is heard next to its transcript."""
     from app.services import audio_classifier
 
     t0 = time.time()
-    y, sr = librosa.load(wav_path, sr=audio_classifier.PANNS_SR, mono=True)
-    net, _device = audio_classifier._get_model()
+    sr = _rate()
     window, hop = int(WINDOW_SECONDS * sr), int(HOP_SECONDS * sr)
-    starts = list(range(0, max(1, len(y) - window + 1), hop))
     classes = _class_indexes()
     groups = list(GROUPS)
-    scores = np.zeros((len(starts), len(groups)), dtype=np.float16)
-    loud = np.zeros(len(starts), dtype=np.float32)
-    for b in range(0, len(starts), BATCH):
-        chunk = [np.pad(y[s : s + window], (0, max(0, window - len(y[s : s + window])))).astype(np.float32) for s in starts[b : b + BATCH]]
-        # The model as it is now: it moves to the CPU by itself when the GPU's memory runs out
-        net, device = audio_classifier._model or (net, _device)
-        probs = audio_classifier._infer(net, device, chunk)
+    scores = loud = None
+    done = 0
+    for total, block in _stretches(wav_path, window, hop):
+        if scores is None:
+            scores = np.zeros((total, len(groups)), dtype=np.float16)
+            loud = np.zeros(total, dtype=np.float32)
+        count = min(BATCH, total - done, max(1, (len(block) - window) // hop + 1))
+        if count <= 0:
+            break
+        chunk = [np.pad(block[i * hop : i * hop + window], (0, max(0, window - len(block[i * hop : i * hop + window])))) for i in range(count)]
+        probs = audio_classifier.infer(chunk)
         for g, name in enumerate(groups):
             if classes[name]:
-                scores[b : b + len(chunk), g] = probs[:, classes[name]].max(axis=1)
-        loud[b : b + len(chunk)] = [20 * np.log10(max(1e-6, float(np.sqrt(np.mean(c**2))))) for c in chunk]
-    index = SoundIndex(groups, scores, loud)
+                scores[done : done + count, g] = probs[:, classes[name]].max(axis=1)
+        loud[done : done + count] = [20 * np.log10(max(1e-6, float(np.sqrt(np.mean(c**2))))) for c in chunk]
+        done += count
+    if scores is None or done == 0:
+        raise ValueError(f"nothing to hear in {wav_path}")
+    index = SoundIndex(groups, scores[:done], loud[:done])
     os.makedirs(os.path.dirname(index_path(job_id)), exist_ok=True)
-    np.savez_compressed(index_path(job_id), version=VERSION, groups=np.array(groups), scores=scores, loud=loud, hop=HOP_SECONDS)
-    logger.info(f"[{job_id[:8]}] Sound index: {len(starts)} s of live heard in {time.time() - t0:.0f} s")
+    # Written whole or not at all: a search may be reading it
+    partial = f"{index_path(job_id)}.part.npz"
+    np.savez_compressed(partial, version=VERSION, groups=np.array(groups), scores=index.scores, loud=index.loud, hop=HOP_SECONDS)
+    os.replace(partial, index_path(job_id))
+    logger.info(f"[{job_id[:8]}] Sound index: {done} s of live heard in {time.time() - t0:.0f} s")
     return index
 
 
@@ -212,3 +246,36 @@ def load(job_id: str) -> SoundIndex | None:
             return SoundIndex([str(g) for g in data["groups"]], data["scores"], data["loud"], float(data["hop"]))
     except (OSError, ValueError, KeyError):
         return None
+
+
+_building: dict[str, threading.Lock] = {}
+_building_lock = threading.Lock()
+
+
+def ensure(job_id: str, vod_url: str | None) -> SoundIndex | None:
+    """The live's sound index, made now when it is missing (analyses from before it existed):
+    the live's sound is downloaded again (a minute or two) and listened to. None when it can't be
+    (the live left Twitch, the sound model is missing): the search then goes without sounds."""
+    index = load(job_id)
+    if index or not vod_url:
+        return index
+    with _building_lock:
+        lock = _building.setdefault(job_id, threading.Lock())
+    with lock:
+        index = load(job_id)
+        if index:
+            return index
+        from app.services.downloader import download_audio
+        from app.services.paths import work_dir
+
+        folder = work_dir(f"sound_{job_id}")
+        try:
+            t0 = time.time()
+            wav = download_audio(vod_url, folder)
+            logger.info(f"[{job_id[:8]}] Sound index: the live's sound downloaded again in {time.time() - t0:.0f} s")
+            return build(wav, job_id)
+        except Exception as e:
+            logger.warning(f"[{job_id[:8]}] Sound index not made: {type(e).__name__}: {e}")
+            return None
+        finally:
+            shutil.rmtree(folder, ignore_errors=True)

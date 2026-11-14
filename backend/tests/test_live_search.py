@@ -158,6 +158,9 @@ def test_the_ai_s_moments_keep_the_length_it_meant():
 
 
 def test_asking_the_ai_is_paid_once(monkeypatch, tmp_path):
+    # With the development command the AI reads the whole live once (it can't call tools);
+    # the search with tools is tested in test_live_agent.py
+    monkeypatch.setenv("CUTTIE_LLM_CMD", "some-command")
     monkeypatch.setattr(ls, "load_cached", lambda job_id: _transcript())
     monkeypatch.setattr(ls, "read_chat", lambda job_id: [])
     monkeypatch.setattr(ls.paths, "transcript_dir", lambda job_id: str(tmp_path))
@@ -181,6 +184,7 @@ def test_asking_the_ai_is_paid_once(monkeypatch, tmp_path):
 
 
 def test_the_ai_plans_a_video_in_sections(monkeypatch, tmp_path):
+    monkeypatch.setenv("CUTTIE_LLM_CMD", "some-command")
     monkeypatch.setattr(ls, "load_cached", lambda job_id: _transcript())
     monkeypatch.setattr(ls, "read_chat", lambda job_id: [])
     monkeypatch.setattr(ls.paths, "transcript_dir", lambda job_id: str(tmp_path))

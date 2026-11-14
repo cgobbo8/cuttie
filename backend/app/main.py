@@ -91,6 +91,8 @@ class SearchRequest(BaseModel):
     energy: list[float] | None = None
     # streamer, game, title
     meta: dict = {}
+    # The live on Twitch: the AI listens to it (nothing to listen to once Twitch dropped it)
+    url: str | None = None
 
 
 class PlanRequest(BaseModel):
@@ -101,6 +103,7 @@ class PlanRequest(BaseModel):
     duration: float = 0.0
     energy: list[float] | None = None
     meta: dict = {}
+    url: str | None = None
 
 
 class LivePiece(BaseModel):
@@ -376,9 +379,17 @@ def search_live(job_id: str, req: SearchRequest) -> dict:
     if req.mode != "ai":
         return live_search.search_words(_check_job_id(job_id), query, req.duration)
     try:
-        return live_search.search_ai(_check_job_id(job_id), query, req.meta, req.duration, req.energy)
+        return live_search.search_ai(_check_job_id(job_id), query, req.meta, req.duration, req.energy, url=req.url)
     except Exception as e:
         raise _ai_errors(e) from e
+
+
+@app.get("/jobs/{job_id}/search/progress", dependencies=[Depends(require_secret)])
+def search_progress(job_id: str) -> dict:
+    """What the AI searching this live is doing right now (shown while the app waits for its answer)."""
+    from app.services import live_search
+
+    return {"doing": live_search.doing(_check_job_id(job_id))}
 
 
 @app.post("/jobs/{job_id}/plan", dependencies=[Depends(require_secret)])
@@ -390,7 +401,7 @@ def plan_video(job_id: str, req: PlanRequest) -> dict:
     if not brief:
         raise HTTPException(status_code=400, detail="empty description")
     try:
-        return live_search.plan_video(_check_job_id(job_id), brief, max(10.0, min(req.target, 600.0)), req.meta, req.duration, req.energy)
+        return live_search.plan_video(_check_job_id(job_id), brief, max(10.0, min(req.target, 600.0)), req.meta, req.duration, req.energy, url=req.url)
     except Exception as e:
         raise _ai_errors(e) from e
 

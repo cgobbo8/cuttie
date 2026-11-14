@@ -9,6 +9,7 @@ import {
   createCompilation,
   deleteCompilation,
   ensurePieces,
+  flattenCompilation,
   getClipWords,
   getEditEnvironment,
   getJobStatus,
@@ -169,6 +170,8 @@ export default function CompilationPage() {
   envsRef.current = envs;
   const [words, setWords] = useState<Record<string, TranscriptWord[]>>({});
   const [exporting, setExporting] = useState(false);
+  // The video being joined into one clip for the layer editor
+  const [editing, setEditing] = useState(false);
   // The AI looking at the passages to choose their templates, and what it said of its choice (by compilation)
   const [looking, setLooking] = useState(false);
   const [looksNote, setLooksNote] = useState<{ id: string; note: string } | null>(null);
@@ -761,6 +764,73 @@ export default function CompilationPage() {
     }
   };
 
+  /**
+   * The whole video in the layer editor: its passages joined into one clip
+   * (with their words and chat), dressed in the video's template, every layer
+   * then free to move. The editor has one layout for the whole video: the
+   * transitions and a passage's own template stay behind.
+   */
+  const openEditor = async () => {
+    if (!jobId || !compilation || !kit || editing || exporting) return;
+    setEditing(true);
+    try {
+      const items = allItems(compilation);
+      const states = await ensure(items);
+      if (items.some((item) => !covers(states[item.id], item))) throw new Error(t("compilation.failure.failed"));
+      // Joined as it is saved
+      await saveCompilation(jobId, compilation);
+      const flat = await flattenCompilation(jobId, compilation.id);
+      const key = `cuttie_editor_${jobId}_${flat.clip}`;
+      let kept = false;
+      try {
+        kept = !!localStorage.getItem(key);
+      } catch {
+        // No storage: the editor starts from its own default
+      }
+      if (kept) toast.info(t("compilation.editorKept"));
+      else {
+        const env = await getEditEnvironment(jobId, flat.clip);
+        const ctx = {
+          ...clipTemplateContext({
+            jobId,
+            filename: flat.clip,
+            env,
+            kit,
+            login: channel?.login ?? kit.twitch_login,
+            avatarUrl: channel?.avatar_url ?? null,
+            facecam: env.facecam,
+            startAt: 0,
+            endAt: flat.duration,
+            hook: compilation.titles ? "" : compilation.hook.trim() || compilation.name,
+          }),
+          displayName: channel?.display_name ?? null,
+          followers: channel?.followers ?? null,
+          game: job?.vod_game ?? null,
+        };
+        // Each part's title where its first passage starts in the clip
+        const titles: ReturnType<typeof titleCard> = [];
+        let index = 0;
+        for (const section of compilation.sections) {
+          const from = flat.starts[index];
+          index += section.items.length;
+          if (!compilation.titles || section.items.length === 0 || !section.title.trim() || from === undefined) continue;
+          const length = (flat.starts[index] ?? flat.duration) - from;
+          titles.push(...titleCard(ctx, hookOf(templateKey, ctx, customs), section.title.trim(), from, Math.min(flat.duration, from + Math.min(TITLE_SECONDS, length * 0.7)), section.id));
+        }
+        try {
+          localStorage.setItem(key, JSON.stringify([...buildAny(templateKey, ctx, customs), ...titles]));
+          localStorage.setItem(`cuttie_trim_${jobId}_${flat.clip}`, JSON.stringify({ start: 0, end: flat.duration }));
+        } catch {
+          // The editor will start from its own default layout
+        }
+      }
+      navigate(`/${jobId}/edit?clip=${encodeURIComponent(flat.clip)}`);
+    } catch (err) {
+      toast.error(err instanceof LiveError ? t(`compilation.failure.${err.reason}`) : t("compilation.editorFailed"));
+      setEditing(false);
+    }
+  };
+
   /* ── The moment on screen ───────────────────────────────── */
 
   const shownItem = (shown && compilation && allItems(compilation).find((i) => i.id === shown.id)) || shown;
@@ -1036,6 +1106,8 @@ export default function CompilationPage() {
           activeSection={activeSection}
           selectedItem={shownItem?.id ?? null}
           playing={preview ? onItem : null}
+          onEdit={openEditor}
+          editing={editing}
           cutting={cutting}
           templates={templates}
           onActivate={setActiveSection}

@@ -147,7 +147,8 @@ async function checkLiveFacecam(jobId: string): Promise<void> {
     pending = (async () => {
       const clipFilenames = (await listObjects(`clips/${jobId}/`))
         .map((key) => path.basename(key))
-        .filter((name) => name.endsWith('.mp4') && !name.startsWith('render_'))
+        // Not a compilation joined into one clip: it is made of clips already looked at
+        .filter((name) => name.endsWith('.mp4') && !name.startsWith('render_') && !name.startsWith('flat_'))
         .sort()
       // The worker stores the result in facecam.json
       if (clipFilenames.length > 0) await detectFacecam(jobId, clipFilenames)
@@ -201,6 +202,16 @@ export function readJobChat(jobId: string): ChatLine[] {
 
 /** The messages posted while a clip runs, timed in clip seconds (its _meta.json gives where it sits in the live) */
 export function chatInClip(jobId: string, clipFilename: string, allChat: ChatLine[]): ChatLine[] {
+  // A clip made of several passages (compilation_flat.ts) comes with its chat, already on its clock
+  const own = path.join(CLIPS_BASE, jobId, `${path.basename(clipFilename, path.extname(clipFilename))}_chat.json`)
+  if (existsSync(own)) {
+    try {
+      const chat = JSON.parse(readFileSync(own, 'utf-8'))
+      return Array.isArray(chat) ? chat : []
+    } catch {
+      return []
+    }
+  }
   const meta = allChat.length > 0 ? readClipMeta(jobId, clipFilename) : null
   if (!meta) return []
   return allChat
@@ -256,8 +267,9 @@ export async function resolveEditEnv(
     try { words = JSON.parse(readFileSync(wordsPath, 'utf-8')) } catch {}
   }
 
-  // A piece of the live (compilations) was transcribed when it was cut: no words means nobody speaks in it
-  const silentPiece = clipFilename.startsWith('piece_') && existsSync(wordsPath)
+  // A piece of the live (compilations) was transcribed when it was cut, and a clip made of several has
+  // their words: no words means nobody speaks in it
+  const silentPiece = (clipFilename.startsWith('piece_') || clipFilename.startsWith('flat_')) && existsSync(wordsPath)
 
   // Lazy transcription fallback — the worker transcribes the clip and caches <clip>_words.json
   if (words.length === 0 && !silentPiece && existsSync(path.join(CLIPS_BASE, jobId, clipFilename))) {

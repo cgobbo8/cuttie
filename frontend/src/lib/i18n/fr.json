@@ -1624,7 +1624,13 @@
       "fade": "Fondu",
       "one": "Transition"
     },
-    "partN": "Partie {{n}}"
+    "partN": "Partie {{n}}",
+    "openEditor": "Ouvrir dans l'éditeur",
+    "editorPreparing": "Préparation de la vidéo…",
+    "editorHint": "Dans l'éditeur, la vidéo est un seul clip : tout s'y retouche calque par calque.",
+    "editorLoses": "Il n'a qu'une mise en page pour toute la vidéo : les transitions et les modèles propres à certains passages n'y sont pas repris.",
+    "editorFailed": "La vidéo n'a pas pu être préparée pour l'éditeur.",
+    "editorKept": "Tu retrouves ce que tu avais fait dans l'éditeur."
   },
   "compilations": {
     "title": "Compilations",

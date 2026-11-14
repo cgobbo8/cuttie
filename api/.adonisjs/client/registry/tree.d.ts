@@ -91,6 +91,7 @@ export interface ApiDefinition {
     update: typeof routes['compilations.update']
     destroy: typeof routes['compilations.destroy']
     duplicate: typeof routes['compilations.duplicate']
+    flatten: typeof routes['compilations.flatten']
     library: typeof routes['compilations.library']
   }
   renders: {

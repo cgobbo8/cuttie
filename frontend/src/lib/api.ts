@@ -1523,6 +1523,24 @@ export async function saveCompilation(jobId: string, compilation: Compilation): 
   return json.compilation;
 }
 
+/** A compilation joined into one clip, to open it in the layer editor: the clip, its length, where each passage starts in it (seconds) */
+export interface FlatCompilation {
+  clip: string;
+  duration: number;
+  /** Just made (false: the compilation had not changed since it was) */
+  fresh: boolean;
+  starts: number[];
+}
+
+/** Joins the passages of a compilation, as it is saved, into one clip with their words and chat (a few seconds for a minute of video) */
+export async function flattenCompilation(jobId: string, compilationId: string): Promise<FlatCompilation> {
+  const res = await postJson(`${BASE}/jobs/${jobId}/compilations/${compilationId}/flatten`, {});
+  return jsonOrThrow<FlatCompilation>(res, "Failed to prepare the video for the editor");
+}
+
+/** The clip a compilation was joined into: flat_<compilation>_<signature>.mp4 */
+export const flatCompilationId = (clip: string): string | null => clip.match(/^flat_([a-z0-9]{10})_[a-f0-9]{8}\.mp4$/)?.[1] ?? null;
+
 /** A compilation as a card shows it */
 export interface CompilationSummary {
   id: string;

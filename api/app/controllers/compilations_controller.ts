@@ -32,7 +32,8 @@ import {
   type PlanChange,
   type LookTemplate,
 } from '#services/worker_client'
-import { loadJobSharedData } from '#services/edit_env_resolver'
+import { dropFlats, flatCompilation, flattenCompilation } from '#services/compilation_flat'
+import { loadJobSharedData, readJobChat } from '#services/edit_env_resolver'
 import { camVisible } from '#services/facecam_resolver'
 import { workerFailure } from '#services/worker_failure'
 
@@ -124,17 +125,21 @@ export default class CompilationsController {
     const query = Job.query().where('user_id', user.id).where('status', 'DONE').orderBy('created_at', 'desc')
     if (typeof only === 'string' && only) query.where('id', only)
     const jobs = await query
-    // The last finished export of each compilation (its key is comp_<id>.mp4)
+    // The last finished export of each compilation: its key is comp_<id>.mp4, or the clip it was
+    // joined into when it was exported from the layer editor (flat_<id>_<signature>.mp4)
     const exported = new Map<string, { id: string; at: string }>()
     if (jobs.length > 0) {
       const rows = await db
         .from('renders')
         .select('id', 'job_id', 'clip_filename', 'updated_at')
         .where('status', 'done')
-        .where('clip_filename', 'like', 'comp_%')
+        .where((q) => q.where('clip_filename', 'like', 'comp_%').orWhere('clip_filename', 'like', 'flat_%'))
         .whereIn('job_id', jobs.map((job) => job.id))
         .orderBy('updated_at', 'asc')
-      for (const row of rows) exported.set(`${row.job_id}/${row.clip_filename}`, { id: row.id, at: row.updated_at })
+      for (const row of rows) {
+        const of = flatCompilation(row.clip_filename) ?? String(row.clip_filename).match(/^comp_([a-z0-9]{10})\.mp4$/)?.[1]
+        if (of) exported.set(`${row.job_id}/${of}`, { id: row.id, at: row.updated_at })
+      }
     }
     return {
       lives: jobs.map((job) => ({
@@ -149,7 +154,7 @@ export default class CompilationsController {
         cover_clip: (job.hotPoints ?? []).find((hp: any) => hp.clip_filename)?.clip_filename ?? null,
         clips_freed: !!job.clipsFreedAt,
         compilations: (job.compilations ?? []).map((c) => {
-          const done = exported.get(`${job.id}/comp_${c.id}.mp4`)
+          const done = exported.get(`${job.id}/${c.id}`)
           return { ...summarizeCompilation(job.id, c), exported_at: done?.at ?? null, render_id: done?.id ?? null }
         }),
       })),
@@ -220,7 +225,30 @@ export default class CompilationsController {
     job.compilations = existing.filter((c) => c !== gone)
     await job.save()
     for (const item of gone.sections.flatMap((s) => s.items)) deletePiece(itemJob(job.id, item), item.id)
+    dropFlats(job.id, gone.id)
     return { success: true }
+  }
+
+  /**
+   * POST /api/jobs/:id/compilations/:compId/flatten — the compilation as one
+   * clip, to open it in the layer editor: its passages joined end to end, with
+   * their words and chat (see compilation_flat.ts). 409 when a passage's clip
+   * is not cut yet. The same compilation gives the same clip (`fresh`: false).
+   */
+  async flatten(ctx: HttpContext) {
+    const job = await ownJob(ctx)
+    if (!job) return ctx.response.notFound({ error: 'job not found' })
+    const compilation = (job.compilations ?? []).find((c) => c.id === ctx.params.compId)
+    if (!compilation) return ctx.response.notFound({ error: 'compilation not found' })
+    try {
+      const chats = new Map<string, ReturnType<typeof readJobChat>>()
+      const flat = await flattenCompilation(job.id, compilation, (live) => chats.get(live) ?? chats.set(live, readJobChat(live)).get(live)!)
+      if (!flat) return ctx.response.conflict({ error: 'pieces missing' })
+      return flat
+    } catch (err: any) {
+      logger.error({ err }, 'Compilation %s of job %s not joined into one clip', compilation.id, job.id)
+      return ctx.response.internalServerError({ error: 'flatten failed' })
+    }
   }
 
   /**

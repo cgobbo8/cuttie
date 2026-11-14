@@ -751,6 +751,18 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/compilations_controller').default['duplicate']>>>
     }
   }
+  'compilations.flatten': {
+    methods: ["POST"]
+    pattern: '/api/jobs/:id/compilations/:compId/flatten'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue, ParamValue]
+      params: { id: ParamValue; compId: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/compilations_controller').default['flatten']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/compilations_controller').default['flatten']>>>
+    }
+  }
   'compilations.library': {
     methods: ["GET","HEAD"]
     pattern: '/api/compilations'

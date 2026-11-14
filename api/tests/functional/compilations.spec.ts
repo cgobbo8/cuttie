@@ -246,6 +246,38 @@ test.group('Compilations', (group) => {
     ;(await client.post(`${url}/nope/duplicate`).loginAs(user)).assertStatus(404)
   })
 
+  test('a compilation is joined into one clip for the layer editor only once its passages are cut', async ({ client, assert }) => {
+    const { user, job, dir } = await setup()
+    const url = `/api/jobs/${job.id}/compilations`
+    piece(dir, 'aaaaaaaaaa', 99, 105)
+    const made = (await client.post(url).loginAs(user).json({ name: 'Calme', sections: [{ id: 'sssssssss1', title: 'Un', items: [item('aaaaaaaaaa', 100, 103), item('bbbbbbbbbb', 200, 204)] }] })).body() as any
+    const id = made.compilation.id
+
+    ;(await client.post(`${url}/nope/flatten`).loginAs(user)).assertStatus(404)
+    // One passage has no clip yet: nothing is joined
+    const early = await client.post(`${url}/${id}/flatten`).loginAs(user)
+    early.assertStatus(409)
+    assert.deepEqual(early.body(), { error: 'pieces missing' })
+    const other = await User.create({ fullName: 'Autre', email: `o-${randomUUID()}@cuttie.app`, password: 'password123' })
+    ;(await client.post(`${url}/${id}/flatten`).loginAs(other)).assertStatus(404)
+
+    // Exported from the layer editor, as the clip it was joined into: the compilation counts as exported
+    const now = new Date().toISOString()
+    await db.table('renders').insert({ id: 'r-flat', job_id: job.id, clip_filename: `flat_${id}_0123abcd.mp4`, status: 'done', progress: 100, created_at: now, updated_at: now })
+    const lives = ((await client.get(`/api/compilations?job_id=${job.id}`).loginAs(user)).body() as any).lives
+    assert.deepInclude(lives[0].compilations[0], { exported_at: now, render_id: 'r-flat' })
+
+    // The clip it was joined into comes with its own words and chat, and goes with the compilation
+    for (const suffix of ['.mp4', '_probe.json', '_words.json', '_chat.json']) writeFileSync(path.join(dir, `flat_${id}_0123abcd${suffix}`), suffix === '.mp4' ? '' : suffix === '_probe.json' ? '{"width":1920,"height":1080,"duration":7}' : suffix === '_chat.json' ? '[{"author":"viewer","text":"MDR","timestamp":3}]' : '[]')
+    const env = await client.get(`/api/clips/${job.id}/flat_${id}_0123abcd.mp4/edit-env`).loginAs(user)
+    env.assertStatus(200)
+    assert.deepEqual((env.body() as any).words, [])
+    assert.deepEqual((env.body() as any).chat_messages, [{ author: 'viewer', text: 'MDR', timestamp: 3 }])
+    await client.delete(`${url}/${id}`).loginAs(user)
+    assert.isFalse(existsSync(path.join(dir, `flat_${id}_0123abcd.mp4`)))
+    assert.isFalse(existsSync(path.join(dir, `flat_${id}_0123abcd_words.json`)))
+  })
+
   test('a compilation takes passages from several lives of the same streamer', async ({ client, assert }) => {
     const { user, job, dir } = await setup()
     // Another live of theirs, and one of somebody else

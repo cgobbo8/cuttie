@@ -378,6 +378,12 @@ const routes = {
     tokens: [{"old":"/api/jobs/:id/compilations/:compId/duplicate","type":0,"val":"api","end":""},{"old":"/api/jobs/:id/compilations/:compId/duplicate","type":0,"val":"jobs","end":""},{"old":"/api/jobs/:id/compilations/:compId/duplicate","type":1,"val":"id","end":""},{"old":"/api/jobs/:id/compilations/:compId/duplicate","type":0,"val":"compilations","end":""},{"old":"/api/jobs/:id/compilations/:compId/duplicate","type":1,"val":"compId","end":""},{"old":"/api/jobs/:id/compilations/:compId/duplicate","type":0,"val":"duplicate","end":""}],
     types: placeholder as Registry['compilations.duplicate']['types'],
   },
+  'compilations.flatten': {
+    methods: ["POST"],
+    pattern: '/api/jobs/:id/compilations/:compId/flatten',
+    tokens: [{"old":"/api/jobs/:id/compilations/:compId/flatten","type":0,"val":"api","end":""},{"old":"/api/jobs/:id/compilations/:compId/flatten","type":0,"val":"jobs","end":""},{"old":"/api/jobs/:id/compilations/:compId/flatten","type":1,"val":"id","end":""},{"old":"/api/jobs/:id/compilations/:compId/flatten","type":0,"val":"compilations","end":""},{"old":"/api/jobs/:id/compilations/:compId/flatten","type":1,"val":"compId","end":""},{"old":"/api/jobs/:id/compilations/:compId/flatten","type":0,"val":"flatten","end":""}],
+    types: placeholder as Registry['compilations.flatten']['types'],
+  },
   'compilations.library': {
     methods: ["GET","HEAD"],
     pattern: '/api/compilations',

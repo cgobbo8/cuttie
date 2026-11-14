@@ -26,7 +26,7 @@ const video = (): Compilation => ({
 });
 
 /** The panel over a compilation it can change, as the page holds it */
-function Harness({ start, onSelect = vi.fn(), playing = null }: { start: Compilation; onSelect?: (item: CompilationItem) => void; playing?: string | null }) {
+function Harness({ start, onSelect = vi.fn(), playing = null, onEdit }: { start: Compilation; onSelect?: (item: CompilationItem) => void; playing?: string | null; onEdit?: () => void }) {
   const [compilation, setCompilation] = useState(start);
   return (
     <>
@@ -50,6 +50,7 @@ function Harness({ start, onSelect = vi.fn(), playing = null }: { start: Compila
         onLooks={vi.fn()}
         onSameLook={vi.fn()}
         playing={playing}
+        onEdit={onEdit}
       />
       <output data-testid="order">{compilation.sections.map((s) => s.items.map((i) => i.id).join("")).join("|")}</output>
       <output data-testid="transitions">{JSON.stringify([compilation.transition ?? null, ...compilation.sections.flatMap((s) => s.items.map((i) => i.transition ?? null))])}</output>
@@ -170,6 +171,25 @@ describe("the passages of a compilation", () => {
     fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Glissé" }));
     expect(transitions()).toEqual([null, null, "slide", null, "slide"]);
     expect(toast.success).toHaveBeenCalledWith("Glissé : 2 passages");
+  });
+
+  it("opens the whole video in the layer editor, and says what the editor does not carry", () => {
+    const onEdit = vi.fn();
+    const view = render(<Harness start={video()} onEdit={onEdit} />);
+    const lost = /transitions et les modèles propres à certains passages n'y sont pas repris/;
+    // Plain cuts and one template: nothing to lose, nothing said
+    expect(screen.queryByText(lost)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Ouvrir dans l'éditeur" }));
+    expect(onEdit).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Coupe nette" }));
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Zoom" }));
+    expect(screen.getByText(lost)).toBeInTheDocument();
+    view.unmount();
+
+    // No passage: nothing to open
+    render(<Harness start={{ ...video(), sections: [{ id: "one", title: "", query: "", items: [] }] }} onEdit={onEdit} />);
+    expect(screen.getByRole("button", { name: "Ouvrir dans l'éditeur" })).toBeDisabled();
   });
 
   it("marks the passage the whole video is on", () => {

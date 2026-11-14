@@ -1624,7 +1624,13 @@
       "fade": "Fundido",
       "one": "Transición"
     },
-    "partN": "Parte {{n}}"
+    "partN": "Parte {{n}}",
+    "openEditor": "Abrir en el editor",
+    "editorPreparing": "Preparando el vídeo…",
+    "editorHint": "En el editor, el vídeo es un solo clip: todo se retoca capa por capa.",
+    "editorLoses": "Solo tiene un diseño para todo el vídeo: las transiciones y las plantillas propias de algunos trozos no se conservan.",
+    "editorFailed": "No se pudo preparar el vídeo para el editor.",
+    "editorKept": "Recuperas lo que habías hecho en el editor."
   },
   "compilations": {
     "title": "Compilaciones",

@@ -64,6 +64,9 @@ interface Props {
   gone?: { item: CompilationItem; section: string; index: number }[];
   /** The passage the whole video is on (the one playing, or the one it is stopped on) */
   playing?: string | null;
+  /** The whole video opened in the layer editor, as one clip (`editing`: it is being made) */
+  onEdit?: () => void;
+  editing?: boolean;
 }
 
 /** Where passages being dragged would land: in a part, before one of its passages (null: at its end) */
@@ -173,6 +176,8 @@ export default function CompilationPanel({
   freshAt,
   gone,
   playing,
+  onEdit,
+  editing = false,
 }: Props) {
   const { t, i18n } = useTranslation();
   const toast = useToast();
@@ -567,19 +572,35 @@ export default function CompilationPanel({
           <p className="mt-1.5 px-0.5 text-[12px] leading-snug text-ink-3">{looksNote || t("compilation.aiLooksHint")}</p>
         </div>
 
-        <button onClick={onExport} disabled={count === 0 || exporting || cutting.size > 0} className="btn btn-primary btn-lg w-full h-[48px]">
-          {exporting ? (
-            <Loader2 className="w-4 h-4 spinner" />
-          ) : cutting.size > 0 ? (
+        <div className="flex flex-col gap-2">
+          <button onClick={onExport} disabled={count === 0 || exporting || editing || cutting.size > 0} className="btn btn-primary btn-lg w-full h-[48px]">
+            {exporting ? (
+              <Loader2 className="w-4 h-4 spinner" />
+            ) : cutting.size > 0 ? (
+              <>
+                <Loader2 className="w-4 h-4 spinner" /> {t("compilation.cuttingCount", { count: cutting.size })}
+              </>
+            ) : (
+              <>
+                {t("compilation.export")} <ArrowRight className="w-4 h-4" strokeWidth={2.2} />
+              </>
+            )}
+          </button>
+          {/* Or the whole video as one clip in the layer editor, where everything can be moved */}
+          {onEdit && (
             <>
-              <Loader2 className="w-4 h-4 spinner" /> {t("compilation.cuttingCount", { count: cutting.size })}
-            </>
-          ) : (
-            <>
-              {t("compilation.export")} <ArrowRight className="w-4 h-4" strokeWidth={2.2} />
+              <button onClick={onEdit} disabled={count === 0 || exporting || editing || cutting.size > 0} className="btn btn-glass w-full">
+                {editing ? <Loader2 className="w-4 h-4 spinner" /> : <Layers className="w-[15px] h-[15px]" />}
+                {t(editing ? "compilation.editorPreparing" : "compilation.openEditor")}
+              </button>
+              <p className="px-0.5 text-[12px] leading-snug text-ink-3">
+                {t("compilation.editorHint")}
+                {/* The editor has one layout for the whole video: said when this one has more */}
+                {(own > 0 || !!compilation.transition || ownLooks > 0) && <span className="text-[#f0c987]"> {t("compilation.editorLoses")}</span>}
+              </p>
             </>
           )}
-        </button>
+        </div>
       </div>
     </aside>
   );

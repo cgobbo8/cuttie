@@ -41,7 +41,7 @@ MAX_COST = float(os.getenv("CUTTIE_SEARCH_MAX_COST", "0.05"))
 # How hard the searching model thinks between two tools (as on the benchmark: it reads, it doesn't ponder)
 REASONING = {"effort": "low"}
 # Changes when the instructions do: answers kept on disk under the old ones are asked again
-ANSWERS_VERSION = "2"
+ANSWERS_VERSION = "3"
 MAX_STEPS = 28
 PLAN_STEPS = 36
 MAX_LISTENS = 12
@@ -114,6 +114,11 @@ PLAN_SPEC = {
                 },
             },
             "note": {"type": "string", "description": "One or two sentences in the stream's language: what you found for each part, what is missing"},
+            "look": {
+                "type": "string",
+                "description": "What the description asks about how the video looks (where the webcam and the game go, captions, pop-ups, style), "
+                "copied in the streamer's words; empty when it says nothing about that. You do not act on it: another step lays the video out.",
+            },
         },
         "required": ["sections", "note"],
     },
@@ -173,6 +178,8 @@ class AgentRun:
     # A planned video: its title and its parts ({"title", "moments"}), in playing order
     title: str = ""
     sections: list[dict] = field(default_factory=list)
+    # What the description asks about the look, in the streamer's words (laid out by another step)
+    look: str = ""
     note: str = ""
     model: str = ""
     steps: int = 0
@@ -381,6 +388,7 @@ class Searcher:
             if isinstance(raw, dict) and isinstance(raw.get("moments"), list):
                 self.run.sections.append({"title": str(raw.get("title") or "")[:60], "moments": [m for m in raw["moments"] if isinstance(m, dict)][:MAX_MOMENTS]})
         self.run.title = str(given.get("title") or "")[:80]
+        self.run.look = " ".join(str(given.get("look") or "").split())[:600]
         self._log(f"{len(self.run.sections)} parts, {sum(len(s['moments']) for s in self.run.sections)} moments")
         return self.run
 

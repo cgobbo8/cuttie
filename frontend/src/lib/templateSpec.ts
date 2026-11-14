@@ -142,6 +142,8 @@ export interface TemplateSpec {
   name: string;
   /** The layout it started from */
   base: TemplateId;
+  /** What the template is good for, in a sentence or two: written by the AI when it is saved, or by the streamer */
+  usage?: string;
   background: { kind: "blur" | "dark" | "brand" | "color"; color: ColorRef; /** Darkening over the blurred clip, 0-0.8 */ dim: number };
   game: {
     box: Box;

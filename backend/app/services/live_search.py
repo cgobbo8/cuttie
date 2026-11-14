@@ -763,7 +763,7 @@ def plan_video(
     if kept:
         return {**kept, "cached": True, "cost": 0.0}
     run, _tools, cost = _ask(job_id, duration, lag, url, lambda searcher: searcher.plan(brief, target), moments)
-    result = {"title": run.title, "sections": _sections(run.sections, transcript, duration), "note": run.note}
+    result = {"title": run.title, "sections": _sections(run.sections, transcript, duration), "note": run.note, "look": run.look}
     _keep(path, result)
     total = sum(h["end"] - h["start"] for s in result["sections"] for h in s["hits"])
     logger.info(f"[{job_id[:8]}] AI plan \"{brief[:60]}\": {len(result['sections'])} sections, {total:.0f} s for a target of {target:.0f} s with {run.model} (~{cost:.4f} $, {run.seconds:.0f} s)")

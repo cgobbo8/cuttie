@@ -135,6 +135,8 @@ function parseSpec(item: Json): TemplateSpec {
     id: item.id,
     name: item.name.trim(),
     base: item.base,
+    // What the template is good for, in a sentence or two (written by the AI when it is saved, or by the streamer)
+    ...(typeof item.usage === 'string' && item.usage.trim() ? { usage: item.usage.trim().slice(0, 400) } : {}),
     background: { kind: oneOf(bg.kind, ['blur', 'dark', 'brand', 'color']), color: color(bg.color), dim: num(bg.dim, 0, 0.8) },
     game: { box: box(game.box), frame: frame(game.frame), ...(game.whole !== undefined ? { whole: bool(game.whole) } : {}) },
     cam: { visible: bool(cam.visible), box: box(cam.box), frame: frame(cam.frame) },

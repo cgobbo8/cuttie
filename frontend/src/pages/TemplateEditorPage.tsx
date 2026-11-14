@@ -2,8 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { useTranslation } from "react-i18next";
 import type { PlayerRef } from "@remotion/player";
-import { AlertTriangle, ArrowLeft, Check, Layers, Loader2, Pause, Play, Redo2, ScanLine, Star, Trash2, Undo2, Volume2, VolumeX } from "lucide-react";
-import { brandFrameUrl, clipThumbUrl, getEditEnvironment, getJobStatus, type EditEnvironment, type HotPoint } from "../lib/api";
+import { AlertTriangle, ArrowLeft, Check, Layers, Loader2, Pause, Play, Redo2, ScanLine, Sparkles, Star, Trash2, Undo2, Volume2, VolumeX } from "lucide-react";
+import { brandFrameUrl, clipThumbUrl, getEditEnvironment, getJobStatus, writeTemplateUsage, type EditEnvironment, type HotPoint } from "../lib/api";
+import { describeSpec } from "../lib/templateGuide";
 import { useBackdrop } from "../lib/BackdropContext";
 import { useChannel } from "../lib/ChannelContext";
 import { buildMoments } from "../lib/moments";
@@ -75,7 +76,7 @@ const isRoundCam = (spec: TemplateSpec) => spec.cam.box.w === spec.cam.box.h && 
  * editor stays available as the advanced mode.
  */
 export default function TemplateEditorPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const toast = useToast();
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
@@ -93,6 +94,9 @@ export default function TemplateEditorPage() {
 
   /* ── The template being edited, with undo / redo ── */
   const [spec, setSpec] = useState<TemplateSpec | null>(null);
+  // The template as it is right now, for what comes back later (the AI's sentence)
+  const specRef = useRef(spec);
+  specRef.current = spec;
   const committed = useRef<TemplateSpec | null>(null);
   const past = useRef<TemplateSpec[]>([]);
   const future = useRef<TemplateSpec[]>([]);
@@ -219,6 +223,8 @@ export default function TemplateEditorPage() {
   const [showZones, setShowZones] = useState(true);
   const [makeDefault, setMakeDefault] = useState(false);
   const [saving, setSaving] = useState(false);
+  // The AI writing what the template is good for
+  const [writing, setWriting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   // The frame and its playback bar fit the window
   const fitHeight = () => Math.max(480, Math.min(760, window.innerHeight - 330));
@@ -385,12 +391,39 @@ export default function TemplateEditorPage() {
     };
   }, [env, spec !== null]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  /* ── What the template is good for (read by the AI that picks a template for a passage) ── */
+
+  /** One or two sentences written by the AI from what the template shows; "" when it couldn't */
+  const usageByAi = async (of: TemplateSpec): Promise<string> => {
+    try {
+      const written = await writeTemplateUsage({ name: of.name.trim() || t("templateEditor.untitled"), description: describeSpec(of), language: i18n.language.slice(0, 2) });
+      return written.usage.trim();
+    } catch {
+      return "";
+    }
+  };
+
+  const writeUsage = async () => {
+    if (!spec || writing) return;
+    setWriting(true);
+    const usage = await usageByAi(spec);
+    setWriting(false);
+    if (usage) update({ ...(specRef.current ?? spec), usage });
+    else toast.error(t("templateEditor.usageFailed"));
+  };
+
   /* ── Save / delete / advanced mode ── */
   const save = async () => {
     if (!kit || !spec) return;
-    const toSave: TemplateSpec = { ...spec, name: spec.name.trim() || t("templateEditor.untitled") };
+    let toSave: TemplateSpec = { ...spec, name: spec.name.trim() || t("templateEditor.untitled") };
     setSaving(true);
     try {
+      // Nothing written on what it is good for: the AI writes it (the template is saved without when it can't)
+      if (!toSave.usage?.trim()) {
+        const usage = await usageByAi(toSave);
+        const { usage: _empty, ...rest } = toSave;
+        toSave = usage ? { ...rest, usage } : rest;
+      }
       await saveKit({
         templates: [...(kit.templates ?? []).filter((tpl) => tpl.id !== toSave.id), toSave],
         ...(makeDefault ? { default_template: toSave.id } : kit.default_template === toSave.id ? { default_template: null } : {}),
@@ -503,6 +536,29 @@ export default function TemplateEditorPage() {
             onMove={(key, index) => update({ ...spec, order: restack(spec, key, index) })}
             action={<AddWidgetButton onClick={() => setPicking(true)} />}
           />
+
+          {/* What the template is good for: the AI that picks a template for a passage reads it */}
+          <div className="glass rounded-[16px] p-3">
+            <div className="flex items-center justify-between gap-2">
+              <label htmlFor="template-usage" className="text-[13px] font-[600] text-white">
+                {t("templateEditor.usage")}
+              </label>
+              <button type="button" onClick={writeUsage} disabled={writing} className="btn btn-ghost btn-sm h-7 px-2 -mr-1">
+                {writing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5 text-accent" />} {t("templateEditor.usageByAi")}
+              </button>
+            </div>
+            <textarea
+              id="template-usage"
+              value={spec.usage ?? ""}
+              onChange={(e) => setSpec({ ...spec, usage: e.target.value })}
+              onBlur={() => update(spec)}
+              rows={3}
+              maxLength={400}
+              placeholder={t("templateEditor.usagePlaceholder")}
+              className="mt-2 block w-full p-2.5 rounded-[10px] bg-black/30 border border-white/10 text-[13px] leading-snug text-white outline-none focus:border-accent-line placeholder:text-ink-3 resize-y"
+            />
+            <p className="mt-1.5 text-[12px] leading-snug text-ink-3">{t("templateEditor.usageHint")}</p>
+          </div>
         </aside>
 
         {/* The frame, its playback bar and hint: all as wide as the frame */}

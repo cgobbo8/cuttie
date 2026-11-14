@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { Player } from "@remotion/player";
 import { ArrowLeft, Check, CircleQuestionMark, Loader2, Plus } from "lucide-react";
 import {
+  chooseLooks,
   clipThumbUrl,
   createCompilation,
   deleteCompilation,
@@ -33,11 +34,26 @@ import {
 import { useBackdrop } from "../lib/BackdropContext";
 import { useChannel } from "../lib/ChannelContext";
 import { useSettings } from "../lib/SettingsContext";
-import { addItems, allItems, compilationLength, fitToTarget, itemFor, itemFromHit, removeItem, sectionStarts, sectionsFromPlan, updateItem } from "../lib/compilation";
+import {
+  addItems,
+  allItems,
+  applyLooks,
+  clearLooks,
+  compilationLength,
+  fitToTarget,
+  itemFor,
+  itemFromHit,
+  looksCount,
+  removeItem,
+  sectionStarts,
+  sectionsFromPlan,
+  updateItem,
+} from "../lib/compilation";
 import { clock } from "../lib/format";
-import { buildMontage, montageFrames, renderPieces, type MontageProps } from "../lib/montage";
+import { buildMontage, montageFrames, renderPieces, type MontageCut, type MontageProps } from "../lib/montage";
 import { evenFrames, tileStyle } from "../lib/storyboard";
 import { clipTemplateContext } from "../lib/templateContext";
+import { templateGuides } from "../lib/templateGuide";
 import { buildAny, customTemplates, defaultTemplateKey, findCustom, hookOf, isBuiltIn, type TemplateKey } from "../lib/templateKeys";
 import { titleCard } from "../lib/templateSpec";
 import { TEMPLATE_IDS } from "../lib/templates";
@@ -73,7 +89,7 @@ const pieceVersion = (piece: PieceState) => `${piece.file}@${piece.file_start}-$
  * editable: order, cut of each moment, titles, template.
  */
 export default function CompilationPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const toast = useToast();
   const navigate = useNavigate();
   const { jobId } = useParams<{ jobId: string }>();
@@ -112,6 +128,11 @@ export default function CompilationPage() {
   envsRef.current = envs;
   const [words, setWords] = useState<Record<string, TranscriptWord[]>>({});
   const [exporting, setExporting] = useState(false);
+  // The AI looking at the passages to choose their templates, and what it said of its choice (by compilation)
+  const [looking, setLooking] = useState(false);
+  const [looksNote, setLooksNote] = useState<{ id: string; note: string } | null>(null);
+  // A described video asked for a look: chosen once its clips are cut
+  const pendingLooks = useRef<{ id: string; wish: string } | null>(null);
   const [failure, setFailure] = useState<LiveFailure | null>(null);
   const [toDelete, setToDelete] = useState(false);
   // Search results looked at before being added keep their id (and so their clip)
@@ -154,6 +175,8 @@ export default function CompilationPage() {
   }, [jobId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const compilation = compilations?.find((c) => c.id === currentId) ?? null;
+  const compilationsRef = useRef(compilations);
+  compilationsRef.current = compilations;
   const liveDuration = job?.vod_duration_seconds ?? 0;
 
   /* ── Saving ─────────────────────────────────────────────── */
@@ -290,6 +313,8 @@ export default function CompilationPage() {
       }
       setActiveSection(planned.sections[0].id);
       setView("video");
+      // The description said how the video should look: the AI lays it out once the clips are there
+      pendingLooks.current = plan.look?.trim() ? { id: planned.id, wish: plan.look.trim() } : null;
       ensure(allItems(planned));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t("common.error"));
@@ -352,8 +377,10 @@ export default function CompilationPage() {
     (source: Compilation, states: Record<string, PieceState>, known: Record<string, EditEnvironment>): { montage: MontageProps; files: string[] } | null => {
       if (!kit || !jobId) return null;
       const items = allItems(source);
-      const cuts = [];
+      const cuts: MontageCut[] = [];
       const files: string[] = [];
+      // Each passage in its own template when it has one, else the video's
+      const keys = items.map((item) => (item.template && (isBuiltIn(item.template) || findCustom(item.template, customs)) ? item.template : templateKey));
       for (const item of items) {
         const piece = states[item.id];
         const env = piece && known[pieceVersion(piece)];
@@ -379,23 +406,81 @@ export default function CompilationPage() {
         files.push(piece.file);
       }
       if (cuts.length === 0) return null;
-      const first = cuts[0].ctx;
-      const hook = hookOf(templateKey, first, customs);
+      // Where each part starts in the list of passages
+      const firstOf = new Map<string, number>();
+      let before = 0;
+      for (const s of source.sections) {
+        if (s.items.length > 0) firstOf.set(s.id, before);
+        before += s.items.length;
+      }
       const montage = buildMontage(
         cuts,
-        (c) => buildAny(templateKey, c, customs),
+        (c, index) => buildAny(index >= 0 ? keys[index] : templateKey, c, customs),
         FPS,
         (total) =>
           source.titles
             ? sectionStarts(source)
                 .filter((s) => s.title.trim())
-                .flatMap((s) => titleCard(first, hook, s.title.trim(), s.at, Math.min(total, s.at + Math.min(TITLE_SECONDS, s.length * 0.7)), s.id))
+                .flatMap((s) => {
+                  // A part's title is written as the template of its first passage writes its hook, where it puts it
+                  const index = firstOf.get(s.id) ?? 0;
+                  const ctx = cuts[index].ctx;
+                  return titleCard(ctx, hookOf(keys[index], ctx, customs), s.title.trim(), s.at, Math.min(total, s.at + Math.min(TITLE_SECONDS, s.length * 0.7)), s.id);
+                })
             : [],
       );
       return { montage, files };
     },
     [channel, customs, job, jobId, kit, templateKey],
   );
+
+  /* ── The look of each passage ───────────────────────────── */
+
+  const templateName = useCallback((key: string) => templates.find((tpl) => tpl.key === key)?.name ?? key, [templates]);
+
+  /** The AI looks at the passages whose clip is cut and chooses the template of each (`wish`: what the streamer asked about the look) */
+  const chooseByAi = useCallback(
+    async (source: Compilation, wish = "") => {
+      if (!jobId || !kit) return;
+      const items = allItems(source).filter((item) => covers(piecesRef.current[item.id], item));
+      if (items.length === 0) return;
+      setLooking(true);
+      try {
+        const guides = templateGuides(customs, { nameOf: (id) => t(`montage.template.${id}.name`), subtitleStyle: kit.subtitles.style, widget: kit.widget });
+        const choice = await chooseLooks(jobId, {
+          items: items.map(({ id, start, end, text }) => ({ id, start, end, text })),
+          templates: guides,
+          wish,
+          usual: templateKey,
+          language: i18n.language.slice(0, 2),
+        });
+        // What the streamer changed while the AI was looking stays
+        const current = compilationsRef.current?.find((c) => c.id === source.id) ?? source;
+        const next = applyLooks(current, choice.main, choice.looks);
+        change(next);
+        setLooksNote({ id: source.id, note: choice.note });
+        const summary = looksCount(next, defaultKey)
+          .map(([key, count]) => `${templateName(key)} × ${count}`)
+          .join(", ");
+        toast.success(t("compilation.looksDone", { summary }));
+      } catch (err) {
+        toast.error(t(`compilation.failure.${err instanceof LiveError ? err.reason : "failed"}`));
+      } finally {
+        setLooking(false);
+      }
+    },
+    [change, customs, defaultKey, i18n.language, jobId, kit, t, templateKey, templateName, toast],
+  );
+
+  // A described video that asked for a look gets it as soon as all its clips are cut
+  useEffect(() => {
+    const pending = pendingLooks.current;
+    if (!pending || looking || !compilation || compilation.id !== pending.id || cutting.size > 0) return;
+    const items = allItems(compilation);
+    if (items.length === 0 || !items.every((item) => covers(pieces[item.id], item))) return;
+    pendingLooks.current = null;
+    chooseByAi(compilation, pending.wish);
+  }, [chooseByAi, compilation, cutting, looking, pieces]);
 
   // The data of each clip (size, cam, words, chat) for the preview
   const readyItems = useMemo(() => (compilation ? allItems(compilation).filter((item) => covers(pieces[item.id], item)) : []), [compilation, pieces]);
@@ -567,6 +652,11 @@ export default function CompilationPage() {
                   cutting={cutting.has(shownItem.id)}
                   words={wordsKey ? words[wordsKey] : undefined}
                   onChange={(start, end) => recut(shownItem, start, end)}
+                  // A passage of the compilation can be shown in a template of its own
+                  templates={inCompilation ? templates : undefined}
+                  template={shownItem.template ?? null}
+                  videoTemplate={templateName(templateKey)}
+                  onTemplate={(key) => change(updateItem(compilation, shownItem.id, { template: key }))}
                 />
                 <div className="flex items-start gap-3 px-1.5 pt-3 pb-1">
                   <p className="flex-1 min-w-0 text-[13px] leading-snug text-ink-2">
@@ -652,6 +742,11 @@ export default function CompilationPage() {
           onExport={exportNow}
           exporting={exporting}
           onDelete={() => setToDelete(true)}
+          templateName={templateName}
+          looking={looking}
+          looksNote={looksNote?.id === compilation.id ? looksNote.note : ""}
+          onLooks={() => chooseByAi(compilation)}
+          onSameLook={() => change(clearLooks(compilation))}
         />
       </section>
 

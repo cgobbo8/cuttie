@@ -4,12 +4,15 @@ import type { CompilationItem, CompilationSection, LiveHit } from "./api";
 import {
   addItems,
   addSection,
+  applyLooks,
+  clearLooks,
   compilationLength,
   fitToTarget,
   isNear,
   itemFor,
   itemFromHit,
   liveClock,
+  looksCount,
   moveItem,
   moveSection,
   newId,
@@ -128,6 +131,31 @@ describe("compilations", () => {
   it("writes a time of the live", () => {
     expect(liveClock(5025.7)).toBe("1:23:45");
     expect(liveClock(59)).toBe("0:00:59");
+  });
+});
+
+describe("a template per passage", () => {
+  const video = { template: "signature" as string | null, sections: [section("s1", [item("a", 0, 3), item("b", 10, 13)]), section("s2", [{ ...item("c", 20, 23), template: "reaction" }])] };
+
+  it("takes what the AI chose: the video's template, and its own for a passage shown otherwise", () => {
+    const chosen = applyLooks(video, "empile", { a: "empile", b: "plein", c: "empile" });
+    expect(chosen.template).toBe("empile");
+    expect(chosen.sections[0].items.map((i) => i.template)).toEqual([undefined, "plein"]);
+    // A passage back to the video's template loses its own
+    expect(chosen.sections[1].items[0]).not.toHaveProperty("template");
+    // A passage the AI didn't look at follows the video
+    expect(applyLooks(video, "plein", { a: "empile" }).sections[0].items.map((i) => i.template)).toEqual(["empile", undefined]);
+    // Nothing else moved
+    expect(ids(chosen)).toEqual([["a", "b"], ["c"]]);
+    expect(video.template).toBe("signature");
+  });
+
+  it("counts the passages of each template, and puts them all back to the video's", () => {
+    const chosen = applyLooks(video, "empile", { a: "empile", b: "plein", c: "empile" });
+    expect(looksCount(chosen, "signature")).toEqual([["empile", 2], ["plein", 1]]);
+    // No template chosen for the video: the channel's default
+    expect(looksCount({ ...clearLooks(video), template: null }, "signature")).toEqual([["signature", 3]]);
+    expect(clearLooks(chosen).sections.flatMap((s) => s.items).some((i) => "template" in i)).toBe(false);
   });
 });
 

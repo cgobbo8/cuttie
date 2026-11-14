@@ -96,13 +96,13 @@ test.group('Compilations', (group) => {
             title: 'Un',
             query: 'calme',
             items: [
-              item('goodoneabc', 10, 13, { sources: ['voice', 'hack'], text: 'y'.repeat(900) }),
+              item('goodoneabc', 10, 13, { sources: ['voice', 'hack'], text: 'y'.repeat(900), template: 'plein' }),
               item('goodoneabc', 20, 23), // same id twice
               item('../../etc', 30, 33),
               item('tooshortab', 40, 40.1),
               item('toolongabc', 50, 900),
               item('pastendabc', 5000, 5003),
-              item('overendabc', 3598, 3605),
+              item('overendabc', 3598, 3605, { template: '../../etc' }),
             ],
           },
           { id: 'sectionone', title: 'Same id', items: [] },
@@ -119,6 +119,9 @@ test.group('Compilations', (group) => {
     assert.deepEqual(items.map((i: any) => i.id), ['goodoneabc', 'overendabc'])
     assert.deepEqual(items[0].sources, ['voice'])
     assert.lengthOf(items[0].text, 300)
+    // A passage may be shown in its own template; a key that isn't one is dropped (the video's template then)
+    assert.equal(items[0].template, 'plein')
+    assert.notProperty(items[1], 'template')
     // The live ends at 3600 s
     assert.equal(items[1].end, 3600)
 
@@ -214,6 +217,25 @@ test.group('Compilations', (group) => {
     assert.deepEqual((await client.get(`/api/clips/${job.id}/zzz.mp4/words`).loginAs(user)).body(), { words: [] })
   })
 
+  test('the AI chooses the template of the passages whose clip is cut', async ({ client, assert }) => {
+    const { user, job, dir } = await setup()
+    const url = `/api/jobs/${job.id}/looks`
+    const templates = [{ key: 'empile', name: 'Empilé', description: 'Webcam: above the game.', needs_cam: true }]
+    // Passages and templates are needed, and a template is a key with what it shows
+    ;(await client.post(url).loginAs(user).json({})).assertStatus(400)
+    ;(await client.post(url).loginAs(user).json({ items: [item('aaaaaaaaaa', 100, 103)], templates: [{ key: '../etc', description: 'x' }, { key: 'empile' }] })).assertStatus(400)
+    ;(await client.post(url).loginAs(user).json({ items: [item('../../etc', 100, 103), item('aaaaaaaaaa', 103, 100)], templates })).assertStatus(400)
+    // Nothing to look at before the clips are cut
+    const early = await client.post(url).loginAs(user).json({ items: [item('aaaaaaaaaa', 100, 103)], templates })
+    early.assertStatus(409)
+    assert.deepEqual(early.body(), { error: 'not_cut' })
+    // Cut: the engine is asked (none answers in tests)
+    piece(dir, 'aaaaaaaaaa', 92, 110)
+    const asked = await client.post(url).loginAs(user).json({ items: [item('aaaaaaaaaa', 100, 103), item('bbbbbbbbbb', 200, 203)], templates, wish: 'ma cam en haut', language: 'fr' })
+    asked.assertStatus(503)
+    assert.deepEqual(asked.body(), { error: 'unreachable' })
+  })
+
   test("can't touch someone else's live", async ({ client }) => {
     const { job } = await setup()
     const other = await User.create({ fullName: 'Other', email: `o-${randomUUID()}@cuttie.app`, password: 'password123' })
@@ -221,6 +243,7 @@ test.group('Compilations', (group) => {
     ;(await client.post(`/api/jobs/${job.id}/compilations`).loginAs(other).json({})).assertStatus(404)
     ;(await client.post(`/api/jobs/${job.id}/search`).loginAs(other).json({ query: 'calme' })).assertStatus(404)
     ;(await client.get(`/api/jobs/${job.id}/search/progress`).loginAs(other)).assertStatus(404)
+    ;(await client.post(`/api/jobs/${job.id}/looks`).loginAs(other).json({ items: [], templates: [] })).assertStatus(404)
     ;(await client.post(`/api/jobs/${job.id}/pieces`).loginAs(other).json({ pieces: [] })).assertStatus(404)
     ;(await client.get(`/api/clips/${job.id}/a.mp4/words`).loginAs(other)).assertStatus(404)
     ;(await client.post(`/api/jobs/${job.id}/montage-render`).loginAs(other).json({ pieces: [] })).assertStatus(404)

@@ -9,9 +9,11 @@ import {
   detectFacecam,
   detectPalette,
   detectVodFacecam,
+  writeTemplateUsage,
   type DetectedPalette,
   type VodFacecam,
 } from '#services/worker_client'
+import { workerFailure } from '#services/worker_failure'
 
 const HEX = /^#[0-9a-fA-F]{6}$/
 const LOGIN = /^[a-zA-Z0-9_]{2,25}$/
@@ -188,6 +190,21 @@ export default class BrandController {
       return { storyboard: await fetchStoryboard(params.id) }
     } catch (err: any) {
       return response.status(502).json({ error: `Twitch ne répond pas (${err.message})` })
+    }
+  }
+
+  /**
+   * POST /api/brand-kit/template-usage { name, description, language? } — what a template of the
+   * streamer's own is good for, in a sentence or two, written by the AI from the description the app made of it
+   */
+  async templateUsage(ctx: HttpContext) {
+    const description = String(ctx.request.input('description') ?? '').trim().slice(0, 3000)
+    if (!description) return ctx.response.badRequest({ error: 'description required' })
+    const language = ['fr', 'en', 'es'].includes(ctx.request.input('language')) ? ctx.request.input('language') : 'fr'
+    try {
+      return await writeTemplateUsage({ name: String(ctx.request.input('name') ?? '').trim().slice(0, 80), description, language })
+    } catch (err) {
+      return workerFailure(ctx.response, err)
     }
   }
 

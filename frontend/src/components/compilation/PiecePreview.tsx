@@ -19,6 +19,13 @@ interface Props {
   words?: TranscriptWord[];
   /** New bounds of the moment, live seconds (the clip is cut again when they leave it) */
   onChange: (start: number, end: number) => void;
+  /** Templates this passage can be shown in (only for a passage of the compilation) */
+  templates?: { key: string; name: string }[];
+  /** Its own template, null: the video's */
+  template?: string | null;
+  /** The video's template, by name */
+  videoTemplate?: string;
+  onTemplate?: (key: string | null) => void;
 }
 
 const FRAMES = 8;
@@ -31,7 +38,7 @@ const MORE = 5;
  * and its two handles move the cut inside the clip (a few seconds wider than
  * the moment). "+" on a side gives 5 s more of the live.
  */
-export default function PiecePreview({ jobId, item, piece, cutting, words, onChange }: Props) {
+export default function PiecePreview({ jobId, item, piece, cutting, words, onChange, templates, template, videoTemplate, onTemplate }: Props) {
   const { t } = useTranslation();
   const videoRef = useRef<HTMLVideoElement>(null);
   const stripRef = useRef<HTMLDivElement>(null);
@@ -202,6 +209,25 @@ export default function PiecePreview({ jobId, item, piece, cutting, words, onCha
         </div>
         {more("end")}
       </div>
+
+      {/* The template of this passage alone, when it shouldn't look like the rest of the video */}
+      {templates && onTemplate && (
+        <label className="flex items-center gap-3 pt-3 px-0.5">
+          <span className="text-[13px] text-ink-2 flex-none">{t("compilation.itemTemplate")}</span>
+          <select
+            value={template && templates.some((tpl) => tpl.key === template) ? template : ""}
+            onChange={(e) => onTemplate(e.target.value || null)}
+            className="flex-1 min-w-0 h-9 px-2.5 rounded-[10px] bg-black/30 border border-white/10 text-[13px] text-white outline-none focus:border-accent-line [color-scheme:dark]"
+          >
+            <option value="">{t("compilation.sameAsVideo", { name: videoTemplate ?? "" })}</option>
+            {templates.map((tpl) => (
+              <option key={tpl.key} value={tpl.key}>
+                {tpl.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
     </div>
   );
 }

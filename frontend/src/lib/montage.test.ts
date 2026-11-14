@@ -253,6 +253,27 @@ describe("montage for Remotion", () => {
     }
   });
 
+  it("lets each piece have its own template, the hook and widgets coming from the video's", () => {
+    // Stacked for the video, the second piece shown with the game full screen
+    const keys = ["empile", "plein"] as const;
+    const asked: number[] = [];
+    const montage = buildMontage([{ ctx, start: 5, end: 9 }, { ctx, start: 30, end: 34 }], (c, index) => {
+      asked.push(index);
+      return buildTemplate(index >= 0 ? keys[index] : "empile", c);
+    });
+    // Each piece is built once, then the video's hook and widgets (-1)
+    expect(asked).toEqual([0, 1, -1]);
+    const camOf = (i: number) => montage.segments[i].layers.find((p) => p.layer.name === "Webcam")!.layer.transform;
+    expect(camOf(0)).toMatchObject({ x: 0, y: 0, width: 1080 });
+    expect(camOf(1).width).toBeLessThan(400);
+    const gameOf = (i: number) => montage.segments[i].layers.find((p) => p.layer.name === "Jeu")!.layer.transform;
+    expect(gameOf(1)).toMatchObject({ y: 0, height: 1920 });
+    // One hook, the stacked template's (on the game, under the webcam)
+    const hooks = montage.overlays.filter((p) => p.layer.id === "tpl-accroche");
+    expect(hooks).toHaveLength(1);
+    expect(hooks[0].layer.transform.y).toBeGreaterThan(700);
+  });
+
   it("adds layers on top for the montage's own clock", () => {
     const title = { ...buildTemplate("sanscam", ctx)[0], id: "section-1", name: "Titre" };
     const montage = buildMontage([{ ctx, start: 5, end: 9 }], build, 30, (total) => {

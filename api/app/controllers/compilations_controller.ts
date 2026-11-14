@@ -1,5 +1,6 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import { randomBytes } from 'node:crypto'
+import logger from '@adonisjs/core/services/logger'
 import Job from '#models/job'
 import { dropClipCaches } from '#services/clip_extend'
 import {
@@ -8,11 +9,23 @@ import {
   describeCompilations,
   dropUnusedPieces,
   isPieceId,
+  isTemplateKey,
   parseCompilation,
   pieceState,
   type Compilation,
 } from '#services/compilations'
-import { extractLivePieces, liveSearchInfo, liveSearchProgress, planLiveVideo, searchLive, type LiveContext } from '#services/worker_client'
+import {
+  chooseLooks,
+  extractLivePieces,
+  liveSearchInfo,
+  liveSearchProgress,
+  planLiveVideo,
+  searchLive,
+  type LiveContext,
+  type LookTemplate,
+} from '#services/worker_client'
+import { loadJobSharedData } from '#services/edit_env_resolver'
+import { camVisible } from '#services/facecam_resolver'
 import { workerFailure } from '#services/worker_failure'
 
 /** Longest description of a video (a real one came to 1300 characters) */
@@ -148,6 +161,64 @@ export default class CompilationsController {
     if (!job) return ctx.response.notFound({ error: 'job not found' })
     try {
       return await liveSearchInfo(job.id, job.vodDurationSeconds ?? 0)
+    } catch (err) {
+      return workerFailure(ctx.response, err)
+    }
+  }
+
+  // POST /api/jobs/:id/looks { items: [{ id, start, end, text }], templates: [{ key, name, description, needs_cam }], wish?, usual?, language? }
+  // — the AI looks at each passage (its clip must be cut) and chooses its template
+  async looks(ctx: HttpContext) {
+    const job = await ownJob(ctx)
+    if (!job) return ctx.response.notFound({ error: 'job not found' })
+    const templates: LookTemplate[] = []
+    for (const raw of Array.isArray(ctx.request.input('templates')) ? ctx.request.input('templates').slice(0, 40) : []) {
+      const description = typeof raw?.description === 'string' ? raw.description.trim().slice(0, 3000) : ''
+      if (!isTemplateKey(raw?.key) || !description || templates.some((t) => t.key === raw.key)) continue
+      templates.push({ key: raw.key, name: String(raw.name ?? '').trim().slice(0, 60) || raw.key, description, needs_cam: raw.needs_cam === true })
+    }
+    const items: { id: string; start: number; end: number; text: string }[] = []
+    for (const raw of Array.isArray(ctx.request.input('items')) ? ctx.request.input('items').slice(0, 120) : []) {
+      const start = Number(raw?.start)
+      const end = Number(raw?.end)
+      if (!isPieceId(raw?.id) || !Number.isFinite(start) || !Number.isFinite(end) || end <= start || items.some((i) => i.id === raw.id)) continue
+      items.push({ id: raw.id, start, end, text: typeof raw.text === 'string' ? raw.text.slice(0, 300) : '' })
+    }
+    if (templates.length === 0 || items.length === 0) {
+      return ctx.response.badRequest({ error: 'items: [{ id, start, end }] and templates: [{ key, description }] required' })
+    }
+    // Only passages whose clip is there can be looked at
+    const ready = items.map((item) => ({ item, piece: pieceState(job.id, item) })).filter(({ piece }) => piece.ready && piece.file_start !== null)
+    if (ready.length === 0) return ctx.response.conflict({ error: 'not_cut' })
+
+    // Where the webcam is in this live, and whether someone is in it during each passage. When that
+    // can't be told, the AI goes by the frames alone (a template without its webcam falls back by itself)
+    const shared = await loadJobSharedData(job.id, ready[0].piece.file).catch((err) => {
+      logger.warn({ err }, 'Webcam of live %s not resolved for the looks', job.id)
+      return null
+    })
+    const rect = shared?.facecam.rect ?? null
+    try {
+      const pieces = ready.map(({ item, piece }) => {
+        const part: [number, number] = [item.start - piece.file_start!, item.end - piece.file_start!]
+        return {
+          id: item.id,
+          file: piece.file,
+          start: part[0],
+          end: part[1],
+          text: item.text,
+          cam: shared ? camVisible(rect, shared.people?.[piece.file], shared.checked?.[piece.file], part) : true,
+        }
+      })
+      const language = ['fr', 'en', 'es'].includes(ctx.request.input('language')) ? ctx.request.input('language') : 'fr'
+      return await chooseLooks(job.id, {
+        pieces,
+        templates,
+        wish: String(ctx.request.input('wish') ?? '').trim().slice(0, 600),
+        cam: rect && shared ? { ...rect, frame_w: shared.clipWidth, frame_h: shared.clipHeight } : null,
+        language,
+        usual: isTemplateKey(ctx.request.input('usual')) ? ctx.request.input('usual') : null,
+      })
     } catch (err) {
       return workerFailure(ctx.response, err)
     }

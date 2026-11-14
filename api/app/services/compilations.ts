@@ -25,6 +25,8 @@ export interface CompilationItem {
   text: string
   why: string
   sources: string[]
+  /** Its own template key, when it isn't shown like the rest of the video */
+  template?: string
 }
 
 export interface CompilationSection {
@@ -62,6 +64,10 @@ const MIN_ITEM_SECONDS = 0.3
 const ID = /^[a-z0-9]{6,24}$/
 const SOURCES = new Set(['voice', 'chat', 'ai', 'manual'])
 
+/** One of the 7 layouts or a template of the streamer's own ("custom-...") */
+const TEMPLATE_KEY = /^[a-z][a-z0-9-]{1,39}$/
+export const isTemplateKey = (value: unknown): value is string => typeof value === 'string' && TEMPLATE_KEY.test(value)
+
 export const isPieceId = (value: unknown): value is string => typeof value === 'string' && ID.test(value)
 export const pieceFile = (id: string) => `piece_${id}.mp4`
 
@@ -81,6 +87,7 @@ function parseItem(raw: any, liveDuration: number): CompilationItem | null {
     text: text(raw.text, 300),
     why: text(raw.why, 200),
     sources: Array.isArray(raw.sources) ? raw.sources.filter((s: unknown) => typeof s === 'string' && SOURCES.has(s)) : [],
+    ...(isTemplateKey(raw.template) ? { template: raw.template } : {}),
   }
 }
 

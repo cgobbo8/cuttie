@@ -1279,7 +1279,12 @@
     },
     "timeline": "Position dans le clip",
     "seeArrival": "Voir l'arrivée",
-    "seeDeparture": "Voir le départ"
+    "seeDeparture": "Voir le départ",
+    "usage": "À quoi sert ce modèle",
+    "usageByAi": "Rédiger avec l'IA",
+    "usagePlaceholder": "Ex. : pour mes fails, le jeu en grand et ma cam en petit.",
+    "usageHint": "L'IA lit cette phrase, en plus de la place de chaque élément, quand elle choisit le modèle d'un passage. Laissée vide, elle est rédigée à l'enregistrement.",
+    "usageFailed": "L'IA n'a pas pu rédiger la description. Réessaie, ou écris-la toi-même."
   },
   "widgets": {
     "channel-pill": {
@@ -1375,7 +1380,7 @@
       "180": "3 min"
     },
     "buildVideo": "Construire la vidéo",
-    "describeHint": "L'IA cherche dans le live les passages de chaque partie, les vérifie, puis propose la vidéo. Tout reste modifiable ensuite : ordre, coupes, titres.",
+    "describeHint": "L'IA cherche dans le live les passages de chaque partie, les vérifie, puis propose la vidéo. Dis-lui aussi la mise en page que tu veux (« ma cam en haut, le jeu dessous ») : elle choisit le modèle qui y ressemble. Tout reste modifiable ensuite.",
     "aiReading": "Elle vérifie chaque passage avant de répondre : compte 15 à 60 secondes.",
     "failure": {
       "no_transcript": "Ce live n'a pas de transcription : l'IA n'a rien à lire. Relance l'analyse pour l'obtenir.",
@@ -1538,6 +1543,13 @@
         "item3": "Attention, ça tire !",
         "total": "3 passages"
       }
-    }
+    },
+    "itemTemplate": "Mise en page de ce passage",
+    "sameAsVideo": "Comme la vidéo ({{name}})",
+    "aiLooks": "Mise en page par l'IA",
+    "aiLooking": "L'IA regarde les passages…",
+    "aiLooksHint": "Elle regarde chaque passage et lui choisit le modèle qui lui va : le tien par défaut, un autre quand le passage le demande.",
+    "looksDone": "Mise en page choisie : {{summary}}",
+    "looksSame": "Même modèle partout"
   }
 }

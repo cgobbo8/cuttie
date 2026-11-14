@@ -446,6 +446,7 @@ def test_the_ai_plans_a_video_with_tools(monkeypatch, tmp_path):
             {"title": "Ça pète", "moments": [SHOTS, {**SHOTS, "start": "0:01:58", "why": "Encore"}]},
         ],
         "note": "Rien pour la partie du milieu.",
+        "look": "  ma caméra en haut,\n le jeu en dessous ",
     }
     model = _live(monkeypatch, tmp_path, [
         [("search_speech", {"words": "calme"}), ("find_sounds", {"kind": "gunfire"})],
@@ -455,6 +456,8 @@ def test_the_ai_plans_a_video_with_tools(monkeypatch, tmp_path):
     ])
     planned = ls.plan_video("job", "d'abord le calme, puis ça pète", 30.0, {}, 600.0)
     assert planned["title"] == "Du calme à la tempête" and planned["note"] == "Rien pour la partie du milieu."
+    # What the description asks about the look is handed on as it was said (another step lays the video out)
+    assert planned["look"] == "ma caméra en haut, le jeu en dessous"
     assert [(s["title"], len(s["hits"])) for s in planned["sections"]] == [("C'est calme", 1), ("Ça pète", 1)]
     assert planned["sections"][1]["hits"][0]["why"] == "Fusillade" and planned["cost"] == 0.003 and planned["cached"] is False
     # It was told the video and its length, and had to end with `plan`

@@ -1279,7 +1279,12 @@
     },
     "timeline": "Position in the clip",
     "seeArrival": "See it come in",
-    "seeDeparture": "See it go"
+    "seeDeparture": "See it go",
+    "usage": "What this template is for",
+    "usageByAi": "Write with the AI",
+    "usagePlaceholder": "E.g.: for my fails, the game big and my cam small.",
+    "usageHint": "The AI reads this sentence, along with where each element sits, when it picks the template of a passage. Left empty, it is written when you save.",
+    "usageFailed": "The AI could not write the description. Try again, or write it yourself."
   },
   "widgets": {
     "channel-pill": {
@@ -1375,7 +1380,7 @@
       "180": "3 min"
     },
     "buildVideo": "Build the video",
-    "describeHint": "The AI looks in the live for the passages of each part, checks them, then proposes the video. Everything stays editable afterwards: order, cuts, titles.",
+    "describeHint": "The AI looks in the live for the passages of each part, checks them, then proposes the video. Tell it the layout you want too (\"my cam on top, the game below\"): it picks the template closest to it. Everything stays editable afterwards.",
     "aiReading": "It checks every passage before answering: give it 15 to 60 seconds.",
     "failure": {
       "no_transcript": "This live has no transcript: the AI has nothing to read. Run the analysis again to get one.",
@@ -1538,6 +1543,13 @@
         "item3": "Watch out, they're shooting!",
         "total": "3 passages"
       }
-    }
+    },
+    "itemTemplate": "Layout of this passage",
+    "sameAsVideo": "Like the video ({{name}})",
+    "aiLooks": "Layout by the AI",
+    "aiLooking": "The AI is looking at the passages…",
+    "aiLooksHint": "It looks at each passage and picks the template that suits it: yours by default, another when the passage calls for it.",
+    "looksDone": "Layout chosen: {{summary}}",
+    "looksSame": "Same template everywhere"
   }
 }

@@ -158,6 +158,39 @@ export function fitToTarget<T extends Pick<Compilation, "sections">>(c: T, targe
   return fitted;
 }
 
+/**
+ * The templates the AI chose, on the compilation: `main` becomes the video's
+ * template, and only the passages shown otherwise keep a template of their own.
+ */
+export function applyLooks<T extends Pick<Compilation, "sections" | "template">>(c: T, main: string, looks: Record<string, string>): T {
+  return {
+    ...mapSections(c, (s) => ({
+      ...s,
+      items: s.items.map((item) => {
+        const { template: _own, ...rest } = item;
+        const key = looks[item.id];
+        return key && key !== main ? { ...rest, template: key } : rest;
+      }),
+    })),
+    template: main,
+  };
+}
+
+/** Every passage back to the video's template */
+export function clearLooks<T extends Pick<Compilation, "sections">>(c: T): T {
+  return mapSections(c, (s) => ({ ...s, items: s.items.map(({ template: _own, ...rest }) => rest) }));
+}
+
+/** How many passages each template shows, the most used first: [["empile", 9], ["plein", 3]] */
+export function looksCount(c: Pick<Compilation, "sections" | "template">, fallback: string): [string, number][] {
+  const counts = new Map<string, number>();
+  for (const item of allItems(c)) {
+    const key = item.template || c.template || fallback;
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return [...counts.entries()].sort((a, b) => b[1] - a[1]);
+}
+
 /** The AI's plan as sections of items, in the order it gave */
 export function sectionsFromPlan(plan: VideoPlan, liveDuration: number): CompilationSection[] {
   const sections: CompilationSection[] = [];

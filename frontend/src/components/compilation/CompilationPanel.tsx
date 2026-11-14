@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { ArrowDown, ArrowRight, ArrowUp, Loader2, Plus, Trash2, X } from "lucide-react";
+import { ArrowDown, ArrowRight, ArrowUp, Loader2, Plus, Sparkles, Trash2, X } from "lucide-react";
 import type { Compilation, CompilationItem, TwitchStoryboard } from "../../lib/api";
 import {
   addSection,
@@ -33,9 +33,20 @@ interface Props {
   onExport: () => void;
   exporting: boolean;
   onDelete: () => void;
+  /** A template's name, by key */
+  templateName: (key: string) => string;
+  /** The AI is looking at the passages to choose their templates */
+  looking: boolean;
+  /** What the AI said of the templates it chose */
+  looksNote: string;
+  onLooks: () => void;
+  /** Every passage back to the video's template */
+  onSameLook: () => void;
 }
 
 const TARGETS = [30, 60, 90, 180];
+/** What the AI looking at one passage costs, dollars (three frames and what is said) */
+const LOOK_COST = 0.0005;
 
 /** The compilation being built: its sections, their moments in playing order, its length and look */
 export default function CompilationPanel({
@@ -51,10 +62,19 @@ export default function CompilationPanel({
   onExport,
   exporting,
   onDelete,
+  templateName,
+  looking,
+  looksNote,
+  onLooks,
+  onSameLook,
 }: Props) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const ownLooks = allItems(compilation).filter((item) => item.template).length;
   const total = compilationLength(compilation);
   const count = allItems(compilation).length;
+  // About half a tenth of a cent per passage looked at (measured): said before asking
+  const dollars = (cost: number) => `${new Intl.NumberFormat(i18n.language, { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(cost)} $`;
+  const looksCost = count * LOOK_COST < 0.01 ? `< ${dollars(0.01)}` : `≈ ${dollars(count * LOOK_COST)}`;
   const target = compilation.target;
   const over = !!target && total > target * 1.05;
   const iconButton = "btn btn-ghost btn-icon w-7 h-7 text-ink-3 hover:text-white disabled:opacity-25";
@@ -138,8 +158,10 @@ export default function CompilationPanel({
                       </span>
                       <span className="flex-1 min-w-0">
                         <span className="block text-[12.5px] leading-snug text-white truncate">{item.text || item.why || liveClock(item.start)}</span>
-                        <span className="mono block text-[11px] text-ink-3">
+                        <span className="mono block text-[11px] text-ink-3 truncate">
                           {liveClock(item.start)} · {(item.end - item.start).toFixed(1)} s
+                          {/* Shown in a template of its own */}
+                          {item.template && <span className="text-accent"> · {templateName(item.template)}</span>}
                         </span>
                       </span>
                     </button>
@@ -229,6 +251,21 @@ export default function CompilationPanel({
             ))}
           </select>
         </label>
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button onClick={onLooks} disabled={count === 0 || looking || cutting.size > 0} className="btn btn-glass btn-sm flex-1 min-w-[190px]">
+              {looking ? <Loader2 className="w-3.5 h-3.5 spinner" /> : <Sparkles className="w-3.5 h-3.5 text-accent" />}
+              {t(looking ? "compilation.aiLooking" : "compilation.aiLooks")}
+              {!looking && <span className="mono text-[11.5px] text-ink-3">{looksCost}</span>}
+            </button>
+            {ownLooks > 0 && !looking && (
+              <button onClick={onSameLook} className="btn btn-ghost btn-sm">
+                {t("compilation.looksSame")}
+              </button>
+            )}
+          </div>
+          <p className="mt-1.5 px-0.5 text-[12px] leading-snug text-ink-3">{looksNote || t("compilation.aiLooksHint")}</p>
+        </div>
 
         <button onClick={onExport} disabled={count === 0 || exporting || cutting.size > 0} className="btn btn-primary btn-lg w-full h-[48px]">
           {exporting ? (

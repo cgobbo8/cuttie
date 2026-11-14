@@ -187,6 +187,18 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/brand_controller').default['detectColors']>>>
     }
   }
+  'brand.template_usage': {
+    methods: ["POST"]
+    pattern: '/api/brand-kit/template-usage'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/brand_controller').default['templateUsage']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/brand_controller').default['templateUsage']>>>
+    }
+  }
   'brand.detect_facecam': {
     methods: ["POST"]
     pattern: '/api/brand-kit/detect-facecam'
@@ -641,6 +653,18 @@ export interface Registry {
       query: {}
       response: ExtractResponse<Awaited<ReturnType<import('#controllers/compilations_controller').default['search']>>>
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/compilations_controller').default['search']>>>
+    }
+  }
+  'compilations.looks': {
+    methods: ["POST"]
+    pattern: '/api/jobs/:id/looks'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { id: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/compilations_controller').default['looks']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/compilations_controller').default['looks']>>>
     }
   }
   'compilations.plan': {

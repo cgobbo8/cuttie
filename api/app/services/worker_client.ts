@@ -265,11 +265,53 @@ export interface VideoPlan {
   cost?: number
   /** What the AI found for each part and what is missing, in its words */
   note?: string
+  /** What the description asks about the look, in the streamer's words (empty: nothing) */
+  look?: string
 }
 
 /** A whole video planned by the AI from a description */
 export async function planLiveVideo(jobId: string, brief: string, target: number, context: LiveContext): Promise<VideoPlan> {
   return call('POST', `/jobs/${encodeURIComponent(jobId)}/plan`, { body: { brief, target, ...context }, timeoutMs: 20 * 60_000 })
+}
+
+/** A template as the AI is told about it: what it shows and what it is good for (written by the app from the template) */
+export interface LookTemplate {
+  key: string
+  name: string
+  description: string
+  /** Built around the webcam: not for a passage where nobody is in it */
+  needs_cam: boolean
+}
+
+export interface LooksChoice {
+  /** The template most passages use */
+  main: string
+  /** Each passage's template, by passage id */
+  looks: Record<string, string>
+  reasons: Record<string, string>
+  note: string
+  cost: number
+}
+
+/** The template of each passage of a video, chosen by the AI looking at frames of it (worker: looks.py) */
+export async function chooseLooks(
+  jobId: string,
+  body: {
+    pieces: { id: string; file: string; start: number; end: number; text: string; cam: boolean }[]
+    templates: LookTemplate[]
+    wish: string
+    cam: { x: number; y: number; w: number; h: number; frame_w: number; frame_h: number } | null
+    language: string
+    /** The template the streamer uses when they ask for nothing */
+    usual: string | null
+  }
+): Promise<LooksChoice> {
+  return call('POST', `/clips/${encodeURIComponent(jobId)}/looks`, { body, timeoutMs: 10 * 60_000 })
+}
+
+/** What a template of the streamer's own is good for, in a sentence or two, written by the AI from its description */
+export async function writeTemplateUsage(body: { name: string; description: string; language: string }): Promise<{ usage: string; cost: number }> {
+  return call('POST', '/templates/usage', { body, timeoutMs: 5 * 60_000 })
 }
 
 export interface CutPiece {

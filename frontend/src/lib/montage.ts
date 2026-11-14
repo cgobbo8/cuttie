@@ -257,16 +257,18 @@ export function montageFrames(segments: { duration: number }[], fps: number): nu
  * What Remotion plays for these pieces with a template (`build`: the template's
  * layers for a context). Each piece gets the template's layers for its own
  * part of its clip; the hook and widgets are laid once over the whole video.
+ * `build` is told which piece it builds for (its index), so each can have its
+ * own template; the hook and widgets are asked with -1 (the video's template).
  * `extra`: more layers on the montage's clock (section titles), on top.
  */
 export function buildMontage(
   cuts: MontageCut[],
-  build: (ctx: TemplateContext) => Layer[],
+  build: (ctx: TemplateContext, index: number) => Layer[],
   fps = 30,
   extra: (total: number) => Layer[] = () => [],
 ): MontageProps {
   const place = (layers: Layer[]): PlacedLayer[] => layers.map((layer, z) => ({ layer, z }));
-  const segments: MontageSegment[] = cuts.map((cut) => {
+  const segments: MontageSegment[] = cuts.map((cut, index) => {
     // Whole frames, counted from the piece's two ends: the overlays' clock stays on the pictures, and a
     // piece that starts where another ends takes over on the very next frame (none played twice, none lost)
     const first = Math.round(cut.start * fps);
@@ -279,7 +281,7 @@ export function buildMontage(
       words: wordsIn(cut.ctx.words, from, from + duration),
       chat: chatIn(cut.ctx.chat, from, from + duration),
     };
-    const layers = place(build(ctx))
+    const layers = place(build(ctx, index))
       .filter((p) => !isOverlayLayer(p.layer))
       // No "subtitles" placeholder between two sentences: it would flash at every cut of the preview
       .map((p) => (p.layer.subtitle ? { ...p, layer: { ...p.layer, subtitle: { ...p.layer.subtitle, quiet: true } } } : p));
@@ -287,7 +289,7 @@ export function buildMontage(
   });
   const total = segments.reduce((sum, s) => sum + s.duration, 0);
   const first = cuts[0];
-  const overlays = first ? place(build({ ...first.ctx, startAt: 0, endAt: total, words: [], chat: [] })).filter((p) => isOverlayLayer(p.layer)) : [];
+  const overlays = first ? place(build({ ...first.ctx, startAt: 0, endAt: total, words: [], chat: [] }, -1)).filter((p) => isOverlayLayer(p.layer)) : [];
   const top = Math.max(0, ...overlays.map((p) => p.z), ...segments.flatMap((s) => s.layers.map((p) => p.z))) + 1;
   return { segments, overlays: [...overlays, ...extra(total).map((layer, i) => ({ layer, z: top + i }))] };
 }

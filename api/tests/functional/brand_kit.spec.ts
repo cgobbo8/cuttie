@@ -162,6 +162,23 @@ test.group('Brand kit | element templates', (group) => {
     ;(await client.put('/api/brand-kit').loginAs(user).json({ default_template: 'custom-nope0000' })).assertStatus(400)
   })
 
+  test('keeps what a template is good for, and asks the AI to write it', async ({ client, assert }) => {
+    const user = await makeUser()
+    const described = { ...spec, id: 'custom-5a6b7c8d', usage: `  Pour mes fails : le jeu prend tout l'écran.  ${'x'.repeat(600)}` }
+    const saved = await client.put('/api/brand-kit').loginAs(user).json({ templates: [described, { ...spec, usage: '   ' }] })
+    saved.assertStatus(200)
+    const kept = (saved.body() as any).templates
+    assert.lengthOf(kept[0].usage, 400)
+    assert.isTrue(kept[0].usage.startsWith("Pour mes fails : le jeu prend tout l'écran."))
+    // Nothing written: nothing kept
+    assert.notProperty(kept[1], 'usage')
+    // The AI writes it from the description the app made of the template (no engine in tests)
+    ;(await client.post('/api/brand-kit/template-usage').loginAs(user).json({ name: 'Cam ronde' })).assertStatus(400)
+    const asked = await client.post('/api/brand-kit/template-usage').loginAs(user).json({ name: 'Cam ronde', description: 'Picture: the game.', language: 'fr' })
+    asked.assertStatus(503)
+    assert.deepEqual(asked.body(), { error: 'unreachable' })
+  })
+
   test('keeps precise widget timing, animations, stacking and elements past the edges', async ({ client, assert }) => {
     const user = await makeUser()
     const rich = {

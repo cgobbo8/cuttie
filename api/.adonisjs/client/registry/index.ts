@@ -96,6 +96,12 @@ const routes = {
     tokens: [{"old":"/api/brand-kit/detect-colors","type":0,"val":"api","end":""},{"old":"/api/brand-kit/detect-colors","type":0,"val":"brand-kit","end":""},{"old":"/api/brand-kit/detect-colors","type":0,"val":"detect-colors","end":""}],
     types: placeholder as Registry['brand.detect_colors']['types'],
   },
+  'brand.template_usage': {
+    methods: ["POST"],
+    pattern: '/api/brand-kit/template-usage',
+    tokens: [{"old":"/api/brand-kit/template-usage","type":0,"val":"api","end":""},{"old":"/api/brand-kit/template-usage","type":0,"val":"brand-kit","end":""},{"old":"/api/brand-kit/template-usage","type":0,"val":"template-usage","end":""}],
+    types: placeholder as Registry['brand.template_usage']['types'],
+  },
   'brand.detect_facecam': {
     methods: ["POST"],
     pattern: '/api/brand-kit/detect-facecam',
@@ -323,6 +329,12 @@ const routes = {
     pattern: '/api/jobs/:id/search',
     tokens: [{"old":"/api/jobs/:id/search","type":0,"val":"api","end":""},{"old":"/api/jobs/:id/search","type":0,"val":"jobs","end":""},{"old":"/api/jobs/:id/search","type":1,"val":"id","end":""},{"old":"/api/jobs/:id/search","type":0,"val":"search","end":""}],
     types: placeholder as Registry['compilations.search']['types'],
+  },
+  'compilations.looks': {
+    methods: ["POST"],
+    pattern: '/api/jobs/:id/looks',
+    tokens: [{"old":"/api/jobs/:id/looks","type":0,"val":"api","end":""},{"old":"/api/jobs/:id/looks","type":0,"val":"jobs","end":""},{"old":"/api/jobs/:id/looks","type":1,"val":"id","end":""},{"old":"/api/jobs/:id/looks","type":0,"val":"looks","end":""}],
+    types: placeholder as Registry['compilations.looks']['types'],
   },
   'compilations.plan': {
     methods: ["POST"],

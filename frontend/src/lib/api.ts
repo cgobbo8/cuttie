@@ -1368,6 +1368,8 @@ export interface VideoPlan {
   cost?: number;
   /** What the AI found for each part and what is missing, in its words */
   note?: string;
+  /** What the description asks about the look (layout, webcam, captions), in the streamer's words; empty when nothing */
+  look?: string;
 }
 
 /** A whole video planned by the AI from a description, `target` seconds long */
@@ -1392,6 +1394,49 @@ export interface CompilationItem extends Partial<PieceState> {
   text: string;
   why: string;
   sources: string[];
+  /** Its own template key, when it isn't shown like the rest of the video */
+  template?: string | null;
+}
+
+/** A template as the AI is told about it (see templateGuide.ts) */
+export interface LookTemplate {
+  key: string;
+  name: string;
+  description: string;
+  needs_cam: boolean;
+}
+
+/** The templates the AI chose for the passages of a video */
+export interface LooksChoice {
+  /** The template most passages use */
+  main: string;
+  /** Each passage's template, by passage id */
+  looks: Record<string, string>;
+  /** Why, in a few words, by passage id */
+  reasons: Record<string, string>;
+  note: string;
+  cost: number;
+}
+
+/** The AI looks at each passage (its clip must be cut) and chooses its template among `templates` */
+export async function chooseLooks(
+  jobId: string,
+  body: {
+    items: Pick<CompilationItem, "id" | "start" | "end" | "text">[];
+    templates: LookTemplate[];
+    /** What the streamer asked about the look, in their words */
+    wish?: string;
+    /** The template they use when they ask for nothing */
+    usual?: string;
+    language?: string;
+  },
+): Promise<LooksChoice> {
+  return liveJson(await postJson(`${BASE}/jobs/${jobId}/looks`, body));
+}
+
+/** What a template of the streamer's own is good for, written by the AI from the description the app makes of it */
+export async function writeTemplateUsage(body: { name: string; description: string; language?: string }): Promise<{ usage: string; cost: number }> {
+  return liveJson(await postJson(`${BASE}/brand-kit/template-usage`, body));
 }
 
 export interface CompilationSection {

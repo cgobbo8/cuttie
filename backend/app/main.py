@@ -125,6 +125,43 @@ class PiecesRequest(BaseModel):
     pieces: list[LivePiece]
 
 
+class LookPiece(BaseModel):
+    id: str
+    # Its clip in the live's folder, and the part of it the passage plays (clip seconds)
+    file: str
+    start: float = 0.0
+    end: float = 0.0
+    text: str = ""
+    # Someone is in the webcam during the passage
+    cam: bool = False
+
+
+class LookTemplate(BaseModel):
+    key: str
+    name: str = ""
+    # What the template shows and what it is good for, written by the app from the template itself
+    description: str
+    needs_cam: bool = False
+
+
+class LooksRequest(BaseModel):
+    pieces: list[LookPiece]
+    templates: list[LookTemplate]
+    # What the streamer asked about the look, in their words
+    wish: str = ""
+    # Where the webcam is in the stream's picture: {"x", "y", "w", "h", "frame_w", "frame_h"}
+    cam: dict | None = None
+    language: str = "fr"
+    # The template the streamer uses when they ask for nothing
+    usual: str | None = None
+
+
+class TemplateUsageRequest(BaseModel):
+    name: str = ""
+    description: str
+    language: str = "fr"
+
+
 class CutRequest(BaseModel):
     # What happens in the clip, the cut kept now (clip seconds), what the streamer asks for
     summary: str = ""
@@ -426,6 +463,40 @@ def clips_pieces(job_id: str, req: PiecesRequest) -> dict:
         raise HTTPException(status_code=410, detail="the live is no longer on Twitch")
     except RuntimeError as e:
         raise HTTPException(status_code=502, detail=str(e)) from e
+
+
+@app.post("/clips/{job_id}/looks", dependencies=[Depends(require_secret)])
+def clips_looks(job_id: str, req: LooksRequest) -> dict:
+    """The template of each passage of a video, chosen by the AI looking at its frames."""
+    from app.services import looks
+
+    if not req.pieces or not req.templates:
+        raise HTTPException(status_code=400, detail="nothing to choose from")
+    try:
+        return looks.choose(
+            _check_job_id(job_id),
+            [p.model_dump() for p in req.pieces[: looks.MAX_PIECES]],
+            [t.model_dump() for t in req.templates[: looks.MAX_TEMPLATES]],
+            wish=req.wish[:600],
+            cam=req.cam,
+            language=req.language,
+            usual=req.usual,
+        )
+    except Exception as e:
+        raise _ai_errors(e) from e
+
+
+@app.post("/templates/usage", dependencies=[Depends(require_secret)])
+def template_usage(req: TemplateUsageRequest) -> dict:
+    """What a template of the streamer's own is good for, in a sentence or two."""
+    from app.services import looks
+
+    if not req.description.strip():
+        raise HTTPException(status_code=400, detail="no description")
+    try:
+        return looks.write_usage(req.name, req.description, req.language)
+    except Exception as e:
+        raise _ai_errors(e) from e
 
 
 @app.post("/clips/{job_id}/{clip_filename}/suggest-cut", dependencies=[Depends(require_secret)])

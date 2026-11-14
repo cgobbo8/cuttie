@@ -56,6 +56,9 @@ export interface Compilation {
   hook: string
   /** Length aimed for, seconds (null: none) */
   target: number | null
+  /** Described to the AI: what the streamer first asked for, then each change asked and what the AI answered */
+  brief?: string
+  asks?: { ask: string; note: string }[]
   created_at: string
   updated_at: string
 }
@@ -67,6 +70,9 @@ const MAX_SECTIONS = 12
 const MAX_ITEMS = 80
 const MAX_ITEM_SECONDS = 180
 const MIN_ITEM_SECONDS = 0.3
+/** Longest description of a video, and most changes asked on it that are kept */
+const MAX_BRIEF = 4000
+const MAX_ASKS = 20
 
 const ID = /^[a-z0-9]{6,24}$/
 const SOURCES = new Set(['voice', 'chat', 'ai', 'manual'])
@@ -136,6 +142,15 @@ export function parseCompilation(raw: any, liveDuration: number): Omit<Compilati
     titles: raw.titles !== false,
     hook: text(raw.hook, 120),
     target: Number.isFinite(target) && target >= 5 && target <= 1800 ? Math.round(target) : null,
+    ...(text(raw.brief, MAX_BRIEF) ? { brief: text(raw.brief, MAX_BRIEF) } : {}),
+    ...(Array.isArray(raw.asks) && text(raw.brief, MAX_BRIEF)
+      ? {
+          asks: raw.asks
+            .filter((a: any) => text(a?.ask, MAX_BRIEF))
+            .slice(-MAX_ASKS)
+            .map((a: any) => ({ ask: text(a.ask, MAX_BRIEF), note: text(a.note, 500) })),
+        }
+      : {}),
   }
 }
 

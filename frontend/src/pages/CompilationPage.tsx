@@ -47,6 +47,8 @@ import {
   looksCount,
   removeItem,
   sectionStarts,
+  planCurrent,
+  revisedSections,
   sectionsFromPlan,
   tightened,
   updateItem,
@@ -76,6 +78,10 @@ const SAVE_DELAY = 500;
 const STRIP_TILES = 24;
 
 const hitKey = (hit: LiveHit) => `${hit.start}-${hit.end}`;
+
+/** The same passages in the same parts, in the same order */
+const sameOrder = (c: Pick<Compilation, "sections">, sections: Compilation["sections"]) =>
+  JSON.stringify(c.sections.filter((s) => s.items.length > 0).map((s) => s.items.map((i) => i.id))) === JSON.stringify(sections.map((s) => s.items.map((i) => i.id)));
 
 /** How far over the length asked a described video may run before passages are taken out of it */
 const PLAN_OVER = 1.1;
@@ -331,7 +337,27 @@ export default function CompilationPage() {
     toast.success(t("compilation.addedCount", { count: added }));
   };
 
-  const applyPlan = async (plan: VideoPlan, target: number) => {
+  /** The AI changed the video as asked: what it kept stays as it was, what it added gets its clip */
+  const applyChange = (plan: VideoPlan, ask: string) => {
+    if (!compilation) return;
+    const note = plan.note ?? "";
+    const asks = [...(compilation.asks ?? []), { ask, note }];
+    const revised = revisedSections(compilation, plan, liveDuration);
+    // An answer with no video in it (it found nothing, or misread): the video stays, its answer is kept
+    if (revised.sections.length === 0 || (revised.added === 0 && revised.removed === 0 && sameOrder(compilation, revised.sections))) {
+      change({ ...compilation, asks });
+      toast.info(t("compilation.changeNothing"));
+      return;
+    }
+    const next = { ...compilation, sections: revised.sections, asks };
+    change(next);
+    if (!next.sections.some((s) => s.id === activeSection)) setActiveSection(next.sections[0].id);
+    setView("video");
+    ensure(allItems(next));
+    toast.success(t("compilation.changeDone", { added: revised.added, removed: revised.removed }));
+  };
+
+  const applyPlan = async (plan: VideoPlan, target: number, brief: string) => {
     if (!jobId || !compilation) return;
     const sections = sectionsFromPlan(plan, liveDuration);
     if (sections.length === 0) return;
@@ -339,10 +365,10 @@ export default function CompilationPage() {
       let planned: Compilation;
       if (allItems(compilation).length === 0) {
         // The compilation on screen is empty: the plan fills it
-        planned = { ...compilation, name: plan.title || compilation.name, sections, target, titles: sections.length > 1 || compilation.titles };
+        planned = { ...compilation, name: plan.title || compilation.name, sections, target, titles: sections.length > 1 || compilation.titles, brief, asks: [] };
         change(planned);
       } else {
-        planned = { ...(await createCompilation(jobId, { name: plan.title || t("compilation.defaultName"), target, titles: true })), sections };
+        planned = { ...(await createCompilation(jobId, { name: plan.title || t("compilation.defaultName"), target, titles: true })), sections, brief, asks: [] };
         setCompilations((prev) => [...(prev ?? []), planned]);
         setCurrentId(planned.id);
         change(planned);
@@ -671,6 +697,9 @@ export default function CompilationPage() {
           onPreview={watch}
           onAdd={add}
           onPlan={applyPlan}
+          talk={compilation.brief ? { brief: compilation.brief, asks: compilation.asks ?? [] } : null}
+          current={() => planCurrent(compilation)}
+          onChange={applyChange}
           onResults={setResults}
         />
 

@@ -867,6 +867,54 @@ def plan_video(
     return {**result, "cached": False, "cost": round(cost, 4)}
 
 
+# A line shares at least this much with a passage that holds it (seconds)
+LINE_SHARED = 0.4
+
+
+def as_lines(transcript: VodTranscript, start: float, end: float) -> dict:
+    """A passage of a video as the AI names moments: the times of its first and last line (as
+    `read` gives them) and what is said. Nobody speaks there: its own times."""
+    # A passage cut on its words is shorter than its lines (their times hold silence): a line is
+    # part of it when the passage holds its middle, or a good part of what it takes to say
+    def in_it(s: float, e: float, t: str) -> bool:
+        shared = min(e, end) - max(s, start)
+        return start - 0.3 <= (s + e) / 2 <= end + 0.3 or shared >= min(LINE_SHARED, 0.5 * spoken_seconds(transcript, s, e, t))
+
+    lines = [(s, e, t) for s, e, t in transcript.segments if t.strip() and e > start and s < end and in_it(s, e, t)]
+    if not lines:
+        over = [(s, e, t) for s, e, t in transcript.segments if e > start and s < end and t.strip()]
+        lines = [max(over, key=lambda line: min(line[1], end) - max(line[0], start))] if over else []
+    if not lines:
+        return {"start": stamp(start), "end": stamp(end), "said": ""}
+    return {"start": stamp(lines[0][0]), "end": stamp(lines[-1][0]), "said": _excerpt([t for _s, _e, t in lines], limit=200)}
+
+
+def revise_video(
+    job_id: str, brief: str, current: list[dict], asks: list[str], request: str, duration: float, lag: float = 5.0,
+    url: str | None = None, moments: list[dict] | None = None,
+) -> dict:
+    """A video the AI planned, changed as the streamer now asks: the whole video again (sections of
+    hits), what is kept given back at its place. `current`: its parts as they are now,
+    [{"title", "items": [{"start", "end"}]}] in live seconds; `asks`: what was asked before.
+    Never kept on disk: the video it starts from is never the same twice."""
+    transcript = load_cached(job_id)
+    if not transcript:
+        raise NoTranscript(job_id)
+    from app.services import live_agent
+
+    video = [
+        {"title": str(part.get("title") or ""), "moments": [as_lines(transcript, float(i["start"]), float(i["end"])) for i in part.get("items") or []]}
+        for part in current
+    ]
+    run, _tools, cost = _ask(
+        job_id, duration, lag, url, lambda searcher: searcher.revise(brief, video, asks, request), moments,
+        models=[live_agent.PLAN_MODEL, live_agent.SEARCH_MODEL, live_agent.FALLBACK_MODEL], max_cost=live_agent.PLAN_MAX_COST,
+    )
+    result = {"title": run.title, "sections": _sections(run.sections, transcript, duration, by_lines=True), "note": run.note, "look": ""}
+    logger.info(f"[{job_id[:8]}] AI change \"{request[:60]}\": {sum(len(s['hits']) for s in result['sections'])} moments with {run.model} (~{cost:.4f} $, {run.seconds:.0f} s)")
+    return {**result, "cached": False, "cost": round(cost, 4)}
+
+
 def _sections(raw_sections, transcript: VodTranscript, duration: float, by_lines: bool = False) -> list[dict]:
     """The AI's sections as the app shows them: a title and hits, in playing order (the AI's, not the stream's);
     a moment given twice is kept once. `by_lines`: its moments name lines of the transcript (the AI with tools)."""

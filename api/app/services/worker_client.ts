@@ -269,9 +269,16 @@ export interface VideoPlan {
   look?: string
 }
 
-/** A whole video planned by the AI from a description */
-export async function planLiveVideo(jobId: string, brief: string, target: number, context: LiveContext): Promise<VideoPlan> {
-  return call('POST', `/jobs/${encodeURIComponent(jobId)}/plan`, { body: { brief, target, ...context }, timeoutMs: 20 * 60_000 })
+/** A change asked on a video the AI planned: what is asked now, the video as it is (live seconds), what was asked before */
+export interface PlanChange {
+  request: string
+  current: { title: string; items: { start: number; end: number }[] }[]
+  asks: string[]
+}
+
+/** A whole video planned by the AI from a description; with `change`, the video it already planned, changed as asked */
+export async function planLiveVideo(jobId: string, brief: string, target: number, context: LiveContext, change?: PlanChange): Promise<VideoPlan> {
+  return call('POST', `/jobs/${encodeURIComponent(jobId)}/plan`, { body: { brief, target, ...context, ...(change ?? {}) }, timeoutMs: 20 * 60_000 })
 }
 
 /** A template as the AI is told about it: what it shows and what it is good for (written by the app from the template) */

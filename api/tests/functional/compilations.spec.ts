@@ -91,6 +91,8 @@ test.group('Compilations', (group) => {
         titles: false,
         hook: 'Le calme avant la tempête',
         target: 100000,
+        brief: '  d’abord le calme, puis ça pète ',
+        asks: [{ ask: 'ajoute les autres calme', note: 'Trois ajoutés.' }, { ask: '  ' }, 'nonsense', { ask: 'retire le dernier' }],
         sections: [
           {
             id: 'sectionone',
@@ -116,6 +118,9 @@ test.group('Compilations', (group) => {
     assert.lengthOf(stored.name, 80)
     assert.deepInclude(stored, { template: 'signature', titles: false, hook: 'Le calme avant la tempête', target: null })
     assert.deepEqual(stored.sections.map((s: any) => s.id), ['sectionone', 'sectiontwo'])
+    // What was described to the AI and each change asked since stay with the video (the next change starts from them)
+    assert.equal(stored.brief, 'd’abord le calme, puis ça pète')
+    assert.deepEqual(stored.asks, [{ ask: 'ajoute les autres calme', note: 'Trois ajoutés.' }, { ask: 'retire le dernier', note: '' }])
     const items = stored.sections[0].items
     assert.deepEqual(items.map((i: any) => i.id), ['goodoneabc', 'overendabc'])
     assert.deepEqual(items[0].sources, ['voice'])
@@ -209,6 +214,9 @@ test.group('Compilations', (group) => {
     search.assertStatus(503)
     assert.deepEqual(search.body(), { error: 'unreachable' })
     ;(await client.post(`/api/jobs/${job.id}/plan`).loginAs(user).json({ brief: 'les moments calmes', target: 90 })).assertStatus(503)
+    // A change asked on a planned video goes to the engine too
+    const change = { brief: 'les moments calmes', request: 'ajoute les autres', current: [{ title: 'Calme', items: [{ start: 10, end: 12 }, { start: 'x' }] }], asks: ['un titre', 3] }
+    ;(await client.post(`/api/jobs/${job.id}/plan`).loginAs(user).json(change)).assertStatus(503)
     ;(await client.get(`/api/jobs/${job.id}/search/info`).loginAs(user)).assertStatus(503)
     // What the AI is doing is only for show: no engine, nothing being searched
     const progress = await client.get(`/api/jobs/${job.id}/search/progress`).loginAs(user)

@@ -111,6 +111,11 @@ class PlanRequest(BaseModel):
     meta: dict = {}
     url: str | None = None
     moments: list[dict] = []
+    # A change asked on a video already planned: what is asked now, the video as it is
+    # ([{"title", "items": [{"start", "end"}]}], live seconds) and what was asked before
+    request: str = ""
+    current: list[dict] = []
+    asks: list[str] = []
 
 
 class LivePiece(BaseModel):
@@ -447,6 +452,11 @@ def plan_video(job_id: str, req: PlanRequest) -> dict:
     if not brief:
         raise HTTPException(status_code=400, detail="empty description")
     try:
+        if req.request.strip():
+            return live_search.revise_video(
+                _check_job_id(job_id), brief, req.current[:12], [a[:MAX_BRIEF] for a in req.asks[-8:]], req.request.strip()[:MAX_BRIEF],
+                req.duration, url=req.url, moments=req.moments[:400],
+            )
         return live_search.plan_video(
             _check_job_id(job_id), brief, max(10.0, min(req.target, 600.0)), req.meta, req.duration, req.energy, url=req.url, moments=req.moments[:400]
         )

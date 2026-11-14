@@ -187,6 +187,17 @@ How to work:
 )
 
 
+# The streamer comes back to a video the AI planned: the same work, from the video as it is now
+REVISE = """
+
+The streamer already has this video and asks for a change. You are given what they first described, the video as it is now (its parts and their moments, each with the times of its first and last line and what is said: they may have changed it by hand since), what they asked before, and what they ask now.
+- Do what they ask now, with the tools: look for what is to be added like for a new video, and check it.
+- Everything else stays as it is: give back every moment of the video that the request doesn't remove, with the very times it has, in its place. Never drop or reorder what you were not asked to.
+- Where a new moment goes: where they say; else in the part it belongs to, in the order of the live.
+- The length asked for at first no longer binds: what they ask now wins (asked to add, the video gets longer).
+- In the note, answer them in one or two sentences: what you added, moved or took out, and what you looked for and didn't find."""
+
+
 @dataclass
 class AgentRun:
     """What a search gave and what it took."""
@@ -411,6 +422,24 @@ class Searcher:
         self.run.title = str(given.get("title") or "")[:80]
         self.run.look = " ".join(str(given.get("look") or "").split())[:600]
         self._log(f"{len(self.run.sections)} parts, {sum(len(s['moments']) for s in self.run.sections)} moments")
+        return self.run
+
+    def revise(self, brief: str, video: list[dict], asks: list[str], request: str, max_steps: int = PLAN_STEPS) -> AgentRun:
+        """A video already planned, changed as the streamer now asks (run.sections is the whole video again).
+        `video`: its parts as they are, [{"title", "moments": [{"start", "end", "said"}]}], times as `read` gives them."""
+        ask = (
+            f"What the streamer first described: « {brief} »\n\n"
+            f"The video as it is now:\n{json.dumps(video, ensure_ascii=False)}\n\n"
+            + (f"What they asked before, already done: {json.dumps(asks[-8:], ensure_ascii=False)}\n\n" if asks else "")
+            + f"What they ask now: « {request} »"
+        )
+        given = self._work(PLAN_SYSTEM + REVISE, ask, PLAN_SPEC, max_steps)
+        sections = given.get("sections")
+        for raw in sections if isinstance(sections, list) else []:
+            if isinstance(raw, dict) and isinstance(raw.get("moments"), list):
+                self.run.sections.append({"title": str(raw.get("title") or "")[:60], "moments": [m for m in raw["moments"] if isinstance(m, dict)][:MAX_MOMENTS]})
+        self.run.title = str(given.get("title") or "")[:80]
+        self._log(f"revised: {len(self.run.sections)} parts, {sum(len(s['moments']) for s in self.run.sections)} moments")
         return self.run
 
     def _log(self, found: str) -> None:

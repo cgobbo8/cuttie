@@ -1378,8 +1378,8 @@ export interface VideoPlan {
 }
 
 /** A whole video planned by the AI from a description, `target` seconds long */
-export async function planLiveVideo(jobId: string, brief: string, target: number): Promise<VideoPlan> {
-  return liveJson(await postJson(`${BASE}/jobs/${jobId}/plan`, { brief, target }));
+export async function planLiveVideo(jobId: string, brief: string, target: number, change?: PlanChange): Promise<VideoPlan> {
+  return liveJson(await postJson(`${BASE}/jobs/${jobId}/plan`, { brief, target, ...(change ?? {}) }));
 }
 
 /** Where a moment's clip stands: cut from the live (with room around the moment) or not yet */
@@ -1472,11 +1472,21 @@ export interface Compilation {
   hook: string;
   /** Length aimed for, seconds */
   target: number | null;
+  /** Described to the AI: what was first asked for, then each change asked and what the AI answered */
+  brief?: string;
+  asks?: { ask: string; note: string }[];
   created_at: string;
   updated_at: string;
 }
 
-export type CompilationDraft = Pick<Compilation, "name" | "sections" | "template" | "titles" | "hook" | "target">;
+export type CompilationDraft = Pick<Compilation, "name" | "sections" | "template" | "titles" | "hook" | "target" | "brief" | "asks">;
+
+/** A change asked on a video the AI planned: what is asked now, the video as it is (live seconds), what was asked before */
+export interface PlanChange {
+  request: string;
+  current: { title: string; items: { start: number; end: number }[] }[];
+  asks: string[];
+}
 
 export async function listCompilations(jobId: string): Promise<Compilation[]> {
   const json = await jsonOrThrow<{ compilations: Compilation[] }>(await fetch(`${BASE}/jobs/${jobId}/compilations`), "Failed to load the compilations");

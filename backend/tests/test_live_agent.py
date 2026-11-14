@@ -507,6 +507,34 @@ def test_the_ai_plans_a_video_with_tools(monkeypatch, tmp_path):
     assert text.finished and text.title == "T" and text.sections == [{"title": "A", "moments": []}] and text.note == "n"
 
 
+def test_the_streamer_comes_back_to_a_planned_video(monkeypatch, tmp_path):
+    calm = {"start": "0:01:40.0", "end": "0:01:40.0", "quote": "c'est calme", "why": "Il le dit", "score": 85}
+    angry = {"start": "0:05:00.0", "end": "0:05:00.0", "quote": "c'est pas possible putain", "why": "Il craque", "score": 80}
+    model = _live(monkeypatch, tmp_path, [
+        [("search_speech", {"words": "possible"})],
+        [("plan", {"title": "", "sections": [{"title": "C'est calme", "moments": [calm]}, {"title": "Ça pète", "moments": [SHOTS, angry]}], "note": "J'ai ajouté le moment où il craque."})],
+    ])
+    # The video as it is now: the streamer moved the first cut by hand (101-102.5 s, inside the line said "from 100 to 103 s")
+    current = [{"title": "C'est calme", "items": [{"start": 101.0, "end": 102.5}]}, {"title": "Ça pète", "items": [{"start": 117.0, "end": 119.0}, {"start": 450.0, "end": 455.0}]}]
+    changed = ls.revise_video("job", "d'abord le calme, puis ça pète", current, ["mets un titre"], "ajoute le moment où il craque à la fin", 600.0)
+    assert changed["note"] == "J'ai ajouté le moment où il craque." and changed["cost"] == 0.002 and changed["cached"] is False
+    assert [(s["title"], [(h["start"], h["end"]) for h in s["hits"]]) for s in changed["sections"]] == [
+        ("C'est calme", [(100.0, 103.0)]), ("Ça pète", [(117.0, 119.0), (300.0, 303.0)]),
+    ]
+    # It was told what was first described, the video as lines it can give back as they are, what was asked before and now
+    told = model.seen[0]["messages"]
+    assert "asks for a change" in told[0]["content"] and model.seen[0]["model"] == live_agent.PLAN_MODEL
+    assert "« d'abord le calme, puis ça pète »" in told[1]["content"] and "« ajoute le moment où il craque à la fin »" in told[1]["content"] and '"mets un titre"' in told[1]["content"]
+    assert '{"start": "0:01:40.0", "end": "0:01:40.0", "said": "Bon là franchement c\'est calme."}' in told[1]["content"]
+    # A passage cut on its words starts late in its first line (the line's time holds silence): that line is still part of it
+    assert ls.as_lines(_tools(monkeypatch).transcript, 118.4, 121.0) == {"start": "0:01:57.0", "end": "0:01:59.5", "said": "Attention ça tire ! À couvert, à couvert !"}
+    # A passage where nobody speaks keeps its own times
+    assert '{"start": "0:07:30.0", "end": "0:07:35.0", "said": ""}' in told[1]["content"]
+    # Asked again: asked again (the video it starts from is never the same twice)
+    model.steps = [[("plan", {"sections": [], "note": "Rien."})]]
+    assert ls.revise_video("job", "x", current, [], "ajoute le moment où il craque à la fin", 600.0)["sections"] == []
+
+
 def test_a_live_never_listened_to_is_listened_to_before_its_first_question(monkeypatch, tmp_path):
     model = _live(monkeypatch, tmp_path, [[("answer", {"moments": [], "note": "rien"})]])
     listened = []

@@ -23,6 +23,7 @@ import {
   planLiveVideo,
   searchLive,
   type LiveContext,
+  type PlanChange,
   type LookTemplate,
 } from '#services/worker_client'
 import { loadJobSharedData } from '#services/edit_env_resolver'
@@ -272,8 +273,28 @@ export default class CompilationsController {
     const brief = String(ctx.request.input('brief') ?? '').trim().slice(0, MAX_BRIEF)
     if (!brief) return ctx.response.badRequest({ error: 'brief required' })
     const target = Math.min(600, Math.max(10, Number(ctx.request.input('target')) || 90))
+    // A change asked on a video already planned: { request, current: [{ title, items: [{ start, end }] }], asks }
+    const request = String(ctx.request.input('request') ?? '').trim().slice(0, MAX_BRIEF)
+    let change: PlanChange | undefined
+    if (request) {
+      const current: PlanChange['current'] = []
+      for (const part of Array.isArray(ctx.request.input('current')) ? ctx.request.input('current').slice(0, 12) : []) {
+        const items: { start: number; end: number }[] = []
+        for (const item of Array.isArray(part?.items) ? part.items.slice(0, 80) : []) {
+          const start = Number(item?.start)
+          const end = Number(item?.end)
+          if (Number.isFinite(start) && Number.isFinite(end) && start >= 0 && end > start) items.push({ start, end })
+        }
+        current.push({ title: String(part?.title ?? '').slice(0, 60), items })
+      }
+      const asks = (Array.isArray(ctx.request.input('asks')) ? ctx.request.input('asks') : [])
+        .filter((a: unknown) => typeof a === 'string' && a.trim())
+        .slice(-8)
+        .map((a: string) => a.trim().slice(0, MAX_BRIEF))
+      change = { request, current, asks }
+    }
     try {
-      return await planLiveVideo(job.id, brief, target, liveContext(job))
+      return await planLiveVideo(job.id, brief, target, liveContext(job), change)
     } catch (err) {
       return workerFailure(ctx.response, err)
     }

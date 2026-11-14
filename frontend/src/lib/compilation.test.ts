@@ -17,8 +17,10 @@ import {
   moveItem,
   moveSection,
   newId,
+  planCurrent,
   removeItem,
   removeSection,
+  revisedSections,
   sectionStarts,
   sectionsFromPlan,
   stepText,
@@ -184,6 +186,31 @@ describe("compilations", () => {
       ["C'est calme", 1],
       ["Ça pète", 1],
     ]);
+  });
+
+  it("takes the AI's change of a video: what it kept stays as it was, the rest is new", () => {
+    const tight = { ...item("a", 103.6, 105.4), template: "plein" };
+    const c = { sections: [section("s1", [tight, item("b", 200, 203)], "Calme"), section("s2", [item("c", 300, 306)], "Ça pète")] };
+    expect(planCurrent(c)).toEqual([
+      { title: "Calme", items: [{ start: 103.6, end: 105.4 }, { start: 200, end: 203 }] },
+      { title: "Ça pète", items: [{ start: 300, end: 306 }] },
+    ]);
+    // It gives the whole video again, by the transcript's lines: "a" (cut on its words since) is the same passage,
+    // one is new after it, "b" is gone, the second part has a new name
+    const plan = { title: "", sections: [{ title: "Calme", hits: [hit(100, 106), hit(150, 152, { spoken: true })] }, { title: "Vide", hits: [] }, { title: "Les conséquences", hits: [hit(300, 306), hit(301, 305)] }] };
+    const revised = revisedSections(c, plan, 5000);
+    expect([revised.added, revised.removed]).toEqual([1, 1]);
+    expect(revised.sections.map((s) => [s.id, s.title, s.items.length])).toEqual([
+      ["s1", "Calme", 2],
+      ["s2", "Les conséquences", 1],
+    ]);
+    expect(revised.sections[0].items[0]).toBe(tight);
+    expect(revised.sections[0].items[1]).toMatchObject({ start: 149.65, end: 152.5, fit: [150, 152] });
+    expect(revised.sections[1].items[0]).toBe(c.sections[1].items[0]);
+    // A passage cut on its words sits at the end of its line ("from 100 to 103 s", said from 102.5): the line is that passage, not a new one
+    const late = { sections: [section("s1", [item("z", 102.5, 104.2)])] };
+    const again = revisedSections(late, { title: "", sections: [{ title: "", hits: [hit(100, 103), hit(103, 105)] }] }, 5000);
+    expect([again.added, again.removed, again.sections[0].items.length]).toEqual([0, 0, 1]);
   });
 
   it("writes a time of the live", () => {

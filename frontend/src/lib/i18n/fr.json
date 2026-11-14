@@ -1550,6 +1550,15 @@
     "aiLooking": "L'IA regarde les passages…",
     "aiLooksHint": "Elle regarde chaque passage et lui choisit le modèle qui lui va : le tien par défaut, un autre quand le passage le demande.",
     "looksDone": "Mise en page choisie : {{summary}}",
-    "looksSame": "Même modèle partout"
+    "looksSame": "Même modèle partout",
+    "changeTitle": "Modifier cette vidéo",
+    "changeYou": "Ta description",
+    "changePlaceholder": "Ex. : ajoute tous les autres moments où ils disent calme. Entre les deux premiers passages, mets celui où il arrive à l'hôpital.",
+    "changeButton": "Modifier la vidéo",
+    "changeHint": "L'IA repart de la vidéo telle qu'elle est (tes retouches comprises) et de tout ce que tu lui as déjà demandé. Ce que tu ne lui demandes pas de changer reste en place.",
+    "changeDone": "Vidéo modifiée : {{added}} ajouté(s), {{removed}} retiré(s)",
+    "changeNothing": "L'IA n'a rien changé. Regarde sa réponse.",
+    "changeNew": "Décrire une autre vidéo",
+    "changeBack": "Revenir à cette vidéo"
   }
 }

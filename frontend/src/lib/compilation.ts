@@ -21,6 +21,8 @@ const WHOLE_UNDER = 6;
 const NO_SCORE = 0.5;
 /** Two moments sharing this much of the shorter one are the same moment */
 const SAME_MOMENT = 0.5;
+/** A passage and a line of the transcript that share this many seconds are the same passage */
+const SAME_LINE = 0.4;
 
 /** Under this score (0-1), a moment the AI gave is only close to what was asked: it says what is missing */
 const NEAR_SCORE = 0.5;
@@ -265,6 +267,49 @@ export function sectionsFromPlan(plan: VideoPlan, liveDuration: number): Compila
     if (items.length > 0) sections.push({ id: newId(), title: planned.title, query: "", items });
   }
   return sections;
+}
+
+/** The video as the AI is told about it when a change is asked: its parts and where their passages are in the live */
+export function planCurrent(c: Pick<Compilation, "sections">): { title: string; items: { start: number; end: number }[] }[] {
+  return c.sections.filter((s) => s.items.length > 0).map((s) => ({ title: s.title, items: s.items.map(({ start, end }) => ({ start, end })) }));
+}
+
+/**
+ * The video once the AI changed it as asked: it gives the whole video again.
+ * A passage it kept is the one the video already had (its clip, its cut, its
+ * template stay); the others are new. A part keeps its id.
+ */
+export function revisedSections(c: Pick<Compilation, "sections">, plan: VideoPlan, liveDuration: number): { sections: CompilationSection[]; added: number; removed: number } {
+  const before = allItems(c);
+  const kept = new Set<string>();
+  const parts = new Set<string>();
+  const sections: CompilationSection[] = [];
+  let added = 0;
+  // The AI names passages by the transcript's lines, whose times hold silence: a passage cut on
+  // its words shares little with them. It is the same one as soon as they share a word's worth
+  const same = (item: CompilationItem, hit: { start: number; end: number }) =>
+    sameMoment(item, hit) || Math.min(item.end, hit.end) - Math.max(item.start, hit.start) >= SAME_LINE;
+  for (const planned of plan.sections) {
+    const items: CompilationItem[] = [];
+    for (const hit of planned.hits) {
+      const known = before.find((item) => !kept.has(item.id) && same(item, hit));
+      if (known) {
+        kept.add(known.id);
+        items.push(known);
+      } else if (!before.some((item) => same(item, hit)) && !items.some((item) => same(item, hit))) {
+        items.push(itemFromHit(hit, liveDuration));
+        added++;
+      }
+    }
+    if (items.length === 0) continue;
+    const old =
+      c.sections.find((s) => !parts.has(s.id) && s.title.trim() === planned.title.trim()) ??
+      c.sections.find((s) => !parts.has(s.id) && s.items.some((item) => items.includes(item)));
+    const id = old?.id ?? newId();
+    parts.add(id);
+    sections.push({ id, title: planned.title, query: old?.query ?? "", items });
+  }
+  return { sections, added, removed: before.length - kept.size };
 }
 
 /** "1:23:45" in the live */

@@ -1550,6 +1550,15 @@
     "aiLooking": "The AI is looking at the passages…",
     "aiLooksHint": "It looks at each passage and picks the template that suits it: yours by default, another when the passage calls for it.",
     "looksDone": "Layout chosen: {{summary}}",
-    "looksSame": "Same template everywhere"
+    "looksSame": "Same template everywhere",
+    "changeTitle": "Change this video",
+    "changeYou": "Your description",
+    "changePlaceholder": "E.g. add every other time they say it's calm. Between the first two passages, put the one where he gets to the hospital.",
+    "changeButton": "Change the video",
+    "changeHint": "The AI starts from the video as it is (your own edits included) and from everything you already asked. What you don't ask it to change stays in place.",
+    "changeDone": "Video changed: {{added}} added, {{removed}} removed",
+    "changeNothing": "The AI changed nothing. Read its answer.",
+    "changeNew": "Describe another video",
+    "changeBack": "Back to this video"
   }
 }

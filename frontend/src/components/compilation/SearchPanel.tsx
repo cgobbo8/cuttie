@@ -11,6 +11,7 @@ import {
   type LiveSearchInfo,
   type LiveSearchStep,
   type TwitchStoryboard,
+  type PlanChange,
   type VideoPlan,
 } from "../../lib/api";
 import { isNear, liveClock, stepText } from "../../lib/compilation";
@@ -29,8 +30,14 @@ interface Props {
   onPreview: (hit: LiveHit) => void;
   /** Add results to the compilation (`query`: the search they came from) */
   onAdd: (hits: LiveHit[], query: string) => void;
-  /** The AI planned a whole video */
-  onPlan: (plan: VideoPlan, target: number) => void;
+  /** The AI planned a whole video from `brief` */
+  onPlan: (plan: VideoPlan, target: number, brief: string) => void;
+  /** The video on screen was described to the AI: what was asked first, each change since and its answer */
+  talk?: { brief: string; asks: { ask: string; note: string }[] } | null;
+  /** The video as it is now, as the AI is told about it when a change is asked */
+  current?: () => PlanChange["current"];
+  /** The AI changed the video as asked (`ask`) */
+  onChange?: (plan: VideoPlan, ask: string) => void;
   /** The results on screen changed (shown on the live's strip) */
   onResults: (hits: LiveHit[]) => void;
 }
@@ -51,7 +58,7 @@ const head = (text: string) => (text.length > AROUND ? `${text.slice(0, text.las
 const PROGRESS_EVERY = 1200;
 
 /** Looking for moments in the whole live: by words, by asking the AI, or by describing the whole video */
-export default function SearchPanel({ jobId, storyboard, info, previewed, isAdded, onPreview, onAdd, onPlan, onResults }: Props) {
+export default function SearchPanel({ jobId, storyboard, info, previewed, isAdded, onPreview, onAdd, onPlan, onResults, talk, current, onChange }: Props) {
   const { t, i18n } = useTranslation();
   const toast = useToast();
   const [tab, setTab] = useState<Tab>("search");
@@ -65,6 +72,10 @@ export default function SearchPanel({ jobId, storyboard, info, previewed, isAdde
   const [step, setStep] = useState<LiveSearchStep | null>(null);
   /** What the AI said of the last video it planned */
   const [planNote, setPlanNote] = useState("");
+  /** A change asked on the video on screen, and the form of a new video shown anyway */
+  const [request, setRequest] = useState("");
+  const [another, setAnother] = useState(false);
+  const talking = !!talk && !!onChange && !another;
 
   const asking = busy === "ai" || busy === "plan";
   useEffect(() => {
@@ -131,8 +142,29 @@ export default function SearchPanel({ jobId, storyboard, info, previewed, isAdde
         toast.info(t("compilation.planEmpty"));
         return;
       }
-      onPlan(planned, target);
+      onPlan(planned, target, asked);
+      setAnother(false);
+      setBrief("");
+      setPlanNote("");
       toast.success([t("compilation.planned", { count }), paid(planned)].filter(Boolean).join(" · "));
+    } catch (err) {
+      setFailure(err instanceof LiveError ? err.reason : "failed");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  /** A change asked on the video the AI planned: it starts from the video as it is and from what was asked before */
+  const change = async (e: FormEvent) => {
+    e.preventDefault();
+    const asked = request.trim();
+    if (!asked || busy || !talk || !current || !onChange) return;
+    setBusy("plan");
+    setFailure(null);
+    try {
+      const planned = await planLiveVideo(jobId, talk.brief, target, { request: asked, current: current(), asks: talk.asks.map((a) => a.ask) });
+      onChange(planned, asked);
+      setRequest("");
     } catch (err) {
       setFailure(err instanceof LiveError ? err.reason : "failed");
     } finally {
@@ -187,6 +219,44 @@ export default function SearchPanel({ jobId, storyboard, info, previewed, isAdde
           </div>
           <p className="mt-2 px-0.5 text-[12px] leading-snug text-ink-3">{t(info && !info.transcript ? "compilation.noTranscript" : "compilation.searchHint")}</p>
         </form>
+      ) : talking ? (
+        <div className="mt-3">
+          {/* The conversation so far: what was described, then each change asked and what the AI answered */}
+          <div className="flex flex-col gap-2 max-h-[280px] overflow-y-auto pr-0.5">
+            <p className="self-end max-w-[92%] px-3 py-2 rounded-[12px] rounded-br-[4px] bg-white/10 text-[12.5px] leading-snug text-ink-2 whitespace-pre-line line-clamp-4" title={talk!.brief}>
+              <span className="sr-only">{t("compilation.changeYou")} : </span>
+              {talk!.brief}
+            </p>
+            {talk!.asks.map((a, i) => (
+              <div key={i} className="flex flex-col gap-2">
+                <p className="self-end max-w-[92%] px-3 py-2 rounded-[12px] rounded-br-[4px] bg-white/10 text-[12.5px] leading-snug text-white whitespace-pre-line">{a.ask}</p>
+                {a.note && <AiNote label={t("compilation.aiNote")} note={a.note} className="max-w-[92%]" />}
+              </div>
+            ))}
+          </div>
+          <form className="mt-2.5" onSubmit={change}>
+            <textarea
+              value={request}
+              onChange={(e) => setRequest(e.target.value)}
+              rows={3}
+              maxLength={MAX_BRIEF}
+              placeholder={t("compilation.changePlaceholder")}
+              aria-label={t("compilation.changeTitle")}
+              className="w-full p-3 rounded-[11px] bg-black/30 border border-white/10 text-[14px] leading-snug text-white outline-none focus:border-accent-line placeholder:text-ink-3 resize-y"
+            />
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <button type="submit" disabled={!request.trim() || !!busy || !info?.transcript} className="btn btn-primary btn-sm">
+                {busy === "plan" ? <Loader2 className="w-3.5 h-3.5 spinner" /> : <Sparkles className="w-3.5 h-3.5" />}
+                {t("compilation.changeButton")}
+                {planCost && <span className="mono text-[11.5px] opacity-60">{planCost}</span>}
+              </button>
+              <button type="button" onClick={() => setAnother(true)} disabled={!!busy} className="btn btn-ghost btn-sm">
+                {t("compilation.changeNew")}
+              </button>
+            </div>
+            <p className="mt-2 px-0.5 text-[12px] leading-snug text-ink-3">{t("compilation.changeHint")}</p>
+          </form>
+        </div>
       ) : (
         <form className="mt-3" onSubmit={plan}>
           <textarea
@@ -213,6 +283,11 @@ export default function SearchPanel({ jobId, storyboard, info, previewed, isAdde
             {planCost && <span className="mono text-[11.5px] opacity-60">{planCost}</span>}
           </button>
           <p className="mt-2 px-0.5 text-[12px] leading-snug text-ink-3">{t(info && !info.transcript ? "compilation.noTranscript" : "compilation.describeHint")}</p>
+          {!!talk && !!onChange && (
+            <button type="button" onClick={() => setAnother(false)} className="btn btn-ghost btn-sm mt-1.5">
+              {t("compilation.changeBack")}
+            </button>
+          )}
         </form>
       )}
 
@@ -227,7 +302,7 @@ export default function SearchPanel({ jobId, storyboard, info, previewed, isAdde
           </div>
         </div>
       )}
-      {tab === "describe" && planNote && !asking && <AiNote label={t("compilation.aiNote")} note={planNote} />}
+      {tab === "describe" && !talking && planNote && !asking && <AiNote label={t("compilation.aiNote")} note={planNote} />}
       {failure && (
         <p role="alert" className="mt-3 p-3 rounded-[12px] bg-[rgba(245,177,76,0.10)] border border-[rgba(245,177,76,0.30)] text-[12.5px] leading-snug text-[#f7d9a8]">
           {t(`compilation.failure.${failure}`)}

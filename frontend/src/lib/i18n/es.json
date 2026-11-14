@@ -1550,6 +1550,15 @@
     "aiLooking": "La IA mira los trozos…",
     "aiLooksHint": "Mira cada trozo y le elige la plantilla que le va: la tuya por defecto, otra cuando el trozo lo pide.",
     "looksDone": "Diseño elegido: {{summary}}",
-    "looksSame": "Misma plantilla en todo"
+    "looksSame": "Misma plantilla en todo",
+    "changeTitle": "Modificar este vídeo",
+    "changeYou": "Tu descripción",
+    "changePlaceholder": "Ej.: añade todas las demás veces que dicen que está tranquilo. Entre los dos primeros trozos, pon el de cuando llega al hospital.",
+    "changeButton": "Modificar el vídeo",
+    "changeHint": "La IA parte del vídeo tal como está (con tus retoques) y de todo lo que ya le pediste. Lo que no le pides cambiar se queda donde está.",
+    "changeDone": "Vídeo modificado: {{added}} añadido(s), {{removed}} quitado(s)",
+    "changeNothing": "La IA no ha cambiado nada. Mira lo que responde.",
+    "changeNew": "Describir otro vídeo",
+    "changeBack": "Volver a este vídeo"
   }
 }

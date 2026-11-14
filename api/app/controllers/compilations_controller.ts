@@ -15,6 +15,9 @@ import {
 import { extractLivePieces, liveSearchInfo, liveSearchProgress, planLiveVideo, searchLive, type LiveContext } from '#services/worker_client'
 import { workerFailure } from '#services/worker_failure'
 
+/** Longest description of a video (a real one came to 1300 characters) */
+const MAX_BRIEF = 4000
+
 const newId = () => randomBytes(8).toString('base64url').toLowerCase().replace(/[^a-z0-9]/g, 'x').slice(0, 10)
 
 async function ownJob({ params, auth }: HttpContext): Promise<Job | null> {
@@ -180,7 +183,7 @@ export default class CompilationsController {
   async plan(ctx: HttpContext) {
     const job = await ownJob(ctx)
     if (!job) return ctx.response.notFound({ error: 'job not found' })
-    const brief = String(ctx.request.input('brief') ?? '').trim().slice(0, 1500)
+    const brief = String(ctx.request.input('brief') ?? '').trim().slice(0, MAX_BRIEF)
     if (!brief) return ctx.response.badRequest({ error: 'brief required' })
     const target = Math.min(600, Math.max(10, Number(ctx.request.input('target')) || 90))
     try {

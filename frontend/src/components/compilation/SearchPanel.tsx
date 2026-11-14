@@ -37,6 +37,8 @@ interface Props {
 
 type Tab = "search" | "describe";
 const TARGETS = [30, 60, 90, 180];
+/** Longest description of a video the app takes (the API's own limit) */
+const MAX_BRIEF = 4000;
 
 const SOURCE_ICON = { voice: Mic, chat: MessageCircle, ai: Sparkles } as const;
 
@@ -191,6 +193,7 @@ export default function SearchPanel({ jobId, storyboard, info, previewed, isAdde
             value={brief}
             onChange={(e) => setBrief(e.target.value)}
             rows={4}
+            maxLength={MAX_BRIEF}
             placeholder={t("compilation.briefPlaceholder")}
             aria-label={t("compilation.tab.describe")}
             className="w-full p-3 rounded-[11px] bg-black/30 border border-white/10 text-[14px] leading-snug text-white outline-none focus:border-accent-line placeholder:text-ink-3 resize-y"

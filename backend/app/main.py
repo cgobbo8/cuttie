@@ -97,6 +97,10 @@ class SearchRequest(BaseModel):
     moments: list[dict] = []
 
 
+# Longest description of a video (a real one came to 1300 characters)
+MAX_BRIEF = 4000
+
+
 class PlanRequest(BaseModel):
     # The video the streamer describes
     brief: str
@@ -400,7 +404,7 @@ def plan_video(job_id: str, req: PlanRequest) -> dict:
     """A whole video planned by the AI from a description: sections of moments."""
     from app.services import live_search
 
-    brief = req.brief.strip()[:1500]
+    brief = req.brief.strip()[:MAX_BRIEF]
     if not brief:
         raise HTTPException(status_code=400, detail="empty description")
     try:

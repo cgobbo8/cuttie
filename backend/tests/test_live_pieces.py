@@ -120,8 +120,9 @@ def _segments(folder, seconds=12, each=4):
          "-c:a", "aac", "-f", "hls", "-hls_time", str(each), "-hls_list_size", "0", "-hls_segment_filename", str(folder / "seg%d.ts"), str(folder / "live.m3u8")],
         check=True,
     )
-    # As addresses, like Twitch's (a bare Windows path would read as a protocol named after its drive)
-    return [(float(i * each), float(each), (folder / f"seg{i}.ts").as_uri()) for i in range(seconds // each)]
+    # As addresses, like Twitch's: a bare Windows path would read as a protocol named after its drive,
+    # and ffmpeg takes "file:C:/..." there, not "file:///C:/..."
+    return [(float(i * each), float(each), "file:" + (folder / f"seg{i}.ts").as_posix()) for i in range(seconds // each)]
 
 
 def test_a_clip_starts_on_its_first_picture_and_its_moment_is_cut_on_its_words(monkeypatch, tmp_path):

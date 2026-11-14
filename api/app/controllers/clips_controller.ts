@@ -12,6 +12,7 @@ import {
   readClipMeta,
   shiftClipClock,
   suggestedCut,
+  trimOnFile,
   type Side,
 } from '#services/clip_extend'
 import { extendClipFile, suggestClipCut } from '#services/worker_client'
@@ -82,10 +83,12 @@ export default class ClipsController {
           : h
       )
     }
-    const choice = { ...(job.selection?.[filename] ?? {}), trim: plan.trim }
+    // The file may start a little after what was planned (on a key frame): the cut is counted from there
+    const cut = done ? trimOnFile(plan, done.vod_start) : plan.trim
+    const choice = { ...(job.selection?.[filename] ?? {}), trim: cut }
     // A clip cut in pieces: its first (or last) piece grows, all of them follow the clip's clock
     if (choice.segments?.length) {
-      const pieces = extendPieces(choice.segments, side, plan.trim, done?.added_before ?? 0)
+      const pieces = extendPieces(choice.segments, side, cut, done?.added_before ?? 0)
       if (pieces.length > 1) choice.segments = pieces
       else delete choice.segments
       choice.trim = envelope(pieces)

@@ -29,9 +29,10 @@ test.group('Compilations', (group) => {
   }
 
   /** A piece's clip on disk, covering `start`-`end` of the live */
-  function piece(dir: string, id: string, start: number, end: number) {
+  function piece(dir: string, id: string, start: number, end: number, settled = true) {
     writeFileSync(path.join(dir, `piece_${id}.mp4`), '')
-    writeFileSync(path.join(dir, `piece_${id}_meta.json`), JSON.stringify({ vod_start: start, vod_end: end }))
+    // "settled": cut since clips are made to start on their first picture
+    writeFileSync(path.join(dir, `piece_${id}_meta.json`), JSON.stringify({ vod_start: start, vod_end: end, ...(settled ? { settled: true } : {}) }))
     writeFileSync(path.join(dir, `piece_${id}_words.json`), '[]')
   }
 
@@ -96,13 +97,13 @@ test.group('Compilations', (group) => {
             title: 'Un',
             query: 'calme',
             items: [
-              item('goodoneabc', 10, 13, { sources: ['voice', 'hack'], text: 'y'.repeat(900), template: 'plein' }),
+              item('goodoneabc', 10, 13, { sources: ['voice', 'hack'], text: 'y'.repeat(900), template: 'plein', fit: [10.354, 12.5], score: 0.876 }),
               item('goodoneabc', 20, 23), // same id twice
               item('../../etc', 30, 33),
               item('tooshortab', 40, 40.1),
               item('toolongabc', 50, 900),
               item('pastendabc', 5000, 5003),
-              item('overendabc', 3598, 3605, { template: '../../etc' }),
+              item('overendabc', 3598, 3605, { template: '../../etc', fit: [3600, 3598], score: 7 }),
             ],
           },
           { id: 'sectionone', title: 'Same id', items: [] },
@@ -122,6 +123,11 @@ test.group('Compilations', (group) => {
     // A passage may be shown in its own template; a key that isn't one is dropped (the video's template then)
     assert.equal(items[0].template, 'plein')
     assert.notProperty(items[1], 'template')
+    // The lines it is made of (still to be set on their words) and the AI's score stay with it; nonsense is dropped
+    assert.deepEqual(items[0].fit, [10.35, 12.5])
+    assert.equal(items[0].score, 0.88)
+    assert.notProperty(items[1], 'fit')
+    assert.notProperty(items[1], 'score')
     // The live ends at 3600 s
     assert.equal(items[1].end, 3600)
 
@@ -177,6 +183,19 @@ test.group('Compilations', (group) => {
     const moved = await client.post(`/api/jobs/${job.id}/pieces`).loginAs(user).json({ pieces: [{ id: 'readypiece', start: 80, end: 103 }] })
     moved.assertStatus(503)
     assert.deepEqual(moved.body(), { error: 'unreachable' })
+
+    // Its words are to be found in the clip (a moment still on the transcript's rough times): the engine's work, even on a clip that is there
+    const fit = await client.post(`/api/jobs/${job.id}/pieces`).loginAs(user).json({ pieces: [{ id: 'readypiece', start: 100, end: 103, fit: [100.4, 102.6] }] })
+    fit.assertStatus(503)
+    // ...but a fit that makes no sense is not one
+    const nonsense = await client.post(`/api/jobs/${job.id}/pieces`).loginAs(user).json({ pieces: [{ id: 'readypiece', start: 100, end: 103, fit: [103, 100] }] })
+    nonsense.assertStatus(200)
+    assert.notProperty((nonsense.body() as any).pieces[0], 'tight')
+
+    // A clip cut before clips were made to start on their first picture (its picture could freeze, its words came early): cut again
+    piece(dir, 'oldpiece12', 92, 110, false)
+    const old = await client.post(`/api/jobs/${job.id}/pieces`).loginAs(user).json({ pieces: [{ id: 'oldpiece12', start: 100, end: 103 }] })
+    old.assertStatus(503)
 
     ;(await client.post(`/api/jobs/${job.id}/pieces`).loginAs(user).json({ pieces: [{ id: '../x', start: 0, end: 5 }] })).assertStatus(400)
     ;(await client.post(`/api/jobs/${job.id}/pieces`).loginAs(user).json({})).assertStatus(400)

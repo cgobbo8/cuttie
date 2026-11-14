@@ -118,6 +118,8 @@ class LivePiece(BaseModel):
     # Where the piece sits in the live, seconds
     start: float
     end: float
+    # The lines of the live's transcript it is made of (live seconds): to be cut on their words
+    fit: list[float] | None = None
 
 
 class PiecesRequest(BaseModel):

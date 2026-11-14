@@ -14,6 +14,11 @@ const PAD_AFTER = 0.5;
 /** Shortest item a result makes, and shortest one fitting a length leaves */
 const MIN_ITEM = 1.5;
 const MIN_FITTED = 1.2;
+/** Shortest passage cut on its words (a word alone), and the length under which fitting leaves a passage whole */
+const MIN_TIGHT = 0.4;
+const WHOLE_UNDER = 6;
+/** A passage nobody scored counts as this when the weakest go first */
+const NO_SCORE = 0.5;
 /** Two moments sharing this much of the shorter one are the same moment */
 const SAME_MOMENT = 0.5;
 
@@ -44,7 +49,35 @@ export function itemFromHit(hit: LiveHit, liveDuration: number): CompilationItem
   if (liveDuration > 0) end = Math.min(liveDuration, end);
   // A near-miss stays marked as one in the compilation ("≈ what is missing")
   const why = isNear(hit) && hit.why ? `≈ ${hit.why}` : hit.why;
-  return { id: newId(), start: hundredth(start), end: hundredth(end), text: hit.text || hit.chat[0] || "", why, sources: hit.sources };
+  return {
+    id: newId(),
+    start: hundredth(start),
+    end: hundredth(end),
+    text: hit.text || hit.chat[0] || "",
+    why,
+    sources: hit.sources,
+    // Words said: these are the transcript's times for them, the real ones come with the clip
+    ...(hit.spoken && hit.end > hit.start ? { fit: [hundredth(hit.start), hundredth(hit.end)] as [number, number] } : {}),
+    ...(hit.sources.includes("ai") ? { score: hit.score } : {}),
+  };
+}
+
+/**
+ * Passages set on where their words are really said, once their clips are cut.
+ * `tight`: by passage, where that is (live seconds), null when its words were
+ * not found in the clip: it then stays as it was. Either way the passage is no
+ * longer waiting for it.
+ */
+export function applyTight<T extends Pick<Compilation, "sections">>(c: T, tight: Record<string, [number, number] | null | undefined>): T {
+  let changed = false;
+  const next = mapSections(c, (s) => ({ ...s, items: s.items.map((item) => (item.fit && tight[item.id] !== undefined ? ((changed = true), tightened(item, tight[item.id]!)) : item)) }));
+  return changed ? next : c;
+}
+
+/** One passage set on where its words are really said (null: not found, it keeps its bounds) */
+export function tightened(item: CompilationItem, bounds: [number, number] | null): CompilationItem {
+  const { fit: _waiting, ...rest } = item;
+  return bounds && bounds[1] - bounds[0] >= MIN_TIGHT ? { ...rest, start: hundredth(bounds[0]), end: hundredth(bounds[1]) } : rest;
 }
 
 export const allItems = (c: Pick<Compilation, "sections">): CompilationItem[] => c.sections.flatMap((s) => s.items);
@@ -134,26 +167,52 @@ export function sectionStarts(c: Pick<Compilation, "sections">): { id: string; t
 }
 
 /**
- * The compilation brought down to `target` seconds: every moment shortened by
- * the same share around its middle (never under 1.2 s); when that isn't
- * enough, the last moments of the longest sections go, one at a time.
+ * The compilation brought down to `target` seconds. A sentence can't be
+ * shortened without cutting into it, so short passages stay whole:
+ * 1. the long ones (over 6 s) are shortened by the same share around their
+ *    middle, never under 6 s;
+ * 2. then passages go, the weakest first (the AI's score; with nothing to tell
+ *    them apart, the last of the longest part), never a part's only one;
+ * 3. and when a few passages still run too long, all are shortened around
+ *    their middle (never under 1.2 s).
+ * `whole`: passages are never shortened, only step 2 (they are cut on their
+ * words: shortening one, even by a tenth of a second, clips a word).
  */
-export function fitToTarget<T extends Pick<Compilation, "sections">>(c: T, target: number): T {
+export function fitToTarget<T extends Pick<Compilation, "sections">>(c: T, target: number, whole = false): T {
   const total = compilationLength(c);
   if (total <= target || total <= 0) return c;
-  const share = target / total;
+  const around = (item: CompilationItem, length: number): CompilationItem => {
+    const middle = (item.start + item.end) / 2;
+    return { ...item, start: hundredth(middle - length / 2), end: hundredth(middle + length / 2) };
+  };
+
+  const spare = whole ? 0 : allItems(c).reduce((sum, item) => sum + Math.max(0, item.end - item.start - WHOLE_UNDER), 0);
+  const share = spare > 0 ? Math.min(1, (total - target) / spare) : 0;
   let fitted = mapSections(c, (s) => ({
     ...s,
     items: s.items.map((item) => {
-      const length = Math.max(Math.min(item.end - item.start, MIN_FITTED), (item.end - item.start) * share);
-      const middle = (item.start + item.end) / 2;
-      return { ...item, start: hundredth(middle - length / 2), end: hundredth(middle + length / 2) };
+      const length = item.end - item.start;
+      return length > WHOLE_UNDER && share > 0 ? around(item, length - (length - WHOLE_UNDER) * share) : item;
     }),
   }));
+
   while (compilationLength(fitted) > target * 1.03) {
-    const longest = [...fitted.sections].filter((s) => s.items.length > 1).sort((a, b) => sectionLength(b) - sectionLength(a))[0];
-    if (!longest) break;
-    fitted = mapSections(fitted, (s) => (s.id === longest.id ? { ...s, items: s.items.slice(0, -1) } : s));
+    const droppable = fitted.sections.filter((s) => s.items.length > 1);
+    if (droppable.length === 0) break;
+    const weakest = Math.min(...droppable.flatMap((s) => s.items.map((item) => item.score ?? NO_SCORE)));
+    // Of the weakest, the last one of the longest part
+    const from = [...droppable].filter((s) => s.items.some((item) => (item.score ?? NO_SCORE) === weakest)).sort((x, y) => sectionLength(y) - sectionLength(x))[0];
+    const gone = [...from.items].reverse().find((item) => (item.score ?? NO_SCORE) === weakest)!;
+    fitted = mapSections(fitted, (s) => (s.id === from.id ? { ...s, items: s.items.filter((item) => item.id !== gone.id) } : s));
+  }
+
+  const left = compilationLength(fitted);
+  if (!whole && left > target * 1.03) {
+    const squeeze = target / left;
+    fitted = mapSections(fitted, (s) => ({
+      ...s,
+      items: s.items.map((item) => around(item, Math.max(Math.min(item.end - item.start, MIN_FITTED), (item.end - item.start) * squeeze))),
+    }));
   }
   return fitted;
 }

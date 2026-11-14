@@ -4,6 +4,7 @@ import json
 import subprocess
 
 from app.services import clip_tools, facecam_detector, vod_transcript
+from app.services.clipper import stream_starts as clip_tools_starts
 
 
 def _video(path, seconds):
@@ -78,3 +79,40 @@ def test_a_clip_that_cannot_be_fetched_stays_as_it_was(monkeypatch, tmp_path):
     except RuntimeError:
         pass
     assert (clips / "a.mp4").read_bytes() == before
+
+
+def test_a_clip_that_starts_on_its_first_picture_still_does_once_longer(monkeypatch, tmp_path):
+    clips = tmp_path / "clips" / "job"
+    clips.mkdir(parents=True)
+    monkeypatch.setattr(clip_tools.paths, "clip_dir", lambda job_id: str(clips))
+    monkeypatch.setattr(clip_tools.paths, "WORK_DIR", str(tmp_path / "work"))
+    monkeypatch.setattr(vod_transcript, "transcript_dir", lambda job_id: str(tmp_path / "transcripts"))
+    _video(str(clips / "a.mp4"), 6)
+    # Cut since files are made to start on their first picture: its meta says exactly where
+    (clips / "a_meta.json").write_text(json.dumps({"vod_start": 100.0, "vod_end": 106.0, "settled": True}))
+    (clips / "a_words.json").write_text(json.dumps([{"word": "Maurice", "start": 1.0, "end": 1.4}]))
+
+    def stream_copy(url, start, duration, out):
+        # Asked 3 s earlier, between two key frames: the copy's picture only starts 1.6 s in
+        plain = str(tmp_path / "plain.mp4")
+        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi", "-i", f"testsrc=size=320x180:rate=30:duration={duration - 1.6}",
+                        "-f", "lavfi", "-i", f"sine=frequency=440:duration={duration - 1.6}", "-shortest", "-c:v", "libx264", "-c:a", "aac", plain], check=True)
+        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-itsoffset", "1.6", "-i", plain, "-itsoffset", "1.6", "-i", plain, "-map", "0:v", "-map", "1:a", "-c", "copy", out], check=True)
+        return True
+
+    monkeypatch.setattr("app.services.clipper._streamcopy_clip", stream_copy)
+    monkeypatch.setattr("app.services.frame_extractor.get_vod_direct_url", lambda url, **k: "https://vod/master.m3u8")
+    monkeypatch.setattr(facecam_detector, "presence", lambda path: None)
+    monkeypatch.setattr(clip_tools, "_label_speakers", lambda job_id, path, words: words)
+    monkeypatch.setattr(clip_tools, "_words_between", lambda job, path, clip_start, a, b: [])
+
+    result = clip_tools.extend_clip("job", "a.mp4", "https://www.twitch.tv/videos/1", 97.0, 106.0)
+
+    # The file starts on the first key frame after 97 s, and everything follows that, not what was asked
+    meta = json.loads((clips / "a_meta.json").read_text())
+    assert 98.45 <= meta["vod_start"] <= 98.6 and meta["vod_end"] == 106.0 and meta["settled"] is True
+    assert result["vod_start"] == meta["vod_start"] and result["added_before"] == round(100.0 - meta["vod_start"], 2)
+    picture, _sound = clip_tools_starts(str(clips / "a.mp4"))
+    assert picture < 0.1
+    words = json.loads((clips / "a_words.json").read_text())
+    assert [(w["word"], w["start"]) for w in words] == [("Maurice", round(1.0 + result["added_before"], 3))]

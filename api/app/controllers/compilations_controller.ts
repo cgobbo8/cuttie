@@ -11,6 +11,7 @@ import {
   isPieceId,
   isTemplateKey,
   parseCompilation,
+  parseFit,
   pieceState,
   type Compilation,
 } from '#services/compilations'
@@ -118,36 +119,50 @@ export default class CompilationsController {
   }
 
   /**
-   * POST /api/jobs/:id/pieces { pieces: [{ id, start, end }] } — makes sure each
+   * POST /api/jobs/:id/pieces { pieces: [{ id, start, end, fit? }] } — makes sure each
    * moment (live seconds) has its clip, cut from the live with room around it.
-   * Answers each piece's clip and where it sits in the live.
+   * Answers each piece's clip and where it sits in the live. A piece sent with
+   * `fit` (the lines of the live's transcript it is made of, their times rough)
+   * also gets `tight`: where those words are really said, null when they are
+   * not found in the clip.
    */
   async pieces(ctx: HttpContext) {
     const job = await ownJob(ctx)
     if (!job) return ctx.response.notFound({ error: 'job not found' })
     const raw = ctx.request.input('pieces')
-    const wanted: { id: string; start: number; end: number }[] = []
+    const wanted: { id: string; start: number; end: number; fit?: [number, number] }[] = []
     for (const piece of Array.isArray(raw) ? raw.slice(0, 60) : []) {
       const start = Number(piece?.start)
       const end = Number(piece?.end)
       if (isPieceId(piece?.id) && Number.isFinite(start) && Number.isFinite(end) && start >= 0 && end - start >= 0.3 && end - start <= 180) {
-        wanted.push({ id: piece.id, start, end })
+        const fit = parseFit(piece.fit)
+        wanted.push({ id: piece.id, start, end, ...(fit ? { fit } : {}) })
       }
     }
     if (wanted.length === 0) return ctx.response.badRequest({ error: 'pieces: [{ id, start, end }] required' })
 
     try {
+      const tight = new Map<string, [number, number] | null>()
       const failed = await oneAtATime(job.id, async () => {
-        const todo = wanted.filter((piece) => !pieceState(job.id, piece).ready)
+        // Those to cut, and those already cut whose words are to be found
+        const todo = wanted.filter((piece) => piece.fit || !pieceState(job.id, piece).ready)
         if (todo.length === 0) return []
+        const fresh = new Set(todo.filter((piece) => !pieceState(job.id, piece).ready).map((piece) => piece.id))
         // The worker cuts each clip a little wider than its moment
         const result = await extractLivePieces(job.id, job.url, todo)
-        // A clip cut again over another part of the live: its frames and backdrop no longer match
-        for (const piece of result.pieces) dropClipCaches(job.id, piece.file)
+        for (const piece of result.pieces) {
+          // A clip cut again over another part of the live: its frames and backdrop no longer match
+          if (fresh.has(piece.id)) dropClipCaches(job.id, piece.file)
+          if (piece.tight !== undefined) tight.set(piece.id, parseFit(piece.tight))
+        }
         return result.failed
       })
       return {
-        pieces: wanted.map((piece) => ({ id: piece.id, ...pieceState(job.id, piece) })),
+        pieces: wanted.map((piece) => ({
+          id: piece.id,
+          ...pieceState(job.id, piece),
+          ...(piece.fit && tight.has(piece.id) ? { tight: tight.get(piece.id) } : {}),
+        })),
         failed,
       }
     } catch (err) {

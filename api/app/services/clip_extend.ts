@@ -59,6 +59,17 @@ export function planExtend(
   return { file: { start: fileStart, end: tenth(end) }, trim: [tenth(trim[0]), tenth(Math.min(want, end - fileStart))] }
 }
 
+/**
+ * The cut once the file is there. A copy of the live can only begin on a key
+ * frame: the file starts up to 2 s after what was planned, and the cut, counted
+ * from the file's start, is that much sooner on it.
+ */
+export function trimOnFile(plan: ExtendPlan, fileStart: number): [number, number] {
+  const late = plan.file ? fileStart - plan.file.start : 0
+  if (late <= 0.05) return plan.trim
+  return [tenth(Math.max(0, plan.trim[0] - late)), tenth(Math.max(0.1, plan.trim[1] - late))]
+}
+
 /** The clip's file started `added` seconds earlier: what the AI timed on its clock follows */
 export function shiftClipClock(hp: any, added: number): any {
   if (!added || !hp?.llm) return hp
@@ -71,8 +82,11 @@ export function shiftClipClock(hp: any, added: number): any {
   return { ...hp, llm }
 }
 
-/** Where a clip's file sits in the live (its _meta.json), null when unknown */
-export function readClipMeta(jobId: string, clipFilename: string): { vod_start: number; vod_end: number } | null {
+/**
+ * Where a clip's file sits in the live (its _meta.json), null when unknown.
+ * `settled`: the file starts on its first picture, at `vod_start` exactly (clips cut since 0.2).
+ */
+export function readClipMeta(jobId: string, clipFilename: string): { vod_start: number; vod_end: number; settled?: boolean } | null {
   const base = path.basename(clipFilename, path.extname(clipFilename))
   const metaPath = path.join(CLIPS_DIR, jobId, `${base}_meta.json`)
   if (!existsSync(metaPath)) return null

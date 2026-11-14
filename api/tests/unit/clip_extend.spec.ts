@@ -1,5 +1,5 @@
 import { test } from '@japa/runner'
-import { planExtend, shiftClipClock, suggestedCut } from '#services/clip_extend'
+import { planExtend, shiftClipClock, suggestedCut, trimOnFile } from '#services/clip_extend'
 
 // A clip file covering 1000-1090 s of a 5 h live, cut at 20-50 s by the AI
 const LIVE = 5 * 3600
@@ -15,6 +15,15 @@ test.group('Clip extend', () => {
     assert.deepEqual(planExtend('start', 1000, 1090, [20, 50], LIVE), { file: { start: 970, end: 1090 }, trim: [20, 80] })
     // 30 s after a cut ending at 80: the file grows to 1120, the cut to 110
     assert.deepEqual(planExtend('end', 1000, 1090, [20, 80], LIVE), { file: { start: 1000, end: 1120 }, trim: [20, 110] })
+  })
+
+  test('a file that starts on a key frame, a little after what was planned: the cut is counted from there', ({ assert }) => {
+    const plan = planExtend('start', 1000, 1090, [20, 50], LIVE)!
+    // Asked from 970 s, the copy begins on the key frame at 971.6 s: the same moment is 1.6 s sooner on the file
+    assert.deepEqual(trimOnFile(plan, 971.6), [18.4, 78.4])
+    // It starts where it was asked (or the file did not grow): the plan stands
+    assert.deepEqual(trimOnFile(plan, 970.03), [20, 80])
+    assert.deepEqual(trimOnFile(planExtend('end', 1000, 1090, [20, 50], LIVE)!, 1000), [20, 80])
   })
 
   test('the live starts and ends somewhere', ({ assert }) => {

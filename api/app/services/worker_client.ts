@@ -320,13 +320,18 @@ export interface CutPiece {
   vod_start: number
   vod_end: number
   duration: number
+  /** Asked with `fit`: where those words are really said (live seconds), null when they are not found in the clip */
+  tight?: [number, number] | null
 }
 
-/** Cut pieces of the live into small clips (clip_tools.extract_pieces); 410 when the live is gone */
+/**
+ * Cut pieces of the live into small clips (clip_tools.extract_pieces); 410 when the live is gone.
+ * `fit`: the lines of the live's transcript a piece is made of, to get back where they are really said.
+ */
 export async function extractLivePieces(
   jobId: string,
   url: string,
-  pieces: { id: string; start: number; end: number }[]
+  pieces: { id: string; start: number; end: number; fit?: [number, number] }[]
 ): Promise<{ pieces: CutPiece[]; failed: string[] }> {
   return call('POST', `/clips/${encodeURIComponent(jobId)}/pieces`, { body: { url, pieces }, timeoutMs: 10 * 60_000 })
 }

@@ -5,6 +5,7 @@ import {
   addItems,
   addSection,
   applyLooks,
+  applyTight,
   clearLooks,
   compilationLength,
   fitToTarget,
@@ -21,6 +22,7 @@ import {
   sectionStarts,
   sectionsFromPlan,
   stepText,
+  tightened,
   updateItem,
 } from "./compilation";
 
@@ -100,21 +102,77 @@ describe("compilations", () => {
     ]);
   });
 
-  it("fits a length", () => {
+  it("fits a length: long passages get shorter, sentences stay whole", () => {
     const c = { sections: [section("s1", [item("a", 100, 110), item("b", 200, 210)]), section("s2", [item("c", 300, 320)])] };
-    // 40 s down to 20: every moment halved around its middle
-    const half = fitToTarget(c, 20);
-    expect(compilationLength(half)).toBeCloseTo(20, 1);
-    expect(half.sections[0].items[0]).toMatchObject({ start: 102.5, end: 107.5 });
-    expect(half.sections[1].items[0]).toMatchObject({ start: 305, end: 315 });
+    // 40 s down to 30: what each passage has over 6 s shrinks by the same share, around its middle
+    const shorter = fitToTarget(c, 30);
+    expect(compilationLength(shorter)).toBeCloseTo(30, 1);
+    expect(shorter.sections[0].items[0]).toMatchObject({ start: 100.91, end: 109.09 });
+    expect(shorter.sections[1].items[0]).toMatchObject({ start: 303.18, end: 316.82 });
     // Already short enough
     expect(fitToTarget(c, 60)).toBe(c);
-    // Moments can't shrink under 1.2 s: the last ones of the longest section go
+    // Sentences (2 s each) are not cut into: the last ones of the longest part go, never a part's only one
     const many = { sections: [section("s1", Array.from({ length: 10 }, (_, i) => item(`i${i}`, i * 10, i * 10 + 2))), section("s2", [item("z", 500, 502)])] };
-    const tight = fitToTarget(many, 6);
-    expect(compilationLength(tight)).toBeLessThanOrEqual(6.2);
-    expect(tight.sections[1].items).toHaveLength(1);
-    expect(tight.sections[0].items.map((i) => i.id)).toEqual(["i0", "i1", "i2", "i3"]);
+    const fewer = fitToTarget(many, 6);
+    expect(compilationLength(fewer)).toBe(6);
+    expect(ids(fewer)).toEqual([["i0", "i1"], ["z"]]);
+    expect(fewer.sections[0].items[0]).toEqual(many.sections[0].items[0]);
+  });
+
+  it("fits a length: the passages the AI scored the lowest go first", () => {
+    const scored = (id: string, start: number, score: number): CompilationItem => ({ ...item(id, start, start + 3), score });
+    const c = {
+      sections: [
+        section("s1", [scored("a", 100, 0.9), scored("b", 200, 0.4), scored("c", 300, 0.8)]),
+        section("s2", [scored("d", 400, 0.3), scored("e", 500, 0.95), scored("f", 600, 0.4)]),
+      ],
+    };
+    // 18 s down to 12: d (0.3) goes, then b rather than f (both 0.4): the longest part gives it
+    expect(ids(fitToTarget(c, 12))).toEqual([["a", "c"], ["e", "f"]]);
+    // Down to 6: the best of each part stays
+    expect(ids(fitToTarget(c, 6))).toEqual([["a"], ["e"]]);
+    // Asked to leave every passage whole (they are cut on their words): passages go, none is shortened
+    const scenes = { sections: [section("s1", [{ ...item("a", 100, 110), score: 0.9 }, { ...item("b", 200, 208), score: 0.6 }]), section("s2", [item("c", 300, 312)])] };
+    expect(compilationLength(fitToTarget(scenes, 26))).toBeCloseTo(26, 1);
+    const whole = fitToTarget(scenes, 26, true);
+    expect(ids(whole)).toEqual([["a"], ["c"]]);
+    expect(whole.sections[0].items[0]).toEqual(scenes.sections[0].items[0]);
+    // ...even when that leaves the video too long: a part keeps its only passage
+    expect(fitToTarget(scenes, 15, true)).toEqual(whole);
+    // Passages can't all go: when the few that are left are still too long, they are shortened
+    const two = { sections: [section("s1", [item("a", 100, 104)]), section("s2", [item("b", 200, 204)])] };
+    const squeezed = fitToTarget(two, 4);
+    expect(ids(squeezed)).toEqual([["a"], ["b"]]);
+    expect(compilationLength(squeezed)).toBeCloseTo(4, 1);
+    expect(squeezed.sections[0].items[0]).toMatchObject({ start: 101, end: 103 });
+  });
+
+  it("sets a passage on where its words are really said, once its clip is cut", () => {
+    // What is said: the transcript's times for it are kept aside (with the air around, the passage is wider)
+    const spoken = itemFromHit(hit(100, 106, { spoken: true }), 5000);
+    expect(spoken).toMatchObject({ start: 99.65, end: 106.5, fit: [100, 106] });
+    // Found in the chat, or a sound the AI heard: nothing to set it on
+    expect(itemFromHit(hit(50, 61, { sources: ["chat"] }), 5000).fit).toBeUndefined();
+    expect(itemFromHit(hit(50, 61, { sources: ["ai"], score: 0.9 }), 5000)).toMatchObject({ score: 0.9 });
+    expect(itemFromHit(hit(50, 61), 5000).score).toBeUndefined();
+
+    const other = { ...item("other", 300, 303), fit: [300.2, 302.8] as [number, number] };
+    const lost = { ...item("lost", 400, 403), fit: [400.2, 402.8] as [number, number] };
+    const c = { sections: [section("s1", [{ ...spoken, id: "spoken" }, other, lost, item("plain", 500, 503)])] };
+    // The sentence is said from 103.6 to 105.42 s; the words of "lost" were not found; "other" has no clip yet
+    const set = applyTight(c, { spoken: [103.6, 105.417], lost: null, plain: [1, 2] });
+    expect(set.sections[0].items.map((i) => [i.id, i.start, i.end, i.fit])).toEqual([
+      ["spoken", 103.6, 105.42, undefined],
+      ["other", 300, 303, [300.2, 302.8]],
+      ["lost", 400, 403, undefined],
+      ["plain", 500, 503, undefined],
+    ]);
+    // Nothing to set: the same compilation
+    expect(applyTight(set, { spoken: [1, 2] })).toBe(set);
+    expect(applyTight(c, {})).toBe(c);
+    // Bounds that make no sense leave the passage as it was
+    expect(tightened(other, [300.5, 300.6])).toMatchObject({ start: 300, end: 303 });
+    expect(tightened(other, [300.5, 300.6]).fit).toBeUndefined();
   });
 
   it("turns the AI's plan into sections", () => {

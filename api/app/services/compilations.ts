@@ -27,6 +27,13 @@ export interface CompilationItem {
   sources: string[]
   /** Its own template key, when it isn't shown like the rest of the video */
   template?: string
+  /**
+   * The lines of the live's transcript it is made of (live seconds), while it still has their
+   * rough times: once its clip is cut, the moment is set on where those words are really said
+   */
+  fit?: [number, number]
+  /** How well it matches what was asked, when the AI found it (0-1): the weakest go first when a length is to be met */
+  score?: number
 }
 
 export interface CompilationSection {
@@ -88,7 +95,17 @@ function parseItem(raw: any, liveDuration: number): CompilationItem | null {
     why: text(raw.why, 200),
     sources: Array.isArray(raw.sources) ? raw.sources.filter((s: unknown) => typeof s === 'string' && SOURCES.has(s)) : [],
     ...(isTemplateKey(raw.template) ? { template: raw.template } : {}),
+    ...(parseFit(raw.fit) ? { fit: parseFit(raw.fit)! } : {}),
+    ...(Number.isFinite(raw.score) && raw.score >= 0 && raw.score <= 1 ? { score: Math.round(raw.score * 100) / 100 } : {}),
   }
+}
+
+/** A stretch of the live's transcript as the app sends it: two seconds in order, null when it isn't one */
+export function parseFit(raw: unknown): [number, number] | null {
+  if (!Array.isArray(raw) || raw.length !== 2) return null
+  const [start, end] = raw.map(Number)
+  if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end <= start || end - start > MAX_ITEM_SECONDS) return null
+  return [hundredth(start), hundredth(end)]
 }
 
 /**
@@ -142,7 +159,9 @@ export function pieceState(jobId: string, item: Pick<CompilationItem, 'id' | 'st
   const meta = readClipMeta(jobId, file)
   const onDisk = existsSync(path.join(clipDir(jobId), file))
   const covers = !!meta && meta.vod_start <= item.start + 0.05 && meta.vod_end >= item.end - 0.05
-  return { ready: onDisk && covers, file, file_start: meta?.vod_start ?? null, file_end: meta?.vod_end ?? null }
+  // A clip cut before files were made to start on their first picture is cut again: its picture
+  // could freeze for 2 s and its words were timed that much early
+  return { ready: onDisk && covers && meta.settled === true, file, file_start: meta?.vod_start ?? null, file_end: meta?.vod_end ?? null }
 }
 
 /** Compilations with each item's clip state, as the app reads them */

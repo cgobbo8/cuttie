@@ -37,6 +37,7 @@ import { useSettings } from "../lib/SettingsContext";
 import {
   addItems,
   allItems,
+  applyTight,
   applyLooks,
   clearLooks,
   compilationLength,
@@ -47,6 +48,7 @@ import {
   removeItem,
   sectionStarts,
   sectionsFromPlan,
+  tightened,
   updateItem,
 } from "../lib/compilation";
 import { clock } from "../lib/format";
@@ -74,6 +76,9 @@ const SAVE_DELAY = 500;
 const STRIP_TILES = 24;
 
 const hitKey = (hit: LiveHit) => `${hit.start}-${hit.end}`;
+
+/** How far over the length asked a described video may run before passages are taken out of it */
+const PLAN_OVER = 1.1;
 
 /** The item's clip is there and covers the moment as it is now */
 function covers(piece: PieceState | undefined, item: CompilationItem): piece is PieceState & { file_start: number; file_end: number } {
@@ -133,6 +138,10 @@ export default function CompilationPage() {
   const [looksNote, setLooksNote] = useState<{ id: string; note: string } | null>(null);
   // A described video asked for a look: chosen once its clips are cut
   const pendingLooks = useRef<{ id: string; wish: string } | null>(null);
+  // Where each passage's words are really said (live seconds, null: not found), known once its clip is cut
+  const [tight, setTight] = useState<Record<string, [number, number] | null>>({});
+  // A described video is brought to its length once its passages are set on their words (their rough times say little)
+  const [pendingFit, setPendingFit] = useState<{ id: string; target: number } | null>(null);
   const [failure, setFailure] = useState<LiveFailure | null>(null);
   const [toDelete, setToDelete] = useState(false);
   // Search results looked at before being added keep their id (and so their clip)
@@ -208,18 +217,23 @@ export default function CompilationPage() {
   const ensure = useCallback(
     async (items: CompilationItem[]): Promise<Record<string, PieceState>> => {
       if (!jobId) return piecesRef.current;
-      const todo = items.filter((item) => !covers(piecesRef.current[item.id], item));
+      // Those without a clip, and those whose words are still to be found in theirs
+      const todo = items.filter((item) => item.fit || !covers(piecesRef.current[item.id], item));
       if (todo.length === 0) return piecesRef.current;
       setCutting((prev) => new Set([...prev, ...todo.map((i) => i.id)]));
       let known = piecesRef.current;
       try {
         for (let i = 0; i < todo.length; i += CUT_BATCH) {
           const batch = todo.slice(i, i + CUT_BATCH);
-          const done = await ensurePieces(jobId, batch.map(({ id, start, end }) => ({ id, start, end })));
-          const states = Object.fromEntries(done.pieces.map(({ id, ...state }) => [id, state]));
+          // A passage still on the transcript's rough times: its clip holds those lines whole, and tells where they are really said
+          const asked = batch.map(({ id, start, end, fit }) => (fit ? { id, start: Math.min(start, fit[0]), end: Math.max(end, fit[1]), fit } : { id, start, end }));
+          const done = await ensurePieces(jobId, asked);
+          const states = Object.fromEntries(done.pieces.map(({ id, tight: _found, ...state }) => [id, state]));
+          const found = Object.fromEntries(done.pieces.filter((piece) => piece.tight !== undefined).map((piece) => [piece.id, piece.tight ?? null]));
           known = { ...known, ...states };
           piecesRef.current = { ...piecesRef.current, ...states };
           setPieces((prev) => ({ ...prev, ...states }));
+          if (Object.keys(found).length > 0) setTight((prev) => ({ ...prev, ...found }));
           setCutting((prev) => new Set([...prev].filter((id) => !batch.some((b) => b.id === id))));
           if (done.failed.length > 0) toast.error(t("compilation.failure.failed"));
         }
@@ -242,6 +256,29 @@ export default function CompilationPage() {
     ensuredFor.current = compilation.id;
     ensure(allItems(compilation));
   }, [compilation, ensure]);
+
+  // A passage's clip is cut: the passage goes where its words are really said (the transcript's times were rough)
+  useEffect(() => {
+    if (Object.keys(tight).length === 0) return;
+    for (const [key, draft] of drafts.current) {
+      if (draft.fit && tight[draft.id] !== undefined) drafts.current.set(key, tightened(draft, tight[draft.id]));
+    }
+    setShown((item) => (item?.fit && tight[item.id] !== undefined ? tightened(item, tight[item.id]) : item));
+    if (!compilation) return;
+    const set = applyTight(compilation, tight);
+    if (set !== compilation) change(set);
+  }, [change, compilation, tight]);
+
+  // A described video: once its passages are set on their words, brought to the length asked for (the weakest passages go)
+  useEffect(() => {
+    if (!pendingFit || !compilation || compilation.id !== pendingFit.id || cutting.size > 0) return;
+    // Passages whose words were just found are being set (the effect above): after them
+    if (allItems(compilation).some((item) => item.fit && tight[item.id] !== undefined)) return;
+    setPendingFit(null);
+    // "About 1 min 30" stands up to a tenth over; past that the weakest passages go. None is shortened: they are cut on their words
+    const fitted = fitToTarget(compilation, pendingFit.target * PLAN_OVER, true);
+    if (fitted !== compilation) change(fitted);
+  }, [change, compilation, cutting, pendingFit, tight]);
 
   const loadEnv = useCallback(
     async (piece: PieceState): Promise<EditEnvironment> => {
@@ -296,8 +333,7 @@ export default function CompilationPage() {
 
   const applyPlan = async (plan: VideoPlan, target: number) => {
     if (!jobId || !compilation) return;
-    // What the AI planned can run a little over: brought back to the length asked for
-    const sections = fitToTarget({ sections: sectionsFromPlan(plan, liveDuration) }, target * 1.05).sections;
+    const sections = sectionsFromPlan(plan, liveDuration);
     if (sections.length === 0) return;
     try {
       let planned: Compilation;
@@ -315,6 +351,8 @@ export default function CompilationPage() {
       setView("video");
       // The description said how the video should look: the AI lays it out once the clips are there
       pendingLooks.current = plan.look?.trim() ? { id: planned.id, wish: plan.look.trim() } : null;
+      // What the AI planned can run over: brought back to the length asked for once each passage has its real length
+      setPendingFit({ id: planned.id, target });
       ensure(allItems(planned));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t("common.error"));
@@ -323,9 +361,11 @@ export default function CompilationPage() {
 
   /** New bounds for the moment on screen (live seconds): saved when it is in the compilation, its clip cut again when needed */
   const recut = (item: CompilationItem, start: number, end: number) => {
-    const moved = { ...item, start: Math.round(start * 100) / 100, end: Math.round(end * 100) / 100 };
+    // The streamer's own cut: no longer waiting to be set on its words
+    const { fit: _waiting, ...kept } = item;
+    const moved = { ...kept, start: Math.round(start * 100) / 100, end: Math.round(end * 100) / 100 };
     setShown(moved);
-    if (compilation && allItems(compilation).some((i) => i.id === item.id)) change(updateItem(compilation, item.id, { start: moved.start, end: moved.end }));
+    if (compilation && allItems(compilation).some((i) => i.id === item.id)) change(updateItem(compilation, item.id, { start: moved.start, end: moved.end, fit: undefined }));
     else for (const [key, draft] of drafts.current) if (draft.id === item.id) drafts.current.set(key, moved);
     ensure([moved]);
   };
@@ -476,11 +516,13 @@ export default function CompilationPage() {
   useEffect(() => {
     const pending = pendingLooks.current;
     if (!pending || looking || !compilation || compilation.id !== pending.id || cutting.size > 0) return;
+    // Once the video has its passages for good: set on their words, brought to its length
+    if (pendingFit?.id === pending.id) return;
     const items = allItems(compilation);
     if (items.length === 0 || !items.every((item) => covers(pieces[item.id], item))) return;
     pendingLooks.current = null;
     chooseByAi(compilation, pending.wish);
-  }, [chooseByAi, compilation, cutting, looking, pieces]);
+  }, [chooseByAi, compilation, cutting, looking, pendingFit, pieces]);
 
   // The data of each clip (size, cam, words, chat) for the preview
   const readyItems = useMemo(() => (compilation ? allItems(compilation).filter((item) => covers(pieces[item.id], item)) : []), [compilation, pieces]);

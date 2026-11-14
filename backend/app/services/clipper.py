@@ -690,6 +690,76 @@ def _streamcopy_clip(
         return False
 
 
+# A file whose picture and sound start within this of its time 0 is left as it is
+STARTS_AT_ZERO = 0.1
+
+
+def stream_starts(path: str) -> tuple[float | None, float | None]:
+    """When a file's picture and its sound start on its own clock, seconds (None: no such stream)."""
+    try:
+        out = subprocess.run(
+            ["ffprobe", "-v", "error", "-show_entries", "stream=codec_type,start_time", "-of", "json", path],
+            capture_output=True, text=True, timeout=30, check=True,
+        ).stdout
+        streams = json.loads(out).get("streams", [])
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError, ValueError):
+        return None, None
+
+    def start(kind: str) -> float | None:
+        try:
+            return next(float(s["start_time"]) for s in streams if s.get("codec_type") == kind and s.get("start_time") not in (None, "N/A"))
+        except (StopIteration, ValueError):
+            return None
+
+    return start("video"), start("audio")
+
+
+def settle_start(path: str) -> float:
+    """Make a stream-copied file start on its first picture.
+
+    A copy can only begin on a key frame: asked for 1:23:45.4, ffmpeg keeps time 0 at 1:23:45.4
+    but the picture only starts at the next key frame (up to 2 s later on Twitch), and the file
+    says so with a wait before its streams. Players then show a frozen picture until there, and
+    whatever is timed on the file's own sound (words transcribed from it, cuts set on them) is
+    that much early. The file is rewritten (no re-encoding) to begin at that key frame, picture
+    and sound together at 0.
+
+    Returns how many seconds later than asked the file now starts (0.0 when it was fine).
+    """
+    video, audio = stream_starts(path)
+    if video is None or max(video, audio or 0.0) < STARTS_AT_ZERO:
+        return 0.0
+    tmp = f"{path}.settling.mp4"
+    try:
+        subprocess.run(
+            ["ffmpeg", "-y", "-loglevel", "error", "-ss", f"{video:.6f}", "-i", path, "-c", "copy",
+             "-avoid_negative_ts", "make_zero", "-movflags", "+faststart", tmp],
+            check=True, timeout=120, capture_output=True, text=True,
+        )
+        after, _sound = stream_starts(tmp)
+        # What is left is the few frames an encoder holds back before its first picture
+        if after is None or (after >= STARTS_AT_ZERO and after > video - 0.05):
+            raise RuntimeError(f"picture still starts at {after}")
+        os.replace(tmp, path)
+        return max(0.0, video - after)
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError, RuntimeError) as e:
+        # The file stays as it was cut: it plays, with its wait at the start
+        logger.warning(f"Start of {os.path.basename(path)} not settled: {type(e).__name__}: {e}")
+        return 0.0
+    finally:
+        if os.path.isfile(tmp):
+            os.remove(tmp)
+
+
+def cut_from_live(direct_url: str, start: float, duration: float, output_path: str) -> float | None:
+    """Cut `duration` seconds of the live from `start` by stream copy, into a file that starts on
+    its first picture. Returns the second of the live the file really starts at (the first key
+    frame at or after `start`), None when it couldn't be cut."""
+    if not _streamcopy_clip(direct_url, start, duration, output_path):
+        return None
+    return start + settle_start(output_path)
+
+
 # Number of consecutive stream copy failures before giving up on direct URL
 STREAMCOPY_FAIL_THRESHOLD = 3
 
@@ -724,10 +794,13 @@ def extract_group(
         logger.info(f"Clip {rank}: {_fmt_time(start)}-{_fmt_time(end)} ({duration:.0f}s)")
 
         success = False
+        # Where the file really starts in the live: a stream copy begins on a key frame
+        real_start: float | None = None
 
         # Try stream copy if direct URL available and hasn't failed too many times
         if direct_url and streamcopy_failures < STREAMCOPY_FAIL_THRESHOLD:
-            if _streamcopy_clip(direct_url, start, duration, filepath):
+            real_start = cut_from_live(direct_url, start, duration, filepath)
+            if real_start is not None:
                 success = True
                 streamcopy_failures = 0  # reset on success
             else:
@@ -740,7 +813,8 @@ def extract_group(
                         url_refreshed = True
                         logger.info(f"Refreshed direct URL after {streamcopy_failures} failures")
                         # Retry with fresh URL
-                        if _streamcopy_clip(direct_url, start, duration, filepath):
+                        real_start = cut_from_live(direct_url, start, duration, filepath)
+                        if real_start is not None:
                             success = True
                             streamcopy_failures = 0
                     except Exception as e:
@@ -784,7 +858,8 @@ def extract_group(
             logger.info(f"Clip {rank}: {filepath} ({size_mb:.1f}MB)")
             meta_path = os.path.join(clip_dir, f"clip_{rank:02d}_meta.json")
             with open(meta_path, "w") as mf:
-                json.dump({"vod_start": start, "vod_end": end}, mf)
+                # "settled": the file starts on its first picture, at vod_start exactly
+                json.dump({"vod_start": round(real_start if real_start is not None else start, 2), "vod_end": end, "settled": True}, mf)
             _write_probe_and_upload(clip_dir, job_id, filename, filepath)
             results.append((rank, idx, filename))
         else:

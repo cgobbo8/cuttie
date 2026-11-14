@@ -1286,6 +1286,11 @@ export interface LiveHit {
   /** The AI's reason, and how sure it is (0-1) */
   why: string;
   score: number;
+  /**
+   * Words that are said, at the times the live's transcript gives them (rough when it has lines
+   * only): once the moment has its clip, it is cut on where they really are
+   */
+  spoken?: boolean;
 }
 
 export interface LiveSearchResult {
@@ -1396,6 +1401,13 @@ export interface CompilationItem extends Partial<PieceState> {
   sources: string[];
   /** Its own template key, when it isn't shown like the rest of the video */
   template?: string | null;
+  /**
+   * The lines of the live's transcript it is made of (live seconds), while it still has their rough
+   * times: once its clip is cut, the moment is set on where those words are really said
+   */
+  fit?: [number, number];
+  /** How well it matches what was asked, when the AI found it (0-1) */
+  score?: number;
 }
 
 /** A template as the AI is told about it (see templateGuide.ts) */
@@ -1486,8 +1498,15 @@ export async function deleteCompilation(jobId: string, compilationId: string): P
   await jsonOrThrow(await fetch(`${BASE}/jobs/${jobId}/compilations/${compilationId}`, { method: "DELETE" }), "Failed to delete the compilation");
 }
 
-/** Makes sure each moment (live seconds) has its clip, cutting it from the live when needed */
-export async function ensurePieces(jobId: string, pieces: { id: string; start: number; end: number }[]): Promise<{ pieces: (PieceState & { id: string })[]; failed: string[] }> {
+/**
+ * Makes sure each moment (live seconds) has its clip, cutting it from the live when needed. A
+ * moment sent with `fit` (the lines of the transcript it is made of) comes back with `tight`:
+ * where those words are really said, null when they are not found in the clip.
+ */
+export async function ensurePieces(
+  jobId: string,
+  pieces: { id: string; start: number; end: number; fit?: [number, number] }[],
+): Promise<{ pieces: (PieceState & { id: string; tight?: [number, number] | null })[]; failed: string[] }> {
   return liveJson(await postJson(`${BASE}/jobs/${jobId}/pieces`, { pieces }));
 }
 

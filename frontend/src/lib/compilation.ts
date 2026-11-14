@@ -7,6 +7,7 @@
 
 import type { TFunction } from "i18next";
 import type { Compilation, CompilationItem, CompilationSection, LiveHit, LiveSearchStep, VideoPlan } from "./api";
+import { isTransition, type TransitionId } from "./transitions";
 
 /** Air kept around what is said when a result becomes an item, seconds */
 const PAD_BEFORE = 0.35;
@@ -140,6 +141,122 @@ export function moveItem<T extends Pick<Compilation, "sections">>(c: T, itemId: 
   }
   return { ...c, sections };
 }
+
+/**
+ * Several passages one place earlier (-1) or later (+1), each as `moveItem`
+ * moves one and in their order: they keep their places among themselves. One
+ * that would have to jump over another of them that can't move stays behind it.
+ */
+export function moveItems<T extends Pick<Compilation, "sections">>(c: T, ids: Iterable<string>, by: -1 | 1): T {
+  const picked = new Set(ids);
+  const order = allItems(c).filter((item) => picked.has(item.id)).map((item) => item.id);
+  // The one in front goes first
+  if (by === 1) order.reverse();
+  let next = c;
+  for (const id of order) {
+    const section = next.sections.find((s) => s.items.some((item) => item.id === id))!;
+    const neighbor = section.items[section.items.findIndex((item) => item.id === id) + by];
+    if (neighbor && picked.has(neighbor.id)) continue;
+    next = moveItem(next, id, by);
+  }
+  return next;
+}
+
+/**
+ * Passages taken from wherever they are and put together, in the order they
+ * play, in one part: right before its passage `before`, at its end without
+ * one. Dropped on one of themselves, they go before the next passage that stays.
+ */
+export function placeItems<T extends Pick<Compilation, "sections">>(c: T, ids: Iterable<string>, sectionId: string, before: string | null = null): T {
+  const picked = new Set(ids);
+  const moved = allItems(c).filter((item) => picked.has(item.id));
+  const target = c.sections.find((s) => s.id === sectionId);
+  if (moved.length === 0 || !target) return c;
+  let anchor = before;
+  if (anchor && picked.has(anchor)) {
+    const at = target.items.findIndex((item) => item.id === anchor);
+    anchor = at === -1 ? null : (target.items.slice(at + 1).find((item) => !picked.has(item.id))?.id ?? null);
+  }
+  const next = mapSections(c, (s) => {
+    const rest = s.items.filter((item) => !picked.has(item.id));
+    if (s.id !== sectionId) return rest.length === s.items.length ? s : { ...s, items: rest };
+    const found = anchor ? rest.findIndex((item) => item.id === anchor) : -1;
+    const at = found === -1 ? rest.length : found;
+    return { ...s, items: [...rest.slice(0, at), ...moved, ...rest.slice(at)] };
+  });
+  // Dropped where they already were: nothing changed
+  const order = (x: Pick<Compilation, "sections">) => x.sections.map((s) => s.items.map((item) => item.id).join(",")).join("|");
+  return order(next) === order(c) ? c : next;
+}
+
+/** Without these passages */
+export function removeItems<T extends Pick<Compilation, "sections">>(c: T, ids: Iterable<string>): T {
+  const picked = new Set(ids);
+  return mapSections(c, (s) => (s.items.some((item) => picked.has(item.id)) ? { ...s, items: s.items.filter((item) => !picked.has(item.id)) } : s));
+}
+
+/** The passages from one to another, both included, in the order they play (a range picked with Shift) */
+export function itemsBetween(c: Pick<Compilation, "sections">, a: string, b: string): string[] {
+  const ids = allItems(c).map((item) => item.id);
+  const [from, to] = [ids.indexOf(a), ids.indexOf(b)].sort((x, y) => x - y);
+  return from === -1 ? (ids.includes(b) ? [b] : []) : ids.slice(from, to + 1);
+}
+
+/* ── Transitions ──────────────────────────────────────────── */
+
+/** A passage's own way in that says "no transition here", where the rest of the video has one */
+export const PLAIN_CUT = "cut";
+
+/**
+ * The ready-made transition each passage comes in with, by passage: its own
+ * when it has one, else the video's. None for the video's first passage
+ * (nothing comes before it) nor where a plain cut was asked.
+ */
+export function transitionsOf(c: Pick<Compilation, "sections" | "transition">): Record<string, TransitionId> {
+  const found: Record<string, TransitionId> = {};
+  allItems(c).forEach((item, i) => {
+    const key = item.transition ?? c.transition;
+    if (i > 0 && isTransition(key)) found[item.id] = key;
+  });
+  return found;
+}
+
+/**
+ * How these passages come in: a ready-made transition, a plain cut, or (null)
+ * as the rest of the video does. One that would only repeat the video's is not
+ * kept: the passage follows the video again.
+ */
+export function setTransition<T extends Pick<Compilation, "sections" | "transition">>(c: T, ids: Iterable<string>, transition: string | null): T {
+  const picked = new Set(ids);
+  const same = transition === null || transition === (c.transition ?? PLAIN_CUT);
+  return mapSections(c, (s) => ({
+    ...s,
+    items: s.items.map((item) => {
+      if (!picked.has(item.id)) return item;
+      const { transition: _own, ...rest } = item;
+      return same ? rest : { ...rest, transition: transition! };
+    }),
+  }));
+}
+
+/** The whole video with one transition (null: plain cuts), every passage following it */
+export function setVideoTransition<T extends Pick<Compilation, "sections" | "transition">>(c: T, transition: string | null, everywhere = false): T {
+  const { transition: _before, ...rest } = c;
+  const next = { ...rest, ...(transition && transition !== PLAIN_CUT ? { transition } : {}) } as T;
+  return mapSections(next, (s) => ({
+    ...s,
+    items: s.items.map((item) => {
+      // A passage's own choice stays, unless it now only repeats the video's
+      if (!everywhere && item.transition !== undefined && item.transition !== (next.transition ?? PLAIN_CUT)) return item;
+      const { transition: _own, ...plain } = item;
+      return plain;
+    }),
+  }));
+}
+
+/** How many passages come in their own way (not as the rest of the video does) */
+export const ownTransitions = (c: Pick<Compilation, "sections" | "transition">): number =>
+  allItems(c).filter((item, i) => i > 0 && item.transition !== undefined && item.transition !== (c.transition ?? PLAIN_CUT)).length;
 
 export function addSection<T extends Pick<Compilation, "sections">>(c: T, title = "", query = ""): { compilation: T; id: string } {
   const id = newId();

@@ -6,6 +6,8 @@
  *   copied as is (only WidgetImg.tsx differs on each side: Remotion's <Img> on the
  *   server makes frames wait for images). The older widgets next to it are
  *   maintained by hand on each side.
+ * - transitions between the pieces of a montage: frontend/src/lib/transitions.ts ->
+ *   api/remotion/transitions.ts, copied as is.
  *
  * Run after adding a font or touching a widget: node scripts/sync-remotion.mjs
  * (frontend/src/lib/remotionSync.test.ts fails when they drift apart).
@@ -48,4 +50,6 @@ for (const file of readdirSync(from)) {
   widgets++;
 }
 
-console.log(`Synced ${CLIP_FONTS.length} fonts and ${widgets} widgets into api/`);
+copyFileSync(path.join(root, "frontend/src/lib/transitions.ts"), path.join(root, "api/remotion/transitions.ts"));
+
+console.log(`Synced ${CLIP_FONTS.length} fonts, ${widgets} widgets and the transitions into api/`);

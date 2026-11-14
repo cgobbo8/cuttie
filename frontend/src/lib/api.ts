@@ -1419,6 +1419,8 @@ export interface CompilationItem extends Partial<PieceState> {
   score?: number;
   /** The live it is cut from, when it isn't the compilation's own (one of its `lives`): its times and its clip are that live's */
   job?: string;
+  /** How it comes in when that isn't as the rest of the video does: a ready-made transition (see transitions.ts), or "cut" (none) */
+  transition?: string;
 }
 
 /** A template as the AI is told about it (see templateGuide.ts) */
@@ -1483,6 +1485,8 @@ export interface Compilation {
   hook: string;
   /** Length aimed for, seconds */
   target: number | null;
+  /** The ready-made transition between its passages (absent: plain cuts) */
+  transition?: string;
   /** Described to the AI: what was first asked for, then each change asked and what the AI answered */
   brief?: string;
   /** What the AI answered to the description: what it built and why */

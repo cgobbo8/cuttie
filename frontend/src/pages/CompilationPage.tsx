@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { useTranslation } from "react-i18next";
-import { Player } from "@remotion/player";
+import { Player, type PlayerRef } from "@remotion/player";
 import { ArrowLeft, Check, CircleQuestionMark, Loader2, Plus, X } from "lucide-react";
 import {
   chooseLooks,
@@ -49,6 +49,7 @@ import {
   looksCount,
   removeItem,
   sectionStarts,
+  transitionsOf,
   planCurrent,
   revisedSections,
   sectionsFromPlan,
@@ -57,8 +58,9 @@ import {
 } from "../lib/compilation";
 import { liveWhen, plainDate } from "../lib/compilationLibrary";
 import { clock, splitVodTitle } from "../lib/format";
-import { buildMontage, montageFrames, renderPieces, type MontageCut, type MontageProps } from "../lib/montage";
+import { buildMontage, framesOf, montageFrames, renderPieces, type MontageCut, type MontageProps } from "../lib/montage";
 import { evenFrames, tileStyle } from "../lib/storyboard";
+import { isTransition, transitionSpan } from "../lib/transitions";
 import { clipTemplateContext } from "../lib/templateContext";
 import { templateGuides } from "../lib/templateGuide";
 import { buildAny, customTemplates, defaultTemplateKey, findCustom, hookOf, isBuiltIn, type TemplateKey } from "../lib/templateKeys";
@@ -149,9 +151,18 @@ export default function CompilationPage() {
   const piecesRef = useRef(pieces);
   piecesRef.current = pieces;
   const [cutting, setCutting] = useState<Set<string>>(new Set());
-  // The moment shown in "Passage": an item of the compilation, or a search result not added yet
+  // The moment open under the whole video: an item of the compilation, or a search result not added yet
   const [shown, setShown] = useState<CompilationItem | null>(null);
-  const [view, setView] = useState<"piece" | "video">("piece");
+  // The whole video's player; the passage it is on; whether it plays (it and the passage never play over each other)
+  const playerRef = useRef<PlayerRef>(null);
+  const [onItem, setOnItem] = useState<string | null>(null);
+  const onItemRef = useRef(onItem);
+  onItemRef.current = onItem;
+  const [videoPlaying, setVideoPlaying] = useState(false);
+  const [hush, setHush] = useState(0);
+  // How tall the open passage is: the whole video takes what is left of the window above it
+  const [pieceHeight, setPieceHeight] = useState(0);
+  const pieceBox = useRef<HTMLDivElement>(null);
   const [results, setResults] = useState<LiveHit[]>([]);
   const [envs, setEnvs] = useState<Record<string, EditEnvironment>>({});
   const envsRef = useRef(envs);
@@ -396,7 +407,6 @@ export default function CompilationPage() {
   const watch = (hit: LiveHit) => {
     const item = (compilation && itemFor(compilation, hit)) || draftOf(hit);
     setShown(item);
-    setView("piece");
     ensure([item]);
   };
 
@@ -477,7 +487,7 @@ export default function CompilationPage() {
         change(planned);
       }
       setActiveSection(planned.sections[0].id);
-      setView("video");
+      setShown(null);
       // The description said how the video should look: the AI lays it out once the clips are there
       pendingLooks.current = plan.look?.trim() ? { id: planned.id, wish: plan.look.trim() } : null;
       // What the AI planned can run over: brought back to the length asked for once each passage has its real length
@@ -539,9 +549,11 @@ export default function CompilationPage() {
 
   /** What Remotion plays for these items (all with their clip and its data), null when something is missing */
   const build = useCallback(
-    (source: Compilation, states: Record<string, Piece>, known: Record<string, EditEnvironment>): { montage: MontageProps; files: string[]; jobs: (string | undefined)[] } | null => {
+    (source: Compilation, states: Record<string, Piece>, known: Record<string, EditEnvironment>, all: Compilation = source): { montage: MontageProps; files: string[]; jobs: (string | undefined)[]; ids: string[] } | null => {
       if (!kit || !jobId) return null;
       const items = allItems(source);
+      // How each passage comes in (`all`: the whole video, when only what is ready of it is built)
+      const transitions = transitionsOf(all);
       const cuts: MontageCut[] = [];
       const files: string[] = [];
       // The live each clip is in, when it isn't this one
@@ -569,6 +581,7 @@ export default function CompilationPage() {
           ctx: { ...ctx, displayName: channel?.display_name ?? null, followers: channel?.followers ?? null, game: job?.vod_game ?? null },
           start: item.start - piece.file_start,
           end: item.end - piece.file_start,
+          transition: transitions[item.id],
         });
         files.push(piece.file);
         jobs.push(piece.job !== jobId ? piece.job : undefined);
@@ -597,7 +610,7 @@ export default function CompilationPage() {
                 })
             : [],
       );
-      return { montage, files, jobs };
+      return { montage, files, jobs, ids: items.map((item) => item.id) };
     },
     [channel, customs, job, jobId, kit, templateKey],
   );
@@ -655,16 +668,73 @@ export default function CompilationPage() {
   // The data of each clip (size, cam, words, chat) for the preview
   const readyItems = useMemo(() => (compilation ? allItems(compilation).filter((item) => covers(pieces[item.id], item)) : []), [compilation, pieces]);
   useEffect(() => {
-    if (view !== "video") return;
     for (const item of readyItems) loadEnv(pieces[item.id]).catch(() => {});
-  }, [view, readyItems, pieces, loadEnv]);
+  }, [readyItems, pieces, loadEnv]);
 
   const preview = useMemo(() => {
-    if (!compilation || view !== "video") return null;
+    if (!compilation) return null;
     // What is ready plays already: the rest joins as its clips arrive
     const ready = { ...compilation, sections: compilation.sections.map((s) => ({ ...s, items: s.items.filter((item) => covers(pieces[item.id], item) && envs[pieceVersion(pieces[item.id])]) })) };
-    return build(ready, pieces, envs);
-  }, [build, compilation, envs, pieces, view]);
+    return build(ready, pieces, envs, compilation);
+  }, [build, compilation, envs, pieces]);
+
+  // Where each passage plays in the whole video, frames; `clear`: its first frame once the transition it comes in with is over
+  const marks = useMemo(() => {
+    let at = 0;
+    return (preview?.montage.segments ?? []).map((segment, i) => {
+      const from = at;
+      at += framesOf(segment.duration, FPS);
+      const coming = isTransition(segment.transition) ? transitionSpan(segment.transition, FPS).after : 0;
+      return { id: preview!.ids[i], from, to: at, clear: Math.min(at - 1, from + coming) };
+    });
+  }, [preview]);
+  const marksRef = useRef(marks);
+  marksRef.current = marks;
+  // The same passages in the same order: the same player, which keeps its place when a cut or a template changes
+  const playerKey = preview ? `${compilation?.id}-${templateKey}-${preview.files.join(",")}` : "";
+  useEffect(() => {
+    const player = playerRef.current;
+    if (!player || !playerKey) return;
+    const here = (frame: number) => setOnItem(marksRef.current.find((mark) => frame >= mark.from && frame < mark.to)?.id ?? null);
+    const onFrame = (e: { detail: { frame: number } }) => here(e.detail.frame);
+    const onPlay = () => {
+      setVideoPlaying(true);
+      // The passage open below stops: one sound at a time
+      setHush((n) => n + 1);
+    };
+    const onPause = () => setVideoPlaying(false);
+    player.addEventListener("frameupdate", onFrame);
+    player.addEventListener("play", onPlay);
+    player.addEventListener("pause", onPause);
+    here(player.getCurrentFrame());
+    setVideoPlaying(player.isPlaying());
+    return () => {
+      player.removeEventListener("frameupdate", onFrame);
+      player.removeEventListener("play", onPlay);
+      player.removeEventListener("pause", onPause);
+    };
+  }, [playerKey]);
+  // A cut that moved: the playhead may now be on another passage
+  useEffect(() => {
+    const frame = playerRef.current?.getCurrentFrame();
+    if (frame !== undefined) setOnItem(marks.find((mark) => frame >= mark.from && frame < mark.to)?.id ?? null);
+  }, [marks]);
+  /** The whole video goes to where a passage starts: it plays on from there, or stays stopped on its first clear picture (not in the middle of a transition) */
+  const jumpTo = (id: string) => {
+    const mark = marksRef.current.find((m) => m.id === id);
+    const player = playerRef.current;
+    if (mark && player) player.seekTo(player.isPlaying() ? mark.from : mark.clear);
+  };
+
+  // The open passage's height, as it is drawn
+  useEffect(() => {
+    const box = pieceBox.current;
+    if (!box || typeof ResizeObserver === "undefined") return setPieceHeight(0);
+    const watch = new ResizeObserver(() => setPieceHeight(box.offsetHeight));
+    watch.observe(box);
+    setPieceHeight(box.offsetHeight);
+    return () => watch.disconnect();
+  }, [shown?.id]);
 
   const exportNow = async () => {
     if (!jobId || !compilation || exporting) return;
@@ -850,96 +920,111 @@ export default function CompilationPage() {
           onResults={setResults}
         />
 
-        {/* Stage: one moment as it is, or the whole video in its template */}
-        <div className="flex-[1_1_380px] lg:group-has-[.talk-thread]/row:sticky lg:group-has-[.talk-thread]/row:top-[84px] min-w-0 flex flex-col items-center gap-3">
-          <div role="tablist" className="seg w-full">
-            {(["piece", "video"] as const).map((key) => (
-              <button key={key} role="tab" aria-selected={view === key} onClick={() => setView(key)}>
-                {t(`compilation.view.${key}`)}
-              </button>
-            ))}
-          </div>
-
-          {view === "piece" ? (
-            shownItem ? (
-              <div className="glass-strong rounded-[20px] p-2.5 w-full">
-                <PiecePreview
-                  jobId={shownItem.job ?? jobId}
-                  item={shownItem}
-                  piece={shownReady}
-                  cutting={cutting.has(shownItem.id)}
-                  words={wordsKey ? words[wordsKey] : undefined}
-                  onChange={(start, end) => recut(shownItem, start, end)}
-                  // A passage of the compilation can be shown in a template of its own
-                  templates={inCompilation ? templates : undefined}
-                  template={shownItem.template ?? null}
-                  videoTemplate={templateName(templateKey)}
-                  onTemplate={(key) => change(updateItem(compilation, shownItem.id, { template: key }))}
-                />
-                <div className="flex items-start gap-3 px-1.5 pt-3 pb-1">
-                  <p className="flex-1 min-w-0 text-[13px] leading-snug text-ink-2">
-                    {shownItem.text || shownItem.why}
-                    {shownItem.text && shownItem.why && <span className="block mt-1 text-[12px] text-accent">{shownItem.why}</span>}
-                  </p>
-                  {inCompilation ? (
-                    <button onClick={() => change(removeItem(compilation, shownItem.id))} className="btn btn-glass btn-sm flex-none">
-                      <Check className="w-3.5 h-3.5 text-accent" strokeWidth={2.6} /> {t("compilation.remove")}
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => {
-                        const section = compilation.sections.find((s) => s.id === activeSection) ?? compilation.sections[compilation.sections.length - 1];
-                        const { compilation: next, added } = addItems(compilation, section.id, [shownItem]);
-                        if (added === 0) return toast.info(t("compilation.alreadyThere"));
-                        change(next);
-                        toast.success(t("compilation.addedCount", { count: 1 }));
-                      }}
-                      className="btn btn-primary btn-sm flex-none"
-                    >
-                      <Plus className="w-3.5 h-3.5" strokeWidth={2.4} /> {t("compilation.add")}
-                    </button>
-                  )}
-                </div>
-              </div>
-            ) : (
-              <div className="glass rounded-[20px] p-6 w-full text-center">
-                <p className="text-[14px] text-ink-2">{t("compilation.pieceEmpty")}</p>
-              </div>
-            )
-          ) : (
-            <div className="relative w-[340px] max-w-full aspect-[9/16] rounded-[24px] overflow-hidden border border-white/[0.14] shadow-[0_50px_100px_-40px_rgba(0,0,0,0.9)] bg-black">
-              {preview ? (
-                <Player
-                  key={`${compilation.id}-${templateKey}-${preview.files.join(",")}`}
-                  component={MontageComposition}
-                  inputProps={preview.montage}
-                  compositionWidth={1080}
-                  compositionHeight={1920}
-                  fps={FPS}
-                  durationInFrames={montageFrames(preview.montage.segments, FPS)}
-                  controls
-                  loop
-                  clickToPlay
-                  style={{ width: "100%", height: "100%" }}
-                />
-              ) : (
-                <div className="absolute inset-0 grid place-items-center px-8 text-center">
-                  {items.length === 0 ? (
-                    <p className="text-[13.5px] leading-snug text-ink-2">{t("compilation.videoEmpty")}</p>
-                  ) : (
+        {/* Stage: the whole video in its template, and under it the passage open to be cut */}
+        <div className="flex-[1_1_380px] lg:[@media(min-height:820px)]:sticky lg:[@media(min-height:820px)]:top-[84px] min-w-0 flex flex-col items-center gap-3">
+          {items.length > 0 && (
+            <>
+              <div
+                aria-label={t("compilation.wholeVideo")}
+                className="relative max-w-full aspect-[9/16] rounded-[24px] overflow-hidden border border-white/[0.14] shadow-[0_50px_100px_-40px_rgba(0,0,0,0.9)] bg-black transition-[height] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
+                // As tall as the window leaves it above the open passage, never tiny
+                style={{ height: shownItem ? `clamp(300px, calc(100dvh - ${pieceHeight + 152}px), 604px)` : "clamp(360px, calc(100dvh - 150px), 604px)" }}
+              >
+                {preview ? (
+                  <Player
+                    key={playerKey}
+                    ref={playerRef}
+                    component={MontageComposition}
+                    inputProps={preview.montage}
+                    compositionWidth={1080}
+                    compositionHeight={1920}
+                    fps={FPS}
+                    durationInFrames={montageFrames(preview.montage.segments, FPS)}
+                    // Passages added, taken out or put in another order: it stays on the passage it was on
+                    initialFrame={marks.find((mark) => mark.id === onItemRef.current)?.clear ?? 0}
+                    controls
+                    loop
+                    clickToPlay
+                    style={{ width: "100%", height: "100%" }}
+                  />
+                ) : (
+                  <div className="absolute inset-0 grid place-items-center px-6 text-center">
                     <div className="flex flex-col items-center gap-2.5 text-[13px] text-ink-2">
                       <Loader2 className="w-5 h-5 spinner text-ink-3" />
                       {t("compilation.cuttingCount", { count: Math.max(1, items.length - readyItems.length) })}
                     </div>
-                  )}
-                </div>
+                  </div>
+                )}
+              </div>
+              {preview && (
+                <p className="-mt-1 text-[12px] text-ink-3">
+                  {readyItems.length < items.length ? t("compilation.partial", { ready: readyItems.length, total: items.length }) : `${clock(compilationLength(compilation))} · ${t("compilation.moments", { count: items.length })}`}
+                </p>
+              )}
+            </>
+          )}
+
+          {shownItem ? (
+            <div ref={pieceBox} className="relative glass-strong rounded-[20px] p-2.5 w-full">
+              <PiecePreview
+                jobId={shownItem.job ?? jobId}
+                item={shownItem}
+                piece={shownReady}
+                cutting={cutting.has(shownItem.id)}
+                words={wordsKey ? words[wordsKey] : undefined}
+                onChange={(start, end) => recut(shownItem, start, end)}
+                // A passage of the compilation can be shown in a template of its own
+                templates={inCompilation ? templates : undefined}
+                template={shownItem.template ?? null}
+                videoTemplate={templateName(templateKey)}
+                onTemplate={(key) => change(updateItem(compilation, shownItem.id, { template: key }))}
+                // One sound at a time: it does not start over the whole video, and stops when that one plays
+                autoPlay={!videoPlaying}
+                hush={hush}
+                onPlay={() => playerRef.current?.pause()}
+              />
+              <div className="flex items-start gap-3 px-1.5 pt-3 pb-1">
+                <p className="flex-1 min-w-0 text-[13px] leading-snug text-ink-2">
+                  {shownItem.text || shownItem.why}
+                  {shownItem.text && shownItem.why && <span className="block mt-1 text-[12px] text-accent">{shownItem.why}</span>}
+                </p>
+                {inCompilation ? (
+                  <button onClick={() => change(removeItem(compilation, shownItem.id))} className="btn btn-glass btn-sm flex-none">
+                    <Check className="w-3.5 h-3.5 text-accent" strokeWidth={2.6} /> {t("compilation.remove")}
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => {
+                      const section = compilation.sections.find((s) => s.id === activeSection) ?? compilation.sections[compilation.sections.length - 1];
+                      const { compilation: next, added } = addItems(compilation, section.id, [shownItem]);
+                      if (added === 0) return toast.info(t("compilation.alreadyThere"));
+                      change(next);
+                      toast.success(t("compilation.addedCount", { count: 1 }));
+                    }}
+                    className="btn btn-primary btn-sm flex-none"
+                  >
+                    <Plus className="w-3.5 h-3.5" strokeWidth={2.4} /> {t("compilation.add")}
+                  </button>
+                )}
+              </div>
+              {/* Closed, the whole video gets its full height back */}
+              {items.length > 0 && (
+                <button
+                  onClick={() => setShown(null)}
+                  aria-label={t("compilation.closePiece")}
+                  title={t("compilation.closePiece")}
+                  className="absolute -top-2.5 -right-2.5 w-7 h-7 grid place-items-center rounded-full bg-[#1b1e1c] border border-white/[0.14] text-ink-2 hover:text-white shadow-[0_8px_20px_-6px_rgba(0,0,0,0.8)]"
+                >
+                  <X className="w-3.5 h-3.5" strokeWidth={2.4} />
+                </button>
               )}
             </div>
-          )}
-          {view === "video" && preview && (
-            <p className="text-[12px] text-ink-3">
-              {readyItems.length < items.length ? t("compilation.partial", { ready: readyItems.length, total: items.length }) : `${clock(compilationLength(compilation))} · ${t("compilation.moments", { count: items.length })}`}
-            </p>
+          ) : (
+            items.length === 0 && (
+              <div className="glass rounded-[20px] p-6 w-full text-center">
+                <p className="text-[14px] text-ink-2">{t("compilation.pieceEmpty")}</p>
+              </div>
+            )
           )}
         </div>
 
@@ -949,14 +1034,16 @@ export default function CompilationPage() {
           home={jobId}
           liveNumbers={several ? Object.fromEntries(liveIds.map((id, n) => [id, n + 1])) : undefined}
           activeSection={activeSection}
-          selectedItem={view === "piece" ? (shownItem?.id ?? null) : null}
+          selectedItem={shownItem?.id ?? null}
+          playing={preview ? onItem : null}
           cutting={cutting}
           templates={templates}
           onActivate={setActiveSection}
+          // A passage clicked: the whole video goes to it, and it opens underneath to be cut
           onSelect={(item) => {
             setShown(item);
-            setView("piece");
             ensure([item]);
+            jumpTo(item.id);
           }}
           onChange={change}
           onExport={exportNow}

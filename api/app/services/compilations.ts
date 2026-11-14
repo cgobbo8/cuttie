@@ -36,6 +36,8 @@ export interface CompilationItem {
   score?: number
   /** The live it is cut from, when it isn't the compilation's own (one of its `lives`): its times and its clip are that live's */
   job?: string
+  /** How it comes in when that isn't as the rest of the video does: a ready-made transition, or "cut" (none) */
+  transition?: string
 }
 
 export interface CompilationSection {
@@ -58,6 +60,8 @@ export interface Compilation {
   hook: string
   /** Length aimed for, seconds (null: none) */
   target: number | null
+  /** The ready-made transition between its passages (absent: plain cuts) */
+  transition?: string
   /** Described to the AI: what the streamer first asked for, then each change asked and what the AI answered */
   brief?: string
   asks?: { ask: string; note: string; added?: number; removed?: number; recut?: number }[]
@@ -86,6 +90,10 @@ const TEMPLATE_KEY = /^[a-z][a-z0-9-]{1,39}$/
 export const isTemplateKey = (value: unknown): value is string => typeof value === 'string' && TEMPLATE_KEY.test(value)
 
 export const isPieceId = (value: unknown): value is string => typeof value === 'string' && ID.test(value)
+
+/** The ready-made transitions between two pieces (drawn by api/remotion/transitions.ts) */
+export const TRANSITIONS = ['flash', 'zoom', 'slide', 'swipe', 'shake', 'pop', 'fade']
+export const isTransition = (value: unknown): value is string => typeof value === 'string' && TRANSITIONS.includes(value)
 
 const JOB_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 export const isJobId = (value: unknown): value is string => typeof value === 'string' && JOB_ID.test(value)
@@ -119,6 +127,8 @@ function parseItem(raw: any, liveDuration: number, others?: Map<string, number>)
     ...(parseFit(raw.fit) ? { fit: parseFit(raw.fit)! } : {}),
     ...(Number.isFinite(raw.score) && raw.score >= 0 && raw.score <= 1 ? { score: Math.round(raw.score * 100) / 100 } : {}),
     ...(job ? { job } : {}),
+    // "cut": a plain cut where the rest of the video has a transition
+    ...(isTransition(raw.transition) || raw.transition === 'cut' ? { transition: raw.transition } : {}),
   }
 }
 
@@ -161,6 +171,7 @@ export function parseCompilation(raw: any, liveDuration: number, others?: Map<st
     titles: raw.titles !== false,
     hook: text(raw.hook, 120),
     target: Number.isFinite(target) && target >= 5 && target <= 1800 ? Math.round(target) : null,
+    ...(isTransition(raw.transition) ? { transition: raw.transition } : {}),
     ...(lives.length > 0 ? { lives } : {}),
     ...(text(raw.brief, MAX_BRIEF) ? { brief: text(raw.brief, MAX_BRIEF) } : {}),
     // What the AI answered to the description: what it built and why

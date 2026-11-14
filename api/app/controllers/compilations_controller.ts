@@ -199,8 +199,8 @@ export default class CompilationsController {
     const parsed = parseCompilation(ctx.request.body(), job.vodDurationSeconds ?? 0, others)
     if (!parsed) return ctx.response.badRequest({ error: 'invalid compilation' })
 
-    // `lives` is the whole truth: a compilation that no longer names other lives loses the field
-    const { lives: _before, ...kept } = existing[index]
+    // `lives` and `transition` are the whole truth: a compilation that no longer names other lives, or went back to plain cuts, loses the field
+    const { lives: _before, transition: _was, ...kept } = existing[index]
     const compilation: Compilation = { ...kept, ...parsed, updated_at: new Date().toISOString() }
     job.compilations = existing.map((c, i) => (i === index ? compilation : c))
     await job.save()

@@ -141,6 +141,36 @@ test.group('Compilations', (group) => {
     ;(await client.put(`${url}/nope`).loginAs(user).json({ sections: [] })).assertStatus(404)
   })
 
+  test('keeps the transitions between passages, and forgets them when they go', async ({ client, assert }) => {
+    const { user, job } = await setup()
+    const url = `/api/jobs/${job.id}/compilations`
+    const { compilation } = (await client.post(url).loginAs(user).json({ name: 'Calme' })).body() as any
+    const transitionsOf = (body: any) => [body.compilation.transition ?? null, ...body.compilation.sections[0].items.map((i: any) => i.transition ?? null)]
+    const sections = (items: unknown[]) => [{ id: compilation.sections[0].id, title: '', query: '', items }]
+
+    const saved = await client
+      .put(`${url}/${compilation.id}`)
+      .loginAs(user)
+      .json({
+        ...compilation,
+        transition: 'zoom',
+        // One comes in its own way, one with a plain cut, one with a transition nobody knows
+        sections: sections([item('aaaaaaaaaa', 100, 104), item('bbbbbbbbbb', 200, 204, { transition: 'flash' }), item('cccccccccc', 300, 304, { transition: 'cut' }), item('dddddddddd', 400, 404, { transition: 'wobble' })]),
+      })
+    saved.assertStatus(200)
+    assert.deepEqual(transitionsOf(saved.body()), ['zoom', null, 'flash', 'cut', null])
+
+    // Back to plain cuts: the video's transition is gone, not kept from the save before
+    const plain = await client
+      .put(`${url}/${compilation.id}`)
+      .loginAs(user)
+      .json({ ...compilation, sections: sections([item('aaaaaaaaaa', 100, 104), item('bbbbbbbbbb', 200, 204)]) })
+    assert.deepEqual(transitionsOf(plain.body()), [null, null, null])
+    ;(await client.put(`${url}/${compilation.id}`).loginAs(user).json({ ...compilation, transition: 'cut', sections: sections([]) })).assertStatus(200)
+    const listed = (await client.get(url).loginAs(user)).body() as any
+    assert.notProperty(listed.compilations[0], 'transition')
+  })
+
   test('deleting a compilation deletes its clips, taking a moment out deletes its clip later', async ({ client, assert }) => {
     const { user, job, dir } = await setup()
     const url = `/api/jobs/${job.id}/compilations`
@@ -415,7 +445,9 @@ test.group('Compilations', (group) => {
     ;(await client.post(url).loginAs(user).json({ pieces: [] })).assertStatus(400)
     ;(await client.post(url).loginAs(user).json({ pieces: [{ clip: 'a.mp4', from: -1, duration: 3, layers: [] }] })).assertStatus(400)
     ;(await client.post(url).loginAs(user).json({ pieces: [{ clip: 'a.mp4', from: 0, duration: 3, layers: [{ layer: { id: 'x' }, z: 0 }] }] })).assertStatus(400)
-    const missing = await client.post(url).loginAs(user).json({ pieces, overlays: [] })
+    // A transition the renderer does not know: refused, not played as a plain cut without a word
+    ;(await client.post(url).loginAs(user).json({ pieces: [{ ...pieces[0], transition: 'wobble' }], overlays: [] })).assertStatus(400)
+    const missing = await client.post(url).loginAs(user).json({ pieces: [{ ...pieces[0], transition: 'slide' }], overlays: [] })
     missing.assertStatus(404)
     assert.deepEqual(missing.body(), { error: 'clip not found', clip: 'a.mp4' })
 

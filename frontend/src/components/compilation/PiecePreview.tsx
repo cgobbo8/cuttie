@@ -26,6 +26,12 @@ interface Props {
   /** The video's template, by name */
   videoTemplate?: string;
   onTemplate?: (key: string | null) => void;
+  /** Plays as soon as it is there (not while the whole video plays next to it) */
+  autoPlay?: boolean;
+  /** Changes when something else starts playing: this one stops */
+  hush?: number;
+  /** It started playing */
+  onPlay?: () => void;
 }
 
 const FRAMES = 8;
@@ -38,7 +44,7 @@ const MORE = 5;
  * and its two handles move the cut inside the clip (a few seconds wider than
  * the moment). "+" on a side gives 5 s more of the live.
  */
-export default function PiecePreview({ jobId, item, piece, cutting, words, onChange, templates, template, videoTemplate, onTemplate }: Props) {
+export default function PiecePreview({ jobId, item, piece, cutting, words, onChange, templates, template, videoTemplate, onTemplate, autoPlay = true, hush, onPlay }: Props) {
   const { t } = useTranslation();
   const videoRef = useRef<HTMLVideoElement>(null);
   const stripRef = useRef<HTMLDivElement>(null);
@@ -53,6 +59,11 @@ export default function PiecePreview({ jobId, item, piece, cutting, words, onCha
   const [playing, setPlaying] = useState(false);
   // Its clip cut again shows the new file
   const version = `${piece?.file_start}-${piece?.file_end}`;
+  const autoPlayRef = useRef(autoPlay);
+  autoPlayRef.current = autoPlay;
+  useEffect(() => {
+    if (hush) videoRef.current?.pause();
+  }, [hush]);
 
   useEffect(() => {
     const next: [number, number] = [item.start - fileStart, item.end - fileStart];
@@ -109,7 +120,7 @@ export default function PiecePreview({ jobId, item, piece, cutting, words, onCha
             onClick={toggle}
             onLoadedMetadata={(e) => {
               e.currentTarget.currentTime = cutRef.current[0];
-              e.currentTarget.play().catch(() => {});
+              if (autoPlayRef.current) e.currentTarget.play().catch(() => {});
             }}
             onTimeUpdate={(e) => {
               const time = e.currentTarget.currentTime;
@@ -119,7 +130,10 @@ export default function PiecePreview({ jobId, item, piece, cutting, words, onCha
                 e.currentTarget.currentTime = cutRef.current[0];
               }
             }}
-            onPlay={() => setPlaying(true)}
+            onPlay={() => {
+              setPlaying(true);
+              onPlay?.();
+            }}
             onPause={() => setPlaying(false)}
           />
         ) : (

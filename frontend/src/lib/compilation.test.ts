@@ -2,8 +2,18 @@ import { describe, expect, it } from "vitest";
 import type { TFunction } from "i18next";
 import type { CompilationItem, CompilationSection, LiveHit } from "./api";
 import {
+  PLAIN_CUT,
+  itemsBetween,
+  moveItems,
+  ownTransitions,
+  placeItems,
+  removeItems,
+  setTransition,
+  setVideoTransition,
+  transitionsOf,
   addItems,
   addSection,
+  allItems,
   applyLooks,
   applyTight,
   clearLooks,
@@ -253,6 +263,118 @@ describe("compilations", () => {
   it("writes a time of the live", () => {
     expect(liveClock(5025.7)).toBe("1:23:45");
     expect(liveClock(59)).toBe("0:00:59");
+  });
+});
+
+describe("several passages at once", () => {
+  const video = (...parts: string[][]): { sections: CompilationSection[] } => ({
+    sections: parts.map((ids, i) => ({ id: `s${i + 1}`, title: "", query: "", items: ids.map((id, k) => item(id, k * 10, k * 10 + 5)) })),
+  });
+  const order = (c: { sections: CompilationSection[] }) => c.sections.map((s) => s.items.map((i) => i.id).join(""));
+
+  it("moves them up together, keeping their order", () => {
+    expect(order(moveItems(video(["x", "a", "b", "y"]), ["a", "b"], -1))).toEqual(["abxy"]);
+    // Not next to each other: each goes up one place
+    expect(order(moveItems(video(["x", "a", "y", "b"]), ["b", "a"], -1))).toEqual(["axby"]);
+  });
+
+  it("moves them down together, keeping their order", () => {
+    expect(order(moveItems(video(["x", "a", "b", "y"]), ["a", "b"], 1))).toEqual(["xyab"]);
+  });
+
+  it("stops at the top of the video without shuffling them", () => {
+    const c = video(["a", "b", "x"]);
+    expect(order(moveItems(c, ["a", "b"], -1))).toEqual(["abx"]);
+    expect(order(moveItems(video(["x", "a", "b"]), ["a", "b"], 1))).toEqual(["xab"]);
+  });
+
+  it("goes on into the part next to theirs", () => {
+    expect(order(moveItems(video(["x"], ["a", "b", "y"]), ["a", "b"], -1))).toEqual(["xab", "y"]);
+    expect(order(moveItems(video(["x", "a", "b"], ["y"]), ["a", "b"], 1))).toEqual(["x", "aby"]);
+  });
+
+  it("puts them together in another part, in the order they play", () => {
+    const c = video(["a", "x", "b"], ["y", "z"], []);
+    expect(order(placeItems(c, ["b", "a"], "s2"))).toEqual(["x", "yzab", ""]);
+    expect(order(placeItems(c, ["a", "b"], "s2", "z"))).toEqual(["x", "yabz", ""]);
+    expect(order(placeItems(c, ["a", "z"], "s3"))).toEqual(["xb", "y", "az"]);
+  });
+
+  it("gathers them inside their own part", () => {
+    const c = video(["a", "x", "b", "y"]);
+    expect(order(placeItems(c, ["a", "b"], "s1", "y"))).toEqual(["xaby"]);
+    expect(order(placeItems(c, ["a", "b"], "s1"))).toEqual(["xyab"]);
+    // Dropped on one of themselves: before the next passage that stays
+    expect(order(placeItems(c, ["a", "b"], "s1", "b"))).toEqual(["xaby"]);
+  });
+
+  it("changes nothing when dropped where they are", () => {
+    const c = video(["a", "b", "x"]);
+    expect(placeItems(c, ["a", "b"], "s1", "x")).toBe(c);
+    expect(placeItems(c, ["a"], "s1", "a")).toBe(c);
+    expect(placeItems(c, ["nope"], "s1")).toBe(c);
+    expect(placeItems(c, ["a"], "nope")).toBe(c);
+  });
+
+  it("takes them out together", () => {
+    expect(order(removeItems(video(["a", "x"], ["b", "y"]), ["a", "b"]))).toEqual(["x", "y"]);
+  });
+
+  it("picks a range across parts", () => {
+    const c = video(["a", "b"], ["c", "d"]);
+    expect(itemsBetween(c, "b", "d")).toEqual(["b", "c", "d"]);
+    expect(itemsBetween(c, "d", "a")).toEqual(["a", "b", "c", "d"]);
+    expect(itemsBetween(c, "gone", "c")).toEqual(["c"]);
+  });
+});
+
+describe("transitions between passages", () => {
+  const video = (transition?: string) => ({
+    ...(transition ? { transition } : {}),
+    sections: [
+      { id: "s1", title: "", query: "", items: [item("a", 0, 5), item("b", 10, 15)] },
+      { id: "s2", title: "", query: "", items: [item("c", 20, 25)] },
+    ] as CompilationSection[],
+  });
+
+  it("plays the video's transition at every cut, never before the first passage", () => {
+    expect(transitionsOf(video("zoom"))).toEqual({ b: "zoom", c: "zoom" });
+    expect(transitionsOf(video())).toEqual({});
+  });
+
+  it("lets a passage come in its own way", () => {
+    const c = setTransition(video("zoom"), ["c"], "flash");
+    expect(transitionsOf(c)).toEqual({ b: "zoom", c: "flash" });
+    expect(ownTransitions(c)).toBe(1);
+    // A plain cut where the rest of the video has a transition
+    expect(transitionsOf(setTransition(c, ["b"], PLAIN_CUT))).toEqual({ c: "flash" });
+    // Back to the video's
+    expect(transitionsOf(setTransition(c, ["c"], null))).toEqual({ b: "zoom", c: "zoom" });
+  });
+
+  it("does not keep a choice that only repeats the video's", () => {
+    const c = setTransition(video("zoom"), ["b"], "zoom");
+    expect(allItems(c).some((i) => i.transition !== undefined)).toBe(false);
+    expect(allItems(setTransition(video(), ["b"], PLAIN_CUT)).some((i) => i.transition !== undefined)).toBe(false);
+  });
+
+  it("changes the video's transition and keeps what passages chose for themselves", () => {
+    const c = setVideoTransition(setTransition(video("zoom"), ["c"], "flash"), "slide");
+    expect(transitionsOf(c)).toEqual({ b: "slide", c: "flash" });
+    // The passage's choice is now the video's: nothing of its own left
+    expect(ownTransitions(setVideoTransition(c, "flash"))).toBe(0);
+    // The same everywhere
+    expect(transitionsOf(setVideoTransition(c, "pop", true))).toEqual({ b: "pop", c: "pop" });
+  });
+
+  it("goes back to plain cuts", () => {
+    const c = setVideoTransition(video("zoom"), null);
+    expect("transition" in c).toBe(false);
+    expect(transitionsOf(c)).toEqual({});
+  });
+
+  it("ignores a transition it does not know", () => {
+    expect(transitionsOf(video("wobble"))).toEqual({});
   });
 });
 

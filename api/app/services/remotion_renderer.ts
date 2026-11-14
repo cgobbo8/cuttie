@@ -370,6 +370,8 @@ export interface MontagePiece {
   duration: number
   /** Its layers, on the clip's clock */
   layers: PlacedLayer[]
+  /** The ready-made transition it comes in with */
+  transition?: string
 }
 
 export interface MontageRenderOptions {
@@ -402,13 +404,18 @@ export async function renderMontage(opts: MontageRenderOptions): Promise<{ sizeM
     return layers.map((layer, i) => ({ layer, z: placed[i].z }))
   }
 
-  const segments: { from: number; duration: number; layers: PlacedLayer[] }[] = []
+  const segments: { from: number; duration: number; layers: PlacedLayer[]; transition?: string }[] = []
   for (const piece of opts.pieces) {
     const probe = readProbe(piece.jobId ?? jobId, piece.clipFilename)
     // Inside the clip's file, whatever was asked
     const from = Math.max(0, Math.min(piece.from, Math.max(0, probe.durationSeconds - 1 / fps)))
     const duration = Math.max(1 / fps, Math.min(piece.duration, probe.durationSeconds - from))
-    segments.push({ from, duration, layers: await place(piece.layers, piece.clipFilename, probe, piece.jobId ?? jobId) })
+    segments.push({
+      from,
+      duration,
+      layers: await place(piece.layers, piece.clipFilename, probe, piece.jobId ?? jobId),
+      ...(piece.transition ? { transition: piece.transition } : {}),
+    })
   }
   const first = opts.pieces[0]
   const overlays = await place(opts.overlays, first.clipFilename, readProbe(first.jobId ?? jobId, first.clipFilename), first.jobId ?? jobId)

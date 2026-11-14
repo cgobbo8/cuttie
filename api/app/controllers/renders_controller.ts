@@ -7,6 +7,7 @@ import db from '@adonisjs/lucid/services/db'
 import { renderClip, renderMontage, type MontagePiece, type PlacedLayer } from '#services/remotion_renderer'
 import { uploadFile, getPresignedDownloadUrl, deleteObject, storagePath } from '#services/storage'
 import { clipDir } from '#services/data_paths'
+import { isTransition } from '#services/compilations'
 import { enqueueRender } from '#services/render_queue'
 import { levelSound } from '#services/sound_level'
 import { loadJobSharedData, resolveEditEnv } from '#services/edit_env_resolver'
@@ -85,7 +86,10 @@ function parsePieces(raw: unknown): MontagePiece[] | null {
     // A piece of another live (a compilation made from several): `job`, checked to be the user's by the caller
     const job = (item as any)?.job
     if (job !== undefined && (typeof job !== 'string' || !/^[0-9a-f-]{36}$/.test(job))) return null
-    pieces.push({ clipFilename: clip, from, duration, layers, ...(job ? { jobId: job } : {}) })
+    // The ready-made transition it comes in with: one the renderer knows, or the piece is refused
+    const transition = (item as any)?.transition
+    if (transition !== undefined && !isTransition(transition)) return null
+    pieces.push({ clipFilename: clip, from, duration, layers, ...(job ? { jobId: job } : {}), ...(transition ? { transition } : {}) })
   }
   return pieces
 }

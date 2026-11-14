@@ -317,6 +317,13 @@ body::after {
   border-radius: 10px;
 }
 
+/* A small one, where several sit in a row of a list */
+.btn-icon.btn-mini {
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 8px;
+}
+
 /* ─── Chips ────────────────────────────────────────────────── */
 .chip {
   display: inline-flex;
@@ -1030,6 +1037,110 @@ video {
   opacity: 0.35;
 }
 
+/* The box that picks a passage (several are then moved, grouped or taken out together) */
+.pick-box {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 6px;
+  background: rgba(12, 14, 13, 0.82);
+  border: 1.5px solid rgba(255, 255, 255, 0.55);
+  color: var(--color-ground);
+  cursor: pointer;
+  transition: opacity 140ms, background 140ms, border-color 140ms, transform 140ms var(--ease-glide);
+}
+.pick-box:hover {
+  border-color: #ffffff;
+  transform: scale(1.08);
+}
+.pick-box.is-picked {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+}
+.pick-box:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* Where passages being dragged would land */
+.drop-line {
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  height: 3px;
+  border-radius: 3px;
+  background: var(--color-accent);
+  box-shadow: 0 0 10px var(--color-accent-glow);
+  pointer-events: none;
+}
+
+body.dragging-passages,
+body.dragging-passages * {
+  user-select: none !important;
+  cursor: grabbing !important;
+}
+
+/* What can be done with the picked passages, floating over the list */
+.pick-bar {
+  background: color-mix(in srgb, var(--color-accent) 16%, #151816);
+  border: 1px solid var(--color-accent-line);
+  box-shadow: 0 18px 44px -16px rgba(0, 0, 0, 0.9);
+  animation: pick-bar-in 220ms var(--ease-glide) both;
+}
+@keyframes pick-bar-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+}
+
+/* A transition drawn small: the picture before, the one after */
+.sketch-picture {
+  position: absolute;
+  inset: 0;
+}
+.sketch-picture::before,
+.sketch-picture::after {
+  content: "";
+  position: absolute;
+  border-radius: 999px;
+}
+.sketch-before {
+  background: linear-gradient(165deg, #7c8580, #3a403d);
+}
+.sketch-before::before {
+  left: 14%;
+  top: 9%;
+  width: 34%;
+  aspect-ratio: 1;
+  background: rgba(255, 255, 255, 0.55);
+}
+.sketch-before::after {
+  left: 14%;
+  right: 14%;
+  bottom: 12%;
+  height: 6%;
+  background: rgba(255, 255, 255, 0.4);
+}
+.sketch-after {
+  background: linear-gradient(165deg, var(--color-accent), color-mix(in srgb, var(--color-accent) 45%, #000));
+}
+.sketch-after::before {
+  right: 14%;
+  top: 9%;
+  width: 34%;
+  aspect-ratio: 1;
+  background: rgba(0, 0, 0, 0.35);
+}
+.sketch-after::after {
+  left: 14%;
+  right: 14%;
+  bottom: 12%;
+  height: 6%;
+  background: rgba(0, 0, 0, 0.3);
+}
+
 /* A passage the AI just put in the video: it grows in, lit, and the light fades */
 .passage-arrive {
   animation: passage-arrive 3600ms var(--ease-glide) both;
@@ -1096,6 +1207,7 @@ video {
   .talk-step,
   .passage-arrive,
   .passage-leave,
+  .pick-bar,
   .animate-bump {
     animation: none !important;
     transition: none !important;

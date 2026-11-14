@@ -214,6 +214,8 @@ export interface MontageSegment {
   from: number;
   duration: number;
   layers: PlacedLayer[];
+  /** The ready-made transition it comes in with (see transitions.ts), none: a plain cut */
+  transition?: string;
 }
 
 export interface MontageProps {
@@ -229,6 +231,8 @@ export interface MontageCut {
   ctx: TemplateContext;
   start: number;
   end: number;
+  /** The ready-made transition it comes in with (the first piece has none: nothing comes before it) */
+  transition?: string;
 }
 
 /** Layers that live on the montage's clock: the hook line (the video's cover) and the widgets */
@@ -285,7 +289,7 @@ export function buildMontage(
       .filter((p) => !isOverlayLayer(p.layer))
       // No "subtitles" placeholder between two sentences: it would flash at every cut of the preview
       .map((p) => (p.layer.subtitle ? { ...p, layer: { ...p.layer, subtitle: { ...p.layer.subtitle, quiet: true } } } : p));
-    return { from, duration, layers };
+    return { from, duration, layers, ...(index > 0 && cut.transition ? { transition: cut.transition } : {}) };
   });
   const total = segments.reduce((sum, s) => sum + s.duration, 0);
   const first = cuts[0];
@@ -299,6 +303,13 @@ export function renderPieces(
   montage: MontageProps,
   clips: string[],
   jobs: (string | undefined)[] = [],
-): { clip: string; from: number; duration: number; layers: PlacedLayer[]; job?: string }[] {
-  return montage.segments.map((segment, i) => ({ clip: clips[i], from: segment.from, duration: segment.duration, layers: segment.layers, ...(jobs[i] ? { job: jobs[i] } : {}) }));
+): { clip: string; from: number; duration: number; layers: PlacedLayer[]; job?: string; transition?: string }[] {
+  return montage.segments.map((segment, i) => ({
+    clip: clips[i],
+    from: segment.from,
+    duration: segment.duration,
+    layers: segment.layers,
+    ...(jobs[i] ? { job: jobs[i] } : {}),
+    ...(segment.transition ? { transition: segment.transition } : {}),
+  }));
 }

@@ -71,7 +71,12 @@ def _tools(monkeypatch, with_sounds=True):
 def test_the_tools_answer_little_and_exactly(monkeypatch):
     tools = _tools(monkeypatch)
     assert [s["name"] for s in tools.specs()] == ["overview", "best_moments", "search_speech", "search_chat", "chat_peaks", "find_sounds", "loud_moments", "read"]
-    assert tools.call("search_speech", {"words": "calme"}) == {"found": 1, "moments": [{"at": "0:01:40", "seconds": 3.0, "said": "Bon là franchement c'est calme."}]}
+    # The line's time to the tenth, and what it takes to say: its 3 s hold silence (this transcript has no timed words)
+    assert tools.call("search_speech", {"words": "calme"}) == {"found": 1, "moments": [{"at": "0:01:40.0", "seconds": 1.5, "said": "Bon là franchement c'est calme."}]}
+    # Words said over two lines: the time of the last one too
+    assert tools.call("search_speech", {"words": "tire couvert"})["moments"] == [
+        {"at": "0:01:57.0", "seconds": 2.8, "said": "Attention ça tire ! À couvert, à couvert !", "last_line_at": "0:01:59.5"},
+    ]
     chat = tools.call("search_chat", {"words": "tire"})
     # Moved back onto the stream, the bot left out, with what was said then
     assert chat["found"] == 1 and chat["moments"][0]["messages"] == ["lea: ça tire fort"] and "ça tire" in chat["moments"][0]["said_then"]
@@ -80,7 +85,10 @@ def test_the_tools_answer_little_and_exactly(monkeypatch):
     assert tools.call("loud_moments", {"kind": "raised_voices"})["moments"][0]["said_then"] == "Mais c'est pas possible putain !"
     assert tools.call("loud_moments", {"kind": "quiet"})["moments"] == [{"at": "0:08:00", "seconds": 20.0}]
     read = tools.call("read", {"start": "0:01:55", "end": "0:02:05"})
-    assert read["said"] == ["[0:01:57] Attention ça tire !", "[0:01:59] À couvert, à couvert !"]
+    assert read["said"] == ["[0:01:57.0] (1.3 s) Attention ça tire !", "[0:01:59.5] (1.5 s) À couvert, à couvert !"]
+    # What a moment given by its lines lasts once cut; nobody speaks there: the time between the two
+    assert round(tools.spoken("0:01:57.0", "0:01:59.5"), 1) == 2.8 and round(tools.spoken("0:01:57.0", "0:01:57.0"), 1) == 1.3
+    assert tools.spoken("0:09:00", "0:09:08") == 8.0 and tools.spoken("0:09:00", None) == 2.0 and tools.spoken("soon", None) == 0.0
     assert read["chat"] == ["[0:02:00] lea: ça tire fort", "[0:02:01] Nightbot: ça tire"] and read["heard"]["sounds"] == {"gunfire": 0.9}
     assert tools.call("read", {"start": "0:09:00", "end": "0:09:10"})["said"] == ["(nobody speaks)"]
     # Mistakes come back as data, never as a crash; a kind of sound that doesn't exist is answered with those that do
@@ -190,7 +198,7 @@ def test_the_search_goes_through_the_tools_then_answers(monkeypatch):
     model = FakeModel([
         [("find_sounds", {"kind": "gunfire"}), ("search_speech", {"words": "tire"})],
         [("read", {"start": "0:01:50", "end": "0:02:10"})],
-        [("answer", {"moments": [{"start": "0:01:57", "end": "0:02:02", "quote": "Attention ça tire", "why": "Fusillade", "score": 90}], "note": "Une fusillade."})],
+        [("answer", {"moments": [{"start": "0:01:57.0", "end": "0:01:59.5", "quote": "Attention ça tire", "why": "Fusillade", "score": 90}], "note": "Une fusillade."})],
     ])
     run = live_agent.Searcher(tools, model, "some/model").search("les moments où ça pète")
     assert run.finished and run.steps == 3 and run.tool_calls == 3 and run.note == "Une fusillade."
@@ -204,7 +212,20 @@ def test_the_search_goes_through_the_tools_then_answers(monkeypatch):
 
     hits = live_agent.to_hits(run, tools)
     assert len(hits) == 1 and hits[0].sources == ["ai"] and hits[0].why == "Fusillade" and hits[0].score == 0.9
-    assert hits[0].text == "Attention ça tire !" and hits[0].start <= 117.0 and hits[0].end >= 119.0
+    # The two lines it named, whole: from the first one's start to the last one's end
+    assert hits[0].text == "Attention ça tire ! À couvert, à couvert !" and (hits[0].start, hits[0].end) == (117.0, 122.0) and hits[0].spoken
+
+
+def test_claude_is_asked_to_keep_what_it_was_sent(monkeypatch):
+    tools = _tools(monkeypatch)
+    # Claude's input is only cached when asked: every step would pay full price for the whole conversation
+    claude = FakeModel([[("answer", {"moments": [], "note": "rien"})]])
+    live_agent.Searcher(tools, claude, "anthropic/claude-haiku-5.5").search("x")
+    assert claude.seen[0]["extra_body"]["cache_control"] == {"type": "ephemeral"}
+    # The others do it by themselves
+    other = FakeModel([[("answer", {"moments": [], "note": "rien"})]])
+    live_agent.Searcher(tools, other, "openai/gpt-6-luna").search("x")
+    assert "cache_control" not in other.seen[0]["extra_body"] and other.seen[0]["extra_body"]["usage"] == {"include": True}
 
 
 def test_a_model_that_answers_in_text_or_never_stops_still_ends(monkeypatch):
@@ -301,7 +322,7 @@ def _live(monkeypatch, tmp_path, steps):
     return model
 
 
-SHOTS = {"start": "0:01:57", "end": "0:02:02", "quote": "Attention ça tire", "why": "Fusillade", "score": 90}
+SHOTS = {"start": "0:01:57.0", "end": "0:01:57.0", "quote": "Attention ça tire", "why": "Fusillade", "score": 90}
 
 
 def test_asking_the_ai_searches_with_tools_and_is_paid_once(monkeypatch, tmp_path):
@@ -318,7 +339,9 @@ def test_asking_the_ai_searches_with_tools_and_is_paid_once(monkeypatch, tmp_pat
     found = ls.search_ai("job", "Les moments où ça pète", {}, 600.0)
     assert found["cached"] is False and found["cost"] == 0.003 and found["total"] == 1 and found["note"] == "Une fusillade, vérifiée."
     hit = found["hits"][0]
-    assert hit["sources"] == ["ai"] and hit["text"] == "Attention ça tire !" and hit["why"] == "Fusillade" and hit["start"] <= 117.0 and hit["end"] >= 119.0
+    assert hit["sources"] == ["ai"] and hit["text"] == "Attention ça tire !" and hit["why"] == "Fusillade" and (hit["start"], hit["end"]) == (117.0, 119.0)
+    # Words said: the app cuts it on where they really are once it has its clip
+    assert hit["spoken"] is True
     # The app could say what the AI was doing at each step, and nothing once it is over
     assert [d and (d["step"], d["detail"]) for d in model.doing] == [("thinking", ""), ("search_speech", "tire"), ("read", "0:01:50")]
     assert ls.doing("job") is None
@@ -436,14 +459,14 @@ def test_a_search_stops_spending_at_its_ceiling(monkeypatch):
 
 
 def test_the_ai_plans_a_video_with_tools(monkeypatch, tmp_path):
-    calm = {"start": "0:01:40", "end": "0:01:43", "quote": "franchement c'est calme", "why": "Il le dit", "score": 85}
+    calm = {"start": "0:01:40.0", "end": "0:01:40.0", "quote": "franchement c'est calme", "why": "Il le dit", "score": 85}
     whole = {
         "title": "Du calme à la tempête",
         "sections": [
             {"title": "C'est calme", "moments": [calm]},
             {"title": "Rien trouvé", "moments": []},
             # The same shots given twice: kept once
-            {"title": "Ça pète", "moments": [SHOTS, {**SHOTS, "start": "0:01:58", "why": "Encore"}]},
+            {"title": "Ça pète", "moments": [SHOTS, {**SHOTS, "start": "0:01:57", "end": "0:01:57", "why": "Encore"}]},
         ],
         "note": "Rien pour la partie du milieu.",
         "look": "  ma caméra en haut,\n le jeu en dessous ",
@@ -460,6 +483,9 @@ def test_the_ai_plans_a_video_with_tools(monkeypatch, tmp_path):
     assert planned["look"] == "ma caméra en haut, le jeu en dessous"
     assert [(s["title"], len(s["hits"])) for s in planned["sections"]] == [("C'est calme", 1), ("Ça pète", 1)]
     assert planned["sections"][1]["hits"][0]["why"] == "Fusillade" and planned["cost"] == 0.003 and planned["cached"] is False
+    # Planning has a model of its own (sorting moments between parts takes more than finding them), with more to spend
+    assert [call["model"] for call in model.seen] == [live_agent.PLAN_MODEL] * 3 and live_agent.PLAN_MODEL != live_agent.SEARCH_MODEL
+    assert ls.info("job", 600.0)["plan_max_cost"] == live_agent.PLAN_MAX_COST > live_agent.MAX_COST
     # It was told the video and its length, and had to end with `plan`
     first = model.seen[0]
     assert "le calme, puis ça pète" in first["messages"][1]["content"] and "about 30 seconds" in first["messages"][1]["content"]
@@ -468,11 +494,12 @@ def test_the_ai_plans_a_video_with_tools(monkeypatch, tmp_path):
     assert names[-1] == "plan" and "answer" not in names
     # What it was told of its short plan; the second one stands, even short (a live may have no more)
     sent_back = json.loads(model.seen[2]["messages"][-1]["content"])["error"]
-    assert "1 part(s)" in sent_back and "3 seconds, for 30 asked" in sent_back
+    # Its length is what its lines take to say (1.5 s), not their rough times
+    assert "1 part(s)" in sent_back and "2 seconds once cut on its words, for 30 asked" in sent_back
     # Asked again for the same video and length: free
     assert ls.plan_video("job", "D'abord le calme puis ça pète", 30.0, {}, 600.0)["cached"] is True and len(model.seen) == 3
     # A plan of about the length asked, with its note, is taken at once
-    assert live_agent._short_plan({"sections": [{"title": "A", "moments": [{"start": "0:01:00", "end": "0:01:20"}]}], "note": "ok"}, 30.0) is None
+    assert live_agent._short_plan({"sections": [{"title": "A", "moments": [{"start": "0:01:00", "end": "0:01:25"}]}], "note": "ok"}, 30.0) is None
     assert live_agent._short_plan({"sections": [{"title": "A", "moments": [{"start": "0:01:00", "end": "0:01:20"}]}], "note": " "}, 30.0)
     assert live_agent._short_plan({"sections": "nonsense"}, 30.0)
     # A model that answers in plain text is still understood

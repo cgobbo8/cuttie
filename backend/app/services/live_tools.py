@@ -43,8 +43,9 @@ SPECS: list[dict] = [
     },
     {
         "name": "search_speech",
-        "description": "Moments when ALL the given words are said close together (accents, plurals and case ignored; hollow words like 'le', 'c'est' are dropped). "
-        "One call per wording: try synonyms and other ways people would say it in separate calls. Answers the sentence and its time.",
+        "description": "Every time ALL the given words are said close together (accents, plurals and case ignored; hollow words like 'le', 'c'est' are dropped). "
+        "One call per wording: try synonyms and other ways people would say it in separate calls. Answers each line where it is said: its time, "
+        "how many seconds it takes to say, its words.",
         "parameters": {"type": "object", "properties": {"words": {"type": "string", "description": "1 to 4 words, e.g. 'calme' or 'brigade tigre'"}}, "required": ["words"]},
     },
     {
@@ -73,8 +74,9 @@ SPECS: list[dict] = [
     },
     {
         "name": "read",
-        "description": "Everything said between two times (at most 4 minutes), one line per sentence with its time, the chat's messages there, and what is heard (sounds, loudness). "
-        "Use it to check a moment and to find exactly where it starts and ends.",
+        "description": "Everything said between two times (at most 4 minutes), one line per sentence: \"[its time] (the seconds it takes to say) its words\"; "
+        "then the chat's messages there, and what is heard (sounds, loudness). Use it to check a moment and to pick the lines to keep: "
+        "a moment is given by the time of its first line and the time of its last one.",
         "parameters": {
             "type": "object",
             "properties": {"start": {"type": "string", "description": "H:MM:SS"}, "end": {"type": "string", "description": "H:MM:SS"}},
@@ -213,14 +215,33 @@ class LiveTools:
             ],
         }
 
+    def spoken(self, first, last) -> float:
+        """How long the lines from the one stamped `first` to the one stamped `last` take to say: what a
+        moment given by its lines lasts once cut on its words. Nobody speaks there: the time between the two."""
+        lines = live_search._lines_between(self.transcript, first, last) if self.transcript else []
+        if lines:
+            return sum(live_search.spoken_seconds(self.transcript, *line) for line in lines)
+        a, b = parse_hms(first), parse_hms(last)
+        return max(live_search.SOUND_SECONDS, (b if b is not None else a) - a) if a is not None else 0.0
+
     def tool_search_speech(self, words: str) -> dict:
         if not self.transcript:
             return {"error": "this live has no transcript"}
         hits = live_search.search_voice(self.transcript, live_search.query_terms(words))
-        return {
-            "found": len(hits),
-            "moments": [{"at": hms(h.start), "seconds": round(h.end - h.start, 1), "said": _short(h.text, 160)} for h in hits[:MAX_HITS]],
-        }
+        moments = []
+        for h in hits[:MAX_HITS]:
+            # The lines that say it, as `read` shows them: a moment is given by their times
+            lines = [(s, e, t) for s, e, t in self.transcript.segments if e > h.start + 0.01 and s < h.end - 0.01 and t.strip()]
+            first = lines[0][0] if lines else h.start
+            moment = {
+                "at": live_search.stamp(first),
+                "seconds": round(sum(live_search.spoken_seconds(self.transcript, *line) for line in lines) if lines else h.end - h.start, 1),
+                "said": _short(h.text, 160),
+            }
+            if len(lines) > 1:
+                moment["last_line_at"] = live_search.stamp(lines[-1][0])
+            moments.append(moment)
+        return {"found": len(hits), "moments": moments}
 
     def tool_search_chat(self, words: str) -> dict:
         hits = live_search.search_chat(self.chat, live_search.query_terms(words), self.chat_lag, self.duration)
@@ -266,7 +287,11 @@ class LiveTools:
         b = min(_seconds(end, a + 30.0), a + MAX_READ_SECONDS)
         if b <= a:
             b = a + 30.0
-        lines = [f"[{hms(s)}] {t.strip()}" for s, e, t in (self.transcript.segments if self.transcript else []) if e > a and s < b and t.strip()]
+        lines = [
+            f"[{live_search.stamp(s)}] ({live_search.spoken_seconds(self.transcript, s, e, t):.1f} s) {t.strip()}"
+            for s, e, t in (self.transcript.segments if self.transcript else [])
+            if e > a and s < b and t.strip()
+        ]
         chat = [
             f"[{hms(float(m.get('timestamp', 0)) - self.chat_lag)}] {m.get('author', '')}: {str(m.get('text', ''))[:100]}"
             for m in self.chat

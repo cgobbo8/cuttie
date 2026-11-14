@@ -75,6 +75,8 @@ def test_the_main_template_is_settled_once_then_each_passage_is_looked_at(clips)
     assert call["model"] == looks.EYES_MODEL
     told = call["messages"][0]["content"]
     assert "main template is [empile] (Empilé): it is settled" in told and "« ma caméra en haut, le jeu en dessous »" in told
+    # They said how the video should look: one look for all of it, a passage only leaves it when it cannot work there
+    assert "every passage keeps the main template" in told and "nobody is in it" in told and "a conversation between characters" not in told
     assert all(f"[{t['key']}] {t['name']}" in told for t in TEMPLATES) and "the inset at the top right (79% to 100% across" in told
     shown = call["messages"][1]["content"]
     # Each passage: what is said, whether someone is in the webcam, then its three frames
@@ -88,7 +90,10 @@ def test_nothing_asked_keeps_the_usual_template(clips):
     eyes = Eyes({"passages": [{"n": 1, "template": "plein"}, {"n": 2, "template": "plein"}], "note": "Rien changé."})
     chosen = looks.choose("job", _pieces(2), TEMPLATES, client=eyes, usual="plein")
     assert len(eyes.seen) == 1 and chosen["main"] == "plein" and chosen["looks"] == {"piece01": "plein", "piece02": "plein"} and chosen["note"] == ""
-    assert "main template is [plein] (Action): it is settled. Every passage" in eyes.seen[0]["messages"][0]["content"]
+    told = eyes.seen[0]["messages"][0]["content"]
+    assert "main template is [plein] (Action): it is settled. Every passage" in told
+    # Nothing was asked about the look: a passage that clearly calls for another template gets it
+    assert "a conversation between characters" in told and "every passage keeps the main template" not in told
     # No usual one either (or one that is gone): the first of the list
     assert looks.choose("job", _pieces(1), TEMPLATES, client=Eyes({"passages": []}), usual="gone")["main"] == "custom-abc"
 

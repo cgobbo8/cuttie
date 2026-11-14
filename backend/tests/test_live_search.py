@@ -72,6 +72,60 @@ def test_without_timed_words_the_segments_are_the_moments():
     assert hits[0].text == "On attend la brigade du tigre, elle arrive."
 
 
+def test_a_line_s_time_to_the_tenth_and_what_it_takes_to_say():
+    assert [ls.stamp(t) for t in (0.0, 59.96, 4619.86, 3600.04)] == ["0:00:00.0", "0:01:00.0", "1:16:59.9", "1:00:00.0"]
+    lines = VodTranscript(segments=[(100.0, 106.0, " Rien il a redit que c'était calme ce bâtard")])
+    # A sentence of 9 words in a line of 6 s: about 2.4 s to say; never more than the line itself
+    assert round(ls.spoken_seconds(lines, 100.0, 106.0, lines.segments[0][2]), 2) == 2.38
+    assert ls.spoken_seconds(lines, 100.0, 101.0, lines.segments[0][2]) == 1.0
+    # With timed words, a line's own times tell
+    timed = VodTranscript(segments=lines.segments, words=[_word("Rien", 103.0, 103.3)])
+    assert ls.spoken_seconds(timed, 100.0, 106.0, lines.segments[0][2]) == 6.0
+
+
+def test_the_ai_with_tools_gives_moments_as_lines():
+    live = VodTranscript(segments=[
+        (100.0, 106.0, " Rien il a redit que c'était calme ce bâtard"),
+        (106.0, 108.0, " tu trouves que c'est vraiment trop calme ?"),
+        (108.0, 108.7, " Ok du coup"),
+        (108.7, 112.0, " j'jure c'est trop calme à l'accueil c'est horrible"),
+        (300.0, 330.0, " " + "bla " * 80),
+        (330.0, 332.0, " et voilà"),
+    ])
+    moment = lambda start, end, quote="", **more: {"start": start, "end": end, "quote": quote, "why": "w", "score": 80, **more}
+    hits = ls.parse_line_moments([
+        # One line: its time twice. The moment is that whole line, however rough its times
+        moment("0:01:40.0", "0:01:40.0", "il a redit que c'était calme"),
+        # From a line to another, the lines between included; a short line told apart from its neighbours by the tenths
+        moment("0:01:46.0", "0:01:48.0", "trop calme"),
+        # The tenths dropped: every line that starts in those seconds
+        moment("0:01:48", "0:01:48"),
+        # Times that name no line, but words that are said nearby: where they are said
+        moment("0:01:30", "0:01:33", "c'est trop calme à l'accueil c'est horrible"),
+        # Nobody speaks there (a sound): the times it gave, 2 s at least
+        moment("0:03:20", "0:03:27", "une explosion"),
+        moment("0:03:40", "0:03:40", "un tir"),
+        # A long line and the next one
+        moment("0:05:00.0", "0:05:30.0"),
+        # Nonsense is left out
+        moment("soon", "later"), "not a moment", moment("0:01:46.0", "0:01:40.0", score="high"),
+    ], live, duration=400.0)
+    assert [(h.start, h.end, h.spoken) for h in hits] == [
+        (100.0, 106.0, True), (106.0, 108.7, True), (108.0, 112.0, True), (108.7, 112.0, True),
+        (200.0, 207.0, False), (220.0, 222.0, False), (300.0, 332.0, True), (106.0, 108.0, True),
+    ]
+    # Too much to say for a compilation: its first line still is a moment, the lines after it are not added
+    assert [(h.start, h.end) for h in ls.parse_line_moments([moment("0:05:00.0", "0:05:30.0")], live, 400.0, longest=10.0)] == [(300.0, 330.0)]
+    assert hits[0].text == "Rien il a redit que c'était calme ce bâtard" and hits[1].text == "tu trouves que c'est vraiment trop calme ? Ok du coup"
+    assert hits[4].text == "" and hits[0].score == 0.8 and hits[-1].score == 0.5 and hits[0].sources == ["ai"]
+    # Past the live's end, or more than asked for: left out
+    assert ls.parse_line_moments([moment("0:01:40.0", "0:01:40.0")] * 3, live, duration=400.0, limit=2)[1].start == 100.0
+    assert len(ls.parse_line_moments([moment("0:01:40.0", "0:01:40.0")] * 3, live, duration=400.0, limit=2)) == 2
+    # With timed words, the lines' own words bound the moment
+    timed = VodTranscript(segments=live.segments, words=[_word("Rien", 103.1, 103.4), _word("bâtard", 104.6, 105.2)])
+    assert [(h.start, h.end) for h in ls.parse_line_moments([moment("0:01:40.0", "0:01:40.0")], timed, 400.0)] == [(103.1, 105.2)]
+
+
 def test_finds_what_the_chat_writes():
     chat = [
         {"timestamp": 108.0, "author": "lea", "text": "c'est trop calme"},

@@ -77,6 +77,9 @@ class Hit:
     # The AI's reason and how sure it is (0-1)
     why: str = ""
     score: float = 0.0
+    # The moment is something said, and its bounds are those the transcript gives to these words
+    # (rough when it has lines only): once it has its clip, it is cut on where they are really said
+    spoken: bool = False
 
 
 # ── Words ────────────────────────────────────────────────────────────────────
@@ -168,6 +171,28 @@ def _sentence(transcript: VodTranscript, terms: list[str], start: float, end: fl
     return float(words[a]["start"]), float(words[b]["end"]), " ".join(str(w["word"]).strip() for w in words[a : b + 1])
 
 
+# What a word takes to say on a stream (people speak fast: 4 to 5 words a second), and the breath around a sentence
+WORD_SECONDS = 0.22
+SENTENCE_AIR = 0.4
+
+
+def spoken_seconds(transcript: VodTranscript, start: float, end: float, text: str) -> float:
+    """How long a line of the transcript takes to say. With timed words its own times tell; the
+    local engine gives lines whose times hold silence (a 2 s sentence in a 6 s line): its words
+    are counted instead."""
+    length = max(0.0, end - start)
+    if transcript.words:
+        return length
+    return min(length, WORD_SECONDS * len(text.split()) + SENTENCE_AIR)
+
+
+def stamp(seconds: float) -> str:
+    """A time to the tenth of a second, "1:16:59.9": what tells two short lines apart."""
+    tenths = int(round(max(0.0, seconds) * 10))
+    whole, tenth = divmod(tenths, 10)
+    return f"{whole // 3600}:{whole % 3600 // 60:02d}:{whole % 60:02d}.{tenth}"
+
+
 def _word_starts(transcript: VodTranscript) -> list[float]:
     starts = getattr(transcript, "_starts", None)
     if starts is None:
@@ -211,9 +236,9 @@ def search_voice(transcript: VodTranscript, terms: list[str]) -> list[Hit]:
         # With timed words: the very sentence, not the whole segment (some run for 20 s)
         sentence = _sentence(transcript, terms, start, segments[last][1])
         if sentence:
-            hits.append(Hit(start=sentence[0], end=sentence[1], sources=["voice"], text=sentence[2]))
+            hits.append(Hit(start=sentence[0], end=sentence[1], sources=["voice"], text=sentence[2], spoken=True))
         else:
-            hits.append(Hit(start=start, end=segments[last][1], sources=["voice"], text=" ".join(seg[2].strip() for seg in segments[i : last + 1])))
+            hits.append(Hit(start=start, end=segments[last][1], sources=["voice"], text=" ".join(seg[2].strip() for seg in segments[i : last + 1]), spoken=True))
     return hits
 
 
@@ -577,7 +602,71 @@ def parse_moments(raw_moments: list, transcript: VodTranscript, duration: float,
             score = 0.5
         # What it quoted, as the transcript has it: the sentence that shows why this moment was picked
         said = _said(transcript, spot[0], spot[1]) if spot else ""
-        hits.append(Hit(start=start, end=end, sources=["ai"], text=said, why=str(raw.get("why") or "")[:200], score=score))
+        hits.append(Hit(start=start, end=end, sources=["ai"], text=said, why=str(raw.get("why") or "")[:200], score=score, spoken=bool(spot)))
+    return hits[:limit]
+
+
+# How far a line's time may be from the one the AI copied (it copies them to the tenth)
+LINE_SLACK = 0.06
+# A moment without words (a sound): at least this long
+SOUND_SECONDS = 2.0
+
+
+def _lines_between(transcript: VodTranscript, first, last) -> list[tuple[float, float, str]]:
+    """The lines from the one stamped `first` to the one stamped `last`, as the AI copied these
+    times from `read` ("1:16:59.9", or "1:16:59" when it dropped the tenths)."""
+    a, b = parse_hms(first), parse_hms(last)
+    if a is None:
+        return []
+    b = a if b is None or b < a else b
+    # Without tenths, a time names every line that starts within that second
+    lo = a - LINE_SLACK
+    hi = b + (LINE_SLACK if "." in str(last if last is not None else first) else 0.999)
+    return [(s, e, t) for s, e, t in transcript.segments if lo <= s <= hi and t.strip()]
+
+
+def parse_line_moments(raw_moments: list, transcript: VodTranscript, duration: float, limit: int = MAX_AI_MOMENTS, longest: float = MAX_MOMENT) -> list[Hit]:
+    """The moments of the AI that searches with tools, as hits. It gives each one as lines of
+    the transcript (`start`: the time of the first line to keep, `end`: the time of the last),
+    so a moment is whole sentences whatever their times are worth; what it quoted is looked for
+    when its times name no line. A moment with no words (a sound) keeps the times it gave."""
+    hits: list[Hit] = []
+    for raw in raw_moments if isinstance(raw_moments, list) else []:
+        if not isinstance(raw, dict):
+            continue
+        start, end = parse_hms(raw.get("start")), parse_hms(raw.get("end"))
+        if start is None:
+            continue
+        end = start if end is None or end < start else end
+        quote = str(raw.get("quote") or "").strip()
+        lines = _lines_between(transcript, raw.get("start"), raw.get("end"))
+        spot = locate_quote(transcript, quote, (start - QUOTE_SLACK, end + QUOTE_SLACK)) if quote else None
+        if spot and not any(e > spot[0] and s < spot[1] for s, e, _t in lines):
+            # What it quoted is said elsewhere than the lines it named (or it named none): there, then
+            lines = [(s, e, t) for s, e, t in transcript.segments if e > spot[0] and s < spot[1] and t.strip()]
+        # Too long for a compilation: its first lines
+        said = 0.0
+        kept: list[tuple[float, float, str]] = []
+        for line in lines:
+            said += spoken_seconds(transcript, *line)
+            if kept and said > longest:
+                break
+            kept.append(line)
+        if kept:
+            a, b = _tighten_to_words(transcript, kept[0][0], kept[-1][1]) if transcript.words else (kept[0][0], kept[-1][1])
+            text = _excerpt([t for _s, _e, t in kept], limit=260)
+        else:
+            # Nobody speaks there: a sound, as long as the AI said
+            a, b, text = max(0.0, start), min(max(end, start + SOUND_SECONDS), start + longest), ""
+        if duration:
+            a, b = min(a, max(0.0, duration - 0.5)), min(duration, b)
+        if b - a < 0.3:
+            continue
+        try:
+            score = max(0.0, min(1.0, float(raw.get("score", 50)) / 100))
+        except (TypeError, ValueError):
+            score = 0.5
+        hits.append(Hit(start=a, end=b, sources=["ai"], text=text, why=str(raw.get("why") or "")[:200], score=score, spoken=bool(kept)))
     return hits[:limit]
 
 
@@ -637,6 +726,7 @@ def info(job_id: str, duration: float = 0.0) -> dict:
         "plan_cost": plan,
         # The most a question can cost: the search stops there and answers with what it has
         "max_cost": None if dev else live_agent.MAX_COST,
+        "plan_max_cost": None if dev else live_agent.PLAN_MAX_COST,
         # The live was listened to (its sounds can be searched); else the first question does it
         "sounds": os.path.isfile(sound_index.index_path(job_id)),
         # Tried with another model than the one that will be billed
@@ -676,11 +766,12 @@ def _step_detail(args: dict) -> str:
     return ""
 
 
-def _ask(job_id: str, duration: float, lag: float, url: str | None, work, moments: list[dict] | None = None):
+def _ask(job_id: str, duration: float, lag: float, url: str | None, work, moments: list[dict] | None = None,
+         models: list[str] | None = None, max_cost: float | None = None):
     """Have the AI do `work(searcher)` over this live: with its tools and its ears, the live
-    listened to first when it never was. When the searching model fails for a reason of its
-    own (retired, down, no answer), the fallback model does the work instead.
-    Returns the run, the tools, and what both tries cost."""
+    listened to first when it never was. When the model fails for a reason of its own (retired,
+    down, no answer), the next one does the work instead (`models`: the searching model then its
+    fallback, unless given). Returns the run, the tools, and what all the tries cost."""
     from app.services import live_agent, sound_index
     from app.services.live_tools import LiveTools
     from app.services.openai_client import get_openrouter_client
@@ -691,13 +782,14 @@ def _ask(job_id: str, duration: float, lag: float, url: str | None, work, moment
             _tell(job_id, "hearing")
             sound_index.ensure(job_id, url)
         tools = LiveTools(job_id, duration, lag, moments)
-        models = list(dict.fromkeys(m for m in (live_agent.SEARCH_MODEL, live_agent.FALLBACK_MODEL) if m))
+        models = list(dict.fromkeys(m for m in (models or (live_agent.SEARCH_MODEL, live_agent.FALLBACK_MODEL)) if m))
         spent = 0.0
         for attempt, model in enumerate(models):
             _tell(job_id, "thinking")
             searcher = live_agent.Searcher(
                 tools, get_openrouter_client(), model, vod_url=url,
                 on_step=lambda name, args: _tell(job_id, name, _step_detail(args)),
+                max_cost=max_cost if max_cost is not None else live_agent.MAX_COST,
             )
             failure: Exception | None = None
             try:
@@ -758,28 +850,34 @@ def plan_video(
         return _plan_by_reading(job_id, brief, target, meta, duration, energy, lag)
     from app.services import live_agent
 
-    path = _cache_path(job_id, "agent_plan", " ".join(tokens(brief)), f"{target:.0f}", _signature(transcript), live_agent.SEARCH_MODEL, live_agent.ANSWERS_VERSION)
+    path = _cache_path(job_id, "agent_plan", " ".join(tokens(brief)), f"{target:.0f}", _signature(transcript), live_agent.PLAN_MODEL, live_agent.ANSWERS_VERSION)
     kept = _cached(path)
     if kept:
         return {**kept, "cached": True, "cost": 0.0}
-    run, _tools, cost = _ask(job_id, duration, lag, url, lambda searcher: searcher.plan(brief, target), moments)
-    result = {"title": run.title, "sections": _sections(run.sections, transcript, duration), "note": run.note, "look": run.look}
+    # A model of its own (sorting moments between the parts of a description takes more than finding them),
+    # then those of the search when it fails
+    run, _tools, cost = _ask(
+        job_id, duration, lag, url, lambda searcher: searcher.plan(brief, target), moments,
+        models=[live_agent.PLAN_MODEL, live_agent.SEARCH_MODEL, live_agent.FALLBACK_MODEL], max_cost=live_agent.PLAN_MAX_COST,
+    )
+    result = {"title": run.title, "sections": _sections(run.sections, transcript, duration, by_lines=True), "note": run.note, "look": run.look}
     _keep(path, result)
     total = sum(h["end"] - h["start"] for s in result["sections"] for h in s["hits"])
     logger.info(f"[{job_id[:8]}] AI plan \"{brief[:60]}\": {len(result['sections'])} sections, {total:.0f} s for a target of {target:.0f} s with {run.model} (~{cost:.4f} $, {run.seconds:.0f} s)")
     return {**result, "cached": False, "cost": round(cost, 4)}
 
 
-def _sections(raw_sections, transcript: VodTranscript, duration: float) -> list[dict]:
+def _sections(raw_sections, transcript: VodTranscript, duration: float, by_lines: bool = False) -> list[dict]:
     """The AI's sections as the app shows them: a title and hits, in playing order (the AI's, not the stream's);
-    a moment given twice is kept once."""
+    a moment given twice is kept once. `by_lines`: its moments name lines of the transcript (the AI with tools)."""
     sections = []
     taken: list[tuple[float, float]] = []
+    parse = parse_line_moments if by_lines else parse_moments
     for raw in raw_sections if isinstance(raw_sections, list) else []:
         if not isinstance(raw, dict):
             continue
         hits = []
-        for hit in parse_moments(raw.get("moments", []), transcript, duration, limit=60, longest=MAX_PLANNED):
+        for hit in parse(raw.get("moments", []), transcript, duration, limit=60, longest=MAX_PLANNED):
             if any(min(hit.end, b) - max(hit.start, a) > 0.5 * min(hit.end - hit.start, b - a) for a, b in taken):
                 continue
             taken.append((hit.start, hit.end))

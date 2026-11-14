@@ -34,16 +34,27 @@ logger = logging.getLogger(__name__)
 SEARCH_MODEL = os.getenv("CUTTIE_SEARCH_MODEL", "openai/gpt-6-luna")
 FALLBACK_MODEL = os.getenv("CUTTIE_SEARCH_FALLBACK", "anthropic/claude-haiku-5.5")
 EARS_MODEL = os.getenv("CUTTIE_EARS_MODEL", "google/gemini-3.1-flash-lite")
-# What a search and a planned video cost on average with SEARCH_MODEL (measured), and what one may never go over
+# The model that plans a whole video from its description. Finding moments is one thing; reading
+# what each part of a description means and sorting the moments between them is another, and the
+# cheap models don't: on a streamer's own description (two parts: everyone saying the evening is
+# calm, then what follows and who gets blamed for it; a 6 h 49 live, 2026-11-14), GPT-6 Luna put
+# every sentence with the word in the first part and found 0 to 2 of the 20 passages an editor
+# kept for the second; Claude Haiku 5.5 3 to 5; Claude Sonnet 5.5 7 (0.09 $); Gemini 3.8 Flash 8
+# (0.10 $); GPT-6.1 Terra 11 and 14 in two runs, filed right and at the length asked, for 0.03-0.04 $.
+PLAN_MODEL = os.getenv("CUTTIE_PLAN_MODEL", "openai/gpt-6.1-terra")
+# What a search and a planned video cost on average with these models (measured), and what one may never go over
 TYPICAL_COST = float(os.getenv("CUTTIE_SEARCH_COST", "0.002"))
-TYPICAL_PLAN_COST = float(os.getenv("CUTTIE_PLAN_COST", "0.003"))
+TYPICAL_PLAN_COST = float(os.getenv("CUTTIE_PLAN_COST", "0.04"))
 MAX_COST = float(os.getenv("CUTTIE_SEARCH_MAX_COST", "0.05"))
+PLAN_MAX_COST = float(os.getenv("CUTTIE_PLAN_MAX_COST", "0.12"))
 # How hard the searching model thinks between two tools (as on the benchmark: it reads, it doesn't ponder)
 REASONING = {"effort": "low"}
 # Changes when the instructions do: answers kept on disk under the old ones are asked again
-ANSWERS_VERSION = "3"
+ANSWERS_VERSION = "4"
 MAX_STEPS = 28
 PLAN_STEPS = 36
+# A planned video that comes to less than this share of the length asked is sent back once
+SHORT_PLAN = 0.75
 MAX_LISTENS = 12
 LISTEN_SECONDS = 30.0
 FETCH_TIMEOUT = 25
@@ -73,9 +84,9 @@ LISTEN_SPEC = {
 _MOMENT = {
     "type": "object",
     "properties": {
-        "start": {"type": "string", "description": "H:MM:SS, on the sentence where the moment begins"},
-        "end": {"type": "string", "description": "H:MM:SS, when it is over (the reaction included)"},
-        "quote": {"type": "string", "description": "The exact words said there that show it matches, copied from `read` (or what is heard, for a sound)"},
+        "start": {"type": "string", "description": "The time of the first line to keep, copied as `read` gives it (H:MM:SS.s). For a moment with no words (a sound): when it starts"},
+        "end": {"type": "string", "description": "The time of the last line to keep, copied the same way: the same as `start` when one line is the whole moment. For a sound: when it ends"},
+        "quote": {"type": "string", "description": "The exact words said there that show it matches, copied from those lines (or what is heard, for a sound)"},
         "why": {"type": "string", "description": "One short sentence, in the stream's language"},
         "score": {"type": "number", "description": "0-100: how well it matches the request"},
     },
@@ -130,8 +141,10 @@ The transcript comes from speech recognition of gaming talk: it has mistakes, mi
 
 _HOW = """1. Read the request the way a streamer means it. Slang and figures of speech are about what happens, not about the words: "ça pète" or "it kicks off" means the action erupts (a fight, shots, a chase, a crash, people yelling at each other), "il pète les plombs" means someone loses their temper, "fou rire" means hard laughter. Such moments rarely contain the request's words.
 2. Think about how it would show: in words (several wordings and synonyms), in the chat's reactions, in sounds, in loudness, in what the first analysis saw (`best_moments` names what happens in the 50 moments it rated).
-3. Start with `overview`, then search wide with several tools and wordings. Call several tools at once when you can. For a request about what happens, how people sound or how the chat reacts, `best_moments`, `chat_peaks`, the loud moments and the sounds matter more than the words.
+3. Start with `overview`, then search wide with several tools and wordings. Call several tools at once when you can. For a request about what happens, how people sound or how the chat reacts, `best_moments`, `chat_peaks`, the loud moments and the sounds matter more than the words. When the streamer wants every time something is said, `search_speech` lists them all: go through its whole list, not its first results.
 4. Check every candidate with `read` before keeping it{listen} A moment matches when what is said or heard there really is what was asked."""
+
+_LINES = """A moment is the lines to keep, as `read` shows them: `start` is the time of its first line and `end` the time of its last line, both copied as they are (the same time twice when one line says it all). Keep only the lines that are the moment, not what leads to it: the video is cut on their very words, and the seconds after each time say how long a line takes once cut. A moment without words (a sound) is given by when it starts and ends."""
 
 _SOUNDS = """The sound tools only point at where to look and they misfire: confirm what they report (shots, a siren, laughter, a shout) with `listen` before keeping it. You have enough listens: use them on your best candidates rather than giving up on them."""
 
@@ -145,7 +158,9 @@ How to work:
 """
     + _HOW
     + """
-5. Set tight bounds: start on the sentence where it begins, end when it is over (the reaction included). Compilations want short moments: usually 3 to 20 seconds, 40 at most.
+5. """
+    + _LINES
+    + """ Compilations want short moments: usually one to four lines, 40 seconds at most.
 6. """
     + _SCORES
     + """ Never score a moment 50 or more to fill the answer: if only two match, only two get such a score. When nothing or little matches, add the closest moments you checked (5 at most) with a score under 50 and a `why` that says what is missing: the streamer prefers a few honest near-misses to an empty answer.
@@ -160,9 +175,11 @@ How to work:
 """
     + _HOW
     + """
-5. Split the video into the parts the streamer describes (one part when they describe none), in the order they give. Search each part on its own.
-6. Set tight bounds: start on the sentence where a moment begins, end when it is over. A video of many moments wants short ones: usually 3 to 12 seconds.
-7. The moments' lengths must add up to about the length asked for (10 % over at most): keep the best ones, shared fairly between the parts. Never use a moment twice.
+5. Split the video into the parts the streamer describes (one part when they describe none), in the order they give, and search each part on its own. Sort the moments by what happens in them, not by the words they share with a part: when the parts tell a before and an after (people say something, then it turns out otherwise; a setup, then what follows), someone who looks back on what was said, mocks it or blames those who said it belongs to the after, even when the same words come up again. The parts make one video about one thing: for what follows, look first around and after the moments of the part before, and prefer what belongs to that story to moments from elsewhere that only share a word with the description.
+6. """
+    + _LINES
+    + """ A video of many moments wants short ones, usually one to three lines; when the description says how long the moments of a part should be, follow it.
+7. Add up the seconds of the lines you keep: the whole video must come to about the length asked for (10 % over at most, and not much under when the live has enough). When more moments match than fit, keep the best ones, shared between the parts as the description suggests; when the streamer wants every moment of a kind, keep as many as fit. Inside a part, moments play in the order of the live unless the description says otherwise. Never use a moment twice.
 8. """
     + _SCORES
     + """ A part with nothing that really matches gets its closest moments (3 at most, scored under 50) rather than staying empty, and the note says so. Never invent: every moment is one you read or listened to.
@@ -307,6 +324,10 @@ class Searcher:
         for attempt in range(STEP_TRIES):
             try:
                 extra = {"usage": {"include": True}, **({"reasoning": REASONING} if kwargs.get("model") == self.model else {})}
+                if str(kwargs.get("model") or "").startswith("anthropic/"):
+                    # Claude only keeps what it was sent when asked to: each step then pays a tenth of
+                    # the price for all that the steps before it already sent (measured: 0.0025 $ -> 0.0003 $)
+                    extra["cache_control"] = {"type": "ephemeral"}
                 response = self.client.chat.completions.create(timeout=STEP_TIMEOUT, extra_body=extra, **kwargs)
                 _usage(self.run, response)
                 if not getattr(response, "choices", None):
@@ -382,7 +403,7 @@ class Searcher:
     def plan(self, brief: str, target: float, max_steps: int = PLAN_STEPS) -> AgentRun:
         """A whole video from its description: its parts and their moments (run.title, run.sections, run.note)."""
         ask = f"The video the streamer describes: « {brief} »\nIts length: about {target:.0f} seconds in all."
-        given = self._work(PLAN_SYSTEM, ask, PLAN_SPEC, max_steps, review=lambda plan: _short_plan(plan, target))
+        given = self._work(PLAN_SYSTEM, ask, PLAN_SPEC, max_steps, review=lambda plan: _short_plan(plan, target, self.tools.spoken))
         sections = given.get("sections")
         for raw in sections if isinstance(sections, list) else []:
             if isinstance(raw, dict) and isinstance(raw.get("moments"), list):
@@ -471,20 +492,24 @@ class Searcher:
         return given
 
 
-def _short_plan(plan: dict, target: float) -> str | None:
+def _short_plan(plan: dict, target: float, spoken=None) -> str | None:
     """What is wrong with a planned video that is much shorter than asked or says nothing of itself
-    (a model sometimes hands in its first part only): sent back to it once. None when the plan stands."""
+    (a model sometimes hands in its first part only): sent back to it once. None when the plan stands.
+    `spoken(start, end)`: how long the lines a moment names take to say (its length once cut)."""
     sections = [s for s in plan.get("sections") or [] if isinstance(s, dict) and isinstance(s.get("moments"), list) and s["moments"]]
     total = 0.0
     for section in sections:
         for moment in section["moments"]:
             if isinstance(moment, dict):
+                if spoken:
+                    total += spoken(moment.get("start"), moment.get("end"))
+                    continue
                 start, end = parse_hms(moment.get("start")), parse_hms(moment.get("end"))
                 total += max(0.0, (end or 0.0) - (start or 0.0)) if start is not None else 0.0
-    if total >= 0.6 * target and str(plan.get("note") or "").strip():
+    if total >= SHORT_PLAN * target and str(plan.get("note") or "").strip():
         return None
     return (
-        f"This plan holds {len(sections)} part(s) with moments and about {total:.0f} seconds, for {target:.0f} asked. Call `plan` again with the whole video: "
+        f"This plan holds {len(sections)} part(s) with moments and about {total:.0f} seconds once cut on its words, for {target:.0f} asked. Call `plan` again with the whole video: "
         "every part the streamer described (a part with nothing that matches gets its closest moments, scored under 50), more of the moments you checked "
         "if the video is short, and the note. If this really is all the live has, give the same plan again and say so in the note."
     )
@@ -506,5 +531,5 @@ def to_hits(run: AgentRun, tools: LiveTools) -> list[live_search.Hit]:
     """The agent's moments as search results: on the words it quoted, with the quote as what is said there."""
     if not tools.transcript:
         return []
-    hits = live_search.parse_moments(run.moments, tools.transcript, tools.duration, limit=MAX_MOMENTS)
+    hits = live_search.parse_line_moments(run.moments, tools.transcript, tools.duration, limit=MAX_MOMENTS)
     return sorted(hits, key=lambda h: h.start)

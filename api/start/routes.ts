@@ -105,6 +105,8 @@ router
         router.post('/jobs/:id/compilations', [() => import('#controllers/compilations_controller'), 'store'])
         router.put('/jobs/:id/compilations/:compId', [() => import('#controllers/compilations_controller'), 'update'])
         router.delete('/jobs/:id/compilations/:compId', [() => import('#controllers/compilations_controller'), 'destroy'])
+        router.post('/jobs/:id/compilations/:compId/duplicate', [() => import('#controllers/compilations_controller'), 'duplicate'])
+        router.get('/compilations', [() => import('#controllers/compilations_controller'), 'library'])
         router.post('/jobs/:jobId/batch-render', [() => import('#controllers/renders_controller'), 'batchStore'])
         router.post('/jobs/:jobId/montage-render', [() => import('#controllers/renders_controller'), 'storeMontage'])
 

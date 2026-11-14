@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { useTranslation } from "react-i18next";
 import { Player } from "@remotion/player";
 import { ArrowLeft, Check, CircleQuestionMark, Loader2, Plus } from "lucide-react";
@@ -62,6 +62,7 @@ import { buildAny, customTemplates, defaultTemplateKey, findCustom, hookOf, isBu
 import { titleCard } from "../lib/templateSpec";
 import { TEMPLATE_IDS } from "../lib/templates";
 import MontageComposition from "../components/remotion-editor/MontageComposition";
+import ModeSwitch from "../components/project/ModeSwitch";
 import CompilationGuide from "../components/compilation/CompilationGuide";
 import CompilationPanel from "../components/compilation/CompilationPanel";
 import PiecePreview from "../components/compilation/PiecePreview";
@@ -108,6 +109,8 @@ export default function CompilationPage() {
   const toast = useToast();
   const navigate = useNavigate();
   const { jobId } = useParams<{ jobId: string }>();
+  // ?c=<id>: the compilation to open; ?new=1: a new one (from the library)
+  const [search, setSearch] = useSearchParams();
   const { kit, channel } = useChannel();
   const { settings, refresh: refreshSettings } = useSettings();
 
@@ -163,6 +166,7 @@ export default function CompilationPage() {
   // Search results looked at before being added keep their id (and so their clip)
   const drafts = useRef(new Map<string, CompilationItem>());
 
+  const loaded = useRef<{ job: string; all: Promise<Compilation[]> } | null>(null);
   const remember = useCallback((list: Compilation[]) => {
     const states: Record<string, PieceState> = {};
     for (const item of list.flatMap(allItems)) {
@@ -183,15 +187,28 @@ export default function CompilationPage() {
       })
       .catch(() => !cancelled && navigate("/"));
     getLiveSearchInfo(jobId).then((i) => !cancelled && setInfo(i)).catch(() => {});
-    listCompilations(jobId)
-      .then(async (list) => {
+    // Asked once per live, even when this runs twice (development): a new compilation is created once
+    const wantsNew = search.get("new") === "1";
+    if (loaded.current?.job !== jobId) {
+      loaded.current = {
+        job: jobId,
         // The first visit opens on an empty compilation
-        const all = list.length > 0 ? list : [await createCompilation(jobId, { name: t("compilation.defaultName") })];
+        all: listCompilations(jobId).then(async (list) => {
+          // A new one is asked for: the empty one left from last time does, rather than piling them up
+          const blank = list.find((c) => allItems(c).length === 0 && !c.brief);
+          if (wantsNew && blank) return [...list.filter((c) => c !== blank), blank];
+          return list.length === 0 || wantsNew ? [...list, await createCompilation(jobId, { name: t("compilation.defaultName") })] : list;
+        }),
+      };
+    }
+    loaded.current.all
+      .then((all) => {
         if (cancelled) return;
+        const opened = (!wantsNew && all.find((c) => c.id === search.get("c"))) || all[all.length - 1];
         remember(all);
         setCompilations(all);
-        setCurrentId(all[all.length - 1].id);
-        setActiveSection(all[all.length - 1].sections[0]?.id ?? "");
+        setCurrentId(opened.id);
+        setActiveSection(opened.sections[0]?.id ?? "");
       })
       .catch((err) => !cancelled && toast.error(err instanceof Error ? err.message : t("common.error")));
     return () => {
@@ -200,6 +217,10 @@ export default function CompilationPage() {
   }, [jobId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const compilation = compilations?.find((c) => c.id === currentId) ?? null;
+  // The address names the compilation on screen: a reload, or coming back from an export, opens it again
+  useEffect(() => {
+    if (currentId && (search.get("c") !== currentId || search.has("new"))) setSearch({ c: currentId }, { replace: true });
+  }, [currentId, search, setSearch]);
   const compilationsRef = useRef(compilations);
   compilationsRef.current = compilations;
   const liveDuration = job?.vod_duration_seconds ?? 0;
@@ -447,13 +468,9 @@ export default function CompilationPage() {
       window.clearTimeout(saveTimers.current.get(compilation.id));
       latest.current.delete(compilation.id);
       await deleteCompilation(jobId, compilation.id);
-      const rest = compilations.filter((c) => c.id !== compilation.id);
-      const list = rest.length > 0 ? rest : [await createCompilation(jobId, { name: t("compilation.defaultName") })];
-      setCompilations(list);
-      setCurrentId(list[list.length - 1].id);
-      setActiveSection(list[list.length - 1].sections[0]?.id ?? "");
-      setShown(null);
       toast.success(t("compilation.deleted"));
+      // Back to the live's compilations
+      navigate(`/${jobId}/compilations`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t("common.error"));
     }
@@ -654,34 +671,20 @@ export default function CompilationPage() {
     <div className="animate-fade-in">
       <header className="flex flex-wrap items-end justify-between gap-5">
         <div className="min-w-0">
-          <Link to={`/${jobId}`} className="btn btn-ghost btn-sm -ml-2 h-7 px-2">
-            <ArrowLeft className="w-4 h-4" /> {t("project.step.choose")}
+          <Link to={`/${jobId}/compilations`} className="btn btn-ghost btn-sm -ml-2 h-7 px-2">
+            <ArrowLeft className="w-4 h-4" /> {t("compilations.title")}
           </Link>
-          <h1 className="mt-2 text-[32px] leading-[1.1] tracking-[-0.03em] font-[650] text-white">{t("compilation.title")}</h1>
+          <h1 className="mt-2 text-[32px] leading-[1.1] tracking-[-0.03em] font-[650] text-white truncate">{compilation.name || t("compilation.title")}</h1>
           <p className="mt-2 text-[13.5px] text-ink-2 max-w-[62ch]">{t("compilation.subtitle")}</p>
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
-          {compilations.length > 1 &&
-            compilations.map((c) => (
-              <button
-                key={c.id}
-                onClick={() => {
-                  setCurrentId(c.id);
-                  setActiveSection(c.sections[0]?.id ?? "");
-                  setShown(null);
-                }}
-                aria-pressed={c.id === compilation.id}
-                className={`chip h-8 px-3 ${c.id === compilation.id ? "chip-accent" : "chip-neutral hover:text-white"}`}
-              >
-                {c.name}
-              </button>
-            ))}
           <button onClick={() => setGuide(true)} className="btn btn-ghost btn-sm">
             <CircleQuestionMark className="w-[15px] h-[15px]" /> {t("compilation.guide.open")}
           </button>
           <button onClick={startNew} className="btn btn-glass btn-sm">
             <Plus className="w-[15px] h-[15px]" /> {t("compilation.new")}
           </button>
+          <ModeSwitch jobId={jobId} current="compilations" />
         </div>
       </header>
 

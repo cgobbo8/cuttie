@@ -44,7 +44,8 @@
     "channel": "Mi canal",
     "navigation": "Navegación principal",
     "update": "Actualización",
-    "updateReady": "Reiniciar para actualizar"
+    "updateReady": "Reiniciar para actualizar",
+    "compilations": "Compilaciones"
   },
   "workspace": {
     "allCreators": "Todos los creadores",
@@ -837,7 +838,12 @@
     "aiCutSame": "La IA dejaría el corte como está.",
     "keepTooClose": "No hay sitio para un trozo aquí: arrastra mejor el tirador del trozo de al lado.",
     "cutDone": "Clip cortado en dos. Separa los tiradores del medio para quitar una parte, o pasa el ratón por un trozo y pulsa × para quitarlo.",
-    "keptDone": "Trozo añadido. Ajústalo con los tiradores."
+    "keptDone": "Trozo añadido. Ajústalo con los tiradores.",
+    "modes": "Clips o compilaciones",
+    "mode": {
+      "clips": "Clips",
+      "compilations": "Compilaciones"
+    }
   },
   "montage": {
     "title": "Viste tus clips",
@@ -1576,5 +1582,46 @@
     "ownLook": "Diseño de este trozo: {{name}}",
     "changePassages_one": "{{count}} trozo en el vídeo",
     "changePassages_other": "{{count}} trozos en el vídeo"
+  },
+  "compilations": {
+    "title": "Compilaciones",
+    "subtitle": "Vídeos hechos con trozos de un directo: describe lo que quieres, la IA lo construye, tú ajustas.",
+    "count_one": "{{count}} compilación",
+    "count_other": "{{count}} compilaciones",
+    "open": "Abrir «{{name}}»",
+    "status": {
+      "empty": "Vacía",
+      "draft": "Borrador",
+      "exported": "Exportada",
+      "changed": "Exportada, modificada después"
+    },
+    "described": "Construida describiéndola a la IA",
+    "noPassage": "Ningún trozo por ahora",
+    "passages_one": "{{count}} trozo",
+    "passages_other": "{{count}} trozos",
+    "parts_one": "{{count}} parte",
+    "parts_other": "{{count}} partes",
+    "exportedOn": "Exportada el {{date}}",
+    "changedOn": "Modificada el {{date}}",
+    "duplicate": "Duplicar",
+    "duplicated": "Compilación duplicada",
+    "copyWord": "copia",
+    "rename": "Renombrar",
+    "renamed": "Compilación renombrada",
+    "deleteMessage": "«{{name}}» y los trozos recortados se eliminarán.",
+    "deleteExported": "«{{name}}» y los trozos recortados se eliminarán. El vídeo ya exportado queda en Exports.",
+    "newHint": "Describe el vídeo que quieres, la IA lo construye con trozos del directo.",
+    "newHere": "Nueva",
+    "openLive": "Ver este directo",
+    "filter": "Filtrar por directo",
+    "allLives": "Todos los directos",
+    "untitledLive": "Directo sin título",
+    "pickLive": "¿De qué directo?",
+    "pickLiveHint": "Una compilación se hace con trozos de un directo ya analizado.",
+    "has_one": "{{count}} compilación",
+    "has_other": "{{count}} compilaciones",
+    "noLive": "Aún no hay directo analizado",
+    "noLiveHint": "Una compilación se hace con trozos de un directo. Analiza un directo y vuelve aquí.",
+    "analyse": "Analizar un directo"
   }
 }

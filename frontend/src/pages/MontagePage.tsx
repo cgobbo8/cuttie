@@ -28,6 +28,7 @@ import MontageComposition from "../components/remotion-editor/MontageComposition
 import TemplateSketch from "../components/montage/TemplateSketch";
 import TemplatePicker from "../components/montage/TemplatePicker";
 import CamSheet from "../components/montage/CamSheet";
+import ModeSwitch from "../components/project/ModeSwitch";
 import Stepper from "../components/project/Stepper";
 import FreedNotice from "../components/project/FreedNotice";
 import { useToast } from "../components/Toast";
@@ -290,11 +291,14 @@ export default function MontagePage() {
   }
 
   const stepper = (
+    <div className="flex flex-wrap items-center gap-2">
+    <ModeSwitch jobId={jobId} current="clips" />
     <Stepper
       current="edit"
       links={{ analyze: `/${jobId}`, choose: `/${jobId}`, export: `/${jobId}/export` }}
       locked={kept.length === 0 ? ["export"] : []}
     />
+    </div>
   );
 
   // Clips freed to make room: nothing to edit until they're back

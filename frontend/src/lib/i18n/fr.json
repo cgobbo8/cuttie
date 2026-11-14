@@ -44,7 +44,8 @@
     "channel": "Ma chaîne",
     "navigation": "Navigation principale",
     "update": "Mise à jour",
-    "updateReady": "Redémarrer pour mettre à jour"
+    "updateReady": "Redémarrer pour mettre à jour",
+    "compilations": "Compilations"
   },
   "workspace": {
     "allCreators": "Tous les créateurs",
@@ -837,7 +838,12 @@
     "aiCutSame": "L'IA garderait la coupe telle qu'elle est.",
     "keepTooClose": "Pas la place pour un morceau ici : tire plutôt la poignée du morceau d'à côté.",
     "cutDone": "Clip coupé en deux. Écarte les poignées du milieu pour retirer un passage, ou survole un morceau et clique sur × pour le retirer.",
-    "keptDone": "Morceau ajouté. Ajuste-le avec ses poignées."
+    "keptDone": "Morceau ajouté. Ajuste-le avec ses poignées.",
+    "modes": "Clips ou compilations",
+    "mode": {
+      "clips": "Clips",
+      "compilations": "Compilations"
+    }
   },
   "montage": {
     "title": "Habille tes clips",
@@ -1576,5 +1582,46 @@
     "ownLook": "Mise en page de ce passage : {{name}}",
     "changePassages_one": "{{count}} passage dans la vidéo",
     "changePassages_other": "{{count}} passages dans la vidéo"
+  },
+  "compilations": {
+    "title": "Compilations",
+    "subtitle": "Des vidéos faites de passages d'un live : décris ce que tu veux, l'IA la construit, tu ajustes.",
+    "count_one": "{{count}} compilation",
+    "count_other": "{{count}} compilations",
+    "open": "Ouvrir « {{name}} »",
+    "status": {
+      "empty": "Vide",
+      "draft": "Brouillon",
+      "exported": "Exportée",
+      "changed": "Exportée, modifiée depuis"
+    },
+    "described": "Construite en la décrivant à l'IA",
+    "noPassage": "Aucun passage pour l'instant",
+    "passages_one": "{{count}} passage",
+    "passages_other": "{{count}} passages",
+    "parts_one": "{{count}} partie",
+    "parts_other": "{{count}} parties",
+    "exportedOn": "Exportée le {{date}}",
+    "changedOn": "Modifiée le {{date}}",
+    "duplicate": "Dupliquer",
+    "duplicated": "Compilation dupliquée",
+    "copyWord": "copie",
+    "rename": "Renommer",
+    "renamed": "Compilation renommée",
+    "deleteMessage": "« {{name}} » et ses passages découpés seront supprimés.",
+    "deleteExported": "« {{name}} » et ses passages découpés seront supprimés. La vidéo déjà exportée reste dans Exports.",
+    "newHint": "Décris la vidéo que tu veux, l'IA la construit avec les passages du live.",
+    "newHere": "Nouvelle",
+    "openLive": "Voir ce live",
+    "filter": "Filtrer par live",
+    "allLives": "Tous les lives",
+    "untitledLive": "Live sans titre",
+    "pickLive": "De quel live ?",
+    "pickLiveHint": "Une compilation se fait avec les passages d'un live déjà analysé.",
+    "has_one": "{{count}} compilation",
+    "has_other": "{{count}} compilations",
+    "noLive": "Pas encore de live analysé",
+    "noLiveHint": "Une compilation se fait avec les passages d'un live. Analyse un live, puis reviens ici.",
+    "analyse": "Analyser un live"
   }
 }

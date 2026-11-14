@@ -1,10 +1,12 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import { randomBytes } from 'node:crypto'
 import logger from '@adonisjs/core/services/logger'
+import db from '@adonisjs/lucid/services/db'
 import Job from '#models/job'
 import { dropClipCaches } from '#services/clip_extend'
 import {
   MAX_COMPILATIONS,
+  copyPiece,
   deletePiece,
   describeCompilations,
   dropUnusedPieces,
@@ -13,6 +15,7 @@ import {
   parseCompilation,
   parseFit,
   pieceState,
+  summarizeCompilation,
   type Compilation,
 } from '#services/compilations'
 import {
@@ -86,6 +89,81 @@ export default class CompilationsController {
     job.compilations = [...existing, compilation]
     await job.save()
     return ctx.response.created({ compilation: describeCompilations(job.id, [compilation])[0] })
+  }
+
+  /**
+   * GET /api/compilations[?job_id=] — the user's analysed lives, newest first, each with its
+   * compilations as cards show them (length, passages, exported or not). A live with none is
+   * listed too: a compilation can be started from it.
+   */
+  async library({ auth, request }: HttpContext) {
+    const user = auth.getUserOrFail()
+    const only = request.input('job_id')
+    const query = Job.query().where('user_id', user.id).where('status', 'DONE').orderBy('created_at', 'desc')
+    if (typeof only === 'string' && only) query.where('id', only)
+    const jobs = await query
+    // The last finished export of each compilation (its key is comp_<id>.mp4)
+    const exported = new Map<string, { id: string; at: string }>()
+    if (jobs.length > 0) {
+      const rows = await db
+        .from('renders')
+        .select('id', 'job_id', 'clip_filename', 'updated_at')
+        .where('status', 'done')
+        .where('clip_filename', 'like', 'comp_%')
+        .whereIn('job_id', jobs.map((job) => job.id))
+        .orderBy('updated_at', 'asc')
+      for (const row of rows) exported.set(`${row.job_id}/${row.clip_filename}`, { id: row.id, at: row.updated_at })
+    }
+    return {
+      lives: jobs.map((job) => ({
+        job_id: job.id,
+        title: job.customTitle || job.vodTitle || null,
+        streamer: job.streamer ?? null,
+        game: job.vodGame ?? null,
+        duration: job.vodDurationSeconds ?? null,
+        stream_date: job.streamDate ?? null,
+        created_at: job.createdAt?.toISO() ?? null,
+        vod_id: job.url?.match(/videos\/(\d+)/)?.[1] ?? null,
+        cover_clip: (job.hotPoints ?? []).find((hp: any) => hp.clip_filename)?.clip_filename ?? null,
+        clips_freed: !!job.clipsFreedAt,
+        compilations: (job.compilations ?? []).map((c) => {
+          const done = exported.get(`${job.id}/comp_${c.id}.mp4`)
+          return { ...summarizeCompilation(job.id, c), exported_at: done?.at ?? null, render_id: done?.id ?? null }
+        }),
+      })),
+    }
+  }
+
+  // POST /api/jobs/:id/compilations/:compId/duplicate — a copy with clips of its own, to try another version
+  async duplicate(ctx: HttpContext) {
+    const job = await ownJob(ctx)
+    if (!job) return ctx.response.notFound({ error: 'job not found' })
+    const existing = job.compilations ?? []
+    const source = existing.find((c) => c.id === ctx.params.compId)
+    if (!source) return ctx.response.notFound({ error: 'compilation not found' })
+    if (existing.length >= MAX_COMPILATIONS) return ctx.response.badRequest({ error: 'too many compilations' })
+
+    const now = new Date().toISOString()
+    const name = typeof ctx.request.input('name') === 'string' && ctx.request.input('name').trim() ? ctx.request.input('name').trim().slice(0, 80) : source.name
+    const copy: Compilation = {
+      ...structuredClone(source),
+      id: newId(),
+      name,
+      created_at: now,
+      updated_at: now,
+      sections: source.sections.map((s) => ({
+        ...s,
+        id: newId(),
+        items: s.items.map((item) => {
+          const id = newId()
+          copyPiece(job.id, item.id, id)
+          return { ...item, id }
+        }),
+      })),
+    }
+    job.compilations = [...existing, copy]
+    await job.save()
+    return ctx.response.created({ compilation: describeCompilations(job.id, [copy])[0] })
   }
 
   // PUT /api/jobs/:id/compilations/:compId — the whole compilation as the app has it (sections, items, look)

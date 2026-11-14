@@ -44,7 +44,8 @@
     "channel": "My channel",
     "navigation": "Main navigation",
     "update": "Update",
-    "updateReady": "Restart to update"
+    "updateReady": "Restart to update",
+    "compilations": "Compilations"
   },
   "workspace": {
     "allCreators": "All creators",
@@ -837,7 +838,12 @@
     "aiCutSame": "The AI would keep the cut as it is.",
     "keepTooClose": "No room for a piece here: drag the handle of the piece next to it instead.",
     "cutDone": "Clip cut in two. Pull the middle handles apart to take a part out, or hover a piece and click × to remove it.",
-    "keptDone": "Piece added. Adjust it with its handles."
+    "keptDone": "Piece added. Adjust it with its handles.",
+    "modes": "Clips or compilations",
+    "mode": {
+      "clips": "Clips",
+      "compilations": "Compilations"
+    }
   },
   "montage": {
     "title": "Dress up your clips",
@@ -1576,5 +1582,46 @@
     "ownLook": "Layout of this passage: {{name}}",
     "changePassages_one": "{{count}} passage in the video",
     "changePassages_other": "{{count}} passages in the video"
+  },
+  "compilations": {
+    "title": "Compilations",
+    "subtitle": "Videos made of passages of a live: describe what you want, the AI builds it, you adjust.",
+    "count_one": "{{count}} compilation",
+    "count_other": "{{count}} compilations",
+    "open": "Open \"{{name}}\"",
+    "status": {
+      "empty": "Empty",
+      "draft": "Draft",
+      "exported": "Exported",
+      "changed": "Exported, changed since"
+    },
+    "described": "Built by describing it to the AI",
+    "noPassage": "No passage yet",
+    "passages_one": "{{count}} passage",
+    "passages_other": "{{count}} passages",
+    "parts_one": "{{count}} part",
+    "parts_other": "{{count}} parts",
+    "exportedOn": "Exported on {{date}}",
+    "changedOn": "Changed on {{date}}",
+    "duplicate": "Duplicate",
+    "duplicated": "Compilation duplicated",
+    "copyWord": "copy",
+    "rename": "Rename",
+    "renamed": "Compilation renamed",
+    "deleteMessage": "\"{{name}}\" and its cut passages will be deleted.",
+    "deleteExported": "\"{{name}}\" and its cut passages will be deleted. The video already exported stays in Exports.",
+    "newHint": "Describe the video you want, the AI builds it from passages of the live.",
+    "newHere": "New",
+    "openLive": "See this live",
+    "filter": "Filter by live",
+    "allLives": "All lives",
+    "untitledLive": "Untitled live",
+    "pickLive": "From which live?",
+    "pickLiveHint": "A compilation is made of passages of a live already analysed.",
+    "has_one": "{{count}} compilation",
+    "has_other": "{{count}} compilations",
+    "noLive": "No live analysed yet",
+    "noLiveHint": "A compilation is made of passages of a live. Analyse a live, then come back here.",
+    "analyse": "Analyse a live"
   }
 }

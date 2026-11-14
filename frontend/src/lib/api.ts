@@ -1508,6 +1508,52 @@ export async function saveCompilation(jobId: string, compilation: Compilation): 
   return json.compilation;
 }
 
+/** A compilation as a card shows it */
+export interface CompilationSummary {
+  id: string;
+  name: string;
+  /** Seconds */
+  length: number;
+  passages: number;
+  parts: number;
+  /** Built by describing it to the AI */
+  described: boolean;
+  /** A passage's clip that stands for it (null: none is cut yet) */
+  cover: string | null;
+  created_at: string;
+  updated_at: string;
+  /** Its last finished export */
+  exported_at: string | null;
+  render_id: string | null;
+}
+
+/** An analysed live and its compilations */
+export interface LiveCompilations {
+  job_id: string;
+  title: string | null;
+  streamer: string | null;
+  game: string | null;
+  duration: number | null;
+  stream_date: string | null;
+  created_at: string | null;
+  vod_id: string | null;
+  cover_clip: string | null;
+  clips_freed: boolean;
+  compilations: CompilationSummary[];
+}
+
+/** Every analysed live with its compilations (`jobId`: that live only) */
+export async function listAllCompilations(jobId?: string): Promise<LiveCompilations[]> {
+  const json = await jsonOrThrow<{ lives: LiveCompilations[] }>(await fetch(`${BASE}/compilations${jobId ? `?job_id=${encodeURIComponent(jobId)}` : ""}`), "Failed to load the compilations");
+  return json.lives;
+}
+
+/** A copy of a compilation, with clips of its own */
+export async function duplicateCompilation(jobId: string, compilationId: string, name: string): Promise<Compilation> {
+  const json = await jsonOrThrow<{ compilation: Compilation }>(await postJson(`${BASE}/jobs/${jobId}/compilations/${compilationId}/duplicate`, { name }), "Failed to duplicate the compilation");
+  return json.compilation;
+}
+
 export async function deleteCompilation(jobId: string, compilationId: string): Promise<void> {
   await jsonOrThrow(await fetch(`${BASE}/jobs/${jobId}/compilations/${compilationId}`, { method: "DELETE" }), "Failed to delete the compilation");
 }

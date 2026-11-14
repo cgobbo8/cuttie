@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { useTranslation } from "react-i18next";
-import { AlertTriangle, ArrowLeft, ArrowRight, Check, ChevronDown, Loader2, RotateCcw, Search, Sparkles, Upload, WandSparkles, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ArrowRight, Check, ChevronDown, Loader2, RotateCcw, Sparkles, Upload, WandSparkles, X } from "lucide-react";
 import {
   clipThumbUrl,
   deleteClip,
@@ -34,6 +34,7 @@ import ConfirmModal from "../components/ConfirmModal";
 import ProviderFix, { providerNotice } from "../components/ProviderFix";
 import ImportClipModal from "../components/ImportClipModal";
 import AnalysisView from "../components/project/AnalysisView";
+import ModeSwitch from "../components/project/ModeSwitch";
 import Stepper from "../components/project/Stepper";
 import VodTimeline from "../components/project/VodTimeline";
 import MomentPlayer, { type MomentPlayerHandle } from "../components/project/MomentPlayer";
@@ -378,20 +379,17 @@ export default function ProjectPage() {
                 <ChevronDown className={`w-3.5 h-3.5 transition-transform ${contextOpen ? "rotate-180" : ""}`} />
               </button>
             )}
-            {/* The whole live, searched: compilations */}
-            {!processing && !freed && job.status === "DONE" && (
-              <Link to={`/${jobId}/compilation`} title={t("project.toCompilationHint")} className="btn btn-glass btn-sm h-7 px-2.5">
-                <Search className="w-3.5 h-3.5" /> {t("project.toCompilation")}
-              </Link>
-            )}
           </div>
         </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {!processing && job.status === "DONE" && <ModeSwitch jobId={jobId} current="clips" />}
         <Stepper
           current={processing ? "analyze" : "choose"}
           links={stepLinks}
           locked={processing ? ["choose", "edit", "export"] : freed ? ["edit"] : counts.kept === 0 ? ["edit", "export"] : []}
           detail={processing ? undefined : t("project.keptCount", { count: counts.kept })}
         />
+        </div>
       </header>
 
       {contextOpen && job.vod_context && (

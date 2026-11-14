@@ -7,6 +7,7 @@ import { useBackdrop } from "../lib/BackdropContext";
 import { splitVodTitle } from "../lib/format";
 import { activeRenderId, latestPerClip } from "../lib/renders";
 import RenderCard from "../components/project/RenderCard";
+import ModeSwitch from "../components/project/ModeSwitch";
 import Stepper from "../components/project/Stepper";
 import FreedNotice from "../components/project/FreedNotice";
 
@@ -58,7 +59,10 @@ export default function ExportStepPage() {
           </h1>
           {title && <p className="mt-2 text-[13.5px] text-ink-2">{title}</p>}
         </div>
-        <Stepper current="export" links={{ analyze: `/${jobId}`, choose: `/${jobId}`, edit: `/${jobId}/montage` }} />
+        <div className="flex flex-wrap items-center gap-2">
+          {jobId && <ModeSwitch jobId={jobId} current="clips" />}
+          <Stepper current="export" links={{ analyze: `/${jobId}`, choose: `/${jobId}`, edit: `/${jobId}/montage` }} />
+        </div>
       </header>
 
       {/* Clips freed to make room: the exports stay, the clips can come back */}

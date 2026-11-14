@@ -3,6 +3,7 @@ import testUtils from '@adonisjs/core/services/test_utils'
 import { randomUUID } from 'node:crypto'
 import { existsSync, mkdirSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
+import db from '@adonisjs/lucid/services/db'
 import User from '#models/user'
 import Job from '#models/job'
 import { clipDir } from '#services/data_paths'
@@ -171,6 +172,48 @@ test.group('Compilations', (group) => {
     assert.isTrue(existsSync(path.join(dir, 'a.mp4')))
     assert.deepEqual((await client.get(url).loginAs(user)).body(), { compilations: [] })
     ;(await client.delete(`${url}/${compilation.id}`).loginAs(user)).assertStatus(404)
+  })
+
+  test('lists every live with its compilations, says which are exported, and duplicates one with clips of its own', async ({ client, assert }) => {
+    const { user, job, dir } = await setup()
+    const url = `/api/jobs/${job.id}/compilations`
+    piece(dir, 'aaaaaaaaaa', 99, 105)
+    const made = (await client.post(url).loginAs(user).json({ name: 'Calme', brief: 'les moments calmes', sections: [{ id: 'sssssssss1', title: 'Un', items: [item('aaaaaaaaaa', 100, 103), item('bbbbbbbbbb', 200, 204)] }] })).body() as any
+    const id = made.compilation.id
+
+    // A live with no compilation is listed too (one can be started from it); somebody else's is not
+    const other = await User.create({ fullName: 'Autre', email: `o-${randomUUID()}@cuttie.app`, password: 'password123' })
+    assert.deepEqual((await client.get('/api/compilations').loginAs(other)).body(), { lives: [] })
+    let lives = ((await client.get('/api/compilations').loginAs(user)).body() as any).lives
+    assert.lengthOf(lives, 1)
+    assert.equal(lives[0].job_id, job.id)
+    assert.equal(lives[0].vod_id, '123')
+    assert.deepInclude(lives[0].compilations[0], { id, name: 'Calme', length: 7, passages: 2, parts: 1, described: true, cover: 'piece_aaaaaaaaaa.mp4', exported_at: null, render_id: null })
+
+    // Exported: its last finished export
+    const now = new Date().toISOString()
+    await db.table('renders').insert({ id: 'r1', job_id: job.id, clip_filename: `comp_${id}.mp4`, status: 'done', progress: 100, created_at: now, updated_at: now })
+    lives = ((await client.get(`/api/compilations?job_id=${job.id}`).loginAs(user)).body() as any).lives
+    assert.deepInclude(lives[0].compilations[0], { exported_at: now, render_id: 'r1' })
+
+    // A copy: other ids all the way down, the clips that exist copied with their sidecars
+    const copied = await client.post(`${url}/${id}/duplicate`).loginAs(user).json({ name: 'Calme (copie)' })
+    copied.assertStatus(201)
+    const copy = (copied.body() as any).compilation
+    assert.notEqual(copy.id, id)
+    assert.equal(copy.name, 'Calme (copie)')
+    assert.equal(copy.brief, 'les moments calmes')
+    const [first, second] = copy.sections[0].items
+    assert.notEqual(copy.sections[0].id, 'sssssssss1')
+    assert.notInclude(['aaaaaaaaaa', 'bbbbbbbbbb'], first.id)
+    assert.deepInclude(first, { start: 100, end: 103, ready: true, file: `piece_${first.id}.mp4` })
+    assert.isTrue(existsSync(path.join(dir, `piece_${first.id}_words.json`)))
+    assert.isFalse(second.ready)
+    // Deleting the copy leaves the original's clips alone
+    await client.delete(`${url}/${copy.id}`).loginAs(user)
+    assert.isTrue(existsSync(path.join(dir, 'piece_aaaaaaaaaa.mp4')))
+    assert.isFalse(existsSync(path.join(dir, `piece_${first.id}.mp4`)))
+    ;(await client.post(`${url}/nope/duplicate`).loginAs(user)).assertStatus(404)
   })
 
   test('clips already there need no worker; the others say the engine is away', async ({ client, assert }) => {

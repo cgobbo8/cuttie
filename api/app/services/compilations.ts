@@ -10,7 +10,7 @@
  * it edits and exports like any clip.
  */
 
-import { existsSync, readdirSync, rmSync, statSync } from 'node:fs'
+import { copyFileSync, existsSync, readdirSync, rmSync, statSync } from 'node:fs'
 import path from 'node:path'
 import { dropClipCaches, readClipMeta } from '#services/clip_extend'
 import { clipDir } from '#services/data_paths'
@@ -196,12 +196,41 @@ export function describeCompilations(jobId: string, compilations: Compilation[])
   }))
 }
 
+const PIECE_FILES = ['.mp4', '_meta.json', '_probe.json', '_words.json']
+
+/** A piece's clip and sidecars under another id (a duplicated compilation has clips of its own) */
+export function copyPiece(jobId: string, from: string, to: string): void {
+  if (!isPieceId(from) || !isPieceId(to)) return
+  const dir = clipDir(jobId)
+  for (const suffix of PIECE_FILES) {
+    const source = path.join(dir, `piece_${from}${suffix}`)
+    if (existsSync(source)) copyFileSync(source, path.join(dir, `piece_${to}${suffix}`))
+  }
+}
+
+/** A compilation as a card shows it: how long, how many passages, the clip that stands for it */
+export function summarizeCompilation(jobId: string, c: Compilation) {
+  const items = c.sections.flatMap((s) => s.items)
+  const cover = items.find((item) => pieceState(jobId, item).ready)
+  return {
+    id: c.id,
+    name: c.name,
+    length: Math.round(compilationLength(c) * 10) / 10,
+    passages: items.length,
+    parts: c.sections.filter((s) => s.items.length > 0).length,
+    described: !!c.brief,
+    cover: cover ? pieceFile(cover.id) : null,
+    created_at: c.created_at,
+    updated_at: c.updated_at,
+  }
+}
+
 /** Every file of a piece: its clip, sidecars, frames and backdrop */
 export function deletePiece(jobId: string, id: string): void {
   if (!isPieceId(id)) return
   const dir = clipDir(jobId)
   const base = `piece_${id}`
-  for (const suffix of ['.mp4', '_meta.json', '_probe.json', '_words.json']) rmSync(path.join(dir, base + suffix), { force: true })
+  for (const suffix of PIECE_FILES) rmSync(path.join(dir, base + suffix), { force: true })
   dropClipCaches(jobId, pieceFile(id))
 }
 

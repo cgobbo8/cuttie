@@ -10,6 +10,8 @@ import { useSettings } from "../lib/SettingsContext";
 import { checkForUpdateSoon, updatePending, useUpdateState } from "../lib/desktop";
 
 const JOB_PATH = /^\/[0-9a-f]{8}-[0-9a-f]{4}-/;
+/** A live's compilations and the editor of one */
+const COMPILATION_PATH = /^\/[0-9a-f-]{36}\/compilations?(\/|$)/;
 
 function NavItem({ to, label, active }: { to: string; label: string; active: boolean }) {
   return (
@@ -43,7 +45,8 @@ export default function TopBar() {
 
   const items = [
     { to: "/", label: t("sidebar.home"), active: pathname === "/" },
-    { to: "/projects", label: t("sidebar.projects"), active: pathname.startsWith("/projects") || JOB_PATH.test(pathname) },
+    { to: "/projects", label: t("sidebar.projects"), active: pathname.startsWith("/projects") || (JOB_PATH.test(pathname) && !COMPILATION_PATH.test(pathname)) },
+    { to: "/compilations", label: t("sidebar.compilations"), active: pathname.startsWith("/compilations") || COMPILATION_PATH.test(pathname) },
     { to: "/exports", label: t("sidebar.exports"), active: pathname.startsWith("/exports") },
     { to: "/chaine", label: t("sidebar.channel"), active: pathname.startsWith("/chaine") },
     ...(!isLocalApp

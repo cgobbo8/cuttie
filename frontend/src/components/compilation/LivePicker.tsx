@@ -1,9 +1,16 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Check, X } from "lucide-react";
-import type { LiveCompilations } from "../../lib/api";
-import { liveWhen, plainDate } from "../../lib/compilationLibrary";
-import { hoursMinutes, splitVodTitle } from "../../lib/format";
+import { Check, Coins, Loader2, X } from "lucide-react";
+import { submitVod, type LiveCompilations, type TwitchVod } from "../../lib/api";
+import { useChannel } from "../../lib/ChannelContext";
+import { liveWhen, plainDate, vodsToAnalyse } from "../../lib/compilationLibrary";
+import { ANALYSIS_COST, aboutCost, analysisProgress, hoursMinutes, splitVodTitle, timeLeft } from "../../lib/format";
+import { useToast } from "../Toast";
+
+/** Lives still to analyse shown before "see the others" */
+const SHOWN_TO_ANALYSE = 4;
+/** How often the channel is asked again while a live is being analysed */
+const WATCH_EVERY = 8000;
 
 interface Props {
   title: string;
@@ -21,12 +28,61 @@ interface Props {
   /** The lives picked, newest first */
   onPick: (jobIds: string[]) => void;
   onClose: () => void;
+  /** A live analysed from here is ready: the list of analysed lives is to be read again */
+  onAnalysed?: () => void;
 }
 
-/** Choosing the live (or the lives) a compilation is made from */
-export default function LivePicker({ title, hint, lives, coverOf, multiple = false, max = 5, confirm, onPick, onClose }: Props) {
+/**
+ * Choosing the live (or the lives) a compilation is made from. The channel's lives that are not
+ * analysed yet are listed too: they can be analysed from here, once the price was said.
+ */
+export default function LivePicker({ title, hint, lives, coverOf, multiple = false, max = 5, confirm, onPick, onClose, onAnalysed }: Props) {
   const { t, i18n } = useTranslation();
+  const toast = useToast();
+  const { channel, refreshChannel } = useChannel();
   const [ticked, setTicked] = useState<string[]>([]);
+  // The live whose price is being read before its analysis is launched, the one being launched, and whether all are listed
+  const [asking, setAsking] = useState<string | null>(null);
+  const [starting, setStarting] = useState<string | null>(null);
+  const [all, setAll] = useState(false);
+  const cost = aboutCost(ANALYSIS_COST, i18n.language);
+
+  const toAnalyse = vodsToAnalyse(channel?.vods ?? []);
+  const anyRunning = toAnalyse.some(({ state }) => state === "running");
+  // While a live is being analysed, its progress stays fresh
+  useEffect(() => {
+    if (!anyRunning) return;
+    const timer = window.setInterval(() => refreshChannel(), WATCH_EVERY);
+    return () => window.clearInterval(timer);
+  }, [anyRunning, refreshChannel]);
+  // A live that was being analysed is done: it can be picked
+  const watched = useRef(new Set<string>());
+  useEffect(() => {
+    for (const vod of channel?.vods ?? []) {
+      if (vod.job && vodsToAnalyse([vod])[0]?.state === "running") watched.current.add(vod.id);
+      else if (watched.current.has(vod.id)) {
+        watched.current.delete(vod.id);
+        if (vod.job?.status === "DONE") {
+          toast.success(t("compilations.analysed", { name: splitVodTitle(vod.title).title }));
+          onAnalysed?.();
+        }
+      }
+    }
+  }, [channel]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const analyse = async (vod: TwitchVod) => {
+    setStarting(vod.id);
+    try {
+      await submitVod(vod.url);
+      toast.success(t("compilations.analyseStarted", { cost }));
+      setAsking(null);
+      await refreshChannel();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t("analyze.submitError"));
+    } finally {
+      setStarting(null);
+    }
+  };
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -52,10 +108,11 @@ export default function LivePicker({ title, hint, lives, coverOf, multiple = fal
             <X className="w-4 h-4" />
           </button>
         </div>
+        <div className="mt-4 -mx-1.5 px-1.5 overflow-y-auto min-h-0">
         {sorted.length === 0 ? (
-          <p className="mt-4 text-[13px] text-ink-3">{t("compilations.noOtherLive")}</p>
+          <p className="text-[13px] text-ink-3">{t("compilations.noOtherLive")}</p>
         ) : (
-          <ul className="mt-4 -mx-1.5 overflow-y-auto flex flex-col gap-0.5">
+          <ul className="-mx-1.5 flex flex-col gap-0.5">
             {sorted.map((live) => {
               const on = ticked.includes(live.job_id);
               const when = liveWhen(live);
@@ -89,6 +146,74 @@ export default function LivePicker({ title, hint, lives, coverOf, multiple = fal
             })}
           </ul>
         )}
+
+        {/* The channel's lives that can't be picked yet: analysing one is not free, and says so */}
+        {toAnalyse.length > 0 && (
+          <section className="mt-4 pt-3.5 border-t border-white/[0.08]">
+            <h4 className="text-[13px] font-[600] text-white">{t("compilations.notAnalysed")}</h4>
+            <p className="mt-1 flex items-start gap-1.5 text-[12px] leading-snug text-ink-3">
+              <Coins className="w-3.5 h-3.5 flex-none mt-px text-amber-300/80" />
+              {t("compilations.notAnalysedHint", { cost })}
+            </p>
+            <ul className="mt-2 -mx-1.5 flex flex-col gap-0.5">
+              {(all ? toAnalyse : toAnalyse.slice(0, SHOWN_TO_ANALYSE)).map(({ vod, state }) => {
+                const progress = state === "running" && vod.job ? analysisProgress(vod.job.status, vod.job.progress, vod.job.eta) : null;
+                return (
+                  <li key={vod.id} className={`rounded-[12px] ${asking === vod.id ? "bg-white/[0.05]" : ""}`}>
+                    <div className="flex items-center gap-3 p-1.5">
+                      <span className="w-[96px] aspect-video rounded-[8px] overflow-hidden flex-none bg-white/[0.05]">
+                        {vod.thumbnail_url && <img src={vod.thumbnail_url} alt="" loading="lazy" className="w-full h-full object-cover opacity-70" />}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-[13.5px] font-[550] text-ink-2 truncate">{splitVodTitle(vod.title).title || t("compilations.untitledLive")}</span>
+                        <span className="block text-[12px] text-ink-3 truncate">
+                          {progress
+                            ? t("compilations.analysing", { percent: progress.percent, left: timeLeft(progress.minutesLeft) })
+                            : [state === "failed" ? t("compilations.analyseStopped") : null, plainDate(vod.published_at, i18n.language), vod.game, hoursMinutes(vod.duration_seconds)].filter(Boolean).join(" · ")}
+                        </span>
+                        {progress && (
+                          <span className="mt-1 block h-[3px] rounded-full bg-white/10 overflow-hidden" aria-hidden>
+                            <span className="block h-full bg-accent transition-[width] duration-700" style={{ width: `${progress.percent}%` }} />
+                          </span>
+                        )}
+                      </span>
+                      {state === "running" ? (
+                        <Loader2 className="w-4 h-4 spinner text-accent flex-none mr-1" />
+                      ) : (
+                        asking !== vod.id && (
+                          <button type="button" onClick={() => setAsking(vod.id)} className="btn btn-glass btn-sm flex-none">
+                            {t(state === "failed" ? "compilations.analyseAgain" : "compilations.analyseVod")}
+                            <span className="mono text-[11.5px] text-ink-3">{cost}</span>
+                          </button>
+                        )
+                      )}
+                    </div>
+                    {asking === vod.id && state !== "running" && (
+                      <div className="px-2.5 pb-2.5">
+                        <p className="text-[12.5px] leading-snug text-ink-2">{t("compilations.analysePrice", { cost })}</p>
+                        <div className="mt-2 flex items-center justify-end gap-2">
+                          <button type="button" onClick={() => setAsking(null)} disabled={starting === vod.id} className="btn btn-ghost btn-sm">
+                            {t("common.cancel")}
+                          </button>
+                          <button type="button" onClick={() => analyse(vod)} disabled={starting !== null} className="btn btn-primary btn-sm">
+                            {starting === vod.id && <Loader2 className="w-3.5 h-3.5 spinner" />}
+                            {t("compilations.analyseConfirm", { cost })}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+            {!all && toAnalyse.length > SHOWN_TO_ANALYSE && (
+              <button type="button" onClick={() => setAll(true)} className="mt-1.5 text-[12px] text-ink-2 underline decoration-white/20 underline-offset-2 hover:text-white">
+                {t("compilations.showMore", { count: toAnalyse.length - SHOWN_TO_ANALYSE })}
+              </button>
+            )}
+          </section>
+        )}
+        </div>
         {multiple && (
           <div className="mt-4 flex items-center justify-between gap-3">
             <p className="text-[12px] text-ink-3">{t("compilations.pickSeveral", { max })}</p>

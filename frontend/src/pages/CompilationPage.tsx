@@ -725,6 +725,8 @@ export default function CompilationPage() {
     const when = liveInfo(id) ? liveWhen(liveInfo(id)!) : null;
     return when ? plainDate(when, i18n.language) : "";
   };
+  // Another live to take passages from: one already analysed, or one of the channel's that can be analysed from the picker
+  const canAddLive = liveIds.length <= MAX_OTHER_LIVES && (library.some((live) => !liveIds.includes(live.job_id)) || (channel?.vods ?? []).some((vod) => !vod.recording && vod.job?.status !== "DONE"));
   const addLive = (id: string) => {
     setAddingLive(false);
     if (liveIds.includes(id) || liveIds.length > MAX_OTHER_LIVES) return;
@@ -820,12 +822,12 @@ export default function CompilationPage() {
             </span>
           )}
           {/* One more live to take passages from: the AI then works on all of them at once */}
-          {liveIds.length <= MAX_OTHER_LIVES && library.some((live) => !liveIds.includes(live.job_id)) && (
+          {canAddLive && (
             <button type="button" onClick={() => setAddingLive(true)} title={t("compilation.lives.addHint")} className="ml-auto inline-flex items-center gap-1 text-ink-2 hover:text-white underline decoration-white/20 underline-offset-2">
               <Plus className="w-3 h-3" strokeWidth={2.6} /> {t("compilation.lives.add")}
             </button>
           )}
-          {!several && <span className={`mono ${liveIds.length <= MAX_OTHER_LIVES && library.some((live) => !liveIds.includes(live.job_id)) ? "" : "ml-auto"}`}>{clock(liveDuration)}</span>}
+          {!several && <span className={`mono ${canAddLive ? "" : "ml-auto"}`}>{clock(liveDuration)}</span>}
         </div>
       </section>
 
@@ -986,6 +988,7 @@ export default function CompilationPage() {
           coverOf={(live) => (live.cover_clip ? clipThumbUrl(live.job_id, live.cover_clip, { width: 480 }) : null)}
           onPick={([id]) => addLive(id)}
           onClose={() => setAddingLive(false)}
+          onAnalysed={() => listAllCompilations().then(setLibrary).catch(() => {})}
         />
       )}
       <CompilationGuide open={guide} onClose={closeGuide} />

@@ -65,7 +65,7 @@ export default function CompilationsPage() {
   const startIn = (id: string) => navigate(`/${id}/compilation?new=1`);
   const startNew = () => {
     if (jobId) startIn(jobId);
-    else if ((lives ?? []).length === 1) startIn(lives![0].job_id);
+    // Always the picker: several lives can be ticked, and one not analysed yet can be analysed from it
     else setPicking(true);
   };
 
@@ -165,7 +165,7 @@ export default function CompilationsPage() {
               ))}
             </select>
           )}
-          {!jobId && lives.length > 0 && (
+          {!jobId && (lives.length > 0 || (channel?.vods.length ?? 0) > 0) && (
             <button onClick={startNew} className="btn btn-primary btn-sm">
               <Plus className="w-[15px] h-[15px]" /> {t("compilation.new")}
             </button>
@@ -223,6 +223,7 @@ export default function CompilationsPage() {
           // The newest live keeps the compilation; the others are the lives it also takes from
           onPick={([first, ...rest]) => navigate(`/${first}/compilation?new=1${rest.length > 0 ? `&lives=${rest.join(",")}` : ""}`)}
           onClose={() => setPicking(false)}
+          onAnalysed={() => load().catch(() => {})}
         />
       )}
 

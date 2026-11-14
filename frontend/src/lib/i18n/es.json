@@ -1638,6 +1638,18 @@
     "pickSeveral": "Hasta {{max}} directos",
     "createFrom_one": "Crear con {{count}} directo",
     "createFrom_other": "Crear con {{count}} directos",
-    "noOtherLive": "Ningún otro directo analizado."
+    "noOtherLive": "Ningún otro directo analizado.",
+    "notAnalysed": "Aún sin analizar",
+    "notAnalysedHint": "Para tomar trozos de un directo, primero hay que analizarlo. No es gratis: {{cost}} de créditos OpenRouter por directo.",
+    "analyseVod": "Analizar",
+    "analyseAgain": "Relanzar",
+    "analyseStopped": "El análisis se detuvo",
+    "analysePrice": "Analizar este directo cuesta {{cost}} de créditos OpenRouter, y tarda de unos minutos a más de una hora según lo que dure y tu PC. Corre en segundo plano: el directo aparecerá en la lista cuando esté listo.",
+    "analyseConfirm": "Lanzar el análisis · {{cost}}",
+    "analyseStarted": "Análisis lanzado ({{cost}}). El directo aparecerá aquí en cuanto termine.",
+    "analysing": "Analizando · {{percent}} % · quedan {{left}}",
+    "analysed": "«{{name}}» está analizado: ya puedes elegirlo.",
+    "showMore_one": "Ver {{count}} directo más",
+    "showMore_other": "Ver los otros {{count}} directos"
   }
 }

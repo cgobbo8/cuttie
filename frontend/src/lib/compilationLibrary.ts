@@ -1,4 +1,5 @@
-import type { CompilationSummary, LiveCompilations } from "./api";
+import type { CompilationSummary, LiveCompilations, TwitchVod } from "./api";
+import { ACTIVE_STATUSES } from "./format";
 
 /** Where a compilation stands, as its card says it */
 export type CompilationStatus = "empty" | "draft" | "exported" | "changed";
@@ -36,4 +37,18 @@ export function copyName(name: string, taken: string[], word: string): string {
 export function plainDate(iso: string, lang: string, now = new Date()): string {
   const date = new Date(iso);
   return date.toLocaleDateString(lang, { day: "numeric", month: "short", ...(date.getFullYear() !== now.getFullYear() ? { year: "numeric" } : {}) });
+}
+
+/** Where a live of the channel stands when it can't be picked yet: never analysed, being analysed, or stopped on an error */
+export type VodState = "new" | "running" | "failed";
+
+/**
+ * The channel's lives a compilation can't take from yet, newest first: those never analysed,
+ * being analysed, or whose analysis stopped. A live still being streamed is left out (nothing to analyse yet).
+ */
+export function vodsToAnalyse(vods: TwitchVod[]): { vod: TwitchVod; state: VodState }[] {
+  return vods
+    .filter((vod) => !vod.recording && vod.job?.status !== "DONE")
+    .map((vod) => ({ vod, state: (!vod.job ? "new" : ACTIVE_STATUSES.has(vod.job.status) ? "running" : "failed") as VodState }))
+    .sort((a, b) => Date.parse(b.vod.published_at) - Date.parse(a.vod.published_at));
 }

@@ -119,6 +119,18 @@ export function analysisProgress(
   };
 }
 
+/**
+ * What analysing a live takes in OpenRouter credits, dollars: measured at 0.31 $ on a 5-hour live
+ * (the AI reads the whole live once, then watches and listens to its 50 best moments), about the
+ * same whatever its length. Said before an analysis is launched from somewhere it isn't expected.
+ */
+export const ANALYSIS_COST = 0.3;
+
+/** "≈ 0,30 $" in the language's numbers */
+export function aboutCost(dollars: number, lang: string): string {
+  return `≈ ${new Intl.NumberFormat(lang, { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(dollars)} $`;
+}
+
 /** What's left of an analysis: "12 min", "1 h 50" */
 export function timeLeft(minutes: number): string {
   return minutes < 60 ? `${minutes} min` : `${Math.floor(minutes / 60)} h ${String(minutes % 60).padStart(2, "0")}`;

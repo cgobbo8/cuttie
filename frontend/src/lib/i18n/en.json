@@ -1638,6 +1638,18 @@
     "pickSeveral": "Up to {{max}} lives",
     "createFrom_one": "Create with {{count}} live",
     "createFrom_other": "Create with {{count}} lives",
-    "noOtherLive": "No other analysed live."
+    "noOtherLive": "No other analysed live.",
+    "notAnalysed": "Not analysed yet",
+    "notAnalysedHint": "To take passages from a live, it has to be analysed first. It isn't free: {{cost}} of OpenRouter credits per live.",
+    "analyseVod": "Analyse",
+    "analyseAgain": "Try again",
+    "analyseStopped": "The analysis stopped",
+    "analysePrice": "Analysing this live takes {{cost}} of OpenRouter credits, and from a few minutes to over an hour depending on its length and your computer. It runs in the background: the live will show up in the list once ready.",
+    "analyseConfirm": "Start the analysis · {{cost}}",
+    "analyseStarted": "Analysis started ({{cost}}). The live will show up here as soon as it is done.",
+    "analysing": "Being analysed · {{percent}}% · {{left}} left",
+    "analysed": "“{{name}}” is analysed: you can pick it.",
+    "showMore_one": "See {{count}} more live",
+    "showMore_other": "See the {{count}} other lives"
   }
 }

@@ -1638,6 +1638,18 @@
     "pickSeveral": "Jusqu'à {{max}} lives",
     "createFrom_one": "Créer avec {{count}} live",
     "createFrom_other": "Créer avec {{count}} lives",
-    "noOtherLive": "Aucun autre live analysé."
+    "noOtherLive": "Aucun autre live analysé.",
+    "notAnalysed": "Pas encore analysés",
+    "notAnalysedHint": "Pour prendre des passages d'un live, il faut d'abord l'analyser. Ce n'est pas gratuit : {{cost}} de crédits OpenRouter par live.",
+    "analyseVod": "Analyser",
+    "analyseAgain": "Relancer",
+    "analyseStopped": "L'analyse s'est arrêtée",
+    "analysePrice": "Analyser ce live prend {{cost}} de crédits OpenRouter, et de quelques minutes à plus d'une heure selon sa durée et ton PC. Elle tourne en arrière-plan : le live apparaîtra dans la liste une fois prêt.",
+    "analyseConfirm": "Lancer l'analyse · {{cost}}",
+    "analyseStarted": "Analyse lancée ({{cost}}). Le live apparaîtra ici dès qu'elle est finie.",
+    "analysing": "Analyse en cours · {{percent}} % · reste {{left}}",
+    "analysed": "« {{name}} » est analysé : tu peux le choisir.",
+    "showMore_one": "Voir {{count}} autre live",
+    "showMore_other": "Voir les {{count}} autres lives"
   }
 }

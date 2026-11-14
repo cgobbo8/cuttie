@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import type { CompilationSummary, LiveCompilations } from "./api";
-import { compilationStatus, copyName, libraryGroups } from "./compilationLibrary";
+import type { CompilationSummary, LiveCompilations, TwitchVod } from "./api";
+import { compilationStatus, copyName, libraryGroups, vodsToAnalyse } from "./compilationLibrary";
+import { aboutCost } from "./format";
 
 const card = (id: string, more: Partial<CompilationSummary> = {}): CompilationSummary => ({
   id, name: id, length: 60, passages: 8, parts: 2, described: false, cover: null, cover_job: null, lives: ["live"],
@@ -30,6 +31,24 @@ describe("the library of compilations", () => {
     expect(libraryGroups(lives).map((l) => [l.job_id, l.compilations.map((c) => c.id)])).toEqual([["new", ["b", "a"]], ["old", ["x"]], ["undated", ["u"]]]);
     expect(libraryGroups(lives, "old").map((l) => l.job_id)).toEqual(["old"]);
     expect(libraryGroups(lives, "none")).toEqual([]);
+  });
+
+  it("lists the lives of the channel that are still to analyse, and says what it costs", () => {
+    const vod = (id: string, published_at: string, job: Partial<NonNullable<TwitchVod["job"]>> | null = null, more: Partial<TwitchVod> = {}): TwitchVod => ({
+      id, title: id, duration_seconds: 3600, published_at, view_count: 0, thumbnail_url: null, thumbnail_large_url: null, game: null, url: `https://twitch.tv/videos/${id}`,
+      job: job ? { id: `job-${id}`, status: "DONE", progress: null, clip_count: 0, ...job } : null, ...more,
+    });
+    const vods = [
+      vod("done", "2026-11-09T20:00:00Z", {}),
+      vod("old", "2026-10-01T20:00:00Z"),
+      vod("running", "2026-11-05T20:00:00Z", { status: "ANALYZING_CLIPS" }),
+      vod("failed", "2026-11-07T20:00:00Z", { status: "ERROR" }),
+      // Being streamed right now: nothing to analyse yet
+      vod("live", "2026-11-14T20:00:00Z", null, { recording: true }),
+    ];
+    expect(vodsToAnalyse(vods).map(({ vod: v, state }) => [v.id, state])).toEqual([["failed", "failed"], ["running", "running"], ["old", "new"]]);
+    expect(aboutCost(0.3, "fr")).toBe("≈ 0,30 $");
+    expect(aboutCost(0.3, "en")).toBe("≈ 0.30 $");
   });
 
   it("names a copy with a name the live doesn't have yet", () => {

@@ -1476,12 +1476,14 @@ export interface Compilation {
   target: number | null;
   /** Described to the AI: what was first asked for, then each change asked and what the AI answered */
   brief?: string;
+  /** What the AI answered to the description: what it built and why */
+  answer?: string;
   asks?: { ask: string; note: string; added?: number; removed?: number; recut?: number }[];
   created_at: string;
   updated_at: string;
 }
 
-export type CompilationDraft = Pick<Compilation, "name" | "sections" | "template" | "titles" | "hook" | "target" | "brief" | "asks">;
+export type CompilationDraft = Pick<Compilation, "name" | "sections" | "template" | "titles" | "hook" | "target" | "brief" | "answer" | "asks">;
 
 /** A change asked on a video the AI planned: what is asked now, the video as it is (live seconds), what was asked before */
 export interface PlanChange {

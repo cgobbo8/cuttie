@@ -1573,6 +1573,8 @@
     "changeFold": "Fold",
     "changeRecut_one": "{{count}} passage recut",
     "changeRecut_other": "{{count}} passages recut",
-    "ownLook": "Layout of this passage: {{name}}"
+    "ownLook": "Layout of this passage: {{name}}",
+    "changePassages_one": "{{count}} passage in the video",
+    "changePassages_other": "{{count}} passages in the video"
   }
 }

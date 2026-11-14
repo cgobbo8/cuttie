@@ -850,7 +850,7 @@ def plan_video(
         return _plan_by_reading(job_id, brief, target, meta, duration, energy, lag)
     from app.services import live_agent
 
-    path = _cache_path(job_id, "agent_plan", " ".join(tokens(brief)), f"{target:.0f}", _signature(transcript), live_agent.PLAN_MODEL, live_agent.ANSWERS_VERSION)
+    path = _cache_path(job_id, "agent_plan", " ".join(tokens(brief)), f"{target:.0f}", _signature(transcript), live_agent.PLAN_MODEL, live_agent.ANSWERS_VERSION, "answer")
     kept = _cached(path)
     if kept:
         return {**kept, "cached": True, "cost": 0.0}

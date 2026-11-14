@@ -143,6 +143,8 @@ export function parseCompilation(raw: any, liveDuration: number): Omit<Compilati
     hook: text(raw.hook, 120),
     target: Number.isFinite(target) && target >= 5 && target <= 1800 ? Math.round(target) : null,
     ...(text(raw.brief, MAX_BRIEF) ? { brief: text(raw.brief, MAX_BRIEF) } : {}),
+    // What the AI answered to the description: what it built and why
+    ...(text(raw.brief, MAX_BRIEF) && text(raw.answer, 800) ? { answer: text(raw.answer, 800) } : {}),
     ...(Array.isArray(raw.asks) && text(raw.brief, MAX_BRIEF)
       ? {
           asks: raw.asks

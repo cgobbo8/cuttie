@@ -34,7 +34,7 @@ interface Props {
   /** The AI planned a whole video from `brief` */
   onPlan: (plan: VideoPlan, target: number, brief: string) => void;
   /** The video on screen was described to the AI: what was asked first, each change since and its answer */
-  talk?: { brief: string; asks: TalkTurn[] } | null;
+  talk?: { brief: string; answer?: string; passages?: number; asks: TalkTurn[] } | null;
   /** The video as it is now, as the AI is told about it when a change is asked */
   current?: () => PlanChange["current"];
   /** The AI changed the video as asked (`ask`) */
@@ -83,6 +83,9 @@ export default function SearchPanel({ jobId, storyboard, info, previewed, isAdde
   /** The change being worked on, and each thing the AI did for it so far */
   const [pending, setPending] = useState<string | null>(null);
   const [trail, setTrail] = useState<string[]>([]);
+  /** A video is being built from its description: watched in the conversation, like a change */
+  const planning = busy === "plan" && pending === null;
+  const inTalk = tab === "describe" && (talking || planning);
 
   const asking = busy === "ai" || busy === "plan";
   useEffect(() => {
@@ -194,7 +197,7 @@ export default function SearchPanel({ jobId, storyboard, info, previewed, isAdde
     <aside
       aria-label={t("compilation.search")}
       // A conversation stays in view while the list of passages scrolls beside it
-      className={`glass rounded-[20px] p-3 min-w-0 flex flex-col ${talking && tab === "describe" ? "flex-[1_1_400px] lg:sticky lg:top-[84px] self-start" : "flex-[1_1_400px]"}`}
+      className={`glass rounded-[20px] p-3 min-w-0 flex flex-col ${inTalk ? "flex-[1_1_400px] lg:sticky lg:top-[84px] self-start" : "flex-[1_1_400px]"}`}
     >
       <div role="tablist" className="seg">
         {(["describe", "search"] as const).map((key) => (
@@ -238,10 +241,13 @@ export default function SearchPanel({ jobId, storyboard, info, previewed, isAdde
           </div>
           <p className="mt-2 px-0.5 text-[12px] leading-snug text-ink-3">{t(info && !info.transcript ? "compilation.noTranscript" : "compilation.searchHint")}</p>
         </form>
-      ) : talking ? (
+      ) : talking || planning ? (
         <PlanTalk
-          brief={talk!.brief}
-          turns={talk!.asks}
+          brief={planning ? brief.trim() : talk!.brief}
+          answer={planning ? undefined : talk!.answer}
+          passages={planning ? undefined : talk!.passages}
+          planning={planning}
+          turns={planning ? [] : talk!.asks}
           pending={busy === "plan" ? pending : null}
           trail={trail}
           value={request}
@@ -287,7 +293,7 @@ export default function SearchPanel({ jobId, storyboard, info, previewed, isAdde
         </form>
       )}
 
-      {asking && !(talking && tab === "describe") && (
+      {asking && !inTalk && (
         <div role="status" aria-live="polite" className="mt-3 flex items-start gap-3 p-3 rounded-[12px] inset animate-fade-in">
           <Loader2 className="w-4 h-4 spinner text-accent flex-none mt-0.5" />
           <div className="min-w-0">
@@ -299,7 +305,7 @@ export default function SearchPanel({ jobId, storyboard, info, previewed, isAdde
         </div>
       )}
       {tab === "describe" && !talking && planNote && !asking && <AiNote label={t("compilation.aiNote")} note={planNote} />}
-      {failure && !(talking && tab === "describe") && (
+      {failure && !(talking && tab === "describe") && !planning && (
         <p role="alert" className="mt-3 p-3 rounded-[12px] bg-[rgba(245,177,76,0.10)] border border-[rgba(245,177,76,0.30)] text-[12.5px] leading-snug text-[#f7d9a8]">
           {t(`compilation.failure.${failure}`)}
         </p>

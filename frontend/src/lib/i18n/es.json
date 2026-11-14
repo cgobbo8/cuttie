@@ -1573,6 +1573,8 @@
     "changeFold": "Plegar",
     "changeRecut_one": "{{count}} trozo recortado de nuevo",
     "changeRecut_other": "{{count}} trozos recortados de nuevo",
-    "ownLook": "Diseño de este trozo: {{name}}"
+    "ownLook": "Diseño de este trozo: {{name}}",
+    "changePassages_one": "{{count}} trozo en el vídeo",
+    "changePassages_other": "{{count}} trozos en el vídeo"
   }
 }

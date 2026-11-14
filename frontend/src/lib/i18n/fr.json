@@ -1573,6 +1573,8 @@
     "changeFold": "Replier",
     "changeRecut_one": "{{count}} passage recoupé",
     "changeRecut_other": "{{count}} passages recoupés",
-    "ownLook": "Mise en page de ce passage : {{name}}"
+    "ownLook": "Mise en page de ce passage : {{name}}",
+    "changePassages_one": "{{count}} passage dans la vidéo",
+    "changePassages_other": "{{count}} passages dans la vidéo"
   }
 }

@@ -124,7 +124,7 @@ PLAN_SPEC = {
                     "required": ["title", "moments"],
                 },
             },
-            "note": {"type": "string", "description": "One or two sentences in the stream's language: what you found for each part, what is missing"},
+            "note": {"type": "string", "description": "Two to four sentences in the stream's language, said to the streamer: what each part holds and why you chose these moments, what is only close or missing"},
             "look": {
                 "type": "string",
                 "description": "What the description asks about how the video looks (where the webcam and the game go, captions, pop-ups, style), "
@@ -183,7 +183,7 @@ How to work:
 8. """
     + _SCORES
     + """ A part with nothing that really matches gets its closest moments (3 at most, scored under 50) rather than staying empty, and the note says so. Never invent: every moment is one you read or listened to.
-9. Finish by calling `plan`. In the note, say for each part what really matches and what is only close."""
+9. Finish by calling `plan`. The note is your answer to the streamer, who reads it beside the video: for each part, what you put in it and why these moments, then what is only close or what you looked for and didn't find."""
 )
 
 
@@ -517,7 +517,7 @@ class Searcher:
                 messages.append({"role": "tool", "tool_call_id": c.id, "content": json.dumps(result, ensure_ascii=False)[:TOOL_RESULT_CHARS]})
             if self.run.finished or last:
                 break
-        self.run.note = str(given.get("note") or "")[:500]
+        self.run.note = str(given.get("note") or "")[:800]
         self.run.seconds = time.time() - t0
         return given
 

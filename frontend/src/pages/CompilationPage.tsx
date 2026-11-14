@@ -396,10 +396,10 @@ export default function CompilationPage() {
       let planned: Compilation;
       if (allItems(compilation).length === 0) {
         // The compilation on screen is empty: the plan fills it
-        planned = { ...compilation, name: plan.title || compilation.name, sections, target, titles: sections.length > 1 || compilation.titles, brief, asks: [] };
+        planned = { ...compilation, name: plan.title || compilation.name, sections, target, titles: sections.length > 1 || compilation.titles, brief, answer: plan.note ?? "", asks: [] };
         change(planned);
       } else {
-        planned = { ...(await createCompilation(jobId, { name: plan.title || t("compilation.defaultName"), target, titles: true })), sections, brief, asks: [] };
+        planned = { ...(await createCompilation(jobId, { name: plan.title || t("compilation.defaultName"), target, titles: true })), sections, brief, answer: plan.note ?? "", asks: [] };
         setCompilations((prev) => [...(prev ?? []), planned]);
         setCurrentId(planned.id);
         change(planned);
@@ -729,7 +729,7 @@ export default function CompilationPage() {
           onPreview={watch}
           onAdd={add}
           onPlan={applyPlan}
-          talk={compilation.brief ? { brief: compilation.brief, asks: compilation.asks ?? [] } : null}
+          talk={compilation.brief ? { brief: compilation.brief, answer: compilation.answer, passages: allItems(compilation).length, asks: compilation.asks ?? [] } : null}
           current={() => planCurrent(compilation)}
           onChange={applyChange}
           onReveal={reveal}

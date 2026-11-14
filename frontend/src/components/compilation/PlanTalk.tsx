@@ -16,6 +16,12 @@ export interface TalkTurn {
 interface Props {
   /** What the streamer first described */
   brief: string;
+  /** What the AI answered to it: what it built and why (absent on videos made before it was kept) */
+  answer?: string;
+  /** Passages in the video now */
+  passages?: number;
+  /** The video is being built from the description: what the AI does shows as its answer */
+  planning?: boolean;
   /** Each change asked since, with the AI's answer */
   turns: TalkTurn[];
   /** The change being worked on, and what the AI has done for it so far (one line per step, the last one in progress) */
@@ -45,10 +51,10 @@ const SHOWN_STEPS = 4;
  * change asked and what the AI did about it, what it is doing right now, and
  * where to ask for the next one. What it adds shows up in the video beside.
  */
-export default function PlanTalk({ brief, turns, pending, trail, value, onValue, onSend, disabled, cost, onReveal, onAnother, failure }: Props) {
+export default function PlanTalk({ brief, answer, passages, planning = false, turns, pending, trail, value, onValue, onSend, disabled, cost, onReveal, onAnother, failure }: Props) {
   const { t } = useTranslation();
   const thread = useRef<HTMLDivElement>(null);
-  const busy = pending !== null;
+  const busy = pending !== null || planning;
 
   // The newest message stays in view
   useEffect(() => {
@@ -68,6 +74,26 @@ export default function PlanTalk({ brief, turns, pending, trail, value, onValue,
     <div className="mt-3 flex flex-col rounded-[14px] border border-white/[0.08] bg-black/20 overflow-hidden">
       <div ref={thread} role="log" aria-label={t("compilation.changeTitle")} className="talk-thread flex flex-col gap-3.5 h-[max(360px,calc(100dvh-390px))] overflow-y-auto p-4">
         <Mine label={t("compilation.changeYou")} text={brief} folded />
+        {planning && (
+          <Theirs label={t("compilation.aiNote")} working>
+            <ol role="status" aria-live="polite" className="flex flex-col gap-1.5">
+              {steps.length === 0 && <Step text={t("compilation.step.thinking")} doing />}
+              {steps.map((text, i) => (
+                <Step key={`${trail.length - steps.length + i}-${text}`} text={text} doing={i === steps.length - 1} />
+              ))}
+            </ol>
+          </Theirs>
+        )}
+        {!planning && answer && (
+          <Theirs label={t("compilation.aiNote")}>
+            <p className="text-[13.5px] leading-[1.45] text-ink-2 whitespace-pre-line">{answer}</p>
+            {!!passages && turns.length === 0 && (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                <span className="talk-chip">{t("compilation.changePassages", { count: passages })}</span>
+              </div>
+            )}
+          </Theirs>
+        )}
         {turns.map((turn, i) => (
           <div key={i} className="flex flex-col gap-3">
             <Mine label={t("compilation.changeAsk")} text={turn.ask} />
@@ -98,7 +124,7 @@ export default function PlanTalk({ brief, turns, pending, trail, value, onValue,
             </Theirs>
           </div>
         ))}
-        {busy && (
+        {pending !== null && (
           <div className="flex flex-col gap-3 animate-fade-in">
             <Mine label={t("compilation.changeAsk")} text={pending!} />
             <Theirs label={t("compilation.aiNote")} working>

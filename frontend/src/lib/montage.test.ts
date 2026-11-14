@@ -232,6 +232,14 @@ describe("montage for Remotion", () => {
     expect(all.map((p) => p.layer.name)).toEqual(flat.map((l) => l.name));
   });
 
+  it("goes from a piece to the one that touches it without a frame lost or played twice", () => {
+    // 5.95 s is frame 178.5 and the first piece is 85.5 frames long: rounded apart, they would overlap by a frame
+    const montage = buildMontage([{ ctx, start: 5.95, end: 8.8 }, { ctx, start: 8.8, end: 20.02 }, { ctx, start: 40, end: 40.01 }], build);
+    const frames = montage.segments.map((s) => [Math.round(s.from * 30), Math.round(s.duration * 30)]);
+    expect(frames[0][0] + frames[0][1]).toBe(frames[1][0]);
+    expect(frames).toEqual([[179, 85], [264, 337], [1200, 1]]);
+  });
+
   it("splits every built-in template into clip layers and montage layers", () => {
     for (const id of TEMPLATE_IDS) {
       const layers = buildTemplate(id, ctx);

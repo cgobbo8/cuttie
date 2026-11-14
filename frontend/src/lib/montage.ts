@@ -267,9 +267,11 @@ export function buildMontage(
 ): MontageProps {
   const place = (layers: Layer[]): PlacedLayer[] => layers.map((layer, z) => ({ layer, z }));
   const segments: MontageSegment[] = cuts.map((cut) => {
-    // Whole frames: the overlays' clock stays on the pictures
-    const from = Math.round(cut.start * fps) / fps;
-    const duration = framesOf(cut.end - cut.start, fps) / fps;
+    // Whole frames, counted from the piece's two ends: the overlays' clock stays on the pictures, and a
+    // piece that starts where another ends takes over on the very next frame (none played twice, none lost)
+    const first = Math.round(cut.start * fps);
+    const from = first / fps;
+    const duration = Math.max(1, Math.round(cut.end * fps) - first) / fps;
     const ctx: TemplateContext = {
       ...cut.ctx,
       startAt: from,

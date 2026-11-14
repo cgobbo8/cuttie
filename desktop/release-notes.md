@@ -1,2 +1,7 @@
-- Correctif : une analyse n'échoue plus quand le serveur du modèle audio ne répond pas (erreur « 504 Gateway Time-out »). Le modèle se télécharge au démarrage de Cuttie, depuis un second serveur si besoin, et au pire l'analyse continue sans repérer les rires et les cris.
-- Si une analyse a échoué avec cette erreur, relance-la depuis Projets : la transcription déjà faite est gardée.
+- Nouveau : **Chercher dans le live** (bouton dans Choisir). Cherche des mots dits ou écrits dans le chat (gratuit), ou demande à l'IA (« les moments où ça pète », moins d'un centime), puis enchaîne les passages en une seule vidéo, en plusieurs parties titrées.
+- Nouveau : **Décrire la vidéo**. Tu décris la vidéo que tu veux (ses parties, sa durée, sa mise en page) et l'IA la construit : environ 0,04 $ par vidéo. Tout reste modifiable ensuite.
+- Nouveau : un clip peut être coupé en plusieurs morceaux dans Choisir (« Couper ici », « Enlever les silences », « Montage IA »).
+- Nouveau : chaque passage d'une compilation peut avoir sa propre mise en page, choisie à la main ou par l'IA.
+- Les passages trouvés dans le live sont coupés sur les mots : ils commencent quand la voix commence et s'arrêtent quand elle s'arrête.
+- Le son de tous les exports est mis au niveau de TikTok, Shorts et Reels (il était souvent bien trop bas).
+- Correctif : sur les nouveaux lives analysés, les sous-titres ne sont plus en avance sur la voix et l'image ne reste plus figée au début d'un clip. Les lives déjà analysés ne changent pas.

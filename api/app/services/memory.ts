@@ -112,9 +112,11 @@ export function saveMemory(raw: any): Memory {
   const now = readMemory()
   const sections = { ...now.sections }
   let changed = false
+  const sent = raw?.sections && typeof raw.sections === 'object' ? raw.sections : {}
   for (const key of SECTIONS) {
-    if (typeof raw?.sections?.[key] !== 'string') continue
-    const written = text(raw.sections[key], MAX_SECTION)
+    // (a section emptied arrives as null: the body parser turns an empty text into that)
+    if (!(key in sent) || (typeof sent[key] !== 'string' && sent[key] !== null)) continue
+    const written = text(sent[key] ?? '', MAX_SECTION)
     changed ||= written !== sections[key]
     sections[key] = written
   }

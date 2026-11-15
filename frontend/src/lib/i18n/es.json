@@ -2020,6 +2020,7 @@
       "ignored": "Entendido, la nota se queda como está",
       "changed": "Tu nota cambió mientras tanto: no se modificó nada",
       "failed": "No se pudo cambiar la nota"
-    }
+    },
+    "rememberedLine": "Recordado para tus próximos vídeos: {{said}}"
   }
 }

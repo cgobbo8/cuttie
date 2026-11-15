@@ -273,7 +273,6 @@ export default function SearchPanel({ jobId, storyboards, lives, info, previewed
     setFailure(null);
     try {
       const planned = await planLiveVideo(jobId, talk.brief, target, { request: asked, current: current(), asks: talk.asks.map((a) => a.ask) }, others);
-      noted(planned);
       onChange(planned, asked);
     } catch (err) {
       setFailure(err instanceof LiveError ? err.reason : "failed");

@@ -2020,6 +2020,7 @@
       "ignored": "Understood, the note stays as it is",
       "changed": "Your note changed in the meantime: nothing was modified",
       "failed": "The note could not be changed"
-    }
+    },
+    "rememberedLine": "Remembered for your next videos: {{said}}"
   }
 }

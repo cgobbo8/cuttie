@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
-import { ArrowUp, Check, Loader2, Minus, Plus, RotateCcw, Scissors, Sparkles } from "lucide-react";
+import { ArrowUp, Brain, Check, Loader2, Minus, Plus, RotateCcw, Scissors, Sparkles } from "lucide-react";
 import { Virality } from "./SuggestionCard";
 
 export interface TalkTurn {
@@ -12,6 +12,8 @@ export interface TalkTurn {
   removed?: number;
   /** Passages it cut otherwise (tighter, longer) */
   recut?: number;
+  /** Lasting tastes the streamer stated in this request, that the AI noted in its memory for their next videos */
+  remembered?: string[];
 }
 
 /** A video the AI proposed and nobody has had built yet: what it noticed, and the way to have it built */
@@ -187,6 +189,13 @@ export default function PlanTalk({ brief, byAi = false, proposal = null, again =
                   )}
                 </div>
               )}
+              {/* « I don't like it when you... »: what the AI keeps of it for the next videos (Ma chaîne, « Mémoire ») */}
+              {turn.remembered?.map((said) => (
+                <p key={said} className="mt-2 flex items-start gap-1.5 text-[12px] leading-[1.4] text-accent">
+                  <Brain className="w-3.5 h-3.5 flex-none mt-px" />
+                  <span>{t("memory.rememberedLine", { said })}</span>
+                </p>
+              ))}
             </Theirs>
           </div>
         ))}

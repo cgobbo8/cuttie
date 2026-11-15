@@ -210,6 +210,11 @@ test.group('The memory of the AI', (group) => {
     assert.notProperty(saved.sections, 'intruder')
     assert.notEqual(saved.updated_at, '2026-11-15T10:00:00Z')
     assert.lengthOf(((await client.put('/api/memory').loginAs(user).json({ sections: { who: 'x'.repeat(9000) } })).body() as any).sections.who, 3000)
+    // A section can be emptied (what was noted there was wrong): an empty text, or nothing but spaces
+    const emptied = (await client.put('/api/memory').loginAs(user).json({ sections: { who: '', games: '  ' } })).body() as any
+    assert.equal(emptied.sections.who, '')
+    assert.equal(emptied.sections.games, '')
+    assert.equal(emptied.sections.people, '- Cody : son meilleur ami\n- Blue : une recrue')
 
     await client.put('/api/memory').loginAs(user).json({ paused: true })
     assert.deepEqual((await client.delete('/api/memory').loginAs(user)).body(), { cleared: true })

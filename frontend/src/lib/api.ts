@@ -1737,7 +1737,7 @@ export interface Compilation {
   brief?: string;
   /** What the AI answered to the description: what it built and why */
   answer?: string;
-  asks?: { ask: string; note: string; added?: number; removed?: number; recut?: number }[];
+  asks?: { ask: string; note: string; added?: number; removed?: number; recut?: number; remembered?: string[] }[];
   /** Other lives it takes passages from, besides the one it is kept with (job ids) */
   lives?: string[];
   /** The AI proposed this video on its own once the live was analysed: `brief` is the request it wrote in the streamer's place */

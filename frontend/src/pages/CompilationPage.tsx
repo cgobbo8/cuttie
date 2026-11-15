@@ -476,15 +476,17 @@ export default function CompilationPage() {
   const applyChange = (plan: VideoPlan, ask: string) => {
     if (!compilation) return;
     const note = plan.note ?? "";
+    // A lasting taste they stated in this request, that the AI noted for their next videos: written under its answer
+    const noted = plan.remembered?.length ? { remembered: plan.remembered } : {};
     const revised = revisedSections(compilation, plan, lengthOf);
     // An answer with no video in it (it found nothing, or misread): the video stays, its answer is kept
     if (revised.sections.length === 0 || (revised.added === 0 && revised.removed === 0 && revised.recut.length === 0 && sameOrder(compilation, revised.sections))) {
-      change({ ...compilation, asks: [...(compilation.asks ?? []), { ask, note }] });
+      change({ ...compilation, asks: [...(compilation.asks ?? []), { ask, note, ...noted }] });
       toast.info(t("compilation.changeNothing"));
       return;
     }
     const turn = compilation.asks?.length ?? 0;
-    const next = { ...compilation, sections: revised.sections, asks: [...(compilation.asks ?? []), { ask, note, added: revised.added, removed: revised.removed, recut: revised.recut.length }] };
+    const next = { ...compilation, sections: revised.sections, asks: [...(compilation.asks ?? []), { ask, note, added: revised.added, removed: revised.removed, recut: revised.recut.length, ...noted }] };
     // A change that speaks of the music or the intro: the AI chooses them again with it in mind
     if (/musi|músic|intro|jingle|sound|sonido|bande.son/i.test(ask)) pendingSound.current = { id: compilation.id, asked: ask };
     change(next);

@@ -72,7 +72,7 @@ export interface Compilation {
   /** Described to the AI: what the streamer first asked for, what the AI answered, then each change asked and its answer */
   brief?: string
   answer?: string
-  asks?: { ask: string; note: string; added?: number; removed?: number; recut?: number }[]
+  asks?: { ask: string; note: string; added?: number; removed?: number; recut?: number; remembered?: string[] }[]
   /**
    * The AI proposed this video on its own once the live was analysed (services/suggestions.ts):
    * `brief` is then the request it wrote in the streamer's place. Kept by the server, never
@@ -114,6 +114,13 @@ const MIN_ITEM_SECONDS = 0.3
 /** Longest description of a video, and most changes asked on it that are kept */
 const MAX_BRIEF = 4000
 const MAX_ASKS = 20
+
+/** The tastes the AI said it noted from a request, as kept with the turn: a few short sentences */
+const remembered = (raw: unknown): string[] =>
+  (Array.isArray(raw) ? raw : [])
+    .filter((said): said is string => typeof said === 'string' && !!said.trim())
+    .map((said) => said.replace(/\s+/g, ' ').trim().slice(0, 220))
+    .slice(0, 3)
 
 const ID = /^[a-z0-9]{6,24}$/
 const SOURCES = new Set(['voice', 'chat', 'ai', 'manual'])
@@ -333,6 +340,8 @@ export function parseCompilation(raw: any, liveDuration: number, others?: Map<st
               ...(Number.isInteger(a.added) && a.added > 0 && a.added <= MAX_ITEMS ? { added: a.added } : {}),
               ...(Number.isInteger(a.removed) && a.removed > 0 && a.removed <= MAX_ITEMS ? { removed: a.removed } : {}),
               ...(Number.isInteger(a.recut) && a.recut > 0 && a.recut <= MAX_ITEMS ? { recut: a.recut } : {}),
+              // Lasting tastes stated in the request, that the AI noted in its memory (shown under its answer)
+              ...(remembered(a.remembered).length > 0 ? { remembered: remembered(a.remembered) } : {}),
             })),
         }
       : {}),

@@ -1728,7 +1728,8 @@
       "hint": "Elle regarde quel genre de vidéo c'est (drôle, skill, posé…) et choisit la musique et l'intro qui vont avec, ou aucune. Elle part de tes préférées (Ma chaîne).",
       "done": "Musique : {{music}} · Intro : {{intro}}",
       "none": "aucune"
-    }
+    },
+    "planCached": "Même description qu'une fois d'avant : l'IA a repris sa réponse, sans rien dépenser. Change un mot pour qu'elle cherche à nouveau."
   },
   "compilations": {
     "title": "Compilations",

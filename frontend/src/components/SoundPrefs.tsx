@@ -1,12 +1,12 @@
 import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Loader2, Pause, Play, Plus, Trash2 } from "lucide-react";
+import { ChevronDown, Clapperboard, Loader2, Music2, Pause, Play, Plus, Trash2 } from "lucide-react";
 import { addMusic, deleteMusic, updateMusic, type BrandKit } from "../lib/api";
-import { INTRO_IDS, isIntro } from "../lib/intro/intros";
+import { isIntro } from "../lib/intro/intros";
 import { loadMusics, trackOf, useMusics } from "../lib/music/library";
 import { MUSIC_KINDS, type MusicTrack } from "../lib/music/mix";
-import { IntroSketch, useIntroLoop, type IntroBrand } from "./compilation/IntroPicker";
-import { useListen } from "./compilation/MusicPicker";
+import IntroPicker, { IntroSketch, useIntroLoop, type IntroBrand } from "./compilation/IntroPicker";
+import MusicPicker, { useListen } from "./compilation/MusicPicker";
 import { useToast } from "./Toast";
 
 interface Props {
@@ -17,6 +17,8 @@ interface Props {
 }
 
 const FIELD = "h-9 min-w-0 px-2.5 rounded-[10px] bg-black/30 border border-white/10 text-[13px] text-white outline-none focus:border-accent-line [color-scheme:dark]";
+/** What opens a picker: the choice made, as a field */
+const PICK = "h-9 px-2.5 rounded-[10px] bg-black/30 border border-white/10 hover:border-white/20 text-[13px] flex items-center gap-2 outline-none focus-visible:border-accent-line transition-colors";
 const ROUND = "flex-none w-9 h-9 grid place-items-center rounded-full bg-white/[0.08] hover:bg-white/[0.16] text-white disabled:opacity-30 disabled:hover:bg-white/[0.08]";
 
 /** One of the streamer's own tracks: its name, the kinds of video it suits and what is said of it, all theirs to change */
@@ -106,6 +108,8 @@ export default function SoundPrefs({ kit, brand, onSave }: Props) {
   const frame = useIntroLoop();
   const picker = useRef<HTMLInputElement>(null);
   const [adding, setAdding] = useState(false);
+  // The picker that is open: a kind of video's favourite music, or the preferred intro
+  const [open, setOpen] = useState<string | null>(null);
   const own = tracks.filter((track) => track.own);
   const reload = () => loadMusics().catch(() => {});
 
@@ -137,27 +141,35 @@ export default function SoundPrefs({ kit, brand, onSave }: Props) {
       ) : (
         MUSIC_KINDS.map((kind) => {
           const chosen = trackOf(tracks, kit.musics[kind]);
-          // Those made for this kind of video first
-          const fitting = tracks.filter((track) => track.kinds.includes(kind));
-          const others = tracks.filter((track) => !track.kinds.includes(kind));
           const label = t(`compilation.music.kind.${kind}`);
           return (
             <div key={kind} className="flex items-center gap-2.5">
               <span className="flex-[0_0_132px] text-[13px] text-ink-2">{label}</span>
-              <select value={chosen?.id ?? ""} onChange={(e) => pick(kind, e.target.value)} aria-label={t("brand.musicFor", { kind: label })} className={`select-arrow ${FIELD} flex-1`}>
-                <option value="">{t("brand.musicAny")}</option>
-                {fitting.map((track) => (
-                  <option key={track.id} value={track.id}>
-                    {track.name}
-                  </option>
-                ))}
-                {others.length > 0 && <option disabled>──────</option>}
-                {others.map((track) => (
-                  <option key={track.id} value={track.id}>
-                    {track.name}
-                  </option>
-                ))}
-              </select>
+              <span className="relative flex-1 min-w-0">
+                <button type="button" onClick={() => setOpen(open === kind ? null : kind)} aria-haspopup="dialog" aria-expanded={open === kind} aria-label={t("brand.musicFor", { kind: label })} className={`${PICK} w-full`}>
+                  <Music2 className={`w-3.5 h-3.5 flex-none ${chosen ? "text-accent" : "text-ink-3"}`} />
+                  <span className={`flex-1 min-w-0 truncate text-left ${chosen ? "text-white" : "text-ink-2"}`}>{chosen?.name ?? t("brand.musicAny")}</span>
+                  <ChevronDown className="w-[15px] h-[15px] flex-none text-ink-3" />
+                </button>
+                {open === kind && (
+                  // The very picker a compilation has: every track to listen to, those made for this kind of video first
+                  <MusicPicker
+                    value={chosen ? { track: chosen.id } : null}
+                    tracks={tracks}
+                    favourites={kit.musics}
+                    title={t("brand.musicFor", { kind: label })}
+                    noneLabel={t("brand.musicAny")}
+                    presence={false}
+                    first={kind}
+                    onChange={(next) => {
+                      pick(kind, next?.track ?? "");
+                      setOpen(null);
+                    }}
+                    onClose={() => setOpen(null)}
+                    className="right-0 top-full mt-2"
+                  />
+                )}
+              </span>
               <button
                 type="button"
                 disabled={!chosen}
@@ -173,14 +185,28 @@ export default function SoundPrefs({ kit, brand, onSave }: Props) {
       )}
       <div className="mt-1.5 pt-3.5 border-t border-white/[0.08] flex items-center gap-2.5">
         <span className="flex-[0_0_132px] text-[13px] text-ink-2">{t("brand.introPreferred")}</span>
-        <select value={kit.intro ?? ""} onChange={(e) => onSave({ intro: e.target.value || null })} aria-label={t("brand.introPreferred")} className={`select-arrow ${FIELD} flex-1`}>
-          <option value="">{t("brand.introNone")}</option>
-          {INTRO_IDS.map((id) => (
-            <option key={id} value={id}>
-              {t(`compilation.intro.style.${id}`)}
-            </option>
-          ))}
-        </select>
+        <span className="relative flex-1 min-w-0">
+          <button type="button" onClick={() => setOpen(open === "intro" ? null : "intro")} aria-haspopup="dialog" aria-expanded={open === "intro"} aria-label={t("brand.introPreferred")} className={`${PICK} w-full`}>
+            <Clapperboard className={`w-3.5 h-3.5 flex-none ${isIntro(kit.intro) ? "text-accent" : "text-ink-3"}`} />
+            <span className={`flex-1 min-w-0 truncate text-left ${isIntro(kit.intro) ? "text-white" : "text-ink-2"}`}>{isIntro(kit.intro) ? t(`compilation.intro.style.${kit.intro}`) : t("brand.introNone")}</span>
+            <ChevronDown className="w-[15px] h-[15px] flex-none text-ink-3" />
+          </button>
+          {open === "intro" && (
+            <IntroPicker
+              value={isIntro(kit.intro) ? { style: kit.intro } : null}
+              brand={brand}
+              name={brand.name}
+              heading={t("brand.introPreferred")}
+              styleOnly
+              onChange={(next) => {
+                onSave({ intro: next?.style ?? null });
+                setOpen(null);
+              }}
+              onClose={() => setOpen(null)}
+              className="right-0 top-full mt-2"
+            />
+          )}
+        </span>
         {isIntro(kit.intro) ? <IntroSketch id={kit.intro} frame={frame} brand={brand} title={brand.name} width={36} /> : <span className="flex-none w-9" />}
       </div>
 

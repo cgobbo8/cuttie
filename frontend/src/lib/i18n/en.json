@@ -1728,7 +1728,8 @@
       "hint": "It looks at what kind of video this is (funny, skill, calm…) and chooses the music and the intro that go with it, or none. It starts from your favourites (My channel).",
       "done": "Music: {{music}} · Intro: {{intro}}",
       "none": "none"
-    }
+    },
+    "planCached": "Same description as a time before: the AI gave its earlier answer, at no cost. Change a word to have it search again."
   },
   "compilations": {
     "title": "Compilations",

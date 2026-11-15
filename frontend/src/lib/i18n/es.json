@@ -1728,7 +1728,8 @@
       "hint": "Mira qué tipo de vídeo es (divertido, skill, tranquilo…) y elige la música y la intro que le van, o ninguna. Parte de tus favoritas (Mi canal).",
       "done": "Música: {{music}} · Intro: {{intro}}",
       "none": "ninguna"
-    }
+    },
+    "planCached": "La misma descripción que otra vez: la IA ha retomado la respuesta anterior, sin gastar nada. Cambia una palabra para que busque de nuevo."
   },
   "compilations": {
     "title": "Compilaciones",

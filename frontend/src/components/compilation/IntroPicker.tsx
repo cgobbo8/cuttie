@@ -61,12 +61,16 @@ interface Props {
   name: string;
   onChange: (next: IntroChoice | null) => void;
   onClose: () => void;
+  /** What the picker is for (default: the video's intro) */
+  heading?: string;
+  /** Only the style is chosen (a preferred intro has no title or sound of its own) */
+  styleOnly?: boolean;
   /** Where it sits against what opened it */
   className?: string;
 }
 
 /** The ready-made intros to choose from, each one playing in small with the channel's own logo and colours */
-export default function IntroPicker({ value, brand, name, onChange, onClose, className = "" }: Props) {
+export default function IntroPicker({ value, brand, name, onChange, onClose, heading, styleOnly = false, className = "" }: Props) {
   const { t } = useTranslation();
   const box = useRef<HTMLDivElement>(null);
   const frame = useIntroLoop();
@@ -156,17 +160,17 @@ export default function IntroPicker({ value, brand, name, onChange, onClose, cla
     <div
       ref={box}
       role="dialog"
-      aria-label={t("compilation.intro.pick")}
+      aria-label={heading ?? t("compilation.intro.pick")}
       data-nodrag
       onClick={(e) => e.stopPropagation()}
       className={`absolute z-40 w-[304px] p-3 rounded-[14px] bg-[#171a18]/[0.98] border border-white/[0.12] shadow-[0_24px_60px_-18px_rgba(0,0,0,0.9)] ${className}`}
     >
-      <p className="px-0.5 pb-2 text-[12px] font-[550] text-ink-2">{t("compilation.intro.pick")}</p>
+      <p className="px-0.5 pb-2 text-[12px] font-[550] text-ink-2">{heading ?? t("compilation.intro.pick")}</p>
       <div className="grid grid-cols-4 gap-1">
         {tile(null, t("compilation.intro.none"))}
         {INTRO_IDS.map((id) => tile(id, t(`compilation.intro.style.${id}`)))}
       </div>
-      {style && (
+      {style && !styleOnly && (
         <>
           <label className="block mt-3">
             <span className="block px-0.5 pb-1 text-[11.5px] text-ink-3">{t("compilation.intro.title")}</span>

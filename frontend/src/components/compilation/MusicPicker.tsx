@@ -13,6 +13,13 @@ interface Props {
   favourites?: Record<string, string>;
   onChange: (next: MusicChoice | null) => void;
   onClose: () => void;
+  /** What the picker is for, and what choosing nothing is called (a video: "none"; a favourite: "up to the AI") */
+  title?: string;
+  noneLabel?: string;
+  /** How present the music is under the passages: a video's own setting, not a favourite's */
+  presence?: boolean;
+  /** A kind of video: the tracks that suit it come first, under its name */
+  first?: string;
   /** Where it sits against what opened it */
   className?: string;
 }
@@ -46,7 +53,7 @@ export function useListen() {
 }
 
 /** The musics a video can play in the background, by the kind of video they suit, each one to listen to */
-export default function MusicPicker({ value, tracks, favourites = {}, onChange, onClose, className = "" }: Props) {
+export default function MusicPicker({ value, tracks, favourites = {}, onChange, onClose, title, noneLabel, presence = true, first, className = "" }: Props) {
   const { t } = useTranslation();
   const box = useRef<HTMLDivElement>(null);
   const { playing, toggle } = useListen();
@@ -61,10 +68,13 @@ export default function MusicPicker({ value, tracks, favourites = {}, onChange, 
     };
   }, [onClose]);
 
-  // Each track under the first kind it suits; one that says none comes last
+  // Each track under the first kind it suits; one that says none comes last. Asked for a kind: every track that suits it first
+  const fitting = first ? tracks.filter((track) => track.kinds.includes(first)) : [];
+  const rest = tracks.filter((track) => !fitting.includes(track));
   const groups = [
-    ...MUSIC_KINDS.map((kind) => ({ kind: kind as string, tracks: tracks.filter((track) => track.kinds[0] === kind) })),
-    { kind: "", tracks: tracks.filter((track) => !MUSIC_KINDS.some((kind) => kind === track.kinds[0])) },
+    ...(first ? [{ kind: first, tracks: fitting }] : []),
+    ...MUSIC_KINDS.filter((kind) => kind !== first).map((kind) => ({ kind: kind as string, tracks: rest.filter((track) => track.kinds[0] === kind) })),
+    { kind: "", tracks: rest.filter((track) => !MUSIC_KINDS.some((kind) => kind !== first && kind === track.kinds[0])) },
   ].filter((group) => group.tracks.length > 0);
   const volume = value?.volume ?? MUSIC_VOLUMES.normal;
   const pick = (track: string | null) => onChange(track ? { ...(value ?? {}), track } : null);
@@ -73,12 +83,12 @@ export default function MusicPicker({ value, tracks, favourites = {}, onChange, 
     <div
       ref={box}
       role="dialog"
-      aria-label={t("compilation.music.pick")}
+      aria-label={title ?? t("compilation.music.pick")}
       data-nodrag
       onClick={(e) => e.stopPropagation()}
       className={`absolute z-40 w-[340px] max-h-[min(460px,50dvh)] flex flex-col p-3 rounded-[14px] bg-[#171a18]/[0.98] border border-white/[0.12] shadow-[0_24px_60px_-18px_rgba(0,0,0,0.9)] ${className}`}
     >
-      <p className="px-0.5 pb-2 text-[12px] font-[550] text-ink-2">{t("compilation.music.pick")}</p>
+      <p className="px-0.5 pb-2 text-[12px] font-[550] text-ink-2">{title ?? t("compilation.music.pick")}</p>
       <div className="flex-1 min-h-0 overflow-y-auto -mx-1 px-1 flex flex-col gap-0.5">
         <button
           type="button"
@@ -86,7 +96,7 @@ export default function MusicPicker({ value, tracks, favourites = {}, onChange, 
           onClick={() => pick(null)}
           className={`flex-none h-9 px-2.5 rounded-[9px] border text-left text-[13px] transition-colors ${!value ? "border-accent bg-accent-soft text-white" : "border-transparent text-ink-2 hover:bg-white/[0.07]"}`}
         >
-          {t("compilation.music.none")}
+          {noneLabel ?? t("compilation.music.none")}
         </button>
         {groups.map(({ kind, tracks: list }) => (
           <div key={kind}>
@@ -118,7 +128,7 @@ export default function MusicPicker({ value, tracks, favourites = {}, onChange, 
           </div>
         ))}
       </div>
-      {value && (
+      {value && presence && (
         <div className="pt-3 mt-2 border-t border-white/[0.08]">
           <p className="px-0.5 pb-1.5 text-[11.5px] text-ink-3">{t("compilation.music.volume")}</p>
           <div role="group" aria-label={t("compilation.music.volume")} className="seg">

@@ -502,6 +502,8 @@ export default function CompilationPage() {
   };
 
   const applyPlan = async (plan: VideoPlan, target: number, brief: string) => {
+    // The same description as before is answered from the disk: said, or the streamer wonders why nothing was searched
+    if (plan.cached) toast.info(t("compilation.planCached"));
     if (!jobId || !compilation) return;
     const sections = sectionsFromPlan(plan, lengthOf);
     if (sections.length === 0) return;

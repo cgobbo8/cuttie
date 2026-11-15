@@ -182,3 +182,54 @@ def test_what_a_template_is_good_for_is_written_from_its_description(monkeypatch
     assert "Name: Mes fails" in asked[0] and "Picture: the game, fills the whole frame." in asked[0] and "in French" in asked[0]
     looks.write_usage("Mine", "Picture: ...", "en")
     assert "in English" in asked[1]
+
+
+MUSICS = [
+    {"key": "phonk", "name": "Drift Phonk", "kinds": ["skill", "hype"], "about": "Drift phonk, heavy bass. For kills and action."},
+    {"key": "lofi", "name": "Lofi Upbeat", "kinds": ["chill"], "about": "Upbeat lofi. For conversations."},
+    {"key": "chiptune", "name": "Pixel Chiptune", "kinds": ["funny"], "about": "Fast chiptune. For fails."},
+]
+VIDEO = {"title": "De calme à débordés", "parts": ["C'est bien calme", "Les patients débarquent"], "seconds": 72, "passages": 14, "said": ["Y'a des gens à soigner de son côté", "On va être submergés"]}
+
+
+def test_the_sound_of_a_video_is_chosen_from_what_it_is_and_what_the_streamer_likes():
+    model = Eyes({"kind": "funny", "music": "chiptune", "intro": "sticker", "why": "Une vidéo drôle : Pixel Chiptune et l'intro Stickers."})
+    chosen = looks.choose_sound(VIDEO, MUSICS, favourites={"skill": "phonk", "epic": "phonk", "chill": "kazoo"}, preferred_intro="rush", asked="une musique marrante", language="fr", client=model)
+    assert chosen == {"kind": "funny", "music": "chiptune", "intro": "sticker", "why": "Une vidéo drôle : Pixel Chiptune et l'intro Stickers.", "cost": 0.002}
+
+    call = model.seen[0]
+    assert call["model"] == live_agent.SEARCH_MODEL
+    shown = call["messages"][0]["content"]
+    # What the video is: its title, its parts, how long, what is said
+    assert "« De calme à débordés »" in shown and "« C'est bien calme », « Les patients débarquent »" in shown
+    assert "72 s in 14 passages" in shown and "- « On va être submergés »" in shown
+    assert "« une musique marrante »" in shown
+    # Every track with what it is for; the favourite is marked for its kind (a kind or a track nobody knows is not)
+    assert "[phonk] Drift Phonk (for: skill, hype). Drift phonk, heavy bass. For kills and action. ★ The streamer's favourite for: skill." in shown
+    assert "[lofi] Lofi Upbeat (for: chill). Upbeat lofi. For conversations.\n" in shown and "kazoo" not in shown and "epic" not in shown
+    # No music and no intro are answers too, and the intro the streamer prefers is said
+    assert "[none] No music." in shown and "[none] No intro." in shown
+    assert "The streamer's preferred intro is [rush]" in shown
+    for intro in looks.INTROS:
+        assert f"[{intro}]" in shown
+    assert "in French" in shown
+
+
+def test_no_music_and_no_intro_are_kept_as_such_and_a_wrong_answer_is_made_safe():
+    none = looks.choose_sound({**VIDEO, "said": [], "parts": []}, MUSICS, client=Eyes({"kind": "chill", "music": "none", "intro": "none", "why": "Un moment sérieux."}))
+    assert (none["kind"], none["music"], none["intro"]) == ("chill", None, None)
+    shown_nothing = Eyes({"kind": "epic", "music": "kazoo", "intro": "wobble"})
+    wrong = looks.choose_sound({**VIDEO, "said": [], "parts": []}, MUSICS, client=shown_nothing)
+    assert wrong == {"kind": None, "music": None, "intro": None, "why": "", "cost": 0.002}
+    told = shown_nothing.seen[0]["messages"][0]["content"]
+    # Nothing said in it, no parts, nothing asked, no preferred intro: said so, not left blank
+    assert "one part, no titles" in told and "(nothing: mostly the game)" in told and "nothing about the sound" in told and "preferred intro" not in told
+
+
+def test_no_credits_stops_the_choice_of_the_sound():
+    class Refused(Exception):
+        status_code = 402
+
+    with pytest.raises(ProviderUnavailable) as refused:
+        looks.choose_sound(VIDEO, MUSICS, client=Eyes(Refused("no credits")))
+    assert refused.value.reason == "credits"

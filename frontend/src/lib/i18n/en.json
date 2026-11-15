@@ -1705,6 +1705,13 @@
         "lofi2": "Laid-back, warm lofi. For a video where people talk a lot.",
         "chill": "Muffled lo-fi that stays far back. For serious talks and late-night moods."
       }
+    },
+    "soundAi": {
+      "ai": "Music and intro by the AI",
+      "working": "The AI is choosing the music and the intro…",
+      "hint": "It looks at what kind of video this is (funny, skill, calm…) and chooses the music and the intro that go with it, or none. It starts from your favourites (My channel).",
+      "done": "Music: {{music}} · Intro: {{intro}}",
+      "none": "none"
     }
   },
   "compilations": {

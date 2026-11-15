@@ -15,6 +15,8 @@ import {
   addSection,
   allItems,
   applyLooks,
+  applySound,
+  soundBrief,
   applyTight,
   clearLooks,
   compilationLength,
@@ -432,5 +434,34 @@ describe("what the AI is doing", () => {
     expect(stepText(t, { step: "loud_moments", detail: "whatever", count: 10 })).toBe("loudest");
     expect(stepText(t, { step: "answer", detail: "", count: 11 })).toBe("thinking");
     expect(stepText(t, { step: "search_speech", detail: "", count: 12 })).toBe("thinking");
+  });
+
+  it("tells the AI what a video is to choose its sound, and applies what it chose", () => {
+    const piece = (id: string, text: string): CompilationItem => ({ id, start: 0, end: 4, text, why: "", sources: ["voice"] });
+    const video = {
+      name: " De calme à débordés ",
+      sections: [
+        { id: "one", title: "C'est bien calme", query: "", items: [piece("a", "Y'a personne"), piece("b", " ")] },
+        { id: "two", title: " ", query: "", items: [piece("c", "On va être submergés")] },
+        { id: "three", title: "Vide", query: "", items: [] },
+      ],
+    };
+    // Its title, the parts that have a title and passages, its length, what is said (nothing for a passage without words)
+    expect(soundBrief(video)).toEqual({ title: "De calme à débordés", parts: ["C'est bien calme"], seconds: 12, passages: 3, said: ["Y'a personne", "On va être submergés"] });
+    // A long video: a few passages from all over it, not only its beginning
+    const long = { name: "Long", sections: [{ id: "one", title: "", query: "", items: Array.from({ length: 40 }, (_, n) => piece(`p${n}`, `phrase ${n}`)) }] };
+    const told = soundBrief(long, 4);
+    expect(told.said).toEqual(["phrase 0", "phrase 10", "phrase 20", "phrase 30"]);
+    expect(told.passages).toBe(40);
+
+    // The music and the intro it chose; what the streamer had set on them stays when the track or the style is the same
+    const set = { name: "x", music: { track: "lofi", volume: 1.6 }, intro: { style: "slam", title: "Le calme", sound: "none" } };
+    expect(applySound(set, { music: "phonk", intro: "slam" })).toEqual({ name: "x", music: { track: "phonk", volume: 1.6 }, intro: { style: "slam", title: "Le calme", sound: "none" } });
+    // Another style: its own sound, the title stays
+    expect(applySound(set, { music: "phonk", intro: "rush" }).intro).toEqual({ style: "rush", title: "Le calme" });
+    // It chose none: they are gone
+    expect(applySound(set, { music: null, intro: null })).toEqual({ name: "x" });
+    const bare: { name: string; music?: { track: string }; intro?: { style: string } } = { name: "x" };
+    expect(applySound(bare, { music: "phonk", intro: "neon" })).toEqual({ name: "x", music: { track: "phonk" }, intro: { style: "neon" } });
   });
 });

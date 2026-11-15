@@ -58,6 +58,26 @@ function Harness({ start, onSelect = vi.fn(), playing = null, onEdit }: { start:
   );
 }
 
+// What the panel needs and these tests don't look at
+const base = {
+  storyboards: {},
+  home: "job",
+  activeSection: "one",
+  selectedItem: null,
+  cutting: new Set<string>(),
+  templates: [],
+  onActivate: vi.fn(),
+  onSelect: vi.fn(),
+  onExport: vi.fn(),
+  exporting: false,
+  onDelete: vi.fn(),
+  templateName: (key: string) => key,
+  looking: false,
+  looksNote: "",
+  onLooks: vi.fn(),
+  onSameLook: vi.fn(),
+};
+
 const row = (id: string) => screen.getByText(`passage ${id}`).closest("li")!;
 const box = (id: string) => within(row(id)).getByRole("checkbox", { name: "Sélectionner ce passage" });
 const order = () => screen.getByTestId("order").textContent;
@@ -196,5 +216,21 @@ describe("the passages of a compilation", () => {
     render(<Harness start={video()} playing="b" />);
     expect(row("b")).toHaveAttribute("aria-current", "true");
     expect(row("a")).not.toHaveAttribute("aria-current");
+  });
+
+  it("asks the AI for the music and the intro, and says what it answered", () => {
+    const onSound = vi.fn();
+    const brand = { name: "Falkarst", logo: null, colors: { accent: "#42BF85", highlight: "#F7C502", dark: "#19405A", light: "#BDF3DA" }, font: "Anton" };
+    const { rerender } = render(<CompilationPanel {...base} compilation={video()} onChange={() => {}} brand={brand} musics={["phonk"]} onSound={onSound} />);
+    expect(screen.getByText(/Elle regarde quel genre de vidéo/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /Musique et intro par l'IA/ }));
+    expect(onSound).toHaveBeenCalledTimes(1);
+    // While it thinks the button waits; then its answer takes the place of the explanation
+    rerender(<CompilationPanel {...base} compilation={video()} onChange={() => {}} brand={brand} musics={["phonk"]} onSound={onSound} sounding />);
+    expect((screen.getByRole("button", { name: /L'IA choisit la musique/ }) as HTMLButtonElement).disabled).toBe(true);
+    rerender(<CompilationPanel {...base} compilation={{ ...video(), music: { track: "phonk" } }} onChange={() => {}} brand={brand} musics={["phonk"]} onSound={onSound} soundNote="Une vidéo de skill : Drift Phonk." />);
+    expect(screen.getByText("Une vidéo de skill : Drift Phonk.")).toBeTruthy();
+    // The music it has is named on its row
+    expect(screen.getByRole("button", { name: /Drift Phonk/ })).toBeTruthy();
   });
 });

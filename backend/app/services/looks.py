@@ -252,6 +252,102 @@ def choose(
     return {"main": main, "looks": looks, "reasons": reasons, "note": " ".join(notes)[:600], "cost": round(cost, 4)}
 
 
+SOUND_KINDS = {
+    "funny": "jokes, fails, absurd or silly moments",
+    "skill": "kills, clutch plays, action where the game is the show",
+    "suspense": "tension, fear, something that builds up slowly",
+    "chill": "people talking, stories being told, calm role-play",
+    "hype": "a best-of, highlights of an evening, energy",
+}
+
+# What each ready-made intro looks like (the app draws them: frontend/src/lib/intro)
+INTROS = {
+    "slam": "Impact: the logo falls on the screen, which shakes, with a deep hit. Punchy: for action and big moments.",
+    "bands": "Bands: three slanted bands in the channel's colours cross the screen. Lively and clean: for best-ofs and light videos.",
+    "glitch": "Glitch: the screen misbehaves, the title splits in two colours. For chaos, bugs, fails, dark or absurd humour.",
+    "neon": "Neon: a ring of light draws itself around the logo. Calm and stylish: for night moods, calm or serious videos.",
+    "rush": "Speed: manga speed lines, the title slams down askew. For skill, fast action, hype.",
+    "sticker": "Stickers: the logo and the title slapped on like stickers on a wall of dots. Playful: for funny videos.",
+    "split": "Versus: two halves slam together, then pull apart on the video. For duels, fights, confrontations, a before and an after.",
+}
+
+
+def choose_sound(
+    video: dict, musics: list[dict], favourites: dict | None = None, preferred_intro: str | None = None, asked: str = "", language: str = "fr", client=None
+) -> dict:
+    """What a video sounds like, decided from what it is: {"kind", "music": key or None, "intro": key or None, "why", "cost"}.
+
+    `video`: {"title", "parts": [titles], "seconds", "passages": how many, "said": [what is said in some of them]};
+    `musics`: {"key", "name", "kinds", "about"} (the tracks that can be played); `favourites`: the streamer's
+    favourite track for a kind of video ({kind: key}); `preferred_intro`: the intro they prefer; `asked`: what
+    they asked for the video, in their words. The model may give no music and no intro."""
+    from app.services.live_agent import SEARCH_MODEL
+    from app.services.provider_errors import stop_if_fatal
+
+    if client is None:
+        from app.services.openai_client import get_openrouter_client
+
+        client = get_openrouter_client()
+    musics = [m for m in musics if m.get("key") and m.get("about")][:60]
+    keys = {m["key"] for m in musics}
+    favourites = {kind: key for kind, key in (favourites or {}).items() if kind in SOUND_KINDS and key in keys}
+    preferred_intro = preferred_intro if preferred_intro in INTROS else None
+    spoken = LANGUAGES.get(language, "French")
+
+    liked = {key: [kind for kind, k in favourites.items() if k == key] for key in keys}
+    tracks = "\n".join(
+        f"[{m['key']}] {m.get('name') or m['key']} (for: {', '.join(m.get('kinds') or []) or 'any'}). {' '.join(str(m['about']).split())[:300]}"
+        + (f" ★ The streamer's favourite for: {', '.join(liked[m['key']])}." if liked[m["key"]] else "")
+        for m in musics
+    )
+    parts = [str(p).strip()[:80] for p in (video.get("parts") or []) if str(p).strip()][:12]
+    said = [" ".join(str(line).split())[:160] for line in (video.get("said") or []) if str(line).strip()][:16]
+    seconds = float(video.get("seconds") or 0)
+    prompt = f"""A streamer makes a short vertical video (TikTok, Shorts, Reels) from passages of their Twitch live streams. Decide what it sounds like: its background music, and whether it opens with an intro.
+
+THE VIDEO
+Title: « {str(video.get("title") or "").strip()[:120] or "(none)"} »
+Parts: {", ".join(f"« {p} »" for p in parts) if parts else "one part, no titles"}
+Length: {seconds:.0f} s in {int(video.get("passages") or 0)} passages.
+What is said in some of them:
+{chr(10).join(f"- « {line} »" for line in said) if said else "- (nothing: mostly the game)"}
+What the streamer asked for this video: {f"« {asked.strip()[:800]} »" if asked.strip() else "nothing about the sound"}
+
+1. KIND. What kind of video is it? One of:
+{chr(10).join(f"- {kind}: {what}" for kind, what in SOUND_KINDS.items())}
+
+2. MUSIC. It plays under the whole video: up front during the intro, low when people talk, more present when the game plays alone. The tracks:
+{tracks or "(none available)"}
+[none] No music.
+Take the streamer's favourite for the kind of the video when they have one (★). Otherwise the track that best fits what the video shows. A video that is all talk can have one too (a calm one). Give "none" only when a music would hurt (a serious or sad moment), when no track fits at all, or when the streamer asked for none. If the streamer asked for a music or a mood, follow that first.
+
+3. INTRO. A jingle of about two seconds before the first passage: the channel's logo, its colours, the video's title. On these platforms many viewers leave within the first second, so an intro must earn its place: give one when the video is a compilation with a title worth reading (a best-of, a themed video, several parts) and lasts 30 s or more. Give "none" for a single moment or a very short video. If the streamer asked for an intro, or for none, follow that first. The intros:
+{chr(10).join(f"[{key}] {what}" for key, what in INTROS.items())}
+[none] No intro.
+{f"The streamer's preferred intro is [{preferred_intro}]: when you give one, take it unless another clearly fits this video better." if preferred_intro else ""}
+
+Answer with JSON only: {{"kind": "<kind>", "music": "<track key or none>", "intro": "<intro key or none>", "why": "<one or two sentences in {spoken}, for the streamer: the kind of video you saw, and why this music and this intro (or none); call them by their names>"}}"""
+    try:
+        response = client.chat.completions.create(
+            model=SEARCH_MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.2,
+            max_tokens=1500,
+            timeout=90,
+            extra_body={"usage": {"include": True}, "reasoning": {"effort": "low"}},
+        )
+    except Exception as e:
+        stop_if_fatal(e)
+        raise
+    data = llm_text.parse_json(response.choices[0].message.content or "")
+    kind = data.get("kind") if data.get("kind") in SOUND_KINDS else None
+    music = data.get("music") if data.get("music") in keys else None
+    intro = data.get("intro") if data.get("intro") in INTROS else None
+    cost = _cost(response)
+    logger.info(f"Sound of « {str(video.get('title') or '')[:40]} »: {kind}, music {music}, intro {intro} (~{cost:.4f} $)")
+    return {"kind": kind, "music": music, "intro": intro, "why": str(data.get("why") or "")[:500], "cost": round(cost, 4)}
+
+
 def write_usage(name: str, description: str, language: str = "fr") -> dict:
     """What a template of the streamer's own is good for, in a sentence or two: {"usage", "cost"}."""
     spoken = LANGUAGES.get(language, "French")

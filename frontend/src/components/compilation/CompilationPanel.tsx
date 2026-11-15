@@ -77,6 +77,10 @@ interface Props {
   musics?: string[];
   /** The streamer's favourite music for each kind of video, by kind */
   favourites?: Record<string, string>;
+  /** The AI is choosing the video's music and intro; what it said of its choice; asking it */
+  sounding?: boolean;
+  soundNote?: string;
+  onSound?: () => void;
 }
 
 /** Where passages being dragged would land: in a part, before one of its passages (null: at its end) */
@@ -191,6 +195,9 @@ export default function CompilationPanel({
   brand,
   musics = [],
   favourites,
+  sounding = false,
+  soundNote = "",
+  onSound,
 }: Props) {
   const { t, i18n } = useTranslation();
   const toast = useToast();
@@ -627,6 +634,17 @@ export default function CompilationPanel({
                 />
               )}
             </span>
+          </div>
+        )}
+        {/* The AI says what kind of video this is and picks the music and the intro that go with it (or none) */}
+        {onSound && (musics.length > 0 || brand) && (
+          <div>
+            <button onClick={onSound} disabled={count === 0 || sounding} className="btn btn-glass btn-sm w-full">
+              {sounding ? <Loader2 className="w-3.5 h-3.5 spinner" /> : <Sparkles className="w-3.5 h-3.5 text-accent" />}
+              {t(sounding ? "compilation.soundAi.working" : "compilation.soundAi.ai")}
+              {!sounding && <span className="mono text-[11.5px] text-ink-3">{`< ${dollars(0.01)}`}</span>}
+            </button>
+            <p className="mt-1.5 px-0.5 text-[12px] leading-snug text-ink-3">{soundNote || t("compilation.soundAi.hint")}</p>
           </div>
         )}
         <div>

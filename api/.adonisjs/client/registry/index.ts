@@ -354,6 +354,12 @@ const routes = {
     tokens: [{"old":"/api/jobs/:id/looks","type":0,"val":"api","end":""},{"old":"/api/jobs/:id/looks","type":0,"val":"jobs","end":""},{"old":"/api/jobs/:id/looks","type":1,"val":"id","end":""},{"old":"/api/jobs/:id/looks","type":0,"val":"looks","end":""}],
     types: placeholder as Registry['compilations.looks']['types'],
   },
+  'compilations.sound': {
+    methods: ["POST"],
+    pattern: '/api/jobs/:id/sound',
+    tokens: [{"old":"/api/jobs/:id/sound","type":0,"val":"api","end":""},{"old":"/api/jobs/:id/sound","type":0,"val":"jobs","end":""},{"old":"/api/jobs/:id/sound","type":1,"val":"id","end":""},{"old":"/api/jobs/:id/sound","type":0,"val":"sound","end":""}],
+    types: placeholder as Registry['compilations.sound']['types'],
+  },
   'compilations.plan': {
     methods: ["POST"],
     pattern: '/api/jobs/:id/plan',

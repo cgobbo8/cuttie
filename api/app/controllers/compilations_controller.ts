@@ -1,5 +1,6 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import { getBrandKit } from '#services/brand_kit'
+import { isMusicKind, musicFile, musicTracks } from '#services/musics'
 import { randomBytes } from 'node:crypto'
 import logger from '@adonisjs/core/services/logger'
 import db from '@adonisjs/lucid/services/db'
@@ -12,6 +13,7 @@ import {
   deletePiece,
   describeCompilations,
   dropUnusedPieces,
+  isIntro,
   isJobId,
   isPieceId,
   isTemplateKey,
@@ -24,6 +26,7 @@ import {
 } from '#services/compilations'
 import {
   chooseLooks,
+  chooseSound,
   extractLivePieces,
   liveSearchInfo,
   liveSearchProgress,
@@ -328,6 +331,48 @@ export default class CompilationsController {
 
   // POST /api/jobs/:id/looks { items: [{ id, start, end, text }], templates: [{ key, name, description, needs_cam }], wish?, usual?, language? }
   // — the AI looks at each passage (its clip must be cut) and chooses its template
+  /**
+   * POST /api/jobs/:id/sound { title, parts, seconds, passages, said, asked?, language? } — the AI says what kind
+   * of video this is and chooses its background music and its intro (either may be none), starting
+   * from the streamer's favourites (brand kit). Nothing is saved: the app applies what it gets.
+   */
+  async sound(ctx: HttpContext) {
+    const job = await ownJob(ctx)
+    if (!job) return ctx.response.notFound({ error: 'job not found' })
+    const words = (value: unknown, max: number) => (typeof value === 'string' ? value.trim().slice(0, max) : '')
+    const lines = (value: unknown, count: number, max: number) => (Array.isArray(value) ? value.map((line) => words(line, max)).filter(Boolean).slice(0, count) : [])
+    const kit = await getBrandKit()
+    // Only the tracks that can be played on this machine
+    const musics = musicTracks()
+      .filter((track) => musicFile(track.id))
+      .map((track) => ({ key: track.id, name: track.name, kinds: track.kinds, about: track.about }))
+    try {
+      const chosen = await chooseSound({
+        video: {
+          title: words(ctx.request.input('title'), 120),
+          parts: lines(ctx.request.input('parts'), 12, 80),
+          seconds: Math.max(0, Math.min(7200, Number(ctx.request.input('seconds')) || 0)),
+          passages: Math.max(0, Math.min(500, Math.round(Number(ctx.request.input('passages')) || 0))),
+          said: lines(ctx.request.input('said'), 16, 200),
+        },
+        musics,
+        favourites: kit.musics,
+        intro: kit.intro,
+        asked: words(ctx.request.input('asked'), 800),
+        language: ['fr', 'en', 'es'].includes(ctx.request.input('language')) ? ctx.request.input('language') : 'fr',
+      })
+      return {
+        kind: isMusicKind(chosen.kind) ? chosen.kind : null,
+        music: musics.some((track) => track.key === chosen.music) ? chosen.music : null,
+        intro: isIntro(chosen.intro) ? chosen.intro : null,
+        why: words(chosen.why, 500),
+        cost: Number(chosen.cost) || 0,
+      }
+    } catch (err) {
+      return workerFailure(ctx.response, err)
+    }
+  }
+
   async looks(ctx: HttpContext) {
     const job = await ownJob(ctx)
     if (!job) return ctx.response.notFound({ error: 'job not found' })

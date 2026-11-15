@@ -487,3 +487,32 @@ export function stepText(t: TFunction, step: LiveSearchStep | null): string {
       return t("compilation.step.thinking");
   }
 }
+
+/** What the AI is told of a video to choose its music and its intro: its title, its parts, how long, and what is said in some of its passages */
+export function soundBrief(c: Pick<Compilation, "name" | "sections">, most = 14): { title: string; parts: string[]; seconds: number; passages: number; said: string[] } {
+  const items = allItems(c);
+  // A few passages spread over the whole video, not only its beginning
+  const step = Math.max(1, items.length / most);
+  const picked = Array.from({ length: Math.min(most, items.length) }, (_, i) => items[Math.floor(i * step)]);
+  return {
+    title: c.name.trim(),
+    parts: c.sections.filter((s) => s.items.length > 0 && s.title.trim()).map((s) => s.title.trim()),
+    seconds: Math.round(compilationLength(c)),
+    passages: items.length,
+    said: picked.map((item) => item.text.trim()).filter(Boolean),
+  };
+}
+
+/**
+ * The video with the sound the AI chose: its music and its intro, or without them when it
+ * chose none. What the streamer had set on them stays (the music's presence, the intro's own
+ * title and sound) when the track or the style doesn't change.
+ */
+export function applySound<T extends Pick<Compilation, "music" | "intro">>(c: T, choice: { music: string | null; intro: string | null }): T {
+  const { music, intro, ...rest } = c;
+  return {
+    ...rest,
+    ...(choice.music ? { music: { ...(music?.volume !== undefined ? { volume: music.volume } : {}), track: choice.music } } : {}),
+    ...(choice.intro ? { intro: { ...(intro?.title ? { title: intro.title } : {}), ...(intro?.style === choice.intro && intro.sound ? { sound: intro.sound } : {}), style: choice.intro } } : {}),
+  } as T;
+}

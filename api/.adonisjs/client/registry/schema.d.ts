@@ -703,6 +703,18 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/compilations_controller').default['looks']>>>
     }
   }
+  'compilations.sound': {
+    methods: ["POST"]
+    pattern: '/api/jobs/:id/sound'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { id: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/compilations_controller').default['sound']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/compilations_controller').default['sound']>>>
+    }
+  }
   'compilations.plan': {
     methods: ["POST"]
     pattern: '/api/jobs/:id/plan'

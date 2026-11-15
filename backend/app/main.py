@@ -183,6 +183,25 @@ class LooksRequest(BaseModel):
     usual: str | None = None
 
 
+class SoundMusic(BaseModel):
+    key: str
+    name: str = ""
+    kinds: list[str] = []
+    about: str = ""
+
+
+class SoundRequest(BaseModel):
+    # What the video is: {"title", "parts", "seconds", "passages", "said"}
+    video: dict
+    musics: list[SoundMusic] = []
+    # The streamer's favourite track for a kind of video, and the intro they prefer
+    favourites: dict[str, str] = {}
+    intro: str | None = None
+    # What they asked for the video, in their words
+    asked: str = ""
+    language: str = "fr"
+
+
 class TemplateUsageRequest(BaseModel):
     name: str = ""
     description: str
@@ -520,6 +539,17 @@ def clips_looks(job_id: str, req: LooksRequest) -> dict:
             language=req.language,
             usual=req.usual,
         )
+    except Exception as e:
+        raise _ai_errors(e) from e
+
+
+@app.post("/sound", dependencies=[Depends(require_secret)])
+def video_sound(req: SoundRequest) -> dict:
+    """The background music and the intro of a video, chosen by the AI from what the video is (it may give none)."""
+    from app.services import looks
+
+    try:
+        return looks.choose_sound(req.video, [m.model_dump() for m in req.musics], req.favourites, req.intro, req.asked[:800], req.language)
     except Exception as e:
         raise _ai_errors(e) from e
 

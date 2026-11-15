@@ -509,6 +509,9 @@ test.group('Compilations', (group) => {
     search.assertStatus(503)
     assert.deepEqual(search.body(), { error: 'unreachable' })
     ;(await client.post(`/api/jobs/${job.id}/plan`).loginAs(user).json({ brief: 'les moments calmes', target: 90 })).assertStatus(503)
+    // The AI choosing a video's music and intro is the engine's work too
+    ;(await client.post(`/api/jobs/${job.id}/sound`).loginAs(user).json({ title: 'Calme', parts: ['Un'], seconds: 60, passages: 8, said: ['c’est calme'] })).assertStatus(503)
+    ;(await client.post(`/api/jobs/${randomUUID()}/sound`).loginAs(user).json({ title: 'Calme' })).assertStatus(404)
     // A change asked on a planned video goes to the engine too
     const change = { brief: 'les moments calmes', request: 'ajoute les autres', current: [{ title: 'Calme', items: [{ start: 10, end: 12 }, { start: 'x' }] }], asks: ['un titre', 3] }
     ;(await client.post(`/api/jobs/${job.id}/plan`).loginAs(user).json(change)).assertStatus(503)

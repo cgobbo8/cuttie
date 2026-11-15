@@ -1705,6 +1705,13 @@
         "lofi2": "Lofi pausado y cálido. Para un vídeo donde se habla mucho.",
         "chill": "Lo-fi apagado, muy de fondo. Para charlas serias y ambientes nocturnos."
       }
+    },
+    "soundAi": {
+      "ai": "Música e intro por la IA",
+      "working": "La IA elige la música y la intro…",
+      "hint": "Mira qué tipo de vídeo es (divertido, skill, tranquilo…) y elige la música y la intro que le van, o ninguna. Parte de tus favoritas (Mi canal).",
+      "done": "Música: {{music}} · Intro: {{intro}}",
+      "none": "ninguna"
     }
   },
   "compilations": {

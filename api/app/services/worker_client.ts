@@ -328,6 +328,28 @@ export async function chooseLooks(
   return call('POST', `/clips/${encodeURIComponent(jobId)}/looks`, { body, timeoutMs: 10 * 60_000 })
 }
 
+/** What the AI chose for the sound of a video (worker: looks.choose_sound): any of them may be null */
+export interface SoundChoice {
+  kind: string | null
+  music: string | null
+  intro: string | null
+  why: string
+  cost: number
+}
+
+/** The background music and the intro of a video, chosen by the AI from what the video is and what the streamer likes */
+export async function chooseSound(body: {
+  video: { title: string; parts: string[]; seconds: number; passages: number; said: string[] }
+  musics: { key: string; name: string; kinds: string[]; about: string }[]
+  /** The streamer's favourite track for a kind of video, and the intro they prefer */
+  favourites: Record<string, string>
+  intro: string | null
+  asked: string
+  language: string
+}): Promise<SoundChoice> {
+  return call('POST', '/sound', { body, timeoutMs: 3 * 60_000 })
+}
+
 /** What a template of the streamer's own is good for, in a sentence or two, written by the AI from its description */
 export async function writeTemplateUsage(body: { name: string; description: string; language: string }): Promise<{ usage: string; cost: number }> {
   return call('POST', '/templates/usage', { body, timeoutMs: 5 * 60_000 })

@@ -89,6 +89,7 @@ export interface ApiDefinition {
     searchProgress: typeof routes['compilations.search_progress']
     search: typeof routes['compilations.search']
     looks: typeof routes['compilations.looks']
+    sound: typeof routes['compilations.sound']
     plan: typeof routes['compilations.plan']
     pieces: typeof routes['compilations.pieces']
     index: typeof routes['compilations.index']

@@ -1229,6 +1229,23 @@ export async function startMontageRender(
   return json.render_id;
 }
 
+/** What the AI chose for the sound of a video: its kind, its music and its intro (null: none), and why */
+export interface SoundChoice {
+  kind: string | null;
+  music: string | null;
+  intro: string | null;
+  why: string;
+  cost: number;
+}
+
+/** The AI says what kind of video this is and chooses its music and its intro, starting from the streamer's favourites */
+export async function chooseSound(
+  jobId: string,
+  body: { title: string; parts: string[]; seconds: number; passages: number; said: string[]; asked?: string; language?: string },
+): Promise<SoundChoice> {
+  return liveJson(await postJson(`${BASE}/jobs/${jobId}/sound`, body));
+}
+
 /** The background musics whose file is on this machine (ids of lib/music's catalogue) */
 export async function listMusics(): Promise<string[]> {
   const json = await jsonOrThrow<{ musics: { id: string; available: boolean }[] }>(await fetch(`${BASE}/musics`), "Failed to load the musics");

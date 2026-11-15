@@ -1705,6 +1705,13 @@
         "lofi2": "Lofi posée et chaleureuse. Pour une vidéo où ça parle beaucoup.",
         "chill": "Lo-fi feutrée, très en retrait. Pour les discussions sérieuses et les ambiances de nuit."
       }
+    },
+    "soundAi": {
+      "ai": "Musique et intro par l'IA",
+      "working": "L'IA choisit la musique et l'intro…",
+      "hint": "Elle regarde quel genre de vidéo c'est (drôle, skill, posé…) et choisit la musique et l'intro qui vont avec, ou aucune. Elle part de tes préférées (Ma chaîne).",
+      "done": "Musique : {{music}} · Intro : {{intro}}",
+      "none": "aucune"
     }
   },
   "compilations": {

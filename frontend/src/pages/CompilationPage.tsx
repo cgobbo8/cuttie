@@ -15,6 +15,7 @@ import {
   getJobStatus,
   getLiveSearchInfo,
   getStoryboard,
+  chooseSound,
   listAllCompilations,
   listMusics,
   liveLoudness,
@@ -44,6 +45,8 @@ import {
   allItems,
   applyTight,
   applyLooks,
+  applySound,
+  soundBrief,
   clearLooks,
   compilationLength,
   fitToTarget,
@@ -189,6 +192,10 @@ export default function CompilationPage() {
   const [looksNote, setLooksNote] = useState<{ id: string; note: string } | null>(null);
   // A described video asked for a look: chosen once its clips are cut
   const pendingLooks = useRef<{ id: string; wish: string } | null>(null);
+  // The AI choosing the video's music and intro: what it said, and a choice waiting to be asked (after a description, or a change that speaks of the sound)
+  const [sounding, setSounding] = useState(false);
+  const [soundNote, setSoundNote] = useState<{ id: string; note: string } | null>(null);
+  const pendingSound = useRef<{ id: string; asked: string } | null>(null);
   // What the AI's last change did to the video: passages just added (lit) and just taken out (leaving)
   const [fresh, setFresh] = useState<{ ids: Set<string>; at: number } | null>(null);
   const [gone, setGone] = useState<{ item: CompilationItem; section: string; index: number }[]>([]);
@@ -467,6 +474,8 @@ export default function CompilationPage() {
     }
     const turn = compilation.asks?.length ?? 0;
     const next = { ...compilation, sections: revised.sections, asks: [...(compilation.asks ?? []), { ask, note, added: revised.added, removed: revised.removed, recut: revised.recut.length }] };
+    // A change that speaks of the music or the intro: the AI chooses them again with it in mind
+    if (/musi|músic|intro|jingle|sound|sonido|bande.son/i.test(ask)) pendingSound.current = { id: compilation.id, asked: ask };
     change(next);
     if (!next.sections.some((s) => s.id === activeSection)) setActiveSection(next.sections[0].id);
     // What changed shows in the video: the new passages come in lit, those taken out leave
@@ -517,6 +526,8 @@ export default function CompilationPage() {
       setShown(null);
       // The description said how the video should look: the AI lays it out once the clips are there
       pendingLooks.current = plan.look?.trim() ? { id: planned.id, wish: plan.look.trim() } : null;
+      // ...and chooses its music and its intro from what kind of video it is (the description may ask for some, or for none)
+      pendingSound.current = { id: planned.id, asked: brief };
       // What the AI planned can run over: brought back to the length asked for once each passage has its real length
       setPendingFit({ id: planned.id, target });
       ensure(allItems(planned));
@@ -732,6 +743,41 @@ export default function CompilationPage() {
     pendingLooks.current = null;
     chooseByAi(compilation, pending.wish);
   }, [chooseByAi, compilation, cutting, looking, pendingFit, pieces]);
+
+  /** The AI says what kind of video this is and chooses its music and its intro (or none), starting from the streamer's favourites */
+  const soundByAi = useCallback(
+    async (source: Compilation, asked = "") => {
+      if (!jobId || allItems(source).length === 0) return;
+      setSounding(true);
+      try {
+        const choice = await chooseSound(jobId, { ...soundBrief(source), asked, language: i18n.language.slice(0, 2) });
+        // What the streamer changed while the AI was thinking stays
+        const current = compilationsRef.current?.find((c) => c.id === source.id) ?? source;
+        // A track whose file isn't on this machine can't be played: left out
+        const next = applySound(current, { music: choice.music && musics.includes(choice.music) ? choice.music : null, intro: choice.intro });
+        change(next);
+        setSoundNote({ id: source.id, note: choice.why });
+        toast.success(
+          t("compilation.soundAi.done", {
+            music: musicOf(next.music?.track)?.name ?? t("compilation.soundAi.none"),
+            intro: isIntro(next.intro?.style) ? t(`compilation.intro.style.${next.intro.style}`) : t("compilation.soundAi.none"),
+          }),
+        );
+      } catch (err) {
+        toast.error(t(`compilation.failure.${err instanceof LiveError ? err.reason : "failed"}`));
+      } finally {
+        setSounding(false);
+      }
+    },
+    [change, i18n.language, jobId, musics, t, toast],
+  );
+  // Asked for when a video was just described, or changed with a word about its sound
+  useEffect(() => {
+    const pending = pendingSound.current;
+    if (!pending || !compilation || compilation.id !== pending.id || sounding) return;
+    pendingSound.current = null;
+    soundByAi(compilation, pending.asked);
+  }, [compilation, soundByAi, sounding]);
 
   // The data of each clip (size, cam, words, chat) for the preview
   const readyItems = useMemo(() => (compilation ? allItems(compilation).filter((item) => covers(pieces[item.id], item)) : []), [compilation, pieces]);
@@ -1206,6 +1252,9 @@ export default function CompilationPage() {
           templateName={templateName}
           looking={looking}
           looksNote={looksNote?.id === compilation.id ? looksNote.note : ""}
+          sounding={sounding}
+          soundNote={soundNote?.id === compilation.id ? soundNote.note : ""}
+          onSound={() => soundByAi(compilation)}
           onLooks={() => chooseByAi(compilation)}
           onSameLook={() => change(clearLooks(compilation))}
           fresh={fresh?.ids}

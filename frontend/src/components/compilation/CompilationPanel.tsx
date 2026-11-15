@@ -687,7 +687,7 @@ export default function CompilationPanel({
               <p className="px-0.5 text-[12px] leading-snug text-ink-3">
                 {t("compilation.editorHint")}
                 {/* The editor has one layout for the whole video: said when this one has more */}
-                {(own > 0 || !!compilation.transition || ownLooks > 0 || !!compilation.intro) && <span className="text-[#f0c987]"> {t("compilation.editorLoses")}</span>}
+                {(own > 0 || !!compilation.transition || ownLooks > 0 || !!compilation.intro || !!compilation.music) && <span className="text-[#f0c987]"> {t("compilation.editorLoses")}</span>}
               </p>
             </>
           )}

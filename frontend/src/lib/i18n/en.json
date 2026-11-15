@@ -1635,7 +1635,7 @@
     "openEditor": "Open in the editor",
     "editorPreparing": "Preparing the video…",
     "editorHint": "In the editor, the video is a single clip: everything is retouched layer by layer.",
-    "editorLoses": "It has one layout for the whole video: the intro, transitions and the templates some passages have for themselves are not carried over.",
+    "editorLoses": "It has one layout for the whole video: the intro, the music, transitions and the templates some passages have for themselves are not carried over.",
     "editorFailed": "The video could not be prepared for the editor.",
     "editorKept": "You get back what you had done in the editor.",
     "intro": {

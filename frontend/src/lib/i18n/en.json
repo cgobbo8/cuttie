@@ -953,7 +953,22 @@
     "mineEmpty": "No template of your own yet",
     "mineEmptyHint": "Start from a Cuttie layout: move, resize, add your widgets.",
     "ownTemplate": "Your template",
-    "ownTemplateHint": "Subtitles and widgets come from “{{name}}”."
+    "ownTemplateHint": "Subtitles and widgets come from “{{name}}”.",
+    "sound": {
+      "title": "Sound",
+      "music": "Music",
+      "musicHint": "Under the clip: turned down when people talk, more present on the game",
+      "auto": "According to the clip",
+      "autoHint": "Your favourite for each clip's kind (set in My channel)",
+      "autoNone": "According to the clip",
+      "autoTrack": "{{name}} · auto",
+      "none": "None",
+      "intro": "Intro",
+      "introHint": "A jingle with your logo and the clip's title, before the clip",
+      "pickMusic": "The clips' music",
+      "pickIntro": "The clips' intro",
+      "autoNoneHint": "No favourite music for this kind of clip: none here. They are set in My channel."
+    }
   },
   "exportStep": {
     "title": "Your clips are ready",
@@ -1681,7 +1696,10 @@
         "rush": "Rush",
         "clash": "Clash"
       },
-      "chosen": "Intro chosen by the AI: {{name}}"
+      "chosen": "Intro chosen by the AI: {{name}}",
+      "followLabel": "Follow",
+      "followDone": "Following",
+      "followToggle": "The channel's “Follow” button"
     },
     "music": {
       "label": "Music",

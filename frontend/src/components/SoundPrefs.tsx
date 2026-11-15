@@ -197,7 +197,7 @@ export default function SoundPrefs({ kit, brand, onSave }: Props) {
               brand={brand}
               name={brand.name}
               heading={t("brand.introPreferred")}
-              styleOnly
+              fields="style"
               onChange={(next) => {
                 onSave({ intro: next?.style ?? null });
                 setOpen(null);

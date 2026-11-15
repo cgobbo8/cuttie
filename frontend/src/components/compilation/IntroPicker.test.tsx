@@ -47,6 +47,12 @@ describe("the intro picker", () => {
     fireEvent.blur(title);
     expect(onChange).toHaveBeenLastCalledWith({ style: "slam", sound: "drum" });
 
+    // The channel's follow button: there unless switched off
+    const follow = screen.getByRole("switch", { name: "Bouton « Suivre » de la chaîne" });
+    expect(follow.getAttribute("aria-checked")).toBe("true");
+    fireEvent.click(follow);
+    expect(onChange).toHaveBeenLastCalledWith({ style: "slam", title: "Le calme", sound: "drum", follow: false });
+
     fireEvent.click(screen.getByRole("button", { name: "Aucune" }));
     expect(onChange).toHaveBeenLastCalledWith(null);
     expect(introSoundUrl("boom")).toBe("/sounds/intro-boom.mp3");

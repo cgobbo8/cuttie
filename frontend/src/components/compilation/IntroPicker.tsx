@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Check, Volume2, VolumeX } from "lucide-react";
 import IntroCard, { INTRO_W, type IntroColors } from "../../lib/intro/IntroCard";
 import { defaultIntroSound, INTRO_IDS, INTRO_SOUND_IDS, introSpan, isIntro, isIntroSound, NO_SOUND, type IntroChoice } from "../../lib/intro/intros";
+import { introSoundUrl } from "../../lib/music/sound";
 
 const FPS = 30;
 /** The sketches play their intro, show the video for a moment, then start again */
@@ -10,8 +11,7 @@ const LOOP = 96;
 /** Where a sketch rests when nothing moves: everything has arrived */
 const STILL = 40;
 
-/** Where an intro's sound is served from (frontend/public/sounds) */
-export const introSoundUrl = (id: string) => `/sounds/intro-${id}.mp3`;
+export { introSoundUrl } from "../../lib/music/sound";
 
 /** What an intro is drawn with: the channel, its colours, the font of the video's titles */
 export interface IntroBrand {
@@ -39,14 +39,14 @@ export function useIntroLoop(): number {
 }
 
 /** An intro drawn small, as the video plays it, over a picture that stands for the video */
-export function IntroSketch({ id, frame, brand, title, width = 60 }: { id: string; frame: number; brand: IntroBrand; title: string; width?: number }) {
+export function IntroSketch({ id, frame, brand, title, width = 60, follow = null }: { id: string; frame: number; brand: IntroBrand; title: string; width?: number; follow?: [string, string] | null }) {
   const span = isIntro(id) ? introSpan(id, FPS) : null;
   return (
     <div aria-hidden className="relative overflow-hidden rounded-[7px] bg-black" style={{ width, aspectRatio: "9 / 16" }}>
       <div className="sketch-picture sketch-after" />
       {isIntro(id) && span && frame < span.hold + span.out && (
         <div className="absolute left-0 top-0" style={{ width: INTRO_W, transform: `scale(${width / INTRO_W})`, transformOrigin: "0 0" }}>
-          <IntroCard id={id} frame={frame} fps={FPS} title={title} name={brand.name} logo={brand.logo} colors={brand.colors} font={brand.font} />
+          <IntroCard id={id} frame={frame} fps={FPS} title={title} name={brand.name} logo={brand.logo} colors={brand.colors} font={brand.font} follow={follow} />
         </div>
       )}
     </div>
@@ -63,14 +63,14 @@ interface Props {
   onClose: () => void;
   /** What the picker is for (default: the video's intro) */
   heading?: string;
-  /** Only the style is chosen (a preferred intro has no title or sound of its own) */
-  styleOnly?: boolean;
+  /** What is chosen besides the style: its title and its sound ("all", a compilation), its sound (clips: each has its own title), nothing (a preferred intro) */
+  fields?: "all" | "sound" | "style";
   /** Where it sits against what opened it */
   className?: string;
 }
 
 /** The ready-made intros to choose from, each one playing in small with the channel's own logo and colours */
-export default function IntroPicker({ value, brand, name, onChange, onClose, heading, styleOnly = false, className = "" }: Props) {
+export default function IntroPicker({ value, brand, name, onChange, onClose, heading, fields = "all", className = "" }: Props) {
   const { t } = useTranslation();
   const box = useRef<HTMLDivElement>(null);
   const frame = useIntroLoop();
@@ -89,6 +89,7 @@ export default function IntroPicker({ value, brand, name, onChange, onClose, hea
   }, [onClose]);
 
   const shown = title.trim() || name;
+  const follow: [string, string] = [t("compilation.intro.followLabel"), t("compilation.intro.followDone")];
   const style = value && isIntro(value.style) ? value.style : null;
   /** Heard as soon as it is chosen */
   const listen = (id: string) => {
@@ -133,7 +134,7 @@ export default function IntroPicker({ value, brand, name, onChange, onClose, hea
         onClick={() => pickStyle(id)}
         className={`relative flex flex-col items-center gap-1.5 pt-2 pb-1.5 rounded-[10px] border transition-colors ${chosen ? "border-accent bg-accent-soft" : "border-transparent hover:bg-white/[0.07]"}`}
       >
-        <IntroSketch id={id ?? ""} frame={frame} brand={brand} title={shown} />
+        <IntroSketch id={id ?? ""} frame={frame} brand={brand} title={shown} follow={value?.follow === false ? null : follow} />
         <span className={`text-[11.5px] leading-none ${chosen ? "text-white font-[550]" : "text-ink-2"}`}>{label}</span>
         {chosen && (
           <span className="absolute top-1 right-1 w-4 h-4 grid place-items-center rounded-full bg-accent text-ground">
@@ -170,9 +171,9 @@ export default function IntroPicker({ value, brand, name, onChange, onClose, hea
         {tile(null, t("compilation.intro.none"))}
         {INTRO_IDS.map((id) => tile(id, t(`compilation.intro.style.${id}`)))}
       </div>
-      {style && !styleOnly && (
+      {style && fields !== "style" && (
         <>
-          <label className="block mt-3">
+          <label className={fields === "all" ? "block mt-3" : "hidden"}>
             <span className="block px-0.5 pb-1 text-[11.5px] text-ink-3">{t("compilation.intro.title")}</span>
             <input
               value={title}
@@ -184,6 +185,22 @@ export default function IntroPicker({ value, brand, name, onChange, onClose, hea
               className="w-full h-8 px-2.5 rounded-[9px] bg-black/30 border border-white/10 text-[13px] text-white outline-none focus:border-accent-line placeholder:text-ink-4"
             />
           </label>
+          <div className="mt-3 flex items-center gap-3">
+            <span className="flex-1 min-w-0 px-0.5 text-[12px] text-ink-2">{t("compilation.intro.followToggle")}</span>
+            <button
+              role="switch"
+              aria-checked={value?.follow !== false}
+              aria-label={t("compilation.intro.followToggle")}
+              onClick={() => {
+                if (!value) return;
+                const { follow: _before, ...rest } = value;
+                onChange(value.follow === false ? rest : { ...rest, follow: false });
+              }}
+              className="switch flex-none"
+            >
+              <span />
+            </button>
+          </div>
           <p className="mt-3 px-0.5 pb-1.5 text-[11.5px] text-ink-3">{t("compilation.intro.sound")}</p>
           <div className="flex flex-wrap gap-1.5">
             {chip("style", t("compilation.intro.soundOfStyle", { name: t(`compilation.intro.sounds.${defaultIntroSound(style)}`) }), value?.sound === undefined || (!isIntroSound(value.sound) && value.sound !== NO_SOUND), () => pickSound(null))}

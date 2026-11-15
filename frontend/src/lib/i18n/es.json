@@ -953,7 +953,22 @@
     "mineEmpty": "Aún no tienes plantilla propia",
     "mineEmptyHint": "Parte de un diseño Cuttie: mueve, cambia el tamaño, añade tus widgets.",
     "ownTemplate": "Tu plantilla",
-    "ownTemplateHint": "Los subtítulos y los widgets vienen de «{{name}}»."
+    "ownTemplateHint": "Los subtítulos y los widgets vienen de «{{name}}».",
+    "sound": {
+      "title": "Sonido",
+      "music": "Música",
+      "musicHint": "Bajo el clip: más baja cuando se habla, más presente en el juego",
+      "auto": "Según el clip",
+      "autoHint": "Tu favorita para el tipo de cada clip (se elige en Mi canal)",
+      "autoNone": "Según el clip",
+      "autoTrack": "{{name}} · auto",
+      "none": "Ninguna",
+      "intro": "Intro",
+      "introHint": "Un jingle con tu logo y el título del clip, antes del clip",
+      "pickMusic": "Música de los clips",
+      "pickIntro": "Intro de los clips",
+      "autoNoneHint": "No hay música favorita para este tipo de clip: ninguna aquí. Se eligen en Mi canal."
+    }
   },
   "exportStep": {
     "title": "Tus clips están listos",
@@ -1681,7 +1696,10 @@
         "rush": "Impulso",
         "clash": "Choque"
       },
-      "chosen": "Intro elegida por la IA: {{name}}"
+      "chosen": "Intro elegida por la IA: {{name}}",
+      "followLabel": "Seguir",
+      "followDone": "Siguiendo",
+      "followToggle": "Botón «Seguir» del canal"
     },
     "music": {
       "label": "Música",

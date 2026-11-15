@@ -20,6 +20,8 @@ export interface IntroCardProps {
   colors: IntroColors;
   /** Font family of the title */
   font: string;
+  /** The channel's follow button, shown next to its name and pressed before the video starts: what it says before and after (none: no button) */
+  follow?: [string, string] | null;
   /** What draws the logo: Remotion's <Img> in a video (frames wait for it), a plain <img> elsewhere */
   Img?: ComponentType<{ src: string; style?: CSSProperties }>;
 }
@@ -43,7 +45,8 @@ function inkOn(color: string): string {
   return light > 0.58 ? "#0b0b0c" : "#ffffff";
 }
 
-interface Drawn extends Required<Omit<IntroCardProps, "id" | "frame" | "fps" | "Img">> {
+interface Drawn extends Required<Omit<IntroCardProps, "id" | "frame" | "fps" | "Img" | "follow">> {
+  follow: [string, string] | null;
   /** Frames at 30 a second, whatever the video's own rate */
   f: number;
   hold: number;
@@ -67,9 +70,40 @@ function Title({ d, color, line }: { d: Drawn; color: string; line: (i: number) 
   );
 }
 
-const Name = ({ d, color, style }: { d: Drawn; color: string; style?: CSSProperties }) => (
-  <div style={{ fontFamily: '"Geist Variable", "Geist", system-ui, sans-serif', fontWeight: 650, fontSize: 44, letterSpacing: "0.08em", textTransform: "uppercase", color, ...style }}>{d.name}</div>
-);
+const GEIST = '"Geist Variable", "Geist", system-ui, sans-serif';
+const INK = "#0b0b0c";
+const HEART = "M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z";
+/** Frames before the video starts at which the follow button is pressed */
+const PRESS = 12;
+
+/**
+ * The channel's signature under the title: its name and, next to it, the follow button of its
+ * widget. The button is pressed a moment before the video starts: it gives in, a ring bursts
+ * from it, and it says the viewer now follows. `tone`: what it is painted with before that, so
+ * it stands out on each intro's own background; `tag`: a label painted behind the name.
+ */
+function Signature({ d, color, tone = "accent", tag, style }: { d: Drawn; color: string; tone?: "accent" | "ink" | "white"; tag?: CSSProperties; style?: CSSProperties }) {
+  const press = d.hold - PRESS;
+  const done = d.f >= press;
+  const give = done && d.f < press + 8 ? 1 - 0.16 * Math.sin(between(d.f, press, press + 8) * Math.PI) : 1;
+  const burst = between(d.f, press, press + 12);
+  const paint = { accent: [d.colors.accent, inkOn(d.colors.accent)], ink: [INK, "#ffffff"], white: ["#ffffff", INK] }[tone];
+  const [fill, ink] = done ? [d.colors.highlight, inkOn(d.colors.highlight)] : paint;
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 28, ...style }}>
+      <div style={{ fontFamily: GEIST, fontWeight: 650, fontSize: 48, letterSpacing: "0.08em", textTransform: "uppercase", color, ...tag }}>{d.name}</div>
+      {d.follow && (
+        <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 12, padding: "15px 32px 15px 24px", borderRadius: 16, background: fill, color: ink, fontFamily: GEIST, fontWeight: 700, fontSize: 46, lineHeight: 1, whiteSpace: "nowrap", boxShadow: "0 9px 0 rgba(0,0,0,0.3)", transform: `scale(${give})` }}>
+          <svg width={44} height={44} viewBox="0 0 24 24" fill="currentColor" style={{ flex: "none" }}>
+            <path d={HEART} />
+          </svg>
+          {d.follow[done ? 1 : 0]}
+          <div style={{ position: "absolute", inset: -7, borderRadius: 20, border: `7px solid ${d.colors.highlight}`, opacity: done ? 1 - burst : 0, transform: `scale(${1 + 0.4 * easeOut(burst)})` }} />
+        </div>
+      )}
+    </div>
+  );
+}
 
 /** The logo falls on the screen, which shakes; the title punches in under it */
 function Slam(d: Drawn) {
@@ -93,7 +127,7 @@ function Slam(d: Drawn) {
           color={inkOn(d.colors.dark)}
           line={(i) => ({ opacity: between(d.f, 13 + i * 3, 17 + i * 3), transform: `scale(${0.5 + 0.5 * backOut(between(d.f, 13 + i * 3, 25 + i * 3))})` })}
         />
-        <Name d={d} color={d.colors.accent} style={{ marginTop: 46, opacity: between(d.f, 24, 34), transform: `translateY(${(1 - easeOut(between(d.f, 24, 34))) * 40}px)` }} />
+        <Signature d={d} color={inkOn(d.colors.dark)} style={{ marginTop: 50, opacity: between(d.f, 22, 30), transform: `translateY(${(1 - easeOut(between(d.f, 22, 32))) * 40}px)` }} />
       </div>
     </div>
   );
@@ -122,7 +156,7 @@ function Bands(d: Drawn) {
         >
           <Title d={d} color={inkOn(d.colors.accent)} line={() => ({})} />
         </div>
-        <Name d={d} color={inkOn(d.colors.dark)} style={{ marginTop: 74, opacity: between(d.f, 31, 41) }} />
+        <Signature d={d} color={inkOn(d.colors.dark)} style={{ marginTop: 74, opacity: between(d.f, 30, 36), transform: `scale(${backOut(between(d.f, 30, 40))})` }} />
       </div>
     </div>
   );
@@ -160,7 +194,7 @@ function Glitch(d: Drawn) {
             <Title d={d} color={d.colors.highlight} line={() => ({})} />
           </div>
         </div>
-        <Name d={d} color="#ffffff" style={{ marginTop: 60, opacity: 0.75 }} />
+        <Signature d={d} color="#ffffff" style={{ marginTop: 60 }} />
       </div>
     </div>
   );
@@ -186,13 +220,11 @@ function Neon(d: Drawn) {
         </div>
         <Title d={d} color="#ffffff" line={() => ({ opacity: gather, letterSpacing: `${0.02 + 0.2 * (1 - gather)}em`, transform: `scale(${0.8 + 0.2 * gather})`, textShadow: `0 0 34px ${d.colors.accent}` })} />
         <div style={{ marginTop: 44, height: 8, width: 460 * line, borderRadius: 4, background: d.colors.highlight, boxShadow: `0 0 26px ${d.colors.highlight}` }} />
-        <Name d={d} color="#ffffff" style={{ marginTop: 44, opacity: 0.8 * between(d.f, 36, 48), letterSpacing: "0.3em" }} />
+        <Signature d={d} color="#ffffff" style={{ marginTop: 46, opacity: between(d.f, 34, 44) }} />
       </div>
     </div>
   );
 }
-
-const INK = "#0b0b0c";
 
 /** Speed lines burst from the edges like a manga panel; the logo rushes in from far away, the title slams down askew */
 function Rush(d: Drawn) {
@@ -224,7 +256,7 @@ function Rush(d: Drawn) {
         <div style={{ opacity: between(d.f, 10, 12), transform: `rotate(-6deg) scale(${2.2 - 1.2 * slam})` }}>
           <Title d={d} color="#ffffff" line={() => ({ WebkitTextStroke: `${Math.round(d.size * 0.1)}px ${INK}`, paintOrder: "stroke fill", textShadow: `10px 12px 0 ${d.colors.highlight}` })} />
         </div>
-        <Name d={d} color={INK} style={{ marginTop: 56, padding: "10px 30px 8px", background: "#ffffff", opacity: between(d.f, 20, 24), transform: `rotate(-6deg) scale(${backOut(between(d.f, 20, 30))})` }} />
+        <Signature d={d} color={INK} tone="ink" tag={{ padding: "10px 30px 8px", background: "#ffffff" }} style={{ marginTop: 56, opacity: between(d.f, 20, 24), transform: `rotate(-6deg) scale(${backOut(between(d.f, 20, 30))})` }} />
       </div>
     </div>
   );
@@ -275,7 +307,7 @@ function Sticker(d: Drawn) {
             </div>
           );
         })}
-        <Name d={d} color="#ffffff" style={{ marginTop: 48, padding: "12px 30px 10px", background: INK, transform: `translateY(${fly * 1000}px) rotate(2deg) scale(${backOut(between(d.f, 30, 41))})` }} />
+        <Signature d={d} color="#ffffff" tone="white" tag={{ padding: "12px 30px 10px", background: INK }} style={{ marginTop: 48, transform: `translateY(${fly * 1000}px) rotate(2deg) scale(${backOut(between(d.f, 30, 41))})` }} />
       </div>
     </div>
   );
@@ -302,7 +334,7 @@ function Split(d: Drawn) {
         <div style={{ padding: "30px 60px 22px", background: INK, transform: `translateX(${(1 - strip) * -1200}px) rotate(-4deg)`, boxShadow: `14px 14px 0 ${d.colors.highlight}` }}>
           <Title d={d} color="#ffffff" line={() => ({})} />
         </div>
-        <Name d={d} color="#ffffff" style={{ marginTop: 70, opacity: between(d.f, 26, 34), textShadow: `0 4px 0 ${INK}` }} />
+        <Signature d={d} color="#ffffff" tone="white" tag={{ textShadow: `0 4px 0 ${INK}` }} style={{ marginTop: 70, opacity: between(d.f, 26, 32), transform: `scale(${backOut(between(d.f, 26, 36))})` }} />
       </div>
     </div>
   );
@@ -314,7 +346,7 @@ const DRAW: Record<IntroId, (d: Drawn) => ReactNode> = { slam: Slam, bands: Band
  * One frame of an intro, in a 1080 x 1920 box. It takes its frame as a number
  * (no clock of its own): the video gives it Remotion's, the picker its own loop.
  */
-export default function IntroCard({ id, frame, fps, title, name, logo, colors, font, Img = Plain }: IntroCardProps) {
+export default function IntroCard({ id, frame, fps, title, name, logo, colors, font, follow = null, Img = Plain }: IntroCardProps) {
   const f = (frame * 30) / fps;
   const { hold, out } = introSpan(id, 30);
   const { lines, size } = titleLines(title || name, font);
@@ -338,7 +370,7 @@ export default function IntroCard({ id, frame, fps, title, name, logo, colors, f
   );
   return (
     <div style={{ position: "relative", width: INTRO_W, height: INTRO_H, overflow: "hidden" }}>
-      {DRAW[id]({ f, hold, leave: between(f, hold, hold + out), lines, size, title, name, logo, colors, font, logoBox })}
+      {DRAW[id]({ f, hold, leave: between(f, hold, hold + out), lines, size, title, name, logo, colors, font, follow, logoBox })}
     </div>
   );
 }

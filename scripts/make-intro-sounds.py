@@ -103,6 +103,16 @@ def room(x: np.ndarray, seconds: float = 0.5, wet: float = 0.16) -> np.ndarray:
     return x + wet * signal.fftconvolve(x, tail)[: len(x)]
 
 
+def follow(track: np.ndarray, hold: float) -> None:
+    """The follow button is pressed 0.4 s before the video starts: a soft tick, then a small chime. Kept low: it is a detail."""
+    at = hold - 0.4
+    x = t(0.05)
+    tick = np.sin(2 * np.pi * np.cumsum(900 + 700 * x / 0.05) / SR) * np.exp(-x * 70)
+    place(track, tick, at, 0.2)
+    place(track, bell(0.45, 1318.5, 10), at + 0.07, 0.11)
+    place(track, bell(0.45, 1975.5, 12), at + 0.13, 0.07)
+
+
 def boom() -> np.ndarray:
     """The logo falls (0.27 s): air rushing in, then a deep hit that rings out."""
     track = np.zeros(int(1.75 * SR))
@@ -110,6 +120,7 @@ def boom() -> np.ndarray:
     place(track, thud(1.3, 150, 40, 3.2), 0.27, 1.0)
     place(track, band(rng.standard_normal(int(0.5 * SR)), 180, 2400) * np.exp(-t(0.5) * 9), 0.27, 0.5)
     place(track, bell(1.0, 392, 4.5), 0.47, 0.16)
+    follow(track, 1.600)
     return room(track, 0.6, 0.2)
 
 
@@ -124,6 +135,7 @@ def swish() -> np.ndarray:
     place(track, thud(0.3, 110, 60, 16), 0.9, 0.45)
     # The bands leave
     place(track, sweep(0.35, 3000, 600, "down"), 1.72, 0.35)
+    follow(track, 1.800)
     return room(track, 0.4, 0.14)
 
 
@@ -149,6 +161,7 @@ def zap() -> np.ndarray:
     track += hum
     for at in (1.46, 1.52, 1.57):
         place(track, np.sign(np.sin(2 * np.pi * 440 * t(0.03))) * 0.4, at)
+    follow(track, 1.500)
     return highpass(room(track, 0.25, 0.08), 30)
 
 
@@ -170,6 +183,7 @@ def shine() -> np.ndarray:
     for freq, at, gain in ((440.0, 1.07, 0.3), (554.4, 1.09, 0.26), (659.3, 1.11, 0.24), (830.6, 1.13, 0.2), (1318.5, 1.2, 0.12)):
         place(track, bell(1.25, freq, 2.6), at, gain)
     place(track, thud(0.5, 90, 45, 9), 1.07, 0.35)
+    follow(track, 2.000)
     return room(track, 0.9, 0.24)
 
 
@@ -185,6 +199,7 @@ def rush() -> np.ndarray:
     place(track, crash, 0.4, 0.3)
     # The lines rush away as the video starts
     place(track, sweep(0.3, 1500, 7000, "up"), 1.5, 0.3)
+    follow(track, 1.533)
     return room(track, 0.5, 0.16)
 
 
@@ -198,6 +213,7 @@ def drum() -> np.ndarray:
         place(track, tom(freq), at, 0.8)
     place(track, bell(0.7, 587.3, 6.5), 1.07, 0.22)
     place(track, sweep(0.4, 700, 5200, "up"), 1.78, 0.45)
+    follow(track, 1.800)
     return room(track, 0.35, 0.14)
 
 
@@ -213,6 +229,7 @@ def clash() -> np.ndarray:
     place(track, thud(0.9, 150, 42, 5), 0.33, 1.0)
     place(track, band(rng.standard_normal(int(0.2 * SR)), 1500, 7000) * np.exp(-t(0.2) * 30), 0.33, 0.5)
     place(track, sweep(0.5, 600, 4200, "pass"), 1.62, 0.45)
+    follow(track, 1.667)
     return room(track, 0.55, 0.18)
 
 

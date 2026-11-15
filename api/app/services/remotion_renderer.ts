@@ -383,6 +383,8 @@ export interface MontageIntro {
   logo: string | null
   colors: { accent: string; highlight: string; dark: string; light: string }
   font: string
+  /** The channel's follow button: what it says before and after it is pressed */
+  follow?: [string, string]
   /** Its sound (api/public/sounds/intro-<sound>.mp3): mixed in after the render, never played by the renderer */
   sound?: string
 }

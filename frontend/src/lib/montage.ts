@@ -230,6 +230,8 @@ export interface MontageIntro {
   colors: { accent: string; highlight: string; dark: string; light: string };
   /** Font family of the title */
   font: string;
+  /** The channel's follow button: what it says before and after it is pressed (absent: no button) */
+  follow?: [string, string];
   /**
    * Its sound. In the page: the address of the file, played with the preview. To the
    * renderer: its name; the export mixes it in once the video's own sound is levelled.

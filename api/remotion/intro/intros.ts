@@ -37,6 +37,8 @@ export interface IntroChoice {
   style: string;
   title?: string;
   sound?: string;
+  /** False: without the channel's follow button (it is there unless said otherwise) */
+  follow?: boolean;
 }
 
 /** How long an intro holds the screen and how long it takes to leave, in frames */

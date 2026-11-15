@@ -213,7 +213,9 @@ test.group('Compilations', (group) => {
 
     // Its style, a title of its own, a sound of its own
     assert.deepEqual((await save({ style: 'slam', title: '  Le calme avant  ', sound: 'drum', colour: 'red' })).intro, { style: 'slam', title: 'Le calme avant', sound: 'drum' })
-    assert.deepEqual((await save({ style: 'neon', sound: 'none' })).intro, { style: 'neon', sound: 'none' })
+    assert.deepEqual((await save({ style: 'neon', sound: 'none', follow: false })).intro, { style: 'neon', sound: 'none', follow: false })
+    // The follow button is there unless said otherwise: saying it is there keeps nothing
+    assert.deepEqual((await save({ style: 'neon', follow: true })).intro, { style: 'neon' })
     // A sound nobody knows: the style's own will play
     assert.deepEqual((await save({ style: 'sticker', sound: 'kazoo' })).intro, { style: 'sticker' })
     // The card says how long the video is with it: 4 s of passages and 1.8 s of intro
@@ -596,11 +598,12 @@ test.group('Compilations', (group) => {
 
     // An intro: one this server draws, with the colours and the sound it knows, or the export is refused
     const intro = { style: 'slam', title: 'De calme à débordés', name: 'Falkarst', logo: 'https://static-cdn.jtvnw.net/logo.png', colors: { accent: '#42BF85', highlight: '#F7C502', dark: '#19405A', light: '#BDF3DA' }, font: '"Luckiest Guy"', sound: 'boom' }
-    for (const bad of [{ ...intro, style: 'wobble' }, { ...intro, sound: 'kazoo' }, { ...intro, colors: { ...intro.colors, accent: 'url(evil)' } }, { ...intro, font: 'x; background: url(evil)' }, 'slam']) {
+    for (const bad of [{ ...intro, style: 'wobble' }, { ...intro, sound: 'kazoo' }, { ...intro, follow: ['Suivre'] }, { ...intro, follow: 'Suivre' }, { ...intro, colors: { ...intro.colors, accent: 'url(evil)' } }, { ...intro, font: 'x; background: url(evil)' }, 'slam']) {
       ;(await client.post(url).loginAs(user).json({ pieces, overlays: [], intro: bad })).assertStatus(400)
     }
-    // A well-formed one gets as far as the clips
+    // A well-formed one gets as far as the clips, with or without the follow button's two labels
     ;(await client.post(url).loginAs(user).json({ pieces, overlays: [], intro })).assertStatus(404)
+    ;(await client.post(url).loginAs(user).json({ pieces, overlays: [], intro: { ...intro, follow: ['Suivre', 'Suivi'] } })).assertStatus(404)
 
     // A music: a track of the catalogue, with a level curve that is one
     const curve = { start: 0.7, ramps: [[1.5, 0.5, 0.09], [4, 1, 0]] }

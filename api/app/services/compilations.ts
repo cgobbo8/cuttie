@@ -115,13 +115,15 @@ export interface Intro {
   style: string
   title?: string
   sound?: string
+  /** False: without the channel's follow button */
+  follow?: boolean
 }
 
 /** An intro as the app sends it, null when it isn't one this server can draw */
 export function parseIntro(raw: any): Intro | null {
   if (!raw || typeof raw !== 'object' || !isIntro(raw.style)) return null
   const title = typeof raw.title === 'string' ? raw.title.trim().slice(0, 80) : ''
-  return { style: raw.style, ...(title ? { title } : {}), ...(isIntroSound(raw.sound) || raw.sound === 'none' ? { sound: raw.sound } : {}) }
+  return { style: raw.style, ...(title ? { title } : {}), ...(isIntroSound(raw.sound) || raw.sound === 'none' ? { sound: raw.sound } : {}), ...(raw.follow === false ? { follow: false } : {}) }
 }
 
 /** A compilation's music as the app sends it, null when it isn't a track of the catalogue */

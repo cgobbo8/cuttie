@@ -96,8 +96,9 @@ const FADE_OUT = 1;
 const round = (value: number) => Math.round(value * 1000) / 1000;
 
 /**
- * The curve of a video: `intro` seconds up front (0: none), then each passage at its level
- * (changes are spread over a moment around the cut, never a step), down to nothing at the end.
+ * The curve of a video: `intro` seconds up front (0: none; the music then comes in under the
+ * first passage), then each passage at its level (changes are spread over a moment around the
+ * cut, never a step), down to nothing at the end.
  * `volume`: the streamer's own setting, on everything.
  */
 export function musicCurve(passages: { seconds: number; level: number }[], intro = 0, volume = 1): MusicCurve {
@@ -105,12 +106,14 @@ export function musicCurve(passages: { seconds: number; level: number }[], intro
   const total = intro + passages.reduce((sum, p) => sum + p.seconds, 0);
   const levels = passages.map((p) => loud(p.level));
   const ramps: MusicCurve["ramps"] = [];
-  let now = intro > 0 ? loud(MUSIC_LEVELS.intro) : (levels[0] ?? 0);
+  // With an intro it is there from the first frame, up front. Without one it comes in under the
+  // first passage, at that passage's own level (low under talk, more present under the game)
+  let now = intro > 0 ? loud(MUSIC_LEVELS.intro) : 0;
   const start = now;
   let at = intro;
   passages.forEach((passage, i) => {
-    // Down from the intro just as the first passage starts; between passages, astride the cut
-    const from = i === 0 ? at - 0.1 : at - RAMP / 2;
+    // Down from the intro just as the first passage starts (or in from nothing); between passages, astride the cut
+    const from = i === 0 ? at - (intro > 0 ? 0.1 : 0) : at - RAMP / 2;
     if (Math.abs(levels[i] - now) > 0.004) {
       ramps.push([round(Math.max(0, from)), i === 0 ? 0.5 : RAMP, levels[i]]);
       now = levels[i];

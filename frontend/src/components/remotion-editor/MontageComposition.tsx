@@ -63,7 +63,7 @@ function Intro({ intro }: { intro: MontageIntro }) {
   return (
     <AbsoluteFill style={{ zIndex: 100000, pointerEvents: "none" }}>
       <div style={{ transform: `scale(${width / INTRO_W})`, transformOrigin: "0 0" }}>
-        <IntroCard id={intro.style} frame={frame} fps={fps} title={intro.title} name={intro.name} logo={intro.logo} colors={intro.colors} font={intro.font} Img={Img} />
+        <IntroCard id={intro.style} frame={frame} fps={fps} title={intro.title} name={intro.name} logo={intro.logo} colors={intro.colors} font={intro.font} follow={intro.follow} Img={Img} />
       </div>
     </AbsoluteFill>
   );

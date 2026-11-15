@@ -2,11 +2,12 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { useTranslation } from "react-i18next";
 import { Player } from "@remotion/player";
-import { ArrowLeft, ArrowRight, Layers, Loader2, Pencil, ScanFace } from "lucide-react";
+import { ArrowLeft, ArrowRight, ChevronDown, Clapperboard, Layers, Loader2, Music2, Pencil, ScanFace } from "lucide-react";
 import {
   clipThumbUrl,
   getEditEnvironment,
   getJobStatus,
+  liveLoudness,
   setLiveFacecam,
   startMontageRender,
   startRender,
@@ -20,9 +21,16 @@ import { useBackdrop } from "../lib/BackdropContext";
 import { useChannel } from "../lib/ChannelContext";
 import { buildMoments, type Moment } from "../lib/moments";
 import { suggestTemplate, type TemplateContext } from "../lib/templates";
-import { buildAny, customTemplates, defaultTemplateKey, findCustom, isBuiltIn, needsWebcam, showsHook, type TemplateKey } from "../lib/templateKeys";
+import { buildAny, customTemplates, defaultTemplateKey, findCustom, hookOf, isBuiltIn, needsWebcam, showsHook, type TemplateKey } from "../lib/templateKeys";
 import { clipTemplateContext } from "../lib/templateContext";
-import { buildMontage, montageFrames, renderPieces } from "../lib/montage";
+import { buildMontage, montageFrames, renderPieces, type MontageProps } from "../lib/montage";
+import { fontFamily } from "../lib/fonts";
+import { isIntro, type IntroChoice } from "../lib/intro/intros";
+import { trackOf, useMusics } from "../lib/music/library";
+import type { MusicChoice } from "../lib/music/mix";
+import { favouriteFor, introOf, kindOfClip, montageIntro, montageMusic, playable } from "../lib/music/sound";
+import IntroPicker from "../components/compilation/IntroPicker";
+import MusicPicker from "../components/compilation/MusicPicker";
 import CuttieComposition from "../components/remotion-editor/CuttieComposition";
 import MontageComposition from "../components/remotion-editor/MontageComposition";
 import TemplateSketch from "../components/montage/TemplateSketch";
@@ -46,9 +54,18 @@ interface MontagePrefs {
   applyAll: boolean;
   /** Clips where the cam is shown although nobody was seen in it */
   camForced: Record<string, boolean>;
+  /**
+   * The music under the clips: a track, "none", or nothing said: each clip then plays the
+   * streamer's favourite for its kind (brand kit), and none when they have no favourite for it
+   */
+  music?: MusicChoice | "none";
+  /** Per-clip music when "apply to all" is off */
+  musicPerClip: Record<string, MusicChoice | "none">;
+  /** The intro the clips open with (none unless chosen): its style and its sound; its title is each clip's name */
+  intro?: IntroChoice;
 }
 
-const DEFAULT_PREFS: MontagePrefs = { template: null, perClip: {}, hooks: {}, applyAll: true, camForced: {} };
+const DEFAULT_PREFS: MontagePrefs = { template: null, perClip: {}, hooks: {}, applyAll: true, camForced: {}, musicPerClip: {} };
 
 function usePrefs(jobId: string | undefined) {
   const key = `cuttie_montage_${jobId}`;
@@ -94,6 +111,10 @@ export default function MontagePage() {
   const [index, setIndex] = useState(0);
   const [exporting, setExporting] = useState<{ done: number; total: number } | null>(null);
   const [camSheet, setCamSheet] = useState(false);
+  // The background musics that can be played here, how loud this live's clips are (what the preview sets the music against), and the picker that is open
+  const tracks = useMusics();
+  const [liveLufs, setLiveLufs] = useState<number | null>(null);
+  const [soundMenu, setSoundMenu] = useState<"music" | "intro" | null>(null);
 
   useEffect(() => {
     if (!jobId) return;
@@ -161,19 +182,65 @@ export default function MontagePage() {
     [camFor, channel, job, jobId, kit, prefs.hooks],
   );
 
+  /** The music a clip plays: what was chosen for it (or for all), else the streamer's favourite for its kind of clip */
+  const musicFor = useCallback(
+    (m: Moment): MusicChoice | null => {
+      const chosen = (!prefs.applyAll && prefs.musicPerClip[m.filename]) || prefs.music;
+      if (chosen === "none") return null;
+      if (chosen) return trackOf(tracks, chosen.track) ? chosen : null;
+      const favourite = favouriteFor(kindOfClip(m.hp.llm?.category), kit?.musics, tracks);
+      return favourite ? { track: favourite.id } : null;
+    },
+    [kit, prefs.applyAll, prefs.music, prefs.musicPerClip, tracks],
+  );
+
+  /**
+   * A clip as a montage: its pieces (or its one cut), with the intro and the music it has. Null for
+   * a plain clip in one piece without either: that one keeps the simple player and the simple export.
+   */
+  const soundMontage = useCallback(
+    (m: Moment, clipCtx: TemplateContext, key: TemplateKey): MontageProps | null => {
+      const music = musicFor(m);
+      const intro = prefs.intro && isIntro(prefs.intro.style) ? prefs.intro : null;
+      if (m.pieces.length <= 1 && !music && !intro) return null;
+      const pieces: [number, number][] = m.pieces.length > 1 ? m.pieces : [[m.trim?.[0] ?? 0, m.trim?.[1] ?? m.duration]];
+      const cut = buildMontage(pieces.map(([start, end]) => ({ ctx: clipCtx, start, end })), (c) => buildAny(key, c, customs), FPS);
+      // The intro is titled with the clip's own name, written as the template writes its hook
+      const drawn = montageIntro(intro, {
+        title: m.hp.clip_name || clipCtx.hook,
+        name: clipCtx.displayName ?? clipCtx.login ?? "",
+        logo: clipCtx.avatarUrl,
+        colors: clipCtx.colors,
+        font: fontFamily(hookOf(key, clipCtx, customs).font),
+        follow: [t("compilation.intro.followLabel"), t("compilation.intro.followDone")],
+      });
+      if (drawn) cut.intro = drawn;
+      if (music) cut.music = montageMusic(cut.segments, pieces.map(([start, end]) => ({ words: clipCtx.words, start, end, said: !!m.hp.llm?.transcript })), music, introOf(cut));
+      return cut;
+    },
+    [customs, musicFor, prefs.intro, t],
+  );
+
   const env = current ? envs[current.filename] : undefined;
   const ctx = current ? contextFor(current, env) : null;
   const template = current ? templateFor(current) : projectTemplate;
   const customTemplate = findCustom(template, customs);
   const layers = useMemo(() => (ctx ? buildAny(template, ctx, customs) : []), [ctx, template, customs]);
-  // A clip cut in several pieces: they play one after the other, the hook and widgets once over the whole
-  const montage = useMemo(
-    () =>
-      ctx && current && current.pieces.length > 1
-        ? buildMontage(current.pieces.map(([start, end]) => ({ ctx, start, end })), (c) => buildAny(template, c, customs), FPS)
-        : null,
-    [ctx, current, template, customs],
-  );
+  // A clip cut in several pieces, or one with an intro or a music: played as a montage (the hook and widgets once over the whole)
+  const montage = useMemo(() => (ctx && current ? soundMontage(current, ctx, template) : null), [ctx, current, template, soundMontage]);
+  const playerMontage = useMemo(() => (montage ? playable(montage, tracks, liveLufs) : null), [montage, tracks, liveLufs]);
+  // Measured once a clip has an intro or a music (a few seconds of ffmpeg the first time, then kept with the clips)
+  const hasSound = !!montage?.music || !!montage?.intro;
+  useEffect(() => {
+    if (!jobId || !hasSound) return;
+    let stale = false;
+    liveLoudness(jobId)
+      .then((lufs) => !stale && setLiveLufs(lufs))
+      .catch(() => {});
+    return () => {
+      stale = true;
+    };
+  }, [jobId, hasSound]);
   const clipCam = current ? camFor(current, env) : null;
   const hasWebcam = !!clipCam;
   const cam = env?.cam;
@@ -242,11 +309,19 @@ export default function MontagePage() {
         const clipEnv = envs[m.filename] ?? (await loadEnv(m.filename));
         const clipCtx = contextFor(m, clipEnv);
         if (!clipCtx) continue;
-        if (m.pieces.length > 1) {
-          const cut = buildMontage(m.pieces.map(([start, end]) => ({ ctx: clipCtx, start, end })), (c) => buildAny(templateFor(m), c, customs), FPS);
+        // Cut in pieces, or with an intro or a music: exported as a montage (the only engine that plays them)
+        const cut = soundMontage(m, clipCtx, templateFor(m));
+        if (cut) {
           await startMontageRender(
             jobId,
-            { key: m.filename, name: m.hp.clip_name, pieces: renderPieces(cut, m.pieces.map(() => m.filename)), overlays: cut.overlays },
+            {
+              key: m.filename,
+              name: m.hp.clip_name,
+              pieces: renderPieces(cut, cut.segments.map(() => m.filename)),
+              overlays: cut.overlays,
+              ...(cut.intro ? { intro: cut.intro } : {}),
+              ...(cut.music ? { music: { track: cut.music.track, curve: cut.music.curve } } : {}),
+            },
             { width: 1080, height: 1920, fps: FPS },
           );
           setExporting({ done: i + 1, total: kept.length });
@@ -333,6 +408,24 @@ export default function MontagePage() {
     );
   }
 
+  // The music chosen for this clip (or for all): a track, "none", or nothing said (according to each clip)
+  const musicChosen = (!prefs.applyAll && prefs.musicPerClip[current.filename]) || prefs.music;
+  const playing = musicFor(current);
+  const musicLabel =
+    musicChosen === "none"
+      ? t("montage.sound.none")
+      : musicChosen
+        ? (trackOf(tracks, musicChosen.track)?.name ?? t("montage.sound.none"))
+        : playing
+          ? t("montage.sound.autoTrack", { name: trackOf(tracks, playing.track)?.name })
+          : t("montage.sound.autoNone");
+  /** For every clip, or for this one when each clip has its own settings */
+  const setMusic = (next: MusicChoice | "none" | undefined) => {
+    setSoundMenu(null);
+    if (prefs.applyAll) return setPrefs({ music: next, musicPerClip: {} });
+    const { [current.filename]: _before, ...others } = prefs.musicPerClip;
+    setPrefs({ musicPerClip: next ? { ...others, [current.filename]: next } : others });
+  };
   const durationInFrames = Math.max(1, Math.round(current.duration * FPS));
   const inFrame = current.trim ? Math.floor(current.trim[0] * FPS) : 0;
   const outFrame = current.trim ? Math.min(durationInFrames - 1, Math.ceil(current.trim[1] * FPS)) : durationInFrames - 1;
@@ -400,11 +493,11 @@ export default function MontagePage() {
               <Player
                 key={`${current.filename}-${template}-pieces`}
                 component={MontageComposition}
-                inputProps={montage}
+                inputProps={playerMontage ?? montage}
                 compositionWidth={1080}
                 compositionHeight={1920}
                 fps={FPS}
-                durationInFrames={montageFrames(montage.segments, FPS)}
+                durationInFrames={montageFrames(montage.segments, FPS, montage.intro)}
                 controls
                 loop
                 clickToPlay
@@ -477,6 +570,65 @@ export default function MontagePage() {
               className="mt-2.5 w-full h-10 px-3 rounded-[10px] bg-black/30 border border-white/10 text-[13.5px] text-white outline-none focus:border-accent-line disabled:opacity-40"
             />
             <p className="mt-2 text-[12px] text-ink-3">{showsHook(template, customs) ? t("montage.hookHint") : t("montage.noHook")}</p>
+          </div>
+
+          {/* The clips' sound beyond their own: a music under them, an intro before them */}
+          {/* (above the cards that follow while one of its pickers is open: each card is a layer of its own) */}
+          <div className={`glass rounded-[18px] p-[18px] flex flex-col gap-3 ${soundMenu ? "relative z-30" : ""}`}>
+            <div className="text-[14px] font-semibold text-white">{t("montage.sound.title")}</div>
+            {tracks.length > 0 && (
+              <div className="flex items-center gap-3">
+                <span className="flex-1 min-w-0">
+                  <span className="block text-[13.5px] font-[550] text-white">{t("montage.sound.music")}</span>
+                  <span className="block text-[12px] leading-snug text-ink-3">{!musicChosen && !playing ? t("montage.sound.autoNoneHint") : t("montage.sound.musicHint")}</span>
+                </span>
+                <span className="relative flex-none">
+                  <button onClick={() => setSoundMenu(soundMenu === "music" ? null : "music")} aria-haspopup="dialog" aria-expanded={soundMenu === "music"} className="btn btn-glass btn-sm h-9 px-3 max-w-[168px]">
+                    <Music2 className="w-3.5 h-3.5 flex-none text-accent" />
+                    <span className="truncate">{musicLabel}</span>
+                    <ChevronDown className="w-3.5 h-3.5 flex-none text-ink-3" />
+                  </button>
+                  {soundMenu === "music" && (
+                    <MusicPicker
+                      title={t("montage.sound.pickMusic")}
+                      value={musicChosen && musicChosen !== "none" && trackOf(tracks, musicChosen.track) ? musicChosen : null}
+                      tracks={tracks}
+                      favourites={kit.musics}
+                      first={kindOfClip(current.hp.llm?.category) ?? undefined}
+                      auto={{ label: t("montage.sound.auto"), hint: t("montage.sound.autoHint"), chosen: !musicChosen, onPick: () => setMusic(undefined) }}
+                      onChange={(next) => setMusic(next ?? "none")}
+                      onClose={() => setSoundMenu(null)}
+                      className="right-0 top-full mt-2"
+                    />
+                  )}
+                </span>
+              </div>
+            )}
+            <div className="flex items-center gap-3">
+              <span className="flex-1 min-w-0">
+                <span className="block text-[13.5px] font-[550] text-white">{t("montage.sound.intro")}</span>
+                <span className="block text-[12px] leading-snug text-ink-3">{t("montage.sound.introHint")}</span>
+              </span>
+              <span className="relative flex-none">
+                <button onClick={() => setSoundMenu(soundMenu === "intro" ? null : "intro")} aria-haspopup="dialog" aria-expanded={soundMenu === "intro"} className="btn btn-glass btn-sm h-9 px-3">
+                  <Clapperboard className="w-3.5 h-3.5 flex-none text-accent" />
+                  {prefs.intro && isIntro(prefs.intro.style) ? t(`compilation.intro.style.${prefs.intro.style}`) : t("montage.sound.none")}
+                  <ChevronDown className="w-3.5 h-3.5 flex-none text-ink-3" />
+                </button>
+                {soundMenu === "intro" && ctx && (
+                  <IntroPicker
+                    heading={t("montage.sound.pickIntro")}
+                    fields="sound"
+                    value={prefs.intro && isIntro(prefs.intro.style) ? prefs.intro : null}
+                    brand={{ name: ctx.displayName ?? ctx.login ?? "", logo: ctx.avatarUrl, colors: ctx.colors, font: fontFamily(hookOf(template, ctx, customs).font) }}
+                    name={current.hp.clip_name || ctx.hook}
+                    onChange={(next) => setPrefs({ intro: next ?? undefined })}
+                    onClose={() => setSoundMenu(null)}
+                    className="right-0 top-full mt-2"
+                  />
+                )}
+              </span>
+            </div>
           </div>
 
           {customTemplate ? (

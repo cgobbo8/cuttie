@@ -30,6 +30,8 @@ export interface MontageIntro {
   logo: string | null;
   colors: { accent: string; highlight: string; dark: string; light: string };
   font: string;
+  /** The channel's follow button: what it says before and after it is pressed */
+  follow?: [string, string];
   /** Never set by the renderer: the export mixes the sound in once the video's own is levelled */
   sound?: string;
   gain?: number;
@@ -110,7 +112,7 @@ const Intro: React.FC<{ intro: MontageIntro }> = ({ intro }) => {
   return (
     <AbsoluteFill style={{ zIndex: 100000, pointerEvents: "none" }}>
       <div style={{ transform: `scale(${width / INTRO_W})`, transformOrigin: "0 0" }}>
-        <IntroCard id={intro.style} frame={frame} fps={fps} title={intro.title} name={intro.name} logo={intro.logo} colors={intro.colors} font={intro.font} Img={Img} />
+        <IntroCard id={intro.style} frame={frame} fps={fps} title={intro.title} name={intro.name} logo={intro.logo} colors={intro.colors} font={intro.font} follow={intro.follow} Img={Img} />
       </div>
     </AbsoluteFill>
   );

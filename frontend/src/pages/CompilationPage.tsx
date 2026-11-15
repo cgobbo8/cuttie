@@ -66,11 +66,11 @@ import { clock, splitVodTitle } from "../lib/format";
 import { buildMontage, framesOf, introHold, montageFrames, renderPieces, type MontageCut, type MontageProps } from "../lib/montage";
 import { evenFrames, tileStyle } from "../lib/storyboard";
 import { isTransition, transitionSpan } from "../lib/transitions";
-import { introSeconds, introSound, isIntro } from "../lib/intro/intros";
+import { introSeconds, isIntro } from "../lib/intro/intros";
 import { trackOf, useMusics } from "../lib/music/library";
-import { musicCurve, musicUrl, passageLevel, PROGRAM_LUFS, speechShare, trackGain } from "../lib/music/mix";
+import { introOf, montageIntro, montageMusic, playable } from "../lib/music/sound";
 import { fontFamily } from "../lib/fonts";
-import { introSoundUrl, type IntroBrand } from "../components/compilation/IntroPicker";
+import type { IntroBrand } from "../components/compilation/IntroPicker";
 import { clipTemplateContext } from "../lib/templateContext";
 import { templateGuides } from "../lib/templateGuide";
 import { buildAny, customTemplates, defaultTemplateKey, findCustom, hookOf, isBuiltIn, type TemplateKey } from "../lib/templateKeys";
@@ -648,35 +648,26 @@ export default function CompilationPage() {
             : [],
       );
       // The jingle the video opens with: the channel's logo and colours, its title written as the video's titles are
-      if (isIntro(all.intro?.style)) {
-        const first = cuts[0].ctx;
-        const sound = introSound(all.intro);
-        montage.intro = {
-          style: all.intro.style,
-          title: all.intro.title?.trim() || all.name,
-          name: first.displayName ?? first.login ?? "",
-          logo: first.avatarUrl,
-          colors: first.colors,
-          font: fontFamily(hookOf(templateKey, first, customs).font),
-          ...(sound ? { sound } : {}),
-        };
-      }
+      const first = cuts[0].ctx;
+      const intro = montageIntro(all.intro, {
+        title: all.name,
+        name: first.displayName ?? first.login ?? "",
+        logo: first.avatarUrl,
+        colors: first.colors,
+        font: fontFamily(hookOf(templateKey, first, customs).font),
+        follow: [t("compilation.intro.followLabel"), t("compilation.intro.followDone")],
+      });
+      if (intro) montage.intro = intro;
       // The music under the video: lower where people talk, more present where the game plays alone
       const track = trackOf(musics, all.music?.track);
-      if (track) {
-        const levels = cuts.map((cut, i) => {
-          // A clip that was never transcribed has no words: what is said in it counts as talk, not as silence
-          const untold = cut.ctx.words.length === 0 && !!items[i].text.trim();
-          return passageLevel(speechShare(cut.ctx.words, cut.start, cut.end), untold);
-        });
-        montage.music = {
-          track: track.id,
-          curve: musicCurve(montage.segments.map((segment, i) => ({ seconds: segment.duration, level: levels[i] })), montage.intro ? introSeconds(all.intro) : 0, all.music?.volume ?? 1),
-        };
+      if (track && all.music) {
+        // A clip that was never transcribed has no words: what is said in it counts as talk, not as silence
+        const pieces = cuts.map((cut, i) => ({ words: cut.ctx.words, start: cut.start, end: cut.end, said: !!items[i].text.trim() }));
+        montage.music = montageMusic(montage.segments, pieces, all.music, introOf(montage));
       }
       return { montage, files, jobs, ids: items.map((item) => item.id) };
     },
-    [channel, customs, job, jobId, kit, musics, templateKey],
+    [channel, customs, job, jobId, kit, musics, t, templateKey],
   );
 
   // What the intro picker draws its sketches with
@@ -805,18 +796,7 @@ export default function CompilationPage() {
   const marksRef = useRef(marks);
   marksRef.current = marks;
   // In the page the intro's sound and the music are files the player plays (the export mixes them in afterwards)
-  const playerProps = useMemo(() => {
-    const montage = preview?.montage;
-    if (!montage) return montage;
-    const track = trackOf(musics, montage.music?.track);
-    // The export levels the clips' sound before adding the music; here they play as they are: the music comes down by as much
-    const trim = liveLufs === null ? 0.3 : Math.min(1, 10 ** ((liveLufs - PROGRAM_LUFS) / 20));
-    return {
-      ...montage,
-      ...(montage.intro?.sound ? { intro: { ...montage.intro, sound: introSoundUrl(montage.intro.sound), ...(liveLufs === null ? {} : { gain: trim }) } } : {}),
-      ...(montage.music && track ? { music: { ...montage.music, src: musicUrl(track.id), from: track.start, gain: trackGain(track) * trim } } : {}),
-    };
-  }, [liveLufs, musics, preview]);
+  const playerProps = useMemo(() => (preview ? playable(preview.montage, musics, liveLufs) : undefined), [liveLufs, musics, preview]);
   // The same passages in the same order: the same player, which keeps its place when a cut or a template changes
   const playerKey = preview ? `${compilation?.id}-${templateKey}-${preview.files.join(",")}` : "";
   useEffect(() => {

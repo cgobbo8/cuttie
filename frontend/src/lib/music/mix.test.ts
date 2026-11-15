@@ -93,9 +93,19 @@ describe("the background music of a video", () => {
     expect(gainAt(curve, 99)).toBe(0);
   });
 
-  it("starts at the first passage's level without an intro, and follows the streamer's own setting", () => {
+  it("comes in under the first passage at that passage's level without an intro, and follows the streamer's own setting", () => {
+    // No intro: nothing up front. It rises in half a second to what the first passage calls for: low under talk...
     const quiet = musicCurve([{ seconds: 6, level: MUSIC_LEVELS.talk }], 0);
-    expect(quiet).toEqual({ start: MUSIC_LEVELS.talk, ramps: [[5, 1, 0]] });
+    expect(quiet).toEqual({ start: 0, ramps: [[0, 0.5, MUSIC_LEVELS.talk], [5, 1, 0]] });
+    expect(gainAt(quiet, 0.25)).toBeCloseTo(MUSIC_LEVELS.talk / 2);
+    expect(gainAt(quiet, 3)).toBe(MUSIC_LEVELS.talk);
+    // ...more present under the game, and it still follows each passage after that
+    const game = musicCurve([{ seconds: 6, level: MUSIC_LEVELS.action }, { seconds: 4, level: MUSIC_LEVELS.talk }], 0);
+    expect(game.ramps).toEqual([[0, 0.5, MUSIC_LEVELS.action], [5.8, 0.4, MUSIC_LEVELS.talk], [9, 1, 0]]);
+    // With or without an intro, a passage plays at the same level: only the opening differs
+    const opened = musicCurve([{ seconds: 6, level: MUSIC_LEVELS.action }, { seconds: 4, level: MUSIC_LEVELS.talk }], 1.6);
+    expect(gainAt(opened, 1.6 + 3)).toBe(gainAt(game, 3));
+    expect(gainAt(opened, 1.6 + 8)).toBe(gainAt(game, 8));
     const strong = musicCurve([{ seconds: 6, level: MUSIC_LEVELS.action }], 1.6, 1.6);
     expect(strong.start).toBe(1);
     expect(strong.ramps[0]).toEqual([1.5, 0.5, 0.48]);

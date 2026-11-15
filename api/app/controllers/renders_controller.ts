@@ -112,6 +112,9 @@ function parseMontageIntro(raw: unknown): MontageIntro | null | undefined {
   const font = words(intro.font, 80)
   if (!/^[\w\s"',-]*$/.test(font)) return null
   if (intro.sound !== undefined && !isIntroSound(intro.sound)) return null
+  // The follow button's two labels, as the app words them
+  const follow = Array.isArray(intro.follow) && intro.follow.length === 2 ? intro.follow.map((label: unknown) => words(label, 24)) : null
+  if (intro.follow !== undefined && (!follow || !follow.every(Boolean))) return null
   return {
     style: intro.style,
     title: words(intro.title, 120),
@@ -119,6 +122,7 @@ function parseMontageIntro(raw: unknown): MontageIntro | null | undefined {
     logo,
     colors: { accent: colors.accent, highlight: colors.highlight, dark: colors.dark, light: colors.light },
     font,
+    ...(follow ? { follow: follow as [string, string] } : {}),
     ...(intro.sound ? { sound: intro.sound } : {}),
   }
 }

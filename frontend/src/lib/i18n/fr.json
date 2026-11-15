@@ -953,7 +953,22 @@
     "mineEmpty": "Pas encore de modèle à toi",
     "mineEmptyHint": "Pars d'une mise en page Cuttie : déplace, redimensionne, ajoute tes widgets.",
     "ownTemplate": "Ton modèle",
-    "ownTemplateHint": "Les sous-titres et les widgets viennent de « {{name}} »."
+    "ownTemplateHint": "Les sous-titres et les widgets viennent de « {{name}} ».",
+    "sound": {
+      "title": "Son",
+      "music": "Musique",
+      "musicHint": "Sous le clip : baissée quand ça parle, plus présente sur le jeu",
+      "auto": "Selon le clip",
+      "autoHint": "Ta préférée pour le type de chaque clip (réglée dans Ma chaîne)",
+      "autoNone": "Selon le clip",
+      "autoTrack": "{{name}} · auto",
+      "none": "Aucune",
+      "intro": "Intro",
+      "introHint": "Un jingle avec ton logo et le titre du clip, avant le clip",
+      "pickMusic": "Musique des clips",
+      "pickIntro": "Intro des clips",
+      "autoNoneHint": "Pas de musique préférée pour ce type de clip : aucune ici. Elles se règlent dans Ma chaîne."
+    }
   },
   "exportStep": {
     "title": "Tes clips sont prêts",
@@ -1681,7 +1696,10 @@
         "rush": "Élan",
         "clash": "Choc"
       },
-      "chosen": "Intro choisie par l'IA : {{name}}"
+      "chosen": "Intro choisie par l'IA : {{name}}",
+      "followLabel": "Suivre",
+      "followDone": "Suivi",
+      "followToggle": "Bouton « Suivre » de la chaîne"
     },
     "music": {
       "label": "Musique",

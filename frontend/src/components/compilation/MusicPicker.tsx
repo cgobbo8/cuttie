@@ -20,6 +20,8 @@ interface Props {
   presence?: boolean;
   /** A kind of video: the tracks that suit it come first, under its name */
   first?: string;
+  /** A third answer besides a track and none: let the app choose (for each clip, the streamer's favourite for its kind) */
+  auto?: { label: string; hint?: string; chosen: boolean; onPick: () => void };
   /** Where it sits against what opened it */
   className?: string;
 }
@@ -53,7 +55,7 @@ export function useListen() {
 }
 
 /** The musics a video can play in the background, by the kind of video they suit, each one to listen to */
-export default function MusicPicker({ value, tracks, favourites = {}, onChange, onClose, title, noneLabel, presence = true, first, className = "" }: Props) {
+export default function MusicPicker({ value, tracks, favourites = {}, onChange, onClose, title, noneLabel, presence = true, first, auto, className = "" }: Props) {
   const { t } = useTranslation();
   const box = useRef<HTMLDivElement>(null);
   const { playing, toggle } = useListen();
@@ -92,12 +94,23 @@ export default function MusicPicker({ value, tracks, favourites = {}, onChange, 
       <div className="flex-1 min-h-0 overflow-y-auto -mx-1 px-1 flex flex-col gap-0.5">
         <button
           type="button"
-          aria-pressed={!value}
+          aria-pressed={!value && !auto?.chosen}
           onClick={() => pick(null)}
-          className={`flex-none h-9 px-2.5 rounded-[9px] border text-left text-[13px] transition-colors ${!value ? "border-accent bg-accent-soft text-white" : "border-transparent text-ink-2 hover:bg-white/[0.07]"}`}
+          className={`flex-none h-9 px-2.5 rounded-[9px] border text-left text-[13px] transition-colors ${!value && !auto?.chosen ? "border-accent bg-accent-soft text-white" : "border-transparent text-ink-2 hover:bg-white/[0.07]"}`}
         >
           {noneLabel ?? t("compilation.music.none")}
         </button>
+        {auto && (
+          <button
+            type="button"
+            aria-pressed={auto.chosen}
+            onClick={auto.onPick}
+            className={`flex-none px-2.5 py-1.5 rounded-[9px] border text-left transition-colors ${auto.chosen ? "border-accent bg-accent-soft" : "border-transparent hover:bg-white/[0.07]"}`}
+          >
+            <span className={`block text-[13px] ${auto.chosen ? "text-white" : "text-ink-2"}`}>{auto.label}</span>
+            {auto.hint && <span className="block text-[11.5px] leading-snug text-ink-3">{auto.hint}</span>}
+          </button>
+        )}
         {groups.map(({ kind, tracks: list }) => (
           <div key={kind}>
             <p className="px-1 pt-2.5 pb-1 text-[11px] font-[600] tracking-[0.04em] uppercase text-ink-3">{kind ? t(`compilation.music.kind.${kind}`) : t("compilation.music.unsorted")}</p>

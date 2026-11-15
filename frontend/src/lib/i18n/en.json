@@ -13,7 +13,8 @@
     "none": "None",
     "search": "Search...",
     "noResults": "No results",
-    "comingSoon": "soon"
+    "comingSoon": "soon",
+    "close": "Close"
   },
   "auth": {
     "loginTitle": "Cuttie",
@@ -1945,6 +1946,80 @@
         "title": "Names the AI gets wrong",
         "body": "The transcript writes “…”: it is “…”.\n- "
       }
+    }
+  },
+  "memory": {
+    "button": "Memory",
+    "title": "The AI's memory",
+    "hint": "What it remembers of your streams. It writes it on its own; you can correct it.",
+    "tab": {
+      "knows": "What it knows",
+      "lives_one": "{{count}} stream read",
+      "lives_other": "{{count}} streams read",
+      "lives_zero": "Streams read"
+    },
+    "section": {
+      "who": "Who you are",
+      "games": "Your games",
+      "people": "The people around you",
+      "stories": "What goes on from one stream to the next",
+      "tastes": "Your tastes for your videos"
+    },
+    "editSection": "Correct “{{section}}”",
+    "nothing": "Nothing yet",
+    "empty": "The AI hasn't read a stream yet. It will read the next one once it is analysed.",
+    "emptyUnread": "The AI remembers nothing yet: have it read the streams you already analysed.",
+    "noLives": "No stream read yet.",
+    "unread_one": "{{count}} analysed stream it hasn't read yet",
+    "unread_other": "{{count}} analysed streams it hasn't read yet",
+    "readThem_one": "Read it",
+    "readThem_other": "Read them",
+    "reading": "Reading “{{title}}”",
+    "stopping": "Stopping after this stream…",
+    "stop": "Stop",
+    "auto": "Read each stream once analysed",
+    "pausedDone": "The AI will no longer read your streams on its own",
+    "resumedDone": "The AI will read each stream once analysed",
+    "clear": "Clear the memory",
+    "clearTitle": "Clear the AI's memory?",
+    "clearMessage": "Everything it remembers of your streams will be lost. Your notes don't change.",
+    "cleared": "Memory cleared",
+    "saved": "Memory corrected",
+    "saveFailed": "The memory could not be saved",
+    "loadFailed": "The memory could not be opened",
+    "remembered": "Noted for your next videos: {{said}}",
+    "live": {
+      "said": "You said:",
+      "fromAnalysis": "read without its transcript",
+      "fromAnalysisHint": "This stream's transcript is no longer on this machine: the AI only read what the analysis had kept of it."
+    },
+    "read": {
+      "done_one": "{{count}} stream read: the memory is up to date",
+      "done_other": "{{count}} streams read: the memory is up to date",
+      "partial_one": "{{count}} stream read, {{failed}} could not be",
+      "partial_other": "{{count}} streams read, {{failed}} could not be",
+      "nothing": "No stream could be read",
+      "stopped_one": "Reading stopped after {{count}} stream",
+      "stopped_other": "Reading stopped after {{count}} streams",
+      "stopped_zero": "Reading stopped",
+      "credits": "No OpenRouter credits left: the reading stopped",
+      "key": "OpenRouter key refused: the reading stopped",
+      "unreachable": "The analysis engine is not answering. Restart Cuttie."
+    },
+    "proposal": {
+      "from": "The AI, after reading your streams",
+      "more_one": "{{count}} more after this",
+      "more_other": "{{count}} more after this",
+      "title": "Is your note “{{title}}” still true?",
+      "before": "In your note",
+      "after": "What it would write",
+      "apply": "Update the note",
+      "ignore": "Leave it as it is",
+      "later": "Later",
+      "applied": "Note “{{title}}” updated",
+      "ignored": "Understood, the note stays as it is",
+      "changed": "Your note changed in the meantime: nothing was modified",
+      "failed": "The note could not be changed"
     }
   }
 }

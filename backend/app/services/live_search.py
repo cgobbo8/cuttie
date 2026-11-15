@@ -23,7 +23,7 @@ import unicodedata
 from bisect import bisect_left
 from dataclasses import asdict, dataclass, field
 
-from app.services import notes
+from app.services import memory, notes
 from app.services import llm_text, paths
 from app.services.presort import chat_highlights, hms, parse_hms
 from app.services.vod_transcript import VodTranscript, load_cached
@@ -914,7 +914,7 @@ def plan_video(
     _keep(path, result)
     total = sum(h["end"] - h["start"] for s in result["sections"] for h in s["hits"])
     logger.info(f"[{job_id[:8]}] AI plan \"{brief[:60]}\": {len(result['sections'])} sections, {total:.0f} s for a target of {target:.0f} s with {run.model} (~{cost:.4f} $, {run.seconds:.0f} s)")
-    return {**result, "cached": False, "cost": round(cost, 4)}
+    return {**result, "remembered": memory.remember(run.remember), "cached": False, "cost": round(cost, 4)}
 
 
 # A line shares at least this much with a passage that holds it (seconds)
@@ -986,6 +986,8 @@ def revise_video(
         others=others, date=date,
     )
     result = {"title": run.title, "sections": _sections(run.sections, transcript, duration, by_lines=True, lives=lives if others else None), "note": run.note, "look": ""}
+    # « I don't like it when you... »: kept for the next videos (see memory.py)
+    result["remembered"] = memory.remember(run.remember)
     # A moment of the video given back with other lines (tighter, longer) is to be cut again:
     # the app would else keep the cut it has
     sent = [m for part in video for m in part["moments"]]

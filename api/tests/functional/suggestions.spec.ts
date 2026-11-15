@@ -7,6 +7,7 @@ import env from '#start/env'
 import User from '#models/user'
 import Job from '#models/job'
 import jobStatusBus from '#services/job_status_bus'
+import { readLive } from '#services/memory'
 import { proposed, suggestCompilations, waitingCount } from '#services/suggestions'
 import type { LiveIdea } from '#services/worker_client'
 
@@ -282,14 +283,17 @@ test.group('Compilations proposed by the AI', (group) => {
     await jobStatusBus.handle({ job_id: job.id, status: 'DONE', progress: 'Analysis complete!' })
     // In the background: the analysis is done whether or not the look succeeds. Joining it here to see what it did
     await suggestCompilations(job.id)
-    assert.lengthOf(asked, 1)
+    // (the AI also reads the live into its memory then: see memory.spec.ts)
+    await readLive(job.id).catch(() => {})
+    const looks = () => asked.filter((call) => call.url.endsWith('/ideas'))
+    assert.lengthOf(looks(), 1)
     const after = await Job.findOrFail(job.id)
     assert.equal(after.status, 'DONE')
     assert.deepEqual((after.compilations ?? []).map((c) => c.name), ['La malédiction du calme'])
     // Said done again (a clip added later): not a new analysis
     await jobStatusBus.handle({ job_id: job.id, status: 'DONE' })
     await new Promise((resolve) => setTimeout(resolve, 50))
-    assert.lengthOf(asked, 1)
+    assert.lengthOf(looks(), 1)
   })
 
   test('nothing is proposed without the engine, for a live still being analysed, or for someone else’s', async ({ client, assert }) => {
@@ -302,6 +306,7 @@ test.group('Compilations proposed by the AI', (group) => {
     const running = await setup('CLIPPING')
     await jobStatusBus.handle({ job_id: running.job.id, status: 'DONE' })
     await suggestCompilations(running.job.id).catch(() => {})
+    await readLive(running.job.id).catch(() => {})
     assert.equal((await Job.findOrFail(running.job.id)).status, 'DONE')
     assert.isNull((await Job.findOrFail(running.job.id)).compilations)
 

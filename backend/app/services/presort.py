@@ -12,7 +12,7 @@ import re
 import statistics
 from dataclasses import dataclass
 
-from app.services import notes
+from app.services import memory, notes
 from app.services.chat_analyzer import _BOT_NAMES, CLIP_REQUEST
 from app.services.openai_client import LLM_MODEL, get_openrouter_client
 from app.services.vod_transcript import VodTranscript
@@ -121,7 +121,7 @@ Chat reacts about 5 seconds after the stream; its times below are already moved 
 Give up to {max_moments} moments, the strongest first, spread over the whole stream. Each window starts a few seconds
 before the setup and ends after the payoff or the reaction, 20 to 90 seconds long. Times as H:MM:SS from the transcript.
 Answer with JSON only:
-{{"moments": [{{"start": "H:MM:SS", "end": "H:MM:SS", "score": 0-100, "why": "short reason, in the stream's language"}}]}}{notes.block(vod_meta.get("game"))}
+{{"moments": [{{"start": "H:MM:SS", "end": "H:MM:SS", "score": 0-100, "why": "short reason, in the stream's language"}}]}}{notes.block(vod_meta.get("game"))}{memory.block()}
 
 CHAT HIGH POINTS
 {chr(10).join(chat) if chat else "(quiet chat)"}

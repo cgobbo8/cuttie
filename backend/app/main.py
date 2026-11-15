@@ -152,6 +152,18 @@ class IdeasRequest(BaseModel):
     moments: list[dict] = []
 
 
+class MemoryRequest(BaseModel):
+    """A live to read into the AI's memory: who and what, its length, what the analysis kept of it."""
+
+    duration: float = 0.0
+    meta: dict = {}
+    moments: list[dict] = []
+    # The live as the analysis understood it (the job's vod_context)
+    context: dict | None = None
+    # Read it again although it was read before
+    fresh: bool = False
+
+
 class LivePiece(BaseModel):
     id: str
     # Where the piece sits in the live, seconds
@@ -545,6 +557,18 @@ def live_ideas(job_id: str, req: IdeasRequest) -> dict:
 
     try:
         return ideas.suggest_videos(_check_job_id(job_id), req.meta, req.duration, req.energy, url=req.url, moments=req.moments[:400])
+    except Exception as e:
+        raise _ai_errors(e) from e
+
+
+@app.post("/jobs/{job_id}/memory", dependencies=[Depends(require_secret)])
+def live_memory(job_id: str, req: MemoryRequest) -> dict:
+    """A live enters the AI's memory: what happened in it is noted, the memory is rewritten, and corrections are
+    proposed for the streamer's notes that the lives contradict. A live already read answers from disk."""
+    from app.services import memory
+
+    try:
+        return memory.note_live(_check_job_id(job_id), req.meta, req.duration, req.moments[:400], req.context, fresh=req.fresh)
     except Exception as e:
         raise _ai_errors(e) from e
 

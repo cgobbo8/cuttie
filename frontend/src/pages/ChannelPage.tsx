@@ -9,6 +9,7 @@ import { useLatestMoments } from "../lib/useLatestMoment";
 import { useToast } from "../components/Toast";
 import TemplatePreview, { useDefaultTemplate } from "../components/TemplatePreview";
 import TemplateSketch from "../components/montage/TemplateSketch";
+import MemoryButton from "../components/AiMemory";
 import AiNotes from "../components/AiNotes";
 import SoundPrefs from "../components/SoundPrefs";
 import { fontFamily } from "../lib/fonts";
@@ -407,7 +408,7 @@ export default function ChannelPage() {
             </Card>
 
             {/* What the AI should know about them: notes it reads before every analysis, search and video */}
-            <Card title={t("notes.title")} hint={t("notes.hint")}>
+            <Card title={t("notes.title")} hint={t("notes.hint")} action={<MemoryButton />}>
               <AiNotes />
             </Card>
           </div>

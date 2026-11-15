@@ -47,7 +47,7 @@ Positionnees par les lanceurs (`scripts/dev.mjs`, `scripts/launcher.mjs`) :
 - `CUTTIE_AUTO_LOGIN` (defaut true), `FRONTEND_DIST` (API sert le front build)
 - `CUTTIE_APP_VERSION` (version de l'app desktop, dans l'export des journaux), `CUTTIE_CLEANUP_DAYS` (menage par defaut : 30 dans l'app installee, rien en dev)
 - `CUTTIE_LLM_CMD` (dev seulement) : commande qui lit une invite sur stdin et ecrit la reponse, a la place d'OpenRouter pour les appels texte de `llm_text.py` (recherche IA, plan, montage IA) — ex. `claude -p --model sonnet --tools ""` — pour tester sans depenser de credits. Une commande ne peut pas appeler d'outils : avec elle, la recherche et le plan lisent tout le transcript en une fois (l'ancienne methode)
-- `CUTTIE_SEARCH_MODEL`, `CUTTIE_SEARCH_FALLBACK`, `CUTTIE_EARS_MODEL`, `CUTTIE_EYES_MODEL`, `CUTTIE_PLAN_MODEL`, `CUTTIE_IDEAS_MODEL` : modeles de la recherche dans le live (celui qui cherche, celui qui prend le relais, celui qui ecoute, celui qui regarde (les images d'un moment du live, et les passages pour choisir leur modele), celui qui construit une video decrite, celui qui propose des compilations une fois le live analyse) ; `CUTTIE_SEARCH_MAX_COST` / `CUTTIE_PLAN_MAX_COST` / `CUTTIE_IDEAS_MAX_COST` : plafond d'une question (0,05 $), d'une video decrite (0,12 $) et du reperage des idees (0,05 $)
+- `CUTTIE_SEARCH_MODEL`, `CUTTIE_SEARCH_FALLBACK`, `CUTTIE_EARS_MODEL`, `CUTTIE_EYES_MODEL`, `CUTTIE_PLAN_MODEL`, `CUTTIE_IDEAS_MODEL` : modeles de la recherche dans le live (celui qui cherche, celui qui prend le relais, celui qui ecoute, celui qui regarde (les images d'un moment du live, et les passages pour choisir leur modele), celui qui construit une video decrite, celui qui propose des compilations une fois le live analyse) ; `CUTTIE_MEMORY_MODEL` : celui qui lit un live pour la memoire de l'IA et la reecrit (defaut : celui qui cherche) ; `CUTTIE_SEARCH_MAX_COST` / `CUTTIE_PLAN_MAX_COST` / `CUTTIE_IDEAS_MAX_COST` : plafond d'une question (0,05 $), d'une video decrite (0,12 $) et du reperage des idees (0,05 $)
 
 Fichier `api/.env` : voir `api/.env.example` (APP_KEY en dev ; l'app packagee genere `<data dir>/app.key`).
 
@@ -73,6 +73,7 @@ cuttie/
 │   │   │   ├── renders_controller.ts         # Remotion renders (un clip, ou un montage de plusieurs morceaux)
 │   │   │   ├── musics_controller.ts          # musiques de fond : catalogue, lecture d'une piste, niveau des clips d'un live
 │   │   │   ├── notes_controller.ts           # notes pour l'IA (Ma chaine) : lister, ecrire, changer, supprimer
+│   │   │   ├── memory_controller.ts          # memoire de l'IA (Ma chaine) : la lire, la corriger, faire lire les lives d'avant, repondre aux corrections de notes proposees
 │   │   │   ├── compilations_controller.ts    # recherche dans le live, plan de video par l'IA, compilations, decoupe des passages
 │   │   │   ├── assets_controller.ts          # Upload/serve assets
 │   │   │   └── profile_controller.ts         # Profil utilisateur
@@ -97,6 +98,7 @@ cuttie/
 │   │   │   ├── suggestions.ts                # compilations proposees par l'IA une fois le live analyse (jobs.suggestions) : les idees du worker deviennent des compilations qui attendent d'etre construites
 │   │   │   ├── compilation_flat.ts           # une compilation collee en un seul clip (flat_<id>_<signature>.mp4, ses mots, son chat) pour l'editeur a calques
 │   │   │   ├── notes.ts                      # notes pour l'IA : un fichier Markdown par note dans <data dir>/notes (titre, jeux, texte)
+│   │   │   ├── memory.ts                     # memoire de l'IA (<data dir>/memory) : ce qu'elle a retenu, les lives lus, lecture en fin d'analyse ou a la demande, corrections de notes en attente
 │   │   │   ├── worker_failure.ts             # refus du worker -> reponses de l'API (pas de transcript, credits, live parti)
 │   │   │   ├── clip_thumbs.ts                # vignettes (ffmpeg, cache) ; gardees quand les clips sont liberes
 │   │   │   ├── disk_space.ts                 # place prise, projets inactifs, liberer (exports gardes), recuperer, menage auto (6 h)
@@ -149,6 +151,7 @@ cuttie/
 │   │       ├── music_library.py               # une musique de fond mesuree (tempo, niveau, ou elle bat son plein) et ecoutee par l'IA (genre, types de video, description)
 │   │       ├── looks.py                       # le modele de chaque passage d'une video, choisi par l'IA qui regarde 3 images de chacun ; « a quoi sert » un modele perso
 │   │       ├── notes.py                       # ce que le streamer a ecrit pour l'IA (<data dir>/notes/*.md) : quelles notes pour quel live, le bloc donne a l'IA
+│   │       ├── memory.py                      # ce que l'IA retient du streamer d'un live a l'autre : un live lu en entier, la memoire reecrite, les notes que les lives contredisent, les gouts dits a l'IA
 │   │       ├── llm_text.py                    # appels texte a l'IA (OpenRouter ; CUTTIE_LLM_CMD en dev), cout estime
 │   │       ├── openai_client.py               # Clients multi-provider (Groq, OpenRouter)
 │   │       ├── provider_errors.py             # Refus definitifs (credits, cle) -> arret clair de l'analyse
@@ -192,6 +195,8 @@ cuttie/
         │   ├── compilation/                   # LivePicker (choisir un live, ou plusieurs), CompilationCard (une compilation dans la bibliotheque), SuggestionCard (une idee de l'IA pas encore construite : resume, tags, indice de viralite), SearchPanel (mots / IA / decrire la video), PiecePreview (un passage et sa coupe), PlanTalk (la conversation avec l'IA sur une video decrite), CompilationPanel (parties, passages a cocher / glisser, transitions, duree), TransitionPicker (les transitions, chacune jouee en petit), IntroPicker (les intros, jouees en petit avec le logo et les couleurs de la chaine, titre et bruitage), MusicPicker (les musiques par type de video, a ecouter, presence), CompilationGuide (l'ecran explique en 4 etapes a la premiere visite)
         │   ├── template-editor/               # EditorCanvas (apercu + poignees), LayerList (calques), Panels (reglages), Scrubber (timeline)
         │   ├── AiNotes.tsx                    # Ma chaine : les notes pour l'IA (liste, editeur, modeles pour demarrer, import de fichiers)
+        │   ├── AiMemory.tsx                   # Ma chaine : bouton « Memoire » et sa fenetre (ce que l'IA sait, les lives lus, lire les lives d'avant, mettre en pause, effacer)
+        │   ├── NoteProposals.tsx              # la fenetre qui propose de corriger une note que les lives contredisent (avant / apres), sur toutes les pages
         │   ├── KeyField.tsx                   # Champ de cle API verifie aupres du fournisseur
         │   ├── WebcamFrame.tsx                # Frame + rectangle de cam deplacable
         │   ├── TemplatePreview.tsx            # Apercu du modele par defaut (memes calques que l'export)
@@ -224,6 +229,7 @@ cuttie/
             ├── intro/                         # les 11 intros toutes faites d'une compilation : intros.ts (styles, durees, bruitages), IntroCard.tsx (le dessin) ; copie cote API
             ├── suggestions.ts                 # compilations proposees par l'IA : laquelle attend d'etre construite, leur ordre, leur nombre tenu a jour (useSuggested)
             ├── aiNotes.ts                     # notes pour l'IA : lire un fichier de note, les modeles pour demarrer, les jeux des lives
+            ├── aiMemory.ts                    # memoire de l'IA : lignes d'une section, heure d'un evenement, ce qu'une correction change dans une phrase, comment une lecture s'est finie
             ├── compilationLibrary.ts          # la bibliotheque : ou en est une compilation (vide, brouillon, exportee, modifiee depuis), groupes par live, nom d'une copie
             ├── editorTypes.ts                 # Types editeur (layers, state)
             ├── editorThemes.ts                # Themes pre-definis
@@ -277,6 +283,7 @@ cuttie/
                           + mots des clips gardes transcrits sur leur audio si le live l'a ete sans
 -> DONE
    puis, sans rien retarder : l'IA parcourt le live et propose des compilations (voir « Compilations proposees par l'IA »)
+   et le lit en entier pour sa memoire (voir « Memoire de l'IA »)
 ```
 
 Checkpoints resumables : CLIPPING, LLM_ANALYSIS.
@@ -337,6 +344,21 @@ Dans Ma chaine, carte « Ce que l'IA sait de toi » : le streamer ecrit des note
 - **Premieres notes** (15/11/2026, ecrites par une session a part a partir des lives analyses de Falkarst, dans `.data/notes/`, hors du depot qui est public) : qui est Falkarst, GTA V RP sur FlashFA, Maurice et son entourage, noms et mots mal transcrits. Chacune finit par « A verifier par Falkarst » : des questions a lui poser, a retirer une fois repondues (l'IA les lit en attendant).
 - Essai reel (vrai modele, live du 9/11, les 4 notes) : « les moments ou Maurice parle avec son patron » -> « J'ai cherche les echanges avec Rallen, identifie comme le patron de Maurice », passage trouve, le nom ecrit comme dans les notes alors que le transcript dit « Ralen » ; 0,0033 $ et 22 s (une recherche sans notes : environ 0,002 $).
 - Limites : pas encore essaye sur une analyse entiere (le glossaire du contexte et le pre-tri ne sont couverts que par les tests) ; les sous-titres ne corrigent pas encore les noms d'apres les notes ; pas d'export d'une note depuis l'app (le fichier est dans le dossier de donnees).
+
+## Memoire de l'IA
+
+A cote des notes (ce que le streamer ecrit pour l'IA), une memoire que l'IA ecrit toute seule (demande de Corentin : « a chaque fin d'analyse, il consolide un peu la memoire : il a fait ca, il s'est engueule avec Cody, il a fait une nouvelle rencontre, il a change de jeu ; plus il analyse de videos, mieux l'IA le connait »). Le streamer la lit et peut la corriger, mais elle est faite pour etre tenue par l'IA.
+
+- **Donnees** (`<data dir>/memory/`) : `memory.json` = cinq rubriques de lignes courtes (`who` qui il est, `games` ses jeux, `people` les gens autour de lui, `stories` ce qui se passe d'un live a l'autre, `tastes` ses gouts pour ses videos) et `paused` ; `lives/<job>.json` = ce qui a ete note de chaque live lu (resume, 8 evenements dates au plus, 12 personnes, ce qu'il a dit de lui) : un live n'est lu qu'une fois ; `proposals.json` = les corrections de notes en attente et celles refusees (tenu par l'API). Le worker ecrit la memoire et les lives, l'API ecrit la memoire quand le streamer la corrige ; toujours a cote puis renomme.
+- **Deux appels par live** (`memory.py`, GPT-6 Luna, repli Claude Haiku 5.5 ; `CUTTIE_MEMORY_MODEL`) : `read_live` lit tout le transcript (une ligne par 30 s), les pics du chat, les meilleurs moments de l'analyse, son `vod_context`, les notes et la memoire d'avant, et rend l'entree du live ; `consolidate` reecrit les cinq rubriques a partir de cette entree, des 5 lives lus avant et des notes. Sans transcript sur la machine, le live est note d'apres ce que l'analyse en a garde (`source: "analysis"`).
+- **Quand** : a la fin de chaque analyse (`job_status_bus` -> `memory.afterAnalysis`, en arriere-plan, sans rien faire echouer), sauf si le streamer l'a mise en pause ; et, pour les lives analyses avant, seulement quand il le demande (« Les lire », prix affiche sur le bouton, du plus ancien au plus recent, arretable) : rien n'est depense tout seul apres une mise a jour.
+- **Ou l'IA la recoit** (`memory.block()`, apres les notes, precede de « c'est toi qui l'as ecrit ; ce que le streamer a ecrit lui-meme a raison quand les deux se contredisent ») : les rubriques non vides et les 3 derniers lives lus, partout ou les notes sont donnees (contexte de l'analyse, pre-tri, recherche, video decrite, changement, idees de compilations) ; les gouts seuls au choix de la musique et de l'intro (`looks.choose_sound`). Elle n'entre pas dans ce qui range une reponse gardee : elle change a chaque analyse et jetterait toutes les reponses a chaque fois.
+- **Gouts dits a l'IA** : le plan d'une video decrite et un changement demande dans le fil peuvent rendre `remember` (« j'aime pas quand tu fais ca » : une phrase courte a la troisieme personne, presque toujours vide) ; `memory.remember` l'ajoute aux gouts avec le jour, sans appel en plus, jamais deux fois la meme ; l'app le dit (« Note pour tes prochaines videos : ... »). Ces lignes datees sont les mots du streamer : une reecriture ne les perd, ne les reformule ni ne les double jamais (`_with_told`).
+- **Notes perimees** : la reecriture compare aussi les notes a ce que les lives montrent et propose au plus 2 corrections (`before` : la phrase fausse, recopiee de la note ; `after` : ce qui est vrai maintenant ; `why` : ce que l'IA a vu). Gardees seulement si la note existe, contient ces mots et que ce n'est pas un simple ajout (`clean_proposals`). L'IA ne change jamais une note elle-meme : une fenetre (`NoteProposals`, sur toutes les pages, a la fin d'une lecture et a chaque ouverture) montre l'avant et l'apres, ce qui change surligne ; « Mettre a jour la note » la modifie, « Laisser comme ca » fait que cette phrase n'est plus jamais proposee, la croix remet a plus tard.
+- **Ecran** (`AiMemory.tsx`) : bouton « Memoire » sur la carte « Ce que l'IA sait de toi » (avec le nombre de lives lus) ; la fenetre a deux vues, « Ce qu'elle sait » (les cinq rubriques, un crayon pour corriger chacune) et « Lives lus » (jour, jeu, resume, evenements avec leur heure, personnes, ce qu'il a dit) ; en haut les lives pas encore lus avec le prix ; en bas l'interrupteur « Lire chaque live une fois analyse » et « Effacer la memoire ».
+- **Garde-fous** (ajoutes apres le premier essai reel) : la memoire s'additionne (ce qu'un live ne montre pas n'est pas faux) ; une personne ne sort que quand la rubrique est pleine (`_with_everyone` : au premier essai, apres le 3e live, il ne restait que les personnes de ce live-la) ; une ligne par personne, 25 mots au plus ; rien d'ephemere dans « qui il est » ; les gouts ne parlent que de ses videos.
+- Essai reel (15/11/2026, instance de test, 3 lives de 4 h 43 a 6 h 49) : 30 s par live ; 0,0078, 0,0089 et 0,0101 $ pour les lire (0,0016 $ par heure de live) et 0,0012 $ par reecriture, 0,031 $ pour les trois ; 15 personnes, 2 fils en cours (le gag des tigres, l'examen de Blue), des evenements dates justes. Une note volontairement fausse (« je joue surtout a Fortnite, j'ai arrete le RP sur GTA ») : au premier essai l'IA a ajoute une phrase a une autre note, juste celle-la ; consigne resserree et ajouts refuses par le code, au second elle propose la bonne correction, appliquee depuis la fenetre (fichier de la note modifie).
+- Limites : `remember` (un gout dit dans une conversation) et le declenchement en fin d'analyse ne sont couverts que par les tests, pas essayes avec le vrai modele ni sur une analyse entiere ; l'effet de la memoire sur la qualite des recherches n'est pas mesure ; effacer la memoire oublie aussi les lives lus (les relire se repaie) ; l'entree d'un projet supprime reste ; une seule memoire par dossier de donnees (changer de chaine : l'effacer).
 
 ## Coupes calees sur les mots
 
@@ -512,6 +534,12 @@ L'editeur a calques (`RemotionEditor`) travaille sur un clip : une video, une ho
 | `/api/jobs/{id}/loudness`             | GET     | Token    | Niveau des clips du live (LUFS) : ce contre quoi l'apercu regle la musique |
 | `/api/notes`                          | GET/POST | Token   | Les notes que le streamer ecrit pour l'IA (titre, jeux, texte) / en ajouter une |
 | `/api/notes/{id}`                     | PUT/DELETE | Token | Changer ou supprimer une note |
+| `/api/memory`                         | GET     | Token    | Ce que l'IA retient du streamer : ses 5 rubriques, les lives lus, ceux qui attendent et le prix de leur lecture, la lecture en cours, les corrections de notes en attente |
+| `/api/memory`                         | PUT/DELETE | Token | Corriger des rubriques ou mettre en pause (`paused`) / tout effacer (409 : une lecture est en cours) |
+| `/api/memory/read`                    | POST/DELETE | Token | L'IA lit les lives deja analyses, du plus ancien au plus recent (202 ; 409 : aucun a lire) / arreter apres le live en cours |
+| `/api/memory/proposals`               | GET     | Token    | Les corrections de notes que l'IA propose et qui attendent une reponse |
+| `/api/memory/proposals/{id}/apply`    | POST    | Token    | La note est changee comme propose (409 : elle ne dit plus ca) |
+| `/api/memory/proposals/{id}`          | DELETE  | Token    | Refusee : cette phrase ne sera plus proposee |
 | `/api/compilations[?job_id=]`         | GET     | Token    | Les lives analyses et leurs compilations (duree, passages, dernier export) ; une compilation de plusieurs lives est sous chacun (`home` : celui qui la garde) |
 | `/api/renders/{id}`                   | GET     | Token    | Status d'un export               |
 | `/api/assets`                         | GET     | Token    | Liste des assets                 |

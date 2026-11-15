@@ -13,7 +13,8 @@
     "none": "Ninguna",
     "search": "Buscar...",
     "noResults": "Sin resultados",
-    "comingSoon": "pronto"
+    "comingSoon": "pronto",
+    "close": "Cerrar"
   },
   "auth": {
     "loginTitle": "Cuttie",
@@ -1945,6 +1946,80 @@
         "title": "Nombres que la IA escribe mal",
         "body": "La transcripción escribe «…»: es «…».\n- "
       }
+    }
+  },
+  "memory": {
+    "button": "Memoria",
+    "title": "Memoria de la IA",
+    "hint": "Lo que recuerda de tus directos. La escribe sola; puedes corregirla.",
+    "tab": {
+      "knows": "Lo que sabe",
+      "lives_one": "{{count}} directo leído",
+      "lives_other": "{{count}} directos leídos",
+      "lives_zero": "Directos leídos"
+    },
+    "section": {
+      "who": "Quién eres",
+      "games": "Tus juegos",
+      "people": "La gente a tu alrededor",
+      "stories": "Lo que pasa de un directo a otro",
+      "tastes": "Tus gustos para tus vídeos"
+    },
+    "editSection": "Corregir «{{section}}»",
+    "nothing": "Nada por ahora",
+    "empty": "La IA aún no ha leído ningún directo. Leerá el próximo cuando esté analizado.",
+    "emptyUnread": "La IA aún no recuerda nada: haz que lea tus directos ya analizados.",
+    "noLives": "Ningún directo leído por ahora.",
+    "unread_one": "{{count}} directo analizado que aún no ha leído",
+    "unread_other": "{{count}} directos analizados que aún no ha leído",
+    "readThem_one": "Leerlo",
+    "readThem_other": "Leerlos",
+    "reading": "Leyendo «{{title}}»",
+    "stopping": "Parando tras este directo…",
+    "stop": "Parar",
+    "auto": "Leer cada directo una vez analizado",
+    "pausedDone": "La IA ya no leerá tus directos por su cuenta",
+    "resumedDone": "La IA leerá cada directo una vez analizado",
+    "clear": "Borrar la memoria",
+    "clearTitle": "¿Borrar la memoria de la IA?",
+    "clearMessage": "Todo lo que recuerda de tus directos se perderá. Tus notas no cambian.",
+    "cleared": "Memoria borrada",
+    "saved": "Memoria corregida",
+    "saveFailed": "No se pudo guardar la memoria",
+    "loadFailed": "No se pudo abrir la memoria",
+    "remembered": "Anotado para tus próximos vídeos: {{said}}",
+    "live": {
+      "said": "Dijiste:",
+      "fromAnalysis": "leído sin su transcripción",
+      "fromAnalysisHint": "La transcripción de este directo ya no está en este equipo: la IA solo leyó lo que el análisis había guardado."
+    },
+    "read": {
+      "done_one": "{{count}} directo leído: la memoria está al día",
+      "done_other": "{{count}} directos leídos: la memoria está al día",
+      "partial_one": "{{count}} directo leído, {{failed}} no se pudieron leer",
+      "partial_other": "{{count}} directos leídos, {{failed}} no se pudieron leer",
+      "nothing": "No se pudo leer ningún directo",
+      "stopped_one": "Lectura detenida tras {{count}} directo",
+      "stopped_other": "Lectura detenida tras {{count}} directos",
+      "stopped_zero": "Lectura detenida",
+      "credits": "Sin créditos de OpenRouter: la lectura se detuvo",
+      "key": "Clave de OpenRouter rechazada: la lectura se detuvo",
+      "unreachable": "El motor de análisis no responde. Reinicia Cuttie."
+    },
+    "proposal": {
+      "from": "La IA, tras leer tus directos",
+      "more_one": "{{count}} más después",
+      "more_other": "{{count}} más después",
+      "title": "¿Tu nota «{{title}}» sigue siendo cierta?",
+      "before": "En tu nota",
+      "after": "Lo que escribiría",
+      "apply": "Actualizar la nota",
+      "ignore": "Dejarla así",
+      "later": "Más tarde",
+      "applied": "Nota «{{title}}» actualizada",
+      "ignored": "Entendido, la nota se queda como está",
+      "changed": "Tu nota cambió mientras tanto: no se modificó nada",
+      "failed": "No se pudo cambiar la nota"
     }
   }
 }

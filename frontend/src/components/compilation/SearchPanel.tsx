@@ -73,6 +73,8 @@ const PROGRESS_EVERY = 1200;
 export default function SearchPanel({ jobId, storyboards, lives, info, previewed, isAdded, onPreview, onAdd, onPlan, onResults, talk, proposal = null, current, onChange, onReveal }: Props) {
   const { t, i18n } = useTranslation();
   const toast = useToast();
+  // « I don't like it when you... »: the AI keeps it for the next videos, and says so
+  const noted = (plan: VideoPlan) => plan.remembered?.forEach((said) => toast.success(t("memory.remembered", { said })));
   // Describing the video to the AI is the main way in; searching by hand comes second
   const [tab, setTab] = useState<Tab>("describe");
   const [query, setQuery] = useState("");
@@ -172,6 +174,7 @@ export default function SearchPanel({ jobId, storyboards, lives, info, previewed
     setFailure(null);
     try {
       const planned = await planLiveVideo(jobId, asked, target, undefined, others);
+      noted(planned);
       const count = planned.sections.reduce((sum, s) => sum + s.hits.length, 0);
       setPlanNote(planned.note ?? "");
       if (count === 0) {
@@ -201,6 +204,7 @@ export default function SearchPanel({ jobId, storyboards, lives, info, previewed
     setFailure(null);
     try {
       const planned = await planLiveVideo(jobId, asked.brief, asked.target, undefined, others, [], true);
+      noted(planned);
       const count = planned.sections.reduce((sum, s) => sum + s.hits.length, 0);
       if (count === 0) {
         toast.info(t("compilation.planEmpty"));
@@ -225,6 +229,7 @@ export default function SearchPanel({ jobId, storyboards, lives, info, previewed
     setFailure(null);
     try {
       const planned = await planLiveVideo(jobId, talk.brief, proposal.target, undefined, others, proposal.leads);
+      noted(planned);
       const count = planned.sections.reduce((sum, s) => sum + s.hits.length, 0);
       if (count === 0) {
         toast.info(t("compilation.planEmpty"));
@@ -268,6 +273,7 @@ export default function SearchPanel({ jobId, storyboards, lives, info, previewed
     setFailure(null);
     try {
       const planned = await planLiveVideo(jobId, talk.brief, target, { request: asked, current: current(), asks: talk.asks.map((a) => a.ask) }, others);
+      noted(planned);
       onChange(planned, asked);
     } catch (err) {
       setFailure(err instanceof LiveError ? err.reason : "failed");

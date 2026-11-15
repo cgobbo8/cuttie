@@ -739,6 +739,102 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/notes_controller').default['destroy']>>>
     }
   }
+  'memory.index': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/memory'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/memory_controller').default['index']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/memory_controller').default['index']>>>
+    }
+  }
+  'memory.update': {
+    methods: ["PUT"]
+    pattern: '/api/memory'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/memory_controller').default['update']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/memory_controller').default['update']>>>
+    }
+  }
+  'memory.destroy': {
+    methods: ["DELETE"]
+    pattern: '/api/memory'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/memory_controller').default['destroy']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/memory_controller').default['destroy']>>>
+    }
+  }
+  'memory.read': {
+    methods: ["POST"]
+    pattern: '/api/memory/read'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/memory_controller').default['read']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/memory_controller').default['read']>>>
+    }
+  }
+  'memory.stop': {
+    methods: ["DELETE"]
+    pattern: '/api/memory/read'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/memory_controller').default['stop']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/memory_controller').default['stop']>>>
+    }
+  }
+  'memory.proposals': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/memory/proposals'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/memory_controller').default['proposals']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/memory_controller').default['proposals']>>>
+    }
+  }
+  'memory.apply': {
+    methods: ["POST"]
+    pattern: '/api/memory/proposals/:id/apply'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { id: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/memory_controller').default['apply']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/memory_controller').default['apply']>>>
+    }
+  }
+  'memory.ignore': {
+    methods: ["DELETE"]
+    pattern: '/api/memory/proposals/:id'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { id: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/memory_controller').default['ignore']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/memory_controller').default['ignore']>>>
+    }
+  }
   'compilations.search_info': {
     methods: ["GET","HEAD"]
     pattern: '/api/jobs/:id/search/info'

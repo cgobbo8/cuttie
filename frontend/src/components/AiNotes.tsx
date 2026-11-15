@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { ChevronRight, FileText, FileUp, Loader2, Plus, Trash2, X } from "lucide-react";
 import { createNote, deleteNote, listJobs, listNotes, saveNote, type AiNote } from "../lib/api";
+import { NOTE_CHANGED } from "../lib/aiMemory";
 import { mainGames, parseNote, starterNotes, titleFromFile, whenUsed, type NoteDraft } from "../lib/aiNotes";
 import ConfirmModal from "./ConfirmModal";
 import { useToast } from "./Toast";
@@ -177,6 +178,11 @@ export default function AiNotes() {
         .catch(() => setNotes((now) => now ?? [])),
     [],
   );
+  // A note changed from elsewhere (a correction the AI proposed, accepted): the list follows
+  useEffect(() => {
+    window.addEventListener(NOTE_CHANGED, load);
+    return () => window.removeEventListener(NOTE_CHANGED, load);
+  }, [load]);
   useEffect(() => {
     load();
     // The games of their lives: what a note can be about

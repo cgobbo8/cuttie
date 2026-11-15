@@ -46,6 +46,17 @@ def no_real_notes(monkeypatch, tmp_path):
 
 
 @pytest.fixture(autouse=True)
+def no_real_memory(monkeypatch, tmp_path):
+    """What the AI remembers of the developer's streamer (<repo>/.data/memory) is not the tests' either: it would
+    be put in every prompt, and a test that notes something would write into it. Returns the folder a test's memory is in."""
+    from app.services import memory
+
+    folder = tmp_path / "memory-of-the-ai"
+    monkeypatch.setattr(memory, "directory", lambda: str(folder))
+    return folder
+
+
+@pytest.fixture(autouse=True)
 def no_real_database(monkeypatch):
     from app.services import db
 

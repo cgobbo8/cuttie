@@ -365,6 +365,11 @@ def choose_sound(
     lengths = video.get("lengths") if isinstance(video.get("lengths"), list) and len(video.get("lengths")) >= len(said) else []
     lasts = [f"({float(lengths[n]):.0f} s) " if lengths and isinstance(lengths[n], (int, float)) and lengths[n] > 0 else "" for n in range(len(said))]
     seconds = float(video.get("seconds") or 0)
+    # What they said they like in their videos, kept by the AI from their lives and what they told it (see memory.py)
+    from app.services import memory
+
+    tastes = memory.tastes()
+    liked = f"\nWhat they said before about what they like in their videos (honour it unless they ask otherwise now):\n{tastes}" if tastes else ""
     prompt = f"""A streamer makes a short vertical video (TikTok, Shorts, Reels) from passages of their Twitch live streams. Decide what it sounds like: its background music, and whether it opens with an intro.
 
 THE VIDEO
@@ -373,7 +378,7 @@ Parts: {", ".join(f"« {p} »" for p in parts) if parts else "one part, no title
 Length: {seconds:.0f} s in {int(video.get("passages") or 0)} passages.
 What is said in some of them, in the order they play:
 {chr(10).join(f"{n}. {lasts[n - 1]}« {line} »" for n, line in enumerate(said, 1)) if said else "- (nothing: mostly the game)"}
-What the streamer asked for this video: {f"« {asked.strip()[:800]} »" if asked.strip() else "nothing about the sound"}
+What the streamer asked for this video: {f"« {asked.strip()[:800]} »" if asked.strip() else "nothing about the sound"}{liked}
 
 1. KIND. What kind of video is it? One of:
 {chr(10).join(f"- {kind}: {what}" for kind, what in SOUND_KINDS.items())}

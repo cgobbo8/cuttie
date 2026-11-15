@@ -7,6 +7,7 @@
 import Job, { type JobNotice, type JobTimeline, type TimelineCandidate } from '#models/job'
 import Creator from '#models/creator'
 import transmit from '@adonisjs/transmit/services/main'
+import { afterAnalysis as rememberLive } from '#services/memory'
 import { afterAnalysis } from '#services/suggestions'
 
 export interface HotPointData {
@@ -140,7 +141,11 @@ class JobStatusBus {
     }
 
     await job.save()
-    if (analysed) afterAnalysis(job.id)
+    if (analysed) {
+      afterAnalysis(job.id)
+      // ...and the AI reads the live into what it remembers of the streamer (services/memory.ts)
+      rememberLive(job.id)
+    }
   }
 }
 

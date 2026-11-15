@@ -25,7 +25,7 @@ from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from app.models.schemas import HotPoint, KeyMoment, LlmAnalysis, SignalBreakdown, VodContext
-from app.services import notes
+from app.services import memory, notes
 from app.services import timeline
 from app.services.clipper import CLIP_HALF_DURATION, DETECTED_POST_PEAK, DETECTED_PRE_PEAK
 from app.services.db import add_notice, save_hot_points, update_job
@@ -793,8 +793,9 @@ def _build_context_prompt(
             )
 
     all_segments = "\n\n".join(segments_text)
-    # What the streamer wrote for the AI about themselves and this game (empty: nothing)
-    known = notes.block(vod_game)
+    # What the streamer wrote for the AI about themselves and this game, then what the AI remembers
+    # of them from the lives it read before (empty: nothing)
+    known = notes.block(vod_game) + memory.block()
 
     return f"""You are analyzing a full Twitch VOD to understand its narrative arc and identify the most interesting moments.
 

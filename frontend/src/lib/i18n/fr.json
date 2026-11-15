@@ -13,7 +13,8 @@
     "none": "Aucune",
     "search": "Rechercher...",
     "noResults": "Aucun résultat",
-    "comingSoon": "bientôt"
+    "comingSoon": "bientôt",
+    "close": "Fermer"
   },
   "auth": {
     "loginTitle": "Cuttie",
@@ -1945,6 +1946,80 @@
         "title": "Les noms que l'IA écrit mal",
         "body": "Le transcript écrit « … » : c'est « … ».\n- "
       }
+    }
+  },
+  "memory": {
+    "button": "Mémoire",
+    "title": "Mémoire de l'IA",
+    "hint": "Ce qu'elle retient de tes lives. Elle l'écrit toute seule, tu peux la corriger.",
+    "tab": {
+      "knows": "Ce qu'elle sait",
+      "lives_one": "{{count}} live lu",
+      "lives_other": "{{count}} lives lus",
+      "lives_zero": "Lives lus"
+    },
+    "section": {
+      "who": "Qui tu es",
+      "games": "Tes jeux",
+      "people": "Les gens autour de toi",
+      "stories": "Ce qui se passe d'un live à l'autre",
+      "tastes": "Tes goûts pour tes vidéos"
+    },
+    "editSection": "Corriger « {{section}} »",
+    "nothing": "Rien pour l'instant",
+    "empty": "L'IA n'a encore lu aucun live. Elle lira le prochain une fois analysé.",
+    "emptyUnread": "L'IA n'a encore rien retenu : fais-lui lire tes lives déjà analysés.",
+    "noLives": "Aucun live lu pour l'instant.",
+    "unread_one": "{{count}} live analysé qu'elle n'a pas encore lu",
+    "unread_other": "{{count}} lives analysés qu'elle n'a pas encore lus",
+    "readThem_one": "Le lire",
+    "readThem_other": "Les lire",
+    "reading": "Lecture de « {{title}} »",
+    "stopping": "Arrêt après ce live…",
+    "stop": "Arrêter",
+    "auto": "Lire chaque live une fois analysé",
+    "pausedDone": "L'IA ne lira plus tes lives toute seule",
+    "resumedDone": "L'IA lira chaque live une fois analysé",
+    "clear": "Effacer la mémoire",
+    "clearTitle": "Effacer la mémoire de l'IA ?",
+    "clearMessage": "Tout ce qu'elle a retenu de tes lives sera perdu. Tes notes ne changent pas.",
+    "cleared": "Mémoire effacée",
+    "saved": "Mémoire corrigée",
+    "saveFailed": "La mémoire n'a pas pu être enregistrée",
+    "loadFailed": "La mémoire n'a pas pu être ouverte",
+    "remembered": "Noté pour tes prochaines vidéos : {{said}}",
+    "live": {
+      "said": "Tu as dit :",
+      "fromAnalysis": "lu sans son transcript",
+      "fromAnalysisHint": "Le transcript de ce live n'est plus sur cette machine : l'IA n'a lu que ce que l'analyse en avait gardé."
+    },
+    "read": {
+      "done_one": "{{count}} live lu : la mémoire est à jour",
+      "done_other": "{{count}} lives lus : la mémoire est à jour",
+      "partial_one": "{{count}} live lu, {{failed}} n'ont pas pu l'être",
+      "partial_other": "{{count}} lives lus, {{failed}} n'ont pas pu l'être",
+      "nothing": "Aucun live n'a pu être lu",
+      "stopped_one": "Lecture arrêtée après {{count}} live",
+      "stopped_other": "Lecture arrêtée après {{count}} lives",
+      "stopped_zero": "Lecture arrêtée",
+      "credits": "Plus de crédits OpenRouter : la lecture s'est arrêtée",
+      "key": "Clé OpenRouter refusée : la lecture s'est arrêtée",
+      "unreachable": "Le moteur d'analyse ne répond pas. Relance Cuttie."
+    },
+    "proposal": {
+      "from": "L'IA, après avoir lu tes lives",
+      "more_one": "{{count}} autre ensuite",
+      "more_other": "{{count}} autres ensuite",
+      "title": "Ta note « {{title}} » est-elle encore vraie ?",
+      "before": "Dans ta note",
+      "after": "Ce qu'elle écrirait",
+      "apply": "Mettre à jour la note",
+      "ignore": "Laisser comme ça",
+      "later": "Plus tard",
+      "applied": "Note « {{title}} » mise à jour",
+      "ignored": "Compris, la note reste comme elle est",
+      "changed": "Ta note a changé entre-temps : rien n'a été modifié",
+      "failed": "La note n'a pas pu être modifiée"
     }
   }
 }

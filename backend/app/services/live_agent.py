@@ -26,7 +26,7 @@ import tempfile
 import time
 from dataclasses import dataclass, field
 
-from app.services import notes
+from app.services import memory, notes
 from app.services import live_search, paths
 from app.services.live_tools import LiveTools, ManyLives
 from app.services.presort import hms, parse_hms
@@ -185,6 +185,14 @@ PLAN_SPEC = {
                 "type": "string",
                 "description": "What the description asks about how the video looks (where the webcam and the game go, captions, pop-ups, style), "
                 "copied in the streamer's words; empty when it says nothing about that. You do not act on it: another step lays the video out.",
+            },
+            "remember": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Almost always empty. Only when the streamer states a lasting taste about their videos in general, something they "
+                "always or never want (« I don't like it when you... », « stop putting... », « always... »), not a wish for this one video: "
+                "each as one short sentence in their language, in the third person (« N'aime pas les passages de plus de 10 s »). It is kept "
+                "for their next videos.",
             },
         },
         "required": ["sections", "note"],
@@ -346,7 +354,8 @@ The streamer already has this video and asks for a change. You are given what th
 - Asked for tighter or faster cuts: give each moment again with only the lines that carry it (leave out the lines that lead in or trail off; a dead line in the middle: give the moment as two). A line is the finest you can cut: a moment that is already one line stays. In the note, say how many moments you tightened, and never say you tightened what you gave back unchanged.
 - The length asked for at first no longer binds: what they ask now wins (asked to add, the video gets longer).
 - The moment marked `opens` in the video you are given is the one it can open on: keep it marked, unless what they ask now is about how the video opens or takes that moment out (then mark the one that does it best).
-- In the note, answer them in one or two sentences: what you added, moved or took out, and what you looked for and didn't find."""
+- In the note, answer them in one or two sentences: what you added, moved or took out, and what you looked for and didn't find.
+- When what they ask says something of their taste for every video (« I don't like it when you... », « never... », « always... »), do it here and give it in `remember`, so that it holds for their next videos too."""
 
 
 @dataclass
@@ -361,6 +370,8 @@ class AgentRun:
     look: str = ""
     # What is written on screen over the first seconds of a planned video
     hook: str = ""
+    # Lasting tastes the streamer stated while asking (kept in the AI's memory, see memory.remember)
+    remember: list[str] = field(default_factory=list)
     note: str = ""
     model: str = ""
     steps: int = 0
@@ -542,10 +553,11 @@ class Searcher:
 
     def _system(self, system: str) -> str:
         """What the model is told before anything: its work, then what the streamer wrote for the AI about
-        themselves and the games of these lives (see notes.py), when they wrote some."""
+        themselves and the games of these lives (see notes.py), when they wrote some, then what the AI
+        remembers of them from the lives it read (see memory.py)."""
         if self._known is None:
             # (which game a live is on is only looked up when there are notes to choose from)
-            self._known = notes.block(*self.tools.games()) if notes.load() else ""
+            self._known = (notes.block(*self.tools.games()) if notes.load() else "") + memory.block()
         return (system + MANY.format(count=self.many) if self.many else system) + self._known
 
     def _create(self, **kwargs):
@@ -703,6 +715,7 @@ class Searcher:
         self.run.title = str(given.get("title") or "")[:80]
         self.run.look = " ".join(str(given.get("look") or "").split())[:600]
         self.run.hook = " ".join(str(given.get("hook") or "").split())[:120]
+        self.run.remember = _tastes(given)
         self._log(f"{len(self.run.sections)} parts, {sum(len(s['moments']) for s in self.run.sections)} moments")
         return self.run
 
@@ -721,6 +734,7 @@ class Searcher:
             if isinstance(raw, dict) and isinstance(raw.get("moments"), list):
                 self.run.sections.append({"title": str(raw.get("title") or "")[:60], "moments": [m for m in raw["moments"] if isinstance(m, dict)][:MAX_MOMENTS]})
         self.run.title = str(given.get("title") or "")[:80]
+        self.run.remember = _tastes(given)
         self._log(f"revised: {len(self.run.sections)} parts, {sum(len(s['moments']) for s in self.run.sections)} moments")
         return self.run
 
@@ -846,6 +860,12 @@ class Searcher:
         self.run.note = str(given.get("note") or "")[:800]
         self.run.seconds = time.time() - t0
         return given
+
+
+def _tastes(given: dict) -> list[str]:
+    """The lasting tastes a plan's answer says the streamer stated (see PLAN_SPEC `remember`)."""
+    said = given.get("remember")
+    return [" ".join(str(line).split())[:220] for line in said if isinstance(line, str) and line.strip()][:3] if isinstance(said, list) else []
 
 
 def _to_redo(plan: dict, target: float, spoken=None) -> str | None:

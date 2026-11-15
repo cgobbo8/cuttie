@@ -276,6 +276,8 @@ export interface VideoPlan {
   look?: string
   /** What is written on screen over the first seconds of the video, as the AI wrote it */
   hook?: string
+  /** Lasting tastes the streamer stated while asking, that the AI just noted in its memory */
+  remembered?: string[]
 }
 
 /** A change asked on a video the AI planned: what is asked now, the video as it is (live seconds), what was asked before */
@@ -335,6 +337,24 @@ export interface LiveIdea {
 /** The compilations worth making from a live, found by the AI on its own (kept on the worker's disk: asked again, it costs nothing) */
 export async function findLiveIdeas(jobId: string, context: LiveContext): Promise<{ ideas: LiveIdea[]; note: string; cost: number; cached: boolean }> {
   return call('POST', `/jobs/${encodeURIComponent(jobId)}/ideas`, { body: context, timeoutMs: 15 * 60_000 })
+}
+
+/** A live for the AI to read into its memory: who and what, its length, what the analysis kept of it */
+export interface MemoryLive {
+  duration: number
+  meta: LiveContext['meta']
+  moments: unknown[]
+  /** The live as the analysis understood it (the job's vod_context) */
+  context: Record<string, unknown> | null
+}
+
+/**
+ * The AI reads a live into its memory (backend/app/services/memory.py): what it noted of the live, the memory as
+ * it rewrote it, and corrections for the streamer's notes that the lives contradict. A live already read answers
+ * from the worker's disk and costs nothing.
+ */
+export async function noteLive(jobId: string, live: MemoryLive): Promise<{ entry: any; sections: Record<string, string>; proposals: unknown[]; cost: number; cached: boolean }> {
+  return call('POST', `/jobs/${encodeURIComponent(jobId)}/memory`, { body: live, timeoutMs: 15 * 60_000 })
 }
 
 /** A template as the AI is told about it: what it shows and what it is good for (written by the app from the template) */

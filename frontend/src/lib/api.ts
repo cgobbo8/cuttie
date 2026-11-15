@@ -1302,6 +1302,126 @@ export async function deleteNote(id: string): Promise<void> {
   await jsonOrThrow(await fetch(`${BASE}/notes/${encodeURIComponent(id)}`, { method: "DELETE" }), "Failed to remove the note");
 }
 
+/** The sections of what the AI remembers of the streamer (written by the AI after each live, see `getMemory`) */
+export const MEMORY_SECTIONS = ["who", "games", "people", "stories", "tastes"] as const;
+export type MemorySection = (typeof MEMORY_SECTIONS)[number];
+
+/** What the AI noted of one live it read */
+export interface MemoryLive {
+  job: string;
+  title: string;
+  game: string;
+  /** The day of the live, YYYY-MM-DD */
+  date: string;
+  duration: number;
+  summary: string;
+  /** What happened that matters later, in the order of the live (each may start with its time) */
+  events: string[];
+  people: { name: string; who: string }[];
+  /** What the streamer said about themselves */
+  said: string[];
+  games: string[];
+  /** Read from its transcript, or only from what the analysis kept of it */
+  source: "transcript" | "analysis";
+  read_at: string;
+  cost: number;
+}
+
+/** A sentence of one of the streamer's notes that their lives contradict, and what the AI would write instead */
+export interface NoteProposal {
+  id: string;
+  note: string;
+  note_title: string;
+  before: string;
+  after: string;
+  /** What the AI saw, said to the streamer */
+  why: string;
+  job: string;
+  at: string;
+}
+
+/** The lives analysed before being read into the memory, one after the other */
+export interface MemoryReading {
+  total: number;
+  done: number;
+  /** The live being read */
+  title: string;
+  cost: number;
+  failed: number;
+  stopping: boolean;
+}
+
+/** How the last such reading ended */
+export interface MemoryReadingResult {
+  read: number;
+  failed: number;
+  cost: number;
+  /** What stopped it before the end */
+  stopped?: "credits" | "key" | "unreachable" | "asked";
+  at: string;
+}
+
+/**
+ * What the AI remembers of the streamer from one live to the next (Ma chaîne, « Mémoire »): it writes it itself
+ * after each analysis, and the streamer may correct it. With the lives it read, those that wait, and the
+ * corrections it proposes for the streamer's own notes.
+ */
+export interface AiMemory {
+  sections: Record<MemorySection, string>;
+  updated_at: string | null;
+  /** The streamer stopped the AI from reading each live once analysed */
+  paused: boolean;
+  /** The lives read, the latest first */
+  lives: MemoryLive[];
+  /** Analysed lives not read yet, the oldest first, and about what reading them costs (dollars) */
+  unread: { id: string; title: string; date: string | null; game: string | null; duration: number }[];
+  cost: number;
+  reading: MemoryReading | null;
+  last: MemoryReadingResult | null;
+  proposals: NoteProposal[];
+}
+
+export async function getMemory(): Promise<AiMemory> {
+  return jsonOrThrow(await fetch(`${BASE}/memory`), "Failed to load the memory");
+}
+
+/** The streamer corrects sections of the memory, or pauses it */
+export async function saveMemory(patch: { sections?: Partial<Record<MemorySection, string>>; paused?: boolean }): Promise<Pick<AiMemory, "sections" | "updated_at" | "paused">> {
+  const res = await fetch(`${BASE}/memory`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(patch) });
+  return jsonOrThrow(res, "Failed to save the memory");
+}
+
+/** Everything the AI remembers is thrown away */
+export async function clearMemory(): Promise<void> {
+  await jsonOrThrow(await fetch(`${BASE}/memory`, { method: "DELETE" }), "Failed to clear the memory");
+}
+
+/** The AI reads the lives analysed before, the oldest first (about a cent each): what it is at */
+export async function readLivesIntoMemory(): Promise<MemoryReading> {
+  return (await jsonOrThrow<{ reading: MemoryReading }>(await fetch(`${BASE}/memory/read`, { method: "POST" }), "Failed to read the lives")).reading;
+}
+
+/** Stop after the live being read */
+export async function stopReadingLives(): Promise<void> {
+  await jsonOrThrow(await fetch(`${BASE}/memory/read`, { method: "DELETE" }), "Failed to stop");
+}
+
+/** The corrections of the streamer's notes that wait for their answer */
+export async function listNoteProposals(): Promise<NoteProposal[]> {
+  return (await jsonOrThrow<{ proposals: NoteProposal[] }>(await fetch(`${BASE}/memory/proposals`), "Failed to load the proposals")).proposals;
+}
+
+/** The note is changed as proposed (throws "note_changed" when it no longer says that) */
+export async function applyNoteProposal(id: string): Promise<AiNote> {
+  const res = await fetch(`${BASE}/memory/proposals/${encodeURIComponent(id)}/apply`, { method: "POST" });
+  return (await jsonOrThrow<{ note: AiNote }>(res, "Failed to change the note")).note;
+}
+
+/** Refused: that sentence is not brought up again */
+export async function ignoreNoteProposal(id: string): Promise<void> {
+  await jsonOrThrow(await fetch(`${BASE}/memory/proposals/${encodeURIComponent(id)}`, { method: "DELETE" }), "Failed to ignore the proposal");
+}
+
 /** The background musics that can be played on this machine: those that ship (whose file is there), then the streamer's own */
 export async function listMusics(): Promise<MusicTrack[]> {
   const json = await jsonOrThrow<{ musics: (MusicTrack & { available: boolean })[] }>(await fetch(`${BASE}/musics`), "Failed to load the musics");
@@ -1496,6 +1616,8 @@ export interface VideoPlan {
   look?: string;
   /** What is written on screen over the first seconds of the video, as the AI wrote it */
   hook?: string;
+  /** Lasting tastes the streamer stated while asking, that the AI just noted in its memory for their next videos */
+  remembered?: string[];
 }
 
 /** A whole video planned by the AI from a description, `target` seconds long */

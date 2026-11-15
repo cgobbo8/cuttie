@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { MEMORY_READ } from "./aiMemory";
 import { getSuggestions, type Compilation, type CompilationSummary, type LiveCompilations } from "./api";
 import { useTransmitChannel } from "./TransmitContext";
 
@@ -47,6 +48,8 @@ export function useSuggested(jobId: string | undefined, known?: number): number 
   useTransmitChannel(jobId ? `jobs/${jobId}` : null, (raw: unknown) => {
     const data = raw as { type?: string; suggested?: number };
     if (data?.type === "suggestions" && typeof data.suggested === "number") setCount(data.suggested);
+    // The AI has also just read the live into its memory: it may have a correction to propose for a note (NoteProposals)
+    if (data?.type === "memory") window.dispatchEvent(new Event(MEMORY_READ));
   });
   return count;
 }

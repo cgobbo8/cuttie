@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { Outlet, useLocation } from "react-router";
+import NoteProposals from "./NoteProposals";
 import TopBar from "./TopBar";
 import { AppBackdrop } from "../lib/BackdropContext";
 
@@ -27,6 +28,8 @@ export default function Layout() {
           </main>
         )}
       </div>
+      {/* A note of the streamer's that their lives contradict: the AI asks before anything changes */}
+      <NoteProposals />
     </div>
   );
 }

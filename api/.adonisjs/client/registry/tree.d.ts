@@ -93,6 +93,16 @@ export interface ApiDefinition {
     update: typeof routes['notes.update']
     destroy: typeof routes['notes.destroy']
   }
+  memory: {
+    index: typeof routes['memory.index']
+    update: typeof routes['memory.update']
+    destroy: typeof routes['memory.destroy']
+    read: typeof routes['memory.read']
+    stop: typeof routes['memory.stop']
+    proposals: typeof routes['memory.proposals']
+    apply: typeof routes['memory.apply']
+    ignore: typeof routes['memory.ignore']
+  }
   compilations: {
     searchInfo: typeof routes['compilations.search_info']
     searchProgress: typeof routes['compilations.search_progress']

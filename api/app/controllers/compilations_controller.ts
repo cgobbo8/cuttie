@@ -14,6 +14,7 @@ import {
   describeCompilations,
   dropUnusedPieces,
   isIntro,
+  isTransition,
   isJobId,
   isPieceId,
   isTemplateKey,
@@ -377,6 +378,8 @@ export default class CompilationsController {
         intro: isIntro(chosen.intro) ? chosen.intro : null,
         // The passage the video could open on: its place among `said`, from 1 (null: none named)
         teaser: Number.isInteger(chosen.teaser) && (chosen.teaser as number) >= 1 ? chosen.teaser : null,
+        // How its passages follow each other ("cut": plainly; null: it did not say)
+        transition: chosen.transition === 'cut' || isTransition(chosen.transition) ? chosen.transition : null,
         why: words(chosen.why, 500),
         cost: Number(chosen.cost) || 0,
       }

@@ -1472,7 +1472,7 @@
     "inCompilation_one": "{{count}} en la recopilación",
     "inCompilation_other": "{{count}} en la recopilación",
     "fit": "Ajustar a {{length}}",
-    "titles": "Títulos de las partes en pantalla",
+    "titles": "Títulos de las partes",
     "titlesHint": "Cada parte se abre con el título",
     "hookPlaceholder": "Gancho del vídeo",
     "template": "Plantilla",
@@ -1665,7 +1665,7 @@
     "openEditor": "Abrir en el editor",
     "editorPreparing": "Preparando el vídeo…",
     "editorHint": "En el editor, el vídeo es un solo clip: todo se retoca capa por capa.",
-    "editorLoses": "Solo tiene un diseño para todo el vídeo: la intro, la música, las transiciones y las plantillas propias de algunos trozos no se conservan.",
+    "editorLoses": "El editor no conserva la intro, la música, las transiciones ni los modelos propios de algunos pasajes.",
     "editorFailed": "No se pudo preparar el vídeo para el editor.",
     "editorKept": "Recuperas lo que habías hecho en el editor.",
     "intro": {
@@ -1721,7 +1721,8 @@
         "from": "Inicio del hook",
         "until": "Fin del hook",
         "play": "Ver el hook"
-      }
+      },
+      "value": "{{name}} · +{{seconds}} s"
     },
     "music": {
       "label": "Música",
@@ -1779,7 +1780,15 @@
     "planCached": "Misma descripción que una vez anterior: la IA ha repetido la respuesta, sin gastar nada. «Volver a pedir» hace que busque de nuevo.",
     "keptAnswer": "Respuesta de una vez anterior: la IA no ha buscado ni gastado nada.",
     "askAgain": "Volver a pedir",
-    "askAgainHint": "La IA busca de nuevo, como si lo pidieras por primera vez. La nueva respuesta sustituye a esta."
+    "askAgainHint": "La IA busca de nuevo, como si lo pidieras por primera vez. La nueva respuesta sustituye a esta.",
+    "dress": {
+      "label": "Aspecto y sonido",
+      "ai": "Dejar elegir a la IA",
+      "working": "La IA está eligiendo…",
+      "hint": "La IA mira el vídeo y elige el modelo de cada pasaje, la transición, la intro y la música. Parte de tus favoritas (Mi canal)."
+    },
+    "ownLooks_one": "{{count}} pasaje tiene el suyo",
+    "ownLooks_other": "{{count}} pasajes tienen el suyo"
   },
   "compilations": {
     "title": "Compilaciones",

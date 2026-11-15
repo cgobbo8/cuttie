@@ -55,12 +55,14 @@ import {
   itemFromHit,
   looksCount,
   openingSeconds,
+  PLAIN_CUT,
   removeItem,
   sectionStarts,
   transitionsOf,
   planCurrent,
   revisedSections,
   sectionsFromPlan,
+  setVideoTransition,
   tightened,
   updateItem,
   withHook,
@@ -802,7 +804,9 @@ export default function CompilationPage() {
         // What the streamer changed while the AI was thinking stays
         const current = compilationsRef.current?.find((c) => c.id === source.id) ?? source;
         // A track whose file isn't on this machine can't be played: left out. The passage it would open the video on is told by its place among those it was sent
-        const next = applySound(current, { music: trackOf(musics, choice.music) ? choice.music : null, intro: choice.intro, opening: choice.teaser ? ids[choice.teaser - 1] : null });
+        const dressed = applySound(current, { music: trackOf(musics, choice.music) ? choice.music : null, intro: choice.intro, opening: choice.teaser ? ids[choice.teaser - 1] : null });
+        // ...and the transition it chose becomes the video's (a passage that has its own keeps it)
+        const next = choice.transition && (choice.transition === PLAIN_CUT || isTransition(choice.transition)) ? setVideoTransition(dressed, choice.transition) : dressed;
         change(next);
         setSoundNote({ id: source.id, note: choice.why });
         toast.success(

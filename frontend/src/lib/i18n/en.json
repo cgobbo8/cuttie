@@ -1472,7 +1472,7 @@
     "inCompilation_one": "{{count}} in the compilation",
     "inCompilation_other": "{{count}} in the compilation",
     "fit": "Fit to {{length}}",
-    "titles": "Section titles on screen",
+    "titles": "Part titles",
     "titlesHint": "Each section opens with its title",
     "hookPlaceholder": "Hook line of the video",
     "template": "Template",
@@ -1665,7 +1665,7 @@
     "openEditor": "Open in the editor",
     "editorPreparing": "Preparing the video…",
     "editorHint": "In the editor, the video is a single clip: everything is retouched layer by layer.",
-    "editorLoses": "It has one layout for the whole video: the intro, the music, transitions and the templates some passages have for themselves are not carried over.",
+    "editorLoses": "The editor carries neither the intro, the music, the transitions nor the templates some passages have of their own.",
     "editorFailed": "The video could not be prepared for the editor.",
     "editorKept": "You get back what you had done in the editor.",
     "intro": {
@@ -1721,7 +1721,8 @@
         "from": "Start of the hook",
         "until": "End of the hook",
         "play": "See the hook"
-      }
+      },
+      "value": "{{name}} · +{{seconds}} s"
     },
     "music": {
       "label": "Music",
@@ -1779,7 +1780,15 @@
     "planCached": "Same description as a time before: the AI gave its answer again, at no cost. “Ask again” has it search anew.",
     "keptAnswer": "An answer from a time before: the AI searched nothing and spent nothing.",
     "askAgain": "Ask again",
-    "askAgainHint": "The AI searches anew, as if you asked for the first time. The new answer replaces this one."
+    "askAgainHint": "The AI searches anew, as if you asked for the first time. The new answer replaces this one.",
+    "dress": {
+      "label": "Look and sound",
+      "ai": "Let the AI choose",
+      "working": "The AI is choosing…",
+      "hint": "The AI looks at the video and chooses each passage's template, the transition, the intro and the music. It starts from your favourites (My channel)."
+    },
+    "ownLooks_one": "{{count}} passage has its own",
+    "ownLooks_other": "{{count}} passages have their own"
   },
   "compilations": {
     "title": "Compilations",

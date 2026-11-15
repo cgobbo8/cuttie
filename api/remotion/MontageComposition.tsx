@@ -3,7 +3,7 @@ import { AbsoluteFill, Audio, Freeze, Img, Sequence, Series, useCurrentFrame, us
 import type { Layer } from "./editorTypes";
 import { ResolvedLayer } from "./CuttieComposition";
 import IntroCard, { INTRO_W } from "./intro/IntroCard";
-import { introFade, introSpan, introVolume, isIntro } from "./intro/intros";
+import { between, easeOut, introFade, introSpan, introVolume, isIntro } from "./intro/intros";
 import { gainAt, type MusicCurve } from "./music/curve";
 import { isTransition, lookStyle, transitionAt } from "./transitions";
 
@@ -107,6 +107,18 @@ const Piece: React.FC<{ segment: MontageSegment; before?: MontageSegment; next?:
   );
 };
 
+/** The moment a "hook" intro plays, as a piece: the picture punches in on its first frames (what frames it is the intro's to draw) */
+const Opener: React.FC<{ segment: MontageSegment }> = ({ segment }) => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const punch = 1 + 0.12 * (1 - easeOut(between((frame * 30) / fps, 0, 9)));
+  return (
+    <div style={{ ...FILL, transform: `scale(${punch})` }}>
+      <Layers segment={segment} />
+    </div>
+  );
+};
+
 /** How loud an intro's sound would play here (the renderer never gets one: see MontageIntro.sound) */
 const INTRO_VOLUME = 0.5;
 
@@ -154,7 +166,7 @@ export const MontageComposition: React.FC<MontageCompositionProps> = ({ segments
       <Series>
         {/* Nothing of the video plays while the intro holds the screen (a sequence of a series can't be empty) */}
         {opening && (
-          <Series.Sequence durationInFrames={opening.hold}>{intro?.hook ? <Layers segment={intro.hook} /> : <AbsoluteFill />}</Series.Sequence>
+          <Series.Sequence durationInFrames={opening.hold}>{intro?.hook ? <Opener segment={intro.hook} /> : <AbsoluteFill />}</Series.Sequence>
         )}
         {segments.map((segment, i) => (
           <Series.Sequence key={i} durationInFrames={framesOf(segment.duration, fps)}>

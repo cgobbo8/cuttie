@@ -1472,7 +1472,7 @@
     "inCompilation_one": "{{count}} dans la compilation",
     "inCompilation_other": "{{count}} dans la compilation",
     "fit": "Ajuster à {{length}}",
-    "titles": "Titres des parties à l'écran",
+    "titles": "Titres des parties",
     "titlesHint": "Chaque partie s'ouvre sur son titre",
     "hookPlaceholder": "Accroche de la vidéo",
     "template": "Modèle",
@@ -1665,7 +1665,7 @@
     "openEditor": "Ouvrir dans l'éditeur",
     "editorPreparing": "Préparation de la vidéo…",
     "editorHint": "Dans l'éditeur, la vidéo est un seul clip : tout s'y retouche calque par calque.",
-    "editorLoses": "Il n'a qu'une mise en page pour toute la vidéo : l'intro, la musique, les transitions et les modèles propres à certains passages n'y sont pas repris.",
+    "editorLoses": "L'éditeur ne reprend ni l'intro, ni la musique, ni les transitions, ni les modèles propres à certains passages.",
     "editorFailed": "La vidéo n'a pas pu être préparée pour l'éditeur.",
     "editorKept": "Tu retrouves ce que tu avais fait dans l'éditeur.",
     "intro": {
@@ -1721,7 +1721,8 @@
         "from": "Début du hook",
         "until": "Fin du hook",
         "play": "Voir le hook"
-      }
+      },
+      "value": "{{name}} · +{{seconds}} s"
     },
     "music": {
       "label": "Musique",
@@ -1779,7 +1780,15 @@
     "planCached": "Même description qu'une fois d'avant : l'IA a repris sa réponse, sans rien dépenser. « Redemander » la fait chercher à nouveau.",
     "keptAnswer": "Réponse reprise d'une fois d'avant : l'IA n'a rien cherché, rien dépensé.",
     "askAgain": "Redemander",
-    "askAgainHint": "L'IA cherche à nouveau, comme si tu demandais pour la première fois. La nouvelle réponse remplace celle-ci."
+    "askAgainHint": "L'IA cherche à nouveau, comme si tu demandais pour la première fois. La nouvelle réponse remplace celle-ci.",
+    "dress": {
+      "label": "Habillage",
+      "ai": "Laisser l'IA choisir",
+      "working": "L'IA choisit…",
+      "hint": "L'IA regarde la vidéo et choisit le modèle de chaque passage, la transition, l'intro et la musique. Elle part de tes préférées (Ma chaîne)."
+    },
+    "ownLooks_one": "{{count}} passage a le sien",
+    "ownLooks_other": "{{count}} passages ont le leur"
   },
   "compilations": {
     "title": "Compilations",

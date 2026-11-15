@@ -283,6 +283,17 @@ INTRO_NAMES = {
     "fr": {"hook": "Hook", "slam": "Impact", "bands": "Bandes", "glitch": "Glitch", "neon": "Néon", "rush": "Vitesse", "split": "Duel", "arcade": "Arcade", "news": "Flash info", "shatter": "Éclats", "countdown": "Décompte"},
     "es": {"hook": "Hook", "slam": "Impacto", "bands": "Bandas", "glitch": "Glitch", "neon": "Neón", "rush": "Velocidad", "split": "Duelo", "arcade": "Arcade", "news": "Última hora", "shatter": "Añicos", "countdown": "Cuenta atrás"},
 }
+# How one passage gives way to the next, the same at every cut of a video (the app draws them: frontend/src/lib/transitions.ts)
+TRANSITIONS = {
+    "cut": "A plain cut. Never wrong. Right for talk, a story told, anything where the words carry the video.",
+    "flash": "A white flash on each cut. Punchy. Fits best-ofs, highlights, loud moments.",
+    "zoom": "The picture punches in on each cut. Energetic. Fits action, skill, hype.",
+    "slide": "The next passage slides in from the side. Lively and clean. Fits a series of like moments, a funny compilation.",
+    "swipe": "The next passage sweeps up from the bottom, as when scrolling a feed. Fits tops, series, quick-fire moments.",
+    "shake": "The picture shakes on each cut. Rough. Fits rage, crashes, fights, chaos.",
+    "pop": "The next passage bounces in. Playful. Fits jokes, silly moments, light-hearted videos.",
+    "fade": "A short cross-fade. Soft. Fits calm talk, emotion, a story told slowly.",
+}
 # How many intros the model ranks for a video, and how many of the streamer's last videos its choice stays away from
 FITTING_INTROS, RECENT_INTROS = 3, 3
 # How many passages of a video the model is told about (it names the one the video could open on among them)
@@ -309,7 +320,8 @@ def choose_sound(
     recent_intros: list[str] | None = None,
 ) -> dict:
     """What a video sounds like, decided from what it is: {"kind", "music": key or None, "intro": key or None, "why",
-    "teaser": the passage the video could open on (its number among `said`, from 1) or None, "cost"}.
+    "teaser": the passage the video could open on (its number among `said`, from 1) or None,
+    "transition": how its passages follow each other ("cut": plainly) or None when the model said nothing, "cost"}.
 
     `video`: {"title", "parts": [titles], "seconds", "passages": how many, "said": [what is said in some of them, in the video's order],
     "lengths": [how long each of those lasts, seconds]};
@@ -371,7 +383,11 @@ Give the {FITTING_INTROS} that fit this video best, the best first: judge on wha
 
 4. TEASER. Whatever the intro, name the passage the video could open on as a teaser: a few seconds played before everything else to make people stay, after which the video starts from its beginning and that passage plays again at its place. Take, among the numbered passages above, the strongest instant that also tells what the video is about (the reaction to the story it tells, the line that sums up the running joke, the claim about to turn out wrong): understood on its own, never passage 1. A passage of 8 seconds or less plays whole as a teaser; of a longer one only the last five seconds play: prefer a short passage whose words say it all (3 to 8 seconds). Give 0 when none of them would do.
 
-Answer with JSON only: {{"kind": "<kind>", "music": "<track key or none>", "teaser": <number of the passage, or 0>, "why": "<one sentence in {spoken}, for the streamer: the kind of video you saw and why this music (or none); call the track by its name>", "intros": [{{"key": "<intro key>", "why": "<one short sentence in {spoken}, for the streamer: why this intro for this video, called by the name given between « »>"}}], "no_intro": "<only when you give no intro: one short sentence in {spoken} saying why>"}}"""
+5. TRANSITION. How one passage gives way to the next, the same at every cut of the video:
+{chr(10).join(f"[{key}] {what}" for key, what in TRANSITIONS.items())}
+Take the one that fits the pace and the mood of the video; when the words carry it, or in doubt, a plain cut. If the streamer asked for one, follow that first.
+
+Answer with JSON only: {{"kind": "<kind>", "music": "<track key or none>", "teaser": <number of the passage, or 0>, "transition": "<transition key>", "why": "<one sentence in {spoken}, for the streamer: the kind of video you saw and why this music (or none); call the track by its name>", "intros": [{{"key": "<intro key>", "why": "<one short sentence in {spoken}, for the streamer: why this intro for this video, called by the name given between « »>"}}], "no_intro": "<only when you give no intro: one short sentence in {spoken} saying why>"}}"""
     try:
         response = client.chat.completions.create(
             model=SEARCH_MODEL,
@@ -404,9 +420,10 @@ Answer with JSON only: {{"kind": "<kind>", "music": "<track key or none>", "teas
     # The passage the video could open on: one of those it was shown, never the first
     teaser = data.get("teaser")
     teaser = teaser if isinstance(teaser, int) and not isinstance(teaser, bool) and 2 <= teaser <= len(said) else None
+    transition = data.get("transition") if data.get("transition") in TRANSITIONS else None
     cost = _cost(response)
-    logger.info(f"Sound of « {str(video.get('title') or '')[:40]} »: {kind}, music {music}, intro {intro} among {fits or 'none'}, teaser {teaser or 'none'} (~{cost:.4f} $)")
-    return {"kind": kind, "music": music, "intro": intro, "why": why[:500], "teaser": teaser, "cost": round(cost, 4)}
+    logger.info(f"Sound of « {str(video.get('title') or '')[:40]} »: {kind}, music {music}, intro {intro} among {fits or 'none'}, teaser {teaser or 'none'}, transition {transition or 'not said'} (~{cost:.4f} $)")
+    return {"kind": kind, "music": music, "intro": intro, "why": why[:500], "teaser": teaser, "transition": transition, "cost": round(cost, 4)}
 
 
 def write_usage(name: str, description: str, language: str = "fr") -> dict:

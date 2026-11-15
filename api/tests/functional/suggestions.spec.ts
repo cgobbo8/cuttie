@@ -40,7 +40,7 @@ test.group('Compilations proposed by the AI', (group) => {
         if (req.url?.endsWith('/ideas')) res.end(JSON.stringify({ ideas, note: 'Un running gag et une histoire.', cost: 0.006, cached: false }))
         else if (req.url?.endsWith('/plan')) res.end(JSON.stringify({ title: 'Calme', sections: [], note: '' }))
         else if (req.url?.endsWith('/search')) res.end(JSON.stringify({ hits: [], total: 0, transcript: true, cached: false, cost: 0.002 }))
-        else if (req.url?.endsWith('/sound')) res.end(JSON.stringify({ kind: 'funny', music: null, intro: 'news', why: 'Flash info.', teaser: 3, cost: 0.0004 }))
+        else if (req.url?.endsWith('/sound')) res.end(JSON.stringify({ kind: 'funny', music: null, intro: 'news', why: 'Flash info.', teaser: 3, transition: 'pop', cost: 0.0004 }))
         else res.writeHead(404).end('{}')
       })
     })
@@ -251,6 +251,8 @@ test.group('Compilations proposed by the AI', (group) => {
     assert.deepEqual(asked[0].body.video.lengths.slice(0, 4), [4.2, 0, 120, 5])
     assert.lengthOf(asked[0].body.video.lengths, 30)
     assert.equal((chosen.body() as any).teaser, 3)
+    // ...and how its passages follow each other
+    assert.equal((chosen.body() as any).transition, 'pop')
     assert.deepEqual(asked[0].body.recent_intros, ['arcade', 'bands', 'neon'])
 
     // Saved by the app, an intro keeps who chose it; picked again by hand, it no longer says the AI did

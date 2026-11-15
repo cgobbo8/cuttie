@@ -166,9 +166,11 @@ describe("the passages of a compilation", () => {
     // Nothing comes before the first passage: no transition to choose there
     expect(within(row("a")).queryByRole("button", { name: "Transition avant ce passage" })).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: "Coupe nette" }));
+    fireEvent.click(screen.getByRole("button", { name: "Transitions : Coupe nette" }));
     fireEvent.click(within(screen.getByRole("dialog", { name: "Transition entre tous les passages" })).getByRole("button", { name: "Zoom" }));
     expect(transitions()).toEqual(["zoom", null, null, null, null]);
+    // Its row says what it is set to
+    expect(screen.getByRole("button", { name: "Transitions : Zoom" })).toBeInTheDocument();
 
     fireEvent.click(within(row("c")).getByRole("button", { name: "Transition avant ce passage" }));
     const picker = screen.getByRole("dialog", { name: "Transition avant ce passage" });
@@ -197,13 +199,13 @@ describe("the passages of a compilation", () => {
   it("opens the whole video in the layer editor, and says what the editor does not carry", () => {
     const onEdit = vi.fn();
     const view = render(<Harness start={video()} onEdit={onEdit} />);
-    const lost = /transitions et les modèles propres à certains passages n'y sont pas repris/;
+    const lost = /L'éditeur ne reprend ni l'intro, ni la musique, ni les transitions/;
     // Plain cuts and one template: nothing to lose, nothing said
     expect(screen.queryByText(lost)).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Ouvrir dans l'éditeur" }));
     expect(onEdit).toHaveBeenCalledTimes(1);
 
-    fireEvent.click(screen.getByRole("button", { name: "Coupe nette" }));
+    fireEvent.click(screen.getByRole("button", { name: "Transitions : Coupe nette" }));
     fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Zoom" }));
     expect(screen.getByText(lost)).toBeInTheDocument();
     view.unmount();
@@ -219,19 +221,81 @@ describe("the passages of a compilation", () => {
     expect(row("a")).not.toHaveAttribute("aria-current");
   });
 
-  it("asks the AI for the music and the intro, and says what it answered", () => {
+  it("has one button for the AI to choose how the video looks and sounds, and says what it answered", () => {
     const onSound = vi.fn();
+    const onLooks = vi.fn();
     const brand = { name: "Falkarst", logo: null, colors: { accent: "#42BF85", highlight: "#F7C502", dark: "#19405A", light: "#BDF3DA" }, font: "Anton" };
-    const { rerender } = render(<CompilationPanel {...base} compilation={video()} onChange={() => {}} brand={brand} musics={MUSICS.filter((track) => track.id === "phonk")} onSound={onSound} />);
-    expect(screen.getByText(/Elle regarde quel genre de vidéo/)).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: /Musique et intro par l'IA/ }));
-    expect(onSound).toHaveBeenCalledTimes(1);
-    // While it thinks the button waits; then its answer takes the place of the explanation
-    rerender(<CompilationPanel {...base} compilation={video()} onChange={() => {}} brand={brand} musics={MUSICS.filter((track) => track.id === "phonk")} onSound={onSound} sounding />);
-    expect((screen.getByRole("button", { name: /L'IA choisit la musique/ }) as HTMLButtonElement).disabled).toBe(true);
-    rerender(<CompilationPanel {...base} compilation={{ ...video(), music: { track: "phonk" } }} onChange={() => {}} brand={brand} musics={MUSICS.filter((track) => track.id === "phonk")} onSound={onSound} soundNote="Une vidéo de skill : Drift Phonk." />);
-    expect(screen.getByText("Une vidéo de skill : Drift Phonk.")).toBeTruthy();
+    const phonk = MUSICS.filter((track) => track.id === "phonk");
+    const { rerender } = render(<CompilationPanel {...base} compilation={video()} onChange={() => {}} brand={brand} musics={phonk} onSound={onSound} onLooks={onLooks} />);
+    // No paragraph to read before it is asked: what it does is said on hover
+    expect(screen.queryByText(/Elle regarde/)).toBeNull();
+    const ask = screen.getByRole("button", { name: /Laisser l'IA choisir/ });
+    expect(ask.getAttribute("title")).toMatch(/le modèle de chaque passage, la transition, l'intro et la musique/);
+    fireEvent.click(ask);
+    // Both at once: the templates of the passages, the music and the intro
+    expect([onSound.mock.calls.length, onLooks.mock.calls.length]).toEqual([1, 1]);
+    // While it thinks (about either) the button waits
+    rerender(<CompilationPanel {...base} compilation={video()} onChange={() => {}} brand={brand} musics={phonk} onSound={onSound} onLooks={onLooks} sounding />);
+    expect((screen.getByRole("button", { name: /L'IA choisit/ }) as HTMLButtonElement).disabled).toBe(true);
+    rerender(<CompilationPanel {...base} compilation={video()} onChange={() => {}} brand={brand} musics={phonk} onSound={onSound} onLooks={onLooks} looking />);
+    expect((screen.getByRole("button", { name: /L'IA choisit/ }) as HTMLButtonElement).disabled).toBe(true);
+    // What it said of its choices, under the list
+    rerender(
+      <CompilationPanel {...base} compilation={{ ...video(), music: { track: "phonk" } }} onChange={() => {}} brand={brand} musics={phonk} onSound={onSound} onLooks={onLooks} soundNote="Une vidéo de skill : Drift Phonk." looksNote="Empilé partout." />,
+    );
+    expect(screen.getByText("Une vidéo de skill : Drift Phonk. Empilé partout.")).toBeTruthy();
     // The music it has is named on its row
-    expect(screen.getByRole("button", { name: /Drift Phonk/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Musique : Drift Phonk" })).toBeTruthy();
+    // Without a music or an intro to choose here (no track on this machine, no channel), it still chooses the templates
+    onSound.mockClear();
+    onLooks.mockClear();
+    rerender(<CompilationPanel {...base} compilation={video()} onChange={() => {}} onSound={onSound} onLooks={onLooks} />);
+    fireEvent.click(screen.getByRole("button", { name: /Laisser l'IA choisir/ }));
+    expect([onSound.mock.calls.length, onLooks.mock.calls.length]).toEqual([0, 1]);
+  });
+
+  it("sets every setting of the video from one list of like rows", () => {
+    const onChange = vi.fn();
+    const onSameLook = vi.fn();
+    const brand = { name: "Falkarst", logo: null, colors: { accent: "#42BF85", highlight: "#F7C502", dark: "#19405A", light: "#BDF3DA" }, font: "Anton" };
+    const templates = [
+      { key: "mine", name: "Mes fails" },
+      { key: "stacked", name: "Empilé" },
+    ];
+    const start = { ...video(), template: "stacked", intro: { style: "slam" } };
+    const { rerender } = render(<CompilationPanel {...base} compilation={start} onChange={onChange} brand={brand} musics={MUSICS.filter((track) => track.id === "phonk")} templates={templates} templateName={(key) => templates.find((tpl) => tpl.key === key)?.name ?? key} onSameLook={onSameLook} />);
+    // Each row: what it is and what it is set to (an intro says what it adds to the video)
+    for (const name of ["Modèle : Empilé", "Transitions : Coupe nette", "Intro : Impact · +1,6 s", "Musique : Aucune"]) expect(screen.getByRole("button", { name })).toBeInTheDocument();
+    expect(screen.getByRole("switch", { name: "Titres des parties" })).toHaveAttribute("aria-checked", "true");
+
+    // The template: a menu of its own, the channel's default first
+    fireEvent.click(screen.getByRole("button", { name: "Modèle : Empilé" }));
+    const menu = screen.getByRole("dialog", { name: "Modèle" });
+    expect(within(menu).getAllByRole("button").map((button) => [button.textContent, button.getAttribute("aria-pressed")])).toEqual([
+      ["Modèle par défaut", "false"],
+      ["Mes fails", "false"],
+      ["Empilé", "true"],
+    ]);
+    fireEvent.click(within(menu).getByRole("button", { name: "Mes fails" }));
+    expect(onChange).toHaveBeenLastCalledWith({ ...start, template: "mine" });
+    expect(screen.queryByRole("dialog", { name: "Modèle" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Modèle : Empilé" }));
+    fireEvent.click(within(screen.getByRole("dialog", { name: "Modèle" })).getByRole("button", { name: "Modèle par défaut" }));
+    expect(onChange).toHaveBeenLastCalledWith({ ...start, template: null });
+
+    // Without titles, the line written over the first seconds is asked for, in the list
+    fireEvent.click(screen.getByRole("switch", { name: "Titres des parties" }));
+    expect(onChange).toHaveBeenLastCalledWith({ ...start, titles: false });
+    expect(screen.queryByPlaceholderText("Accroche de la vidéo")).toBeNull();
+    const withOwn = { ...start, titles: false, template: null, sections: [{ ...start.sections[0], items: [start.sections[0].items[0], { ...start.sections[0].items[1], template: "mine" }] }] };
+    rerender(<CompilationPanel {...base} compilation={withOwn} onChange={onChange} brand={brand} templates={templates} templateName={(key) => templates.find((tpl) => tpl.key === key)?.name ?? key} onSameLook={onSameLook} />);
+    expect(screen.getByPlaceholderText("Accroche de la vidéo")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Modèle : Modèle par défaut" })).toBeInTheDocument();
+    // Passages with a template of their own: said under the row, with the way back
+    expect(screen.getByText("1 passage a le sien")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Même modèle partout" }));
+    expect(onSameLook).toHaveBeenCalledTimes(1);
+    // No track on this machine: no music to set
+    expect(screen.queryByRole("button", { name: /^Musique/ })).toBeNull();
   });
 });

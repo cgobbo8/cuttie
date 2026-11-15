@@ -1249,6 +1249,8 @@ export interface SoundChoice {
   intro: string | null;
   /** The passage the video could open on as a teaser: its place among the passages the AI was told (`said`), from 1 */
   teaser?: number | null;
+  /** How its passages follow each other: a ready-made transition, or "cut" (null: it did not say) */
+  transition?: string | null;
   why: string;
   cost: number;
 }

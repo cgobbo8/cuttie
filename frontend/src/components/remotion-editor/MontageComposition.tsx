@@ -1,6 +1,6 @@
 import { AbsoluteFill, Audio, Freeze, Img, Sequence, Series, useCurrentFrame, useVideoConfig } from "remotion";
 import IntroCard, { INTRO_W } from "../../lib/intro/IntroCard";
-import { introFade, introSpan, introVolume, isIntro } from "../../lib/intro/intros";
+import { between, easeOut, introFade, introSpan, introVolume, isIntro } from "../../lib/intro/intros";
 import { framesOf, playsIntro, type MontageIntro, type MontageProps, type MontageSegment } from "../../lib/montage";
 import { gainAt } from "../../lib/music/curve";
 import { isTransition, lookStyle, transitionAt } from "../../lib/transitions";
@@ -52,6 +52,18 @@ function Piece({ segment, before, next }: { segment: MontageSegment; before?: Mo
   );
 }
 
+/** The moment a "hook" intro plays, as a piece: the picture punches in on its first frames (what frames it is the intro's to draw) */
+function Opener({ segment }: { segment: MontageSegment }) {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const punch = 1 + 0.12 * (1 - easeOut(between((frame * 30) / fps, 0, 9)));
+  return (
+    <div style={{ ...FILL, transform: `scale(${punch})` }}>
+      <Layers segment={segment} />
+    </div>
+  );
+}
+
 /** How loud an intro's sound plays in the page when the clips' own level isn't known. The export sets it against the video's levelled sound instead */
 const INTRO_VOLUME = 0.5;
 
@@ -100,7 +112,7 @@ export default function MontageComposition({ segments, overlays, intro, music }:
       <Series>
         {/* Nothing of the video plays while the intro holds the screen (a sequence of a series can't be empty), but the moment of a hook */}
         {opening && (
-          <Series.Sequence durationInFrames={opening.hold}>{intro?.hook ? <Layers segment={intro.hook} /> : <AbsoluteFill />}</Series.Sequence>
+          <Series.Sequence durationInFrames={opening.hold}>{intro?.hook ? <Opener segment={intro.hook} /> : <AbsoluteFill />}</Series.Sequence>
         )}
         {segments.map((segment, i) => (
           // Mounted a second early: the next piece's videos are already at the right frame at the cut

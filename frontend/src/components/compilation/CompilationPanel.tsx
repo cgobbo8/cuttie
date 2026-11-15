@@ -1,6 +1,6 @@
-import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type RefObject } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from "react";
 import { useTranslation } from "react-i18next";
-import { ArrowDown, ArrowRight, ArrowUp, Blend, Check, Clapperboard, FolderInput, Layers, Loader2, Music2, Plus, Sparkles, Trash2, X, LayoutTemplate } from "lucide-react";
+import { ArrowDown, ArrowRight, ArrowUp, Blend, Check, ChevronRight, Clapperboard, FolderInput, Layers, Loader2, Music2, Plus, Sparkles, Trash2, Type, X, LayoutTemplate, type LucideIcon } from "lucide-react";
 import type { Compilation, CompilationItem, CompilationSection, TwitchStoryboard } from "../../lib/api";
 import {
   PLAIN_CUT,
@@ -27,7 +27,7 @@ import { clock } from "../../lib/format";
 import { frameAt, tileStyle } from "../../lib/storyboard";
 import { useToast } from "../Toast";
 import { isIntro } from "../../lib/intro/intros";
-import { musicAbout, trackOf } from "../../lib/music/library";
+import { trackOf } from "../../lib/music/library";
 import type { MusicTrack } from "../../lib/music/mix";
 import IntroPicker, { type HookMenu, type IntroBrand } from "./IntroPicker";
 import MusicPicker from "./MusicPicker";
@@ -238,7 +238,7 @@ export default function CompilationPanel({
   }, [picked.size]);
 
   // What is open: the list of parts to move the picked passages to, or the transitions (of the video, of the picked ones, of one passage)
-  const [menu, setMenu] = useState<"move" | "video" | "picked" | "intro" | "music" | { item: string } | null>(null);
+  const [menu, setMenu] = useState<"move" | "video" | "picked" | "intro" | "music" | "template" | { item: string } | null>(null);
   const partName = (section: CompilationSection, among = compilation.sections) => section.title.trim() || t("compilation.partN", { n: among.indexOf(section) + 1 });
   const moveTo = (sectionId: string | null) => {
     setMenu(null);
@@ -298,7 +298,16 @@ export default function CompilationPanel({
   const count = allItems(compilation).length;
   // About half a tenth of a cent per passage looked at (measured): said before asking
   const dollars = (cost: number) => `${new Intl.NumberFormat(i18n.language, { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(cost)} $`;
-  const looksCost = count * LOOK_COST < 0.01 ? `< ${dollars(0.01)}` : `≈ ${dollars(count * LOOK_COST)}`;
+  // The AI choosing how the video looks and sounds: each passage's template (it looks at them), then the music and the intro
+  const canSound = !!onSound && (musics.length > 0 || !!brand);
+  const choosing = looking || sounding;
+  const dressCost = count * LOOK_COST + 0.01 <= 0.02 ? `< ${dollars(0.02)}` : `≈ ${dollars(count * LOOK_COST + 0.01)}`;
+  const dress = () => {
+    if (canSound) onSound!();
+    onLooks();
+  };
+  const aiNote = [soundNote, looksNote].filter(Boolean).join(" ");
+  const [noteOpen, setNoteOpen] = useState(false);
   const target = compilation.target;
   const over = !!target && total > target * 1.05;
   const iconButton = "btn btn-ghost btn-icon w-7 h-7 text-ink-3 hover:text-white disabled:opacity-25";
@@ -522,159 +531,142 @@ export default function CompilationPanel({
           </div>
         </div>
 
-        <label className="flex items-center gap-3">
-          <span className="flex-1 min-w-0">
-            <span className="block text-[13.5px] font-[550] text-white">{t("compilation.titles")}</span>
-            <span className="block text-[12px] text-ink-3">{t("compilation.titlesHint")}</span>
-          </span>
-          <button role="switch" aria-checked={compilation.titles} aria-label={t("compilation.titles")} onClick={() => onChange({ ...compilation, titles: !compilation.titles })} className="switch flex-none">
-            <span />
-          </button>
-        </label>
-        {!compilation.titles && (
-          <input
-            value={compilation.hook}
-            onChange={(e) => onChange({ ...compilation, hook: e.target.value })}
-            placeholder={t("compilation.hookPlaceholder")}
-            aria-label={t("montage.hook")}
-            className="w-full h-10 px-3 rounded-[10px] bg-black/30 border border-white/10 text-[13.5px] text-white outline-none focus:border-accent-line placeholder:text-ink-3"
-          />
-        )}
-
-        <label className="flex items-center gap-3">
-          <span className="text-[13.5px] font-[550] text-white">{t("compilation.template")}</span>
-          <select
-            value={compilation.template ?? ""}
-            onChange={(e) => onChange({ ...compilation, template: e.target.value || null })}
-            className="select-arrow flex-1 min-w-0 h-9 px-2.5 rounded-[10px] bg-black/30 border border-white/10 text-[13px] text-white outline-none focus:border-accent-line [color-scheme:dark]"
-          >
-            <option value="">{t("compilation.defaultTemplate")}</option>
-            {templates.map((tpl) => (
-              <option key={tpl.key} value={tpl.key}>
-                {tpl.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        {/* How every passage comes in; one passage can do otherwise (its row, or several picked) */}
-        <div className="flex items-center gap-3">
-          <span className="flex-1 min-w-0">
-            <span className="block text-[13.5px] font-[550] text-white">{t("compilation.transition.label")}</span>
-            <span className="block text-[12px] text-ink-3">{own > 0 ? t("compilation.transition.ownCount", { count: own }) : t("compilation.transition.hint")}</span>
-          </span>
-          {own > 0 && (
-            <button onClick={() => onChange(setVideoTransition(compilation, compilation.transition ?? null, true))} className="btn btn-ghost btn-sm flex-none">
-              {t("compilation.transition.same")}
+        {/* How the video looks and sounds. Every setting is the same row: what it is, what it is set to, its picker a click away */}
+        <div>
+          <div className="flex items-center justify-between gap-2 pb-2">
+            <span className="text-[13.5px] font-[600] text-white">{t("compilation.dress.label")}</span>
+            {/* One button for all of it: the AI chooses each passage's template, the transition, the intro and the music */}
+            <button onClick={dress} disabled={count === 0 || choosing || cutting.size > 0} title={t("compilation.dress.hint")} className="btn btn-glass btn-sm h-8 px-3 rounded-full">
+              {choosing ? <Loader2 className="w-3.5 h-3.5 spinner" /> : <Sparkles className="w-3.5 h-3.5 text-accent" />}
+              {t(choosing ? "compilation.dress.working" : "compilation.dress.ai")}
+              {!choosing && <span className="mono text-[11.5px] text-ink-3">{dressCost}</span>}
+            </button>
+          </div>
+          <div className="rounded-[13px] border border-white/[0.09] bg-black/25 divide-y divide-white/[0.07]">
+            <SettingRow
+              icon={LayoutTemplate}
+              label={t("compilation.template")}
+              value={compilation.template ? templateName(compilation.template) : t("compilation.defaultTemplate")}
+              open={menu === "template"}
+              onOpen={() => setMenu(menu === "template" ? null : "template")}
+              apart={ownLooks > 0 ? { text: t("compilation.ownLooks", { count: ownLooks }), action: t("compilation.looksSame"), onClick: onSameLook } : undefined}
+            >
+              {menu === "template" && (
+                <TemplateMenu
+                  value={compilation.template ?? null}
+                  templates={templates}
+                  onPick={(key) => {
+                    setMenu(null);
+                    onChange({ ...compilation, template: key });
+                  }}
+                  onClose={() => setMenu(null)}
+                />
+              )}
+            </SettingRow>
+            <div className={ROW}>
+              <label className="flex items-center gap-2.5 h-11 px-3 cursor-pointer">
+                <Type className={`w-4 h-4 flex-none ${compilation.titles ? "text-accent" : "text-ink-3"}`} />
+                <span className="flex-1 min-w-0 truncate text-[13.5px] font-[550] text-white">{t("compilation.titles")}</span>
+                <button role="switch" aria-checked={compilation.titles} aria-label={t("compilation.titles")} title={t("compilation.titlesHint")} onClick={() => onChange({ ...compilation, titles: !compilation.titles })} className="switch flex-none">
+                  <span />
+                </button>
+              </label>
+              {/* Without titles, one line is written over the first seconds of the video */}
+              {!compilation.titles && (
+                <input
+                  value={compilation.hook}
+                  onChange={(e) => onChange({ ...compilation, hook: e.target.value })}
+                  placeholder={t("compilation.hookPlaceholder")}
+                  aria-label={t("montage.hook")}
+                  className="block w-[calc(100%-24px)] mx-3 mb-2.5 h-9 px-3 rounded-[9px] bg-black/30 border border-white/10 text-[13px] text-white outline-none focus:border-accent-line placeholder:text-ink-3"
+                />
+              )}
+            </div>
+            {/* How every passage comes in; one passage can do otherwise (its row, or several picked) */}
+            <SettingRow
+              icon={Blend}
+              label={t("compilation.transition.label")}
+              value={transitionName(compilation.transition)}
+              set={!!compilation.transition}
+              open={menu === "video"}
+              onOpen={() => setMenu(menu === "video" ? null : "video")}
+              apart={own > 0 ? { text: t("compilation.transition.ownCount", { count: own }), action: t("compilation.transition.same"), onClick: () => onChange(setVideoTransition(compilation, compilation.transition ?? null, true)) } : undefined}
+            >
+              {menu === "video" && (
+                <TransitionPicker
+                  title={t("compilation.transition.video")}
+                  value={compilation.transition ?? PLAIN_CUT}
+                  onPick={(value) => {
+                    setMenu(null);
+                    onChange(setVideoTransition(compilation, value));
+                  }}
+                  onClose={() => setMenu(null)}
+                  className="right-0 bottom-full mb-2"
+                />
+              )}
+            </SettingRow>
+            {/* What the video opens with: a jingle (the channel's logo and colours, its title), or its best moment */}
+            {brand && (
+              <SettingRow
+                icon={Clapperboard}
+                label={t("compilation.intro.label")}
+                value={
+                  isIntro(compilation.intro?.style)
+                    ? t("compilation.intro.value", { name: t(`compilation.intro.style.${compilation.intro.style}`), seconds: new Intl.NumberFormat(i18n.language, { maximumFractionDigits: 1 }).format(opening) })
+                    : t("compilation.intro.none")
+                }
+                set={isIntro(compilation.intro?.style)}
+                open={menu === "intro"}
+                onOpen={() => setMenu(menu === "intro" ? null : "intro")}
+              >
+                {menu === "intro" && (
+                  <IntroPicker
+                    value={compilation.intro ?? null}
+                    brand={brand}
+                    name={compilation.name}
+                    onChange={(next) => {
+                      const { intro: before, ...rest } = compilation;
+                      if (!next) return onChange(rest);
+                      // Another style picked here is the streamer's choice, no longer the AI's
+                      const { by, ...picked } = next as typeof next & { by?: "ai" };
+                      onChange({ ...rest, intro: by && before?.style === next.style ? { ...picked, by } : picked });
+                    }}
+                    onClose={() => setMenu(null)}
+                    className="right-0 bottom-full mb-2"
+                    hook={hook}
+                  />
+                )}
+              </SettingRow>
+            )}
+            {/* A music under the whole video: turned down when people talk */}
+            {musics.length > 0 && (
+              <SettingRow icon={Music2} label={t("compilation.music.label")} value={track?.name ?? t("compilation.music.none")} set={!!track} open={menu === "music"} onOpen={() => setMenu(menu === "music" ? null : "music")}>
+                {menu === "music" && (
+                  <MusicPicker
+                    value={track ? compilation.music! : null}
+                    tracks={musics}
+                    favourites={favourites}
+                    onChange={(next) => {
+                      const { music: _before, ...rest } = compilation;
+                      onChange(next ? { ...rest, music: next } : rest);
+                    }}
+                    onClose={() => setMenu(null)}
+                    className="right-0 bottom-full mb-2"
+                  />
+                )}
+              </SettingRow>
+            )}
+          </div>
+          {/* What the AI said of its choices, once it has made some: two lines, the rest a click away */}
+          {aiNote && (
+            <button type="button" onClick={() => setNoteOpen(!noteOpen)} aria-expanded={noteOpen} className="mt-2 px-0.5 w-full flex gap-1.5 text-left text-[12px] leading-snug text-ink-3 hover:text-ink-2 transition-colors">
+              <Sparkles className="w-3.5 h-3.5 mt-px flex-none text-accent" />
+              <span className={noteOpen ? "" : "line-clamp-2"}>{aiNote}</span>
             </button>
           )}
-          <span className="relative flex-none">
-            <button onClick={() => setMenu(menu === "video" ? null : "video")} aria-haspopup="dialog" aria-expanded={menu === "video"} className="btn btn-glass btn-sm h-9 px-3">
-              <Blend className="w-3.5 h-3.5 text-accent" /> {transitionName(compilation.transition)}
-            </button>
-            {menu === "video" && (
-              <TransitionPicker
-                title={t("compilation.transition.video")}
-                value={compilation.transition ?? PLAIN_CUT}
-                onPick={(value) => {
-                  setMenu(null);
-                  onChange(setVideoTransition(compilation, value));
-                }}
-                onClose={() => setMenu(null)}
-                className="right-0 bottom-full mb-2"
-              />
-            )}
-          </span>
-        </div>
-        {/* A jingle before the first passage: the channel's logo and colours, the video's title */}
-        {brand && (
-          <div className="flex items-center gap-3">
-            <span className="flex-1 min-w-0">
-              <span className="block text-[13.5px] font-[550] text-white">{t("compilation.intro.label")}</span>
-              <span className="block text-[12px] text-ink-3">
-                {isIntro(compilation.intro?.style)
-                  ? t("compilation.intro.on", { name: t(`compilation.intro.style.${compilation.intro.style}`), seconds: new Intl.NumberFormat(i18n.language, { maximumFractionDigits: 1 }).format(opening) })
-                  : t("compilation.intro.hint")}
-              </span>
-            </span>
-            <span className="relative flex-none">
-              <button onClick={() => setMenu(menu === "intro" ? null : "intro")} aria-haspopup="dialog" aria-expanded={menu === "intro"} className="btn btn-glass btn-sm h-9 px-3">
-                <Clapperboard className="w-3.5 h-3.5 text-accent" /> {isIntro(compilation.intro?.style) ? t(`compilation.intro.style.${compilation.intro.style}`) : t("compilation.intro.none")}
-              </button>
-              {menu === "intro" && (
-                <IntroPicker
-                  value={compilation.intro ?? null}
-                  brand={brand}
-                  name={compilation.name}
-                  onChange={(next) => {
-                    const { intro: before, ...rest } = compilation;
-                    if (!next) return onChange(rest);
-                    // Another style picked here is the streamer's choice, no longer the AI's
-                    const { by, ...picked } = next as typeof next & { by?: "ai" };
-                    onChange({ ...rest, intro: by && before?.style === next.style ? { ...picked, by } : picked });
-                  }}
-                  onClose={() => setMenu(null)}
-                  className="right-0 bottom-full mb-2"
-                  hook={hook}
-                />
-              )}
-            </span>
-          </div>
-        )}
-        {/* A music under the whole video: up front during the intro, turned down when people talk */}
-        {musics.length > 0 && (
-          <div className="flex items-center gap-3">
-            <span className="flex-1 min-w-0">
-              <span className="block text-[13.5px] font-[550] text-white">{t("compilation.music.label")}</span>
-              <span className="block text-[12px] text-ink-3 truncate">{(track && musicAbout(track, t)) || t("compilation.music.hint")}</span>
-            </span>
-            <span className="relative flex-none">
-              <button onClick={() => setMenu(menu === "music" ? null : "music")} aria-haspopup="dialog" aria-expanded={menu === "music"} className="btn btn-glass btn-sm h-9 px-3 max-w-[170px]">
-                <Music2 className="w-3.5 h-3.5 flex-none text-accent" /> <span className="truncate">{track?.name ?? t("compilation.music.none")}</span>
-              </button>
-              {menu === "music" && (
-                <MusicPicker
-                  value={track ? compilation.music! : null}
-                  tracks={musics}
-                  favourites={favourites}
-                  onChange={(next) => {
-                    const { music: _before, ...rest } = compilation;
-                    onChange(next ? { ...rest, music: next } : rest);
-                  }}
-                  onClose={() => setMenu(null)}
-                  className="right-0 bottom-full mb-2"
-                />
-              )}
-            </span>
-          </div>
-        )}
-        {/* The AI says what kind of video this is and picks the music and the intro that go with it (or none) */}
-        {onSound && (musics.length > 0 || brand) && (
-          <div>
-            <button onClick={onSound} disabled={count === 0 || sounding} className="btn btn-glass btn-sm w-full">
-              {sounding ? <Loader2 className="w-3.5 h-3.5 spinner" /> : <Sparkles className="w-3.5 h-3.5 text-accent" />}
-              {t(sounding ? "compilation.soundAi.working" : "compilation.soundAi.ai")}
-              {!sounding && <span className="mono text-[11.5px] text-ink-3">{`< ${dollars(0.01)}`}</span>}
-            </button>
-            <p className="mt-1.5 px-0.5 text-[12px] leading-snug text-ink-3">{soundNote || t("compilation.soundAi.hint")}</p>
-          </div>
-        )}
-        <div>
-          <div className="flex flex-wrap items-center gap-2">
-            <button onClick={onLooks} disabled={count === 0 || looking || cutting.size > 0} className="btn btn-glass btn-sm flex-1 min-w-[190px]">
-              {looking ? <Loader2 className="w-3.5 h-3.5 spinner" /> : <Sparkles className="w-3.5 h-3.5 text-accent" />}
-              {t(looking ? "compilation.aiLooking" : "compilation.aiLooks")}
-              {!looking && <span className="mono text-[11.5px] text-ink-3">{looksCost}</span>}
-            </button>
-            {ownLooks > 0 && !looking && (
-              <button onClick={onSameLook} className="btn btn-ghost btn-sm">
-                {t("compilation.looksSame")}
-              </button>
-            )}
-          </div>
-          <p className="mt-1.5 px-0.5 text-[12px] leading-snug text-ink-3">{looksNote || t("compilation.aiLooksHint")}</p>
         </div>
 
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-1.5">
           <button onClick={onExport} disabled={count === 0 || exporting || editing || cutting.size > 0} className="btn btn-primary btn-lg w-full h-[48px]">
             {exporting ? (
               <Loader2 className="w-4 h-4 spinner" />
@@ -691,20 +683,106 @@ export default function CompilationPanel({
           {/* Or the whole video as one clip in the layer editor, where everything can be moved */}
           {onEdit && (
             <>
-              <button onClick={onEdit} disabled={count === 0 || exporting || editing || cutting.size > 0} className="btn btn-glass w-full">
-                {editing ? <Loader2 className="w-4 h-4 spinner" /> : <Layers className="w-[15px] h-[15px]" />}
+              <button onClick={onEdit} disabled={count === 0 || exporting || editing || cutting.size > 0} title={t("compilation.editorHint")} className="btn btn-ghost btn-sm w-full">
+                {editing ? <Loader2 className="w-3.5 h-3.5 spinner" /> : <Layers className="w-3.5 h-3.5" />}
                 {t(editing ? "compilation.editorPreparing" : "compilation.openEditor")}
               </button>
-              <p className="px-0.5 text-[12px] leading-snug text-ink-3">
-                {t("compilation.editorHint")}
-                {/* The editor has one layout for the whole video: said when this one has more */}
-                {(own > 0 || !!compilation.transition || ownLooks > 0 || !!compilation.intro || !!compilation.music) && <span className="text-[#f0c987]"> {t("compilation.editorLoses")}</span>}
-              </p>
+              {/* The editor has one layout for the whole video: said when this one has more */}
+              {(own > 0 || !!compilation.transition || ownLooks > 0 || !!compilation.intro || !!compilation.music) && <p className="px-2 text-center text-[11.5px] leading-snug text-[#f0c987]">{t("compilation.editorLoses")}</p>}
             </>
           )}
         </div>
       </div>
     </aside>
+  );
+}
+
+/** One line of the settings list (its hover fills it, rounded where the list is) */
+const ROW = "relative first:rounded-t-[12px] last:rounded-b-[12px] hover:bg-white/[0.045] transition-colors";
+
+/**
+ * One setting of the video: what it is, what it is set to, and its picker a click away
+ * (`children`, laid against the row). `set`: it has a value of its own (else what it shows is
+ * "none"). `apart`: some passages do otherwise, said under it with a way to bring them back.
+ */
+function SettingRow({
+  icon: Icon,
+  label,
+  value,
+  set = true,
+  open,
+  onOpen,
+  apart,
+  children,
+}: {
+  icon: LucideIcon;
+  label: string;
+  value: string;
+  set?: boolean;
+  open: boolean;
+  onOpen: () => void;
+  apart?: { text: string; action: string; onClick: () => void };
+  children?: ReactNode;
+}) {
+  return (
+    <div className={ROW}>
+      <button type="button" onClick={onOpen} aria-haspopup="dialog" aria-expanded={open} aria-label={`${label} : ${value}`} className="group w-full h-11 pl-3 pr-2.5 flex items-center gap-2.5 text-left">
+        <Icon className={`w-4 h-4 flex-none ${set ? "text-accent" : "text-ink-3"}`} />
+        <span className="flex-none text-[13.5px] font-[550] text-white">{label}</span>
+        <span className={`flex-1 min-w-0 truncate text-right text-[13px] ${set ? "text-ink-2" : "text-ink-3"}`}>{value}</span>
+        <ChevronRight className="w-3.5 h-3.5 flex-none text-ink-4 transition-colors group-hover:text-ink-2" />
+      </button>
+      {apart && (
+        <p className="-mt-1.5 pb-2 pl-[38px] pr-3 flex items-baseline gap-2 text-[12px] text-ink-3">
+          <span className="flex-1 min-w-0 truncate">{apart.text}</span>
+          <button type="button" onClick={apart.onClick} className="flex-none text-accent hover:text-white transition-colors">
+            {apart.action}
+          </button>
+        </p>
+      )}
+      {children}
+    </div>
+  );
+}
+
+/** The templates a video can be shown in: the channel's default, then every other, by name */
+function TemplateMenu({ value, templates, onPick, onClose }: { value: string | null; templates: { key: string; name: string }[]; onPick: (key: string | null) => void; onClose: () => void }) {
+  const { t } = useTranslation();
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const outside = (e: PointerEvent) => !box.current?.contains(e.target as Node) && onClose();
+    const escape = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    document.addEventListener("pointerdown", outside, true);
+    document.addEventListener("keydown", escape);
+    return () => {
+      document.removeEventListener("pointerdown", outside, true);
+      document.removeEventListener("keydown", escape);
+    };
+  }, [onClose]);
+  const option = (key: string | null, name: string) => (
+    <button
+      key={key ?? "default"}
+      type="button"
+      aria-pressed={key === value}
+      onClick={() => onPick(key)}
+      className={`w-full h-8 px-2.5 rounded-[8px] flex items-center gap-2 text-left text-[13px] transition-colors ${key === value ? "bg-accent-soft text-white" : "text-ink-2 hover:bg-white/[0.07]"}`}
+    >
+      <span className="flex-1 min-w-0 truncate">{name}</span>
+      {key === value && <Check className="w-3.5 h-3.5 flex-none text-accent" strokeWidth={2.6} />}
+    </button>
+  );
+  return (
+    <div
+      ref={box}
+      role="dialog"
+      aria-label={t("compilation.template")}
+      data-nodrag
+      onClick={(e) => e.stopPropagation()}
+      className="absolute z-40 right-0 bottom-full mb-2 w-[250px] max-h-[330px] overflow-y-auto p-1.5 rounded-[14px] bg-[#171a18]/[0.98] border border-white/[0.12] shadow-[0_24px_60px_-18px_rgba(0,0,0,0.9)]"
+    >
+      {option(null, t("compilation.defaultTemplate"))}
+      {templates.map((tpl) => option(tpl.key, tpl.name))}
+    </div>
   );
 }
 

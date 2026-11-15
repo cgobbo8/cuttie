@@ -276,19 +276,51 @@ function Footage({ d }: { d: Drawn }) {
   );
 }
 
+/** The frame's edge as a fuse: a line a little inside the picture, going clockwise from the middle of the top */
+const FUSE_INSET = 24;
+const FUSE_W = INTRO_W - 2 * FUSE_INSET;
+const FUSE_H = INTRO_H - 2 * FUSE_INSET;
+const FUSE_LENGTH = 2 * (FUSE_W + FUSE_H);
+const FUSE_PATH = `M ${INTRO_W / 2} ${FUSE_INSET} H ${INTRO_W - FUSE_INSET} V ${INTRO_H - FUSE_INSET} H ${FUSE_INSET} V ${FUSE_INSET} H ${INTRO_W / 2}`;
+
+/** Where the fuse has burnt to, `at` pixels along it */
+function alongFuse(at: number): { x: number; y: number } {
+  const legs: [length: number, x: number, y: number, dx: number, dy: number][] = [
+    [FUSE_W / 2, INTRO_W / 2, FUSE_INSET, 1, 0],
+    [FUSE_H, INTRO_W - FUSE_INSET, FUSE_INSET, 0, 1],
+    [FUSE_W, INTRO_W - FUSE_INSET, INTRO_H - FUSE_INSET, -1, 0],
+    [FUSE_H, FUSE_INSET, INTRO_H - FUSE_INSET, 0, -1],
+    [FUSE_W / 2, FUSE_INSET, FUSE_INSET, 1, 0],
+  ];
+  let left = Math.max(0, at);
+  for (const [length, x, y, dx, dy] of legs) {
+    if (left <= length) return { x: x + dx * left, y: y + dy * left };
+    left -= length;
+  }
+  return { x: INTRO_W / 2, y: FUSE_INSET };
+}
+
+/** The streaks of a tape running back: where each one is across the picture, how thick, how long, and what it is painted with */
+const STREAKS = Array.from({ length: 9 }, (_, i) => ({ y: noise(i * 7.31 + 1) * 0.92 + 0.03, thick: 12 + noise(i * 3.17 + 2) * 64, long: 520 + noise(i * 5.03 + 3) * 700, late: noise(i * 9.7 + 4) * 3, tone: i % 3 }));
+
 /**
- * The best moment of the video plays first, under its title, and the intro only frames it: two slanted bands
- * of the channel's colours clap shut on the top and the bottom of the picture (where the apps put their own
- * buttons, so nothing of the moment is hidden), the logo and the name ride the top one, and a white flash cuts
- * to the start of the video. In a video the moment and its title play underneath (`over`); alone, as in the
+ * The best moment of the video plays first, under its title, and the intro only frames it. A fuse runs round
+ * the picture and burns away as the moment plays: when it is gone the video starts. The channel is slapped on
+ * a corner as a sticker (its logo, its name, its follow button). On the last frames the tape runs back (streaks
+ * tear across, a rewind sign pops) and a white flash cuts to the start of the video: the moment was a look
+ * ahead, the video now begins. In a video the moment and its title play underneath (`over`); alone, as in the
  * picker, it draws what stands for them.
  */
 function Hook(d: Drawn) {
-  const shut = backOut(between(d.f, 0, 12), 1.5);
-  const away = easeIn(d.leave);
-  // A flash that peaks on the cut to the video. None on the first frames: the first picture of the video is its cover
-  const flash = d.f < d.hold ? between(d.f, d.hold - 3, d.hold) : 1 - easeOut(d.leave);
-  const band: CSSProperties = { position: "absolute", left: -110, width: INTRO_W + 220 };
+  // The fuse is whole on the first picture (the video's cover), then burns until a moment before the cut
+  const burnt = between(d.f, 5, d.hold - 6) * FUSE_LENGTH;
+  const spark = alongFuse(burnt);
+  const lit = d.f >= 5 && d.f < d.hold - 6;
+  const slap = backOut(between(d.f, 0, 11), 2.6);
+  // The tape runs back over the last frames of the moment, and the first of the video
+  const back = between(d.f, d.hold - 9, d.hold);
+  const flash = d.f < d.hold ? easeIn(back) : 1 - easeOut(d.leave);
+  const paint = [d.colors.highlight, "#ffffff", d.colors.accent];
   return (
     <div style={FILL}>
       {!d.over && (
@@ -317,18 +349,44 @@ function Hook(d: Drawn) {
           </div>
         </>
       )}
-      <div
-        style={{ ...band, top: -150, height: 340, background: d.colors.accent, boxShadow: `0 16px 0 ${INK}`, overflow: "hidden", display: "flex", alignItems: "flex-end", gap: 26, padding: "0 0 26px 158px", transform: `translateY(${(shut - 1) * 380 - away * 420}px) rotate(-3deg)` }}
-      >
-        {/* Not a flat slab: hatched, and the hatching drifts */}
-        <div style={{ position: "absolute", inset: "0 -200px", background: "repeating-linear-gradient(118deg, rgba(0,0,0,0.13) 0 16px, transparent 16px 44px)", transform: `translateX(${(d.f * 1.5) % 44}px)` }} />
-        {d.logoBox(112, { position: "relative", boxShadow: `0 0 0 8px ${INK}` })}
-        <Signature d={d} color={inkOn(d.colors.accent)} tone="ink" style={{ position: "relative" }} />
+      {/* The fuse: inked, in the channel's colour, burning away from where it started */}
+      <svg viewBox={`0 0 ${INTRO_W} ${INTRO_H}`} style={{ ...FILL, width: "100%", height: "100%", overflow: "visible", opacity: 1 - d.leave }}>
+        <path d={FUSE_PATH} fill="none" stroke={INK} strokeWidth={36} strokeLinejoin="round" strokeDasharray={`0 ${burnt} ${FUSE_LENGTH} ${FUSE_LENGTH}`} />
+        <path d={FUSE_PATH} fill="none" stroke={d.colors.highlight} strokeWidth={20} strokeLinejoin="round" strokeDasharray={`0 ${burnt} ${FUSE_LENGTH} ${FUSE_LENGTH}`} />
+      </svg>
+      {/* Its spark, and what flies off it */}
+      {lit && (
+        <div style={{ position: "absolute", left: spark.x, top: spark.y }}>
+          <div
+            style={{ position: "absolute", left: -90, top: -90, width: 180, height: 180, borderRadius: "50%", background: `radial-gradient(circle, #ffffff 0 12%, ${d.colors.highlight} 26%, transparent 66%)`, transform: `scale(${0.75 + 0.5 * noise(d.f * 1.7)})` }}
+          />
+          {[0, 1, 2, 3, 4, 5, 6].map((i) => {
+            const angle = noise(Math.floor(d.f) * 3.3 + i * 11) * 2 * Math.PI;
+            const far = 40 + noise(Math.floor(d.f) * 5.1 + i * 17) * 130;
+            const size = 8 + noise(i * 2.9 + Math.floor(d.f)) * 14;
+            return <div key={i} style={{ position: "absolute", left: Math.cos(angle) * far - size / 2, top: Math.sin(angle) * far - size / 2, width: size, height: size, background: i % 2 ? "#ffffff" : d.colors.highlight, transform: "rotate(45deg)" }} />;
+          })}
+        </div>
+      )}
+      {/* The channel, slapped on a corner */}
+      <div style={{ position: "absolute", left: 70, top: 78, display: "flex", alignItems: "center", gap: 24, transformOrigin: "60px 60px", transform: `rotate(-4deg) scale(${1.3 - 0.3 * slap})`, opacity: 1 - d.leave }}>
+        {d.logoBox(120, { boxShadow: `0 0 0 8px #ffffff, 9px 11px 0 8px ${INK}` })}
+        <Signature d={d} color="#ffffff" tone="white" tag={{ padding: "10px 26px 8px", background: INK }} />
       </div>
-      {/* The bottom one is a strip of warning tape running across */}
-      <div style={{ ...band, bottom: -150, height: 322, background: d.colors.highlight, boxShadow: `0 -16px 0 ${INK}`, overflow: "hidden", transform: `translateY(${(1 - shut) * 380 + away * 420}px) rotate(-3deg)` }}>
-        <div style={{ position: "absolute", inset: "0 -260px", background: `repeating-linear-gradient(118deg, ${INK} 0 50px, transparent 50px 130px)`, opacity: 0.2, transform: `translateX(${-((d.f * 4) % 130)}px)` }} />
-      </div>
+      {/* The tape runs back: streaks tear across from the right, a rewind sign pops in the middle */}
+      {back > 0 && d.leave < 1 && (
+        <>
+          {STREAKS.map((streak, i) => {
+            const run = between(d.f, d.hold - 9 + streak.late, d.hold + 7);
+            return <div key={i} style={{ position: "absolute", top: streak.y * INTRO_H, left: INTRO_W - run * (INTRO_W + streak.long + 300), width: streak.long, height: streak.thick, background: paint[streak.tone], boxShadow: `0 6px 0 ${INK}`, opacity: 0.92 }} />;
+          })}
+          <svg viewBox="-260 -160 520 320" style={{ position: "absolute", left: INTRO_W / 2 - 260, top: INTRO_H * 0.46 - 160, width: 520, height: 320, overflow: "visible", opacity: 1 - d.leave, transform: `scale(${backOut(between(d.f, d.hold - 8, d.hold - 2), 2.4)}) rotate(-5deg)` }}>
+            {[-20, 190].map((x) => (
+              <polygon key={x} points={`${x},-120 ${x - 170},0 ${x},120`} fill={d.colors.highlight} stroke={INK} strokeWidth={22} strokeLinejoin="round" />
+            ))}
+          </svg>
+        </>
+      )}
       <div style={{ ...FILL, background: "#ffffff", opacity: flash }} />
     </div>
   );

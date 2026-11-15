@@ -199,7 +199,7 @@ def test_the_sound_of_a_video_is_chosen_from_what_it_is_and_what_the_streamer_li
     })
     chosen = looks.choose_sound(VIDEO, MUSICS, favourites={"skill": "phonk", "epic": "phonk", "chill": "kazoo"}, preferred_intro="rush", asked="une musique marrante", language="fr", client=model)
     # The best of the intros that fit (the preferred one is not among them: it is not forced), with why this one
-    assert chosen == {"kind": "funny", "music": "chiptune", "intro": "bands", "why": "Une vidéo drôle : Pixel Chiptune. L'intro Bandes pour le ton léger.", "teaser": None, "cost": 0.002}
+    assert chosen == {"kind": "funny", "music": "chiptune", "intro": "bands", "why": "Une vidéo drôle : Pixel Chiptune. L'intro Bandes pour le ton léger.", "teaser": None, "transition": None, "cost": 0.002}
 
     call = model.seen[0]
     assert call["model"] == live_agent.SEARCH_MODEL
@@ -291,6 +291,11 @@ def test_the_ai_names_the_passage_a_video_could_open_on_and_knows_the_hook_intro
     # A number that names no passage it was shown, the first passage, or no number: none named
     for wrong in (0, 1, 31, -2, "7", 7.0, True, None):
         assert looks.choose_sound({**VIDEO, "said": said}, MUSICS, client=Eyes({**answer, "teaser": wrong}))["teaser"] is None, wrong
+    # How the passages follow each other: one of the app's transitions or a plain cut; anything else is not kept
+    assert "5. TRANSITION." in shown and "[cut] A plain cut." in shown and "[pop] The next passage bounces in." in shown and '"transition": "<transition key>"' in shown
+    assert chosen["transition"] is None
+    for said_so, kept in (("pop", "pop"), ("cut", "cut"), ("wobble", None), (3, None)):
+        assert looks.choose_sound(VIDEO, MUSICS, client=Eyes({**answer, "transition": said_so}))["transition"] == kept
     # The intros it knows are the app's: the hook first, the sticker intro gone
     assert list(looks.INTROS)[0] == "hook" and "sticker" not in looks.INTROS and len(looks.INTROS) == 11
 
@@ -300,7 +305,7 @@ def test_no_music_and_no_intro_are_kept_as_such_and_a_wrong_answer_is_made_safe(
     assert (none["kind"], none["music"], none["intro"]) == ("chill", None, None)
     shown_nothing = Eyes({"kind": "epic", "music": "kazoo", "intro": "wobble"})
     wrong = looks.choose_sound({**VIDEO, "said": [], "parts": []}, MUSICS, client=shown_nothing)
-    assert wrong == {"kind": None, "music": None, "intro": None, "why": "", "teaser": None, "cost": 0.002}
+    assert wrong == {"kind": None, "music": None, "intro": None, "why": "", "teaser": None, "transition": None, "cost": 0.002}
     told = shown_nothing.seen[0]["messages"][0]["content"]
     # Nothing said in it, no parts, nothing asked, no preferred intro: said so, not left blank
     assert "one part, no titles" in told and "(nothing: mostly the game)" in told and "nothing about the sound" in told and "preferred intro" not in told

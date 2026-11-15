@@ -1646,14 +1646,18 @@
         "bands": "Bandes",
         "glitch": "Glitch",
         "neon": "Néon",
-        "card": "Carton"
+        "rush": "Vitesse",
+        "sticker": "Stickers",
+        "split": "Duel"
       },
       "sounds": {
         "boom": "Impact",
         "swish": "Souffle",
         "zap": "Parasites",
         "shine": "Éclat",
-        "drum": "Tambours"
+        "drum": "Tambours",
+        "rush": "Élan",
+        "clash": "Choc"
       },
       "chosen": "Intro choisie par l'IA : {{name}}"
     },

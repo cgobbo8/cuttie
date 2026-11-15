@@ -7,7 +7,7 @@ recording is in them, so they can ship with the app and go on any platform.
 
 Writes frontend/public/sounds/intro-<id>.mp3 (44.1 kHz stereo, peak -3 dBFS). Each one is
 timed on its intro (frontend/src/lib/intro/IntroCard.tsx): the hit of "boom" falls when the
-logo lands, the four drums of "drum" when the four lines of the title rise.
+logo lands, the drums of "drum" when the stickers of the title are slapped on.
 """
 
 import os
@@ -173,20 +173,50 @@ def shine() -> np.ndarray:
     return room(track, 0.9, 0.24)
 
 
+def rush() -> np.ndarray:
+    """Speed lines burst out, the logo rushes in: air and a tone that climb, then the title slams down (0.4 s)."""
+    track = np.zeros(int(1.75 * SR))
+    place(track, sweep(0.42, 250, 6500, "up"), 0.0, 0.6)
+    x = t(0.4)
+    climb = np.sin(2 * np.pi * np.cumsum(180 * (7.5 ** (x / 0.4))) / SR) * (x / 0.4) ** 2
+    place(track, lowpass(climb, 5000), 0.0, 0.22)
+    place(track, thud(1.0, 170, 44, 4.5), 0.4, 1.0)
+    crash = highpass(rng.standard_normal(int(0.9 * SR)), 3500) * np.exp(-t(0.9) * 6)
+    place(track, crash, 0.4, 0.3)
+    # The lines rush away as the video starts
+    place(track, sweep(0.3, 1500, 7000, "up"), 1.5, 0.3)
+    return room(track, 0.5, 0.16)
+
+
 def drum() -> np.ndarray:
-    """Four drums, one for each line of the title that rises, a hit when the name lands, air as the card lifts."""
-    track = np.zeros(int(2.3 * SR))
-    for freq, at in ((92, 0.1), (110, 0.27), (131, 0.43), (165, 0.6)):
-        place(track, tom(freq), at, 0.8)
+    """Stickers slapped on a wall: a clap for the logo (0.2 s), a drum for each line of the title, air as they fly off."""
+    track = np.zeros(int(2.2 * SR))
     clap = band(rng.standard_normal(int(0.25 * SR)), 900, 6000) * np.exp(-t(0.25) * 22)
-    place(track, clap, 0.73, 0.75)
-    place(track, thud(0.6, 140, 48, 7), 0.73, 0.85)
-    place(track, bell(0.8, 523.3, 6), 0.75, 0.2)
-    place(track, sweep(0.45, 700, 5000, "up"), 1.85, 0.45)
+    place(track, clap, 0.2, 0.8)
+    place(track, thud(0.4, 130, 55, 11), 0.2, 0.6)
+    for freq, at in ((98, 0.47), (123, 0.63), (147, 0.8), (196, 0.97)):
+        place(track, tom(freq), at, 0.8)
+    place(track, bell(0.7, 587.3, 6.5), 1.07, 0.22)
+    place(track, sweep(0.4, 700, 5200, "up"), 1.78, 0.45)
     return room(track, 0.35, 0.14)
 
 
-SOUNDS = {"boom": boom, "swish": swish, "zap": zap, "shine": shine, "drum": drum}
+def clash() -> np.ndarray:
+    """Two halves slam together (0.33 s): air from both sides, metal on metal, then the screen pulls apart."""
+    track = np.zeros(int(2.15 * SR))
+    place(track, sweep(0.36, 400, 3800, "up"), 0.0, 0.5)
+    place(track, sweep(0.36, 5200, 900, "up"), 0.0, 0.35)
+    x = t(1.1)
+    # Struck metal: partials that don't line up, the high ones gone first
+    clang = sum(np.sin(2 * np.pi * f * x) * np.exp(-x * d) * g for f, d, g in ((523, 5, 1.0), (811, 7, 0.7), (1317, 10, 0.55), (2093, 14, 0.4), (3271, 20, 0.3)))
+    place(track, clang, 0.33, 0.3)
+    place(track, thud(0.9, 150, 42, 5), 0.33, 1.0)
+    place(track, band(rng.standard_normal(int(0.2 * SR)), 1500, 7000) * np.exp(-t(0.2) * 30), 0.33, 0.5)
+    place(track, sweep(0.5, 600, 4200, "pass"), 1.62, 0.45)
+    return room(track, 0.55, 0.18)
+
+
+SOUNDS = {"boom": boom, "swish": swish, "zap": zap, "shine": shine, "rush": rush, "drum": drum, "clash": clash}
 
 
 def main() -> int:

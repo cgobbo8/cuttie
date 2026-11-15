@@ -105,8 +105,8 @@ export const isTransition = (value: unknown): value is string => typeof value ==
  * video starts, then how long it takes to leave over the first piece, in frames at 30 a second.
  * And the sound effects one can play (api/public/sounds/intro-<id>.mp3).
  */
-export const INTROS: Record<string, [number, number]> = { slam: [48, 8], bands: [54, 12], glitch: [45, 6], neon: [60, 10], card: [57, 12] }
-export const INTRO_SOUNDS = ['boom', 'swish', 'zap', 'shine', 'drum']
+export const INTROS: Record<string, [number, number]> = { slam: [48, 8], bands: [54, 12], glitch: [45, 6], neon: [60, 10], rush: [46, 7], sticker: [54, 10], split: [50, 12] }
+export const INTRO_SOUNDS = ['boom', 'swish', 'zap', 'shine', 'rush', 'drum', 'clash']
 export const isIntro = (value: unknown): value is string => typeof value === 'string' && Object.hasOwn(INTROS, value)
 export const isIntroSound = (value: unknown): value is string => typeof value === 'string' && INTRO_SOUNDS.includes(value)
 

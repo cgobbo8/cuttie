@@ -3,7 +3,7 @@ import { backOut, between, defaultIntroSound, INTRO_IDS, INTRO_SOUND_IDS, introF
 
 describe("the intros of a compilation", () => {
   it("knows its styles and how long each holds the screen, at any frame rate", () => {
-    expect(INTRO_IDS).toEqual(["slam", "bands", "glitch", "neon", "card"]);
+    expect(INTRO_IDS).toEqual(["slam", "bands", "glitch", "neon", "rush", "sticker", "split"]);
     expect(isIntro("slam") && !isIntro("wobble") && !isIntro(undefined)).toBe(true);
     expect(introSpan("slam", 30)).toEqual({ hold: 48, out: 8 });
     // Twice the frames at 60 a second: the same time on screen

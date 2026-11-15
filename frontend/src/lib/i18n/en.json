@@ -1646,14 +1646,18 @@
         "bands": "Bands",
         "glitch": "Glitch",
         "neon": "Neon",
-        "card": "Title card"
+        "rush": "Speed",
+        "sticker": "Stickers",
+        "split": "Versus"
       },
       "sounds": {
         "boom": "Impact",
         "swish": "Whoosh",
         "zap": "Static",
         "shine": "Shine",
-        "drum": "Drums"
+        "drum": "Drums",
+        "rush": "Rush",
+        "clash": "Clash"
       },
       "chosen": "Intro chosen by the AI: {{name}}"
     },

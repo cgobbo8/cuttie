@@ -39,7 +39,7 @@ function useLoop(): number {
 }
 
 /** An intro drawn small, as the video plays it, over a picture that stands for the video */
-export function IntroSketch({ id, frame, brand, title, width = 72 }: { id: string; frame: number; brand: IntroBrand; title: string; width?: number }) {
+export function IntroSketch({ id, frame, brand, title, width = 60 }: { id: string; frame: number; brand: IntroBrand; title: string; width?: number }) {
   const span = isIntro(id) ? introSpan(id, FPS) : null;
   return (
     <div aria-hidden className="relative overflow-hidden rounded-[7px] bg-black" style={{ width, aspectRatio: "9 / 16" }}>
@@ -162,7 +162,7 @@ export default function IntroPicker({ value, brand, name, onChange, onClose, cla
       className={`absolute z-40 w-[304px] p-3 rounded-[14px] bg-[#171a18]/[0.98] border border-white/[0.12] shadow-[0_24px_60px_-18px_rgba(0,0,0,0.9)] ${className}`}
     >
       <p className="px-0.5 pb-2 text-[12px] font-[550] text-ink-2">{t("compilation.intro.pick")}</p>
-      <div className="grid grid-cols-3 gap-1.5">
+      <div className="grid grid-cols-4 gap-1">
         {tile(null, t("compilation.intro.none"))}
         {INTRO_IDS.map((id) => tile(id, t(`compilation.intro.style.${id}`)))}
       </div>

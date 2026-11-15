@@ -215,10 +215,10 @@ test.group('Compilations', (group) => {
     assert.deepEqual((await save({ style: 'slam', title: '  Le calme avant  ', sound: 'drum', colour: 'red' })).intro, { style: 'slam', title: 'Le calme avant', sound: 'drum' })
     assert.deepEqual((await save({ style: 'neon', sound: 'none' })).intro, { style: 'neon', sound: 'none' })
     // A sound nobody knows: the style's own will play
-    assert.deepEqual((await save({ style: 'card', sound: 'kazoo' })).intro, { style: 'card' })
-    // The card says how long the video is with it: 4 s of passages and 1.9 s of intro
+    assert.deepEqual((await save({ style: 'sticker', sound: 'kazoo' })).intro, { style: 'sticker' })
+    // The card says how long the video is with it: 4 s of passages and 1.8 s of intro
     const lives = ((await client.get('/api/compilations').loginAs(user)).body() as any).lives
-    assert.equal(lives[0].compilations[0].length, 5.9)
+    assert.equal(lives[0].compilations[0].length, 5.8)
     // An intro this server can't draw is not kept; no intro sent: the one it had is gone
     assert.notProperty(await save({ style: 'wobble' }), 'intro')
     await save({ style: 'slam' })

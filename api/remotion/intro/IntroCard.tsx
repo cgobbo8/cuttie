@@ -54,13 +54,13 @@ interface Drawn extends Required<Omit<IntroCardProps, "id" | "frame" | "fps" | "
   logoBox: (size: number, style?: CSSProperties, square?: boolean) => ReactNode;
 }
 
-/** The title, line by line (`masked`: each line moves behind its own window, so it can rise into view) */
-function Title({ d, color, line, masked = false }: { d: Drawn; color: string; line: (i: number) => CSSProperties; masked?: boolean }) {
+/** The title, line by line */
+function Title({ d, color, line }: { d: Drawn; color: string; line: (i: number) => CSSProperties }) {
   return (
     <div style={{ fontFamily: d.font, fontSize: d.size, lineHeight: 1.06, color, letterSpacing: "0.01em" }}>
       {d.lines.map((text, i) => (
-        <div key={i} style={masked ? { overflow: "hidden", padding: "0.08em 0 0.04em" } : undefined}>
-          <div style={{ whiteSpace: "nowrap", ...line(i) }}>{text}</div>
+        <div key={i} style={{ whiteSpace: "nowrap", ...line(i) }}>
+          {text}
         </div>
       ))}
     </div>
@@ -192,27 +192,123 @@ function Neon(d: Drawn) {
   );
 }
 
-/** A title card in the channel's colour: the words rise one line after the other, then the whole card lifts like a curtain */
-function Card(d: Drawn) {
-  const ink = inkOn(d.colors.accent);
-  const chip = backOut(between(d.f, 22, 36));
+const INK = "#0b0b0c";
+
+/** Speed lines burst from the edges like a manga panel; the logo rushes in from far away, the title slams down askew */
+function Rush(d: Drawn) {
+  const burst = easeOut(between(d.f, 0, 8));
+  const come = backOut(between(d.f, 2, 15), 1.6);
+  const slam = backOut(between(d.f, 10, 21), 2.2);
+  const shake = d.f >= 12 && d.f < 20 ? (1 - between(d.f, 12, 20)) * 18 : 0;
+  const out = easeIn(d.leave);
+  // The lines are drawn again every other frame, a little turned: they flicker as if inked by hand
+  const turn = Math.floor(d.f / 2) * 7;
+  const fade = "radial-gradient(circle at 50% 45%, transparent 24%, #000 60%)";
   return (
-    <div style={{ ...FILL, transform: `translateY(${-100 * easeIn(d.leave)}%)` }}>
+    <div style={{ ...FILL, opacity: 1 - out }}>
       <div style={{ ...FILL, background: d.colors.accent }} />
-      <div style={{ ...FILL, backgroundImage: "repeating-linear-gradient(135deg, rgba(0,0,0,0.07) 0 26px, transparent 26px 52px)" }} />
-      <div style={{ ...SAFE, alignItems: "flex-start", textAlign: "left" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 26, padding: "16px 38px 16px 16px", borderRadius: 999, background: ink, marginBottom: 70, transform: `scale(${chip})`, transformOrigin: "left center" }}>
-          {d.logoBox(104, { boxShadow: "none" })}
-          <Name d={d} color={d.colors.accent} />
+      <div style={{ ...FILL, background: `radial-gradient(circle at 50% 42%, ${d.colors.light}, transparent 48%)`, opacity: 0.6 }} />
+      <div
+        style={{
+          position: "absolute",
+          inset: "-40%",
+          background: `repeating-conic-gradient(from ${turn}deg at 50% 45%, ${INK} 0deg 0.9deg, transparent 0.9deg 5deg)`,
+          maskImage: fade,
+          WebkitMaskImage: fade,
+          opacity: burst,
+          transform: `scale(${1.5 - 0.5 * burst + 2 * out})`,
+        }}
+      />
+      <div style={{ ...SAFE, transform: `translate(${shake * (noise(d.f * 3.1) - 0.5) * 2}px, ${shake * (noise(d.f * 7.7) - 0.5) * 2}px)` }}>
+        {d.logoBox(330, { marginBottom: 64, opacity: between(d.f, 2, 5), transform: `scale(${0.12 + 0.88 * come})`, boxShadow: `0 0 0 14px ${INK}, 0 0 0 28px #ffffff` })}
+        <div style={{ opacity: between(d.f, 10, 12), transform: `rotate(-6deg) scale(${2.2 - 1.2 * slam})` }}>
+          <Title d={d} color="#ffffff" line={() => ({ WebkitTextStroke: `${Math.round(d.size * 0.1)}px ${INK}`, paintOrder: "stroke fill", textShadow: `10px 12px 0 ${d.colors.highlight}` })} />
         </div>
-        <Title d={d} color={ink} masked line={(i) => ({ transform: `translateY(${(1 - easeOut(between(d.f, 3 + i * 5, 17 + i * 5))) * 115}%)` })} />
-        <div style={{ marginTop: 46, height: 24, width: `${100 * easeOut(between(d.f, 18, 34))}%`, background: ink }} />
+        <Name d={d} color={INK} style={{ marginTop: 56, padding: "10px 30px 8px", background: "#ffffff", opacity: between(d.f, 20, 24), transform: `rotate(-6deg) scale(${backOut(between(d.f, 20, 30))})` }} />
       </div>
     </div>
   );
 }
 
-const DRAW: Record<IntroId, (d: Drawn) => ReactNode> = { slam: Slam, bands: Bands, glitch: Glitch, neon: Neon, card: Card };
+/** A star with as many points, to burst behind a logo */
+const STAR = `polygon(${Array.from({ length: 32 }, (_, i) => {
+  const radius = i % 2 ? 37 : 50;
+  const angle = (i / 32) * 2 * Math.PI;
+  return `${(50 + radius * Math.cos(angle)).toFixed(1)}% ${(50 + radius * Math.sin(angle)).toFixed(1)}%`;
+}).join(", ")})`;
+
+/** Stickers slapped on a wall of dots: the logo first, then each line of the title, each a little crooked; they fly off to show the video */
+function Sticker(d: Drawn) {
+  const slap = backOut(between(d.f, 4, 15), 2.6);
+  const fly = easeIn(d.leave);
+  const tilt = [-4, 3, -2, 4];
+  return (
+    <div style={FILL}>
+      <div style={{ ...FILL, background: d.colors.accent, opacity: 1 - fly }} />
+      <div
+        style={{ ...FILL, backgroundImage: `radial-gradient(${d.colors.highlight} 21%, transparent 23%)`, backgroundSize: "58px 58px", backgroundPosition: `${d.f * 1.4}px ${d.f * 1.4}px`, opacity: 0.6 * (1 - fly) }}
+      />
+      <div style={SAFE}>
+        <div style={{ position: "relative", marginBottom: 76, opacity: between(d.f, 4, 6), transform: `translate(${fly * -900}px, ${fly * -800}px) rotate(${-7 - fly * 40}deg) scale(${1.7 - 0.7 * slap})` }}>
+          <div style={{ position: "absolute", inset: -96, background: d.colors.highlight, clipPath: STAR, transform: `rotate(${d.f * 1.6}deg)` }} />
+          {d.logoBox(310, { position: "relative", boxShadow: `0 0 0 16px #ffffff, 14px 18px 0 16px ${INK}` })}
+        </div>
+        {d.lines.map((text, i) => {
+          const side = i % 2 ? 1 : -1;
+          return (
+            <div
+              key={i}
+              style={{
+                fontFamily: d.font,
+                fontSize: Math.round(d.size * 0.84),
+                lineHeight: 1,
+                whiteSpace: "nowrap",
+                color: INK,
+                background: "#ffffff",
+                padding: "16px 36px 10px",
+                marginTop: i ? -8 : 0,
+                boxShadow: `10px 12px 0 ${INK}`,
+                transform: `translate(${fly * side * 1150}px, ${fly * (180 + i * 130)}px) rotate(${tilt[i % 4] + fly * side * 30}deg) scale(${backOut(between(d.f, 12 + i * 5, 23 + i * 5), 2.4)})`,
+              }}
+            >
+              {text}
+            </div>
+          );
+        })}
+        <Name d={d} color="#ffffff" style={{ marginTop: 48, padding: "12px 30px 10px", background: INK, transform: `translateY(${fly * 1000}px) rotate(2deg) scale(${backOut(between(d.f, 30, 41))})` }} />
+      </div>
+    </div>
+  );
+}
+
+/** Two halves slam together along a slanted seam, like a versus screen; a flash where they meet, then they pull apart on the video */
+function Split(d: Drawn) {
+  const meet = backOut(between(d.f, 0, 12), 1.1);
+  const open = easeIn(d.leave);
+  const spark = d.f >= 9 ? 1 - between(d.f, 9, 19) : 0;
+  const away = (1 - meet) * 72 + open * 78;
+  const strip = easeOut(between(d.f, 14, 27));
+  const gone = between(d.leave, 0, 0.45);
+  return (
+    <div style={FILL}>
+      {/* Each half is wider than the screen: when they bounce past the seam, no edge shows behind them */}
+      <div style={{ position: "absolute", top: 0, bottom: 0, left: "-30%", width: "130%", background: d.colors.dark, clipPath: "polygon(0 0, 70.77% 0, 52.31% 100%, 0 100%)", transform: `translateX(${-away / 1.3}%)` }} />
+      <div style={{ position: "absolute", top: 0, bottom: 0, left: 0, width: "130%", background: d.colors.accent, clipPath: "polygon(47.69% 0, 100% 0, 100% 100%, 29.23% 100%)", transform: `translateX(${away / 1.3}%)` }} />
+      {/* The seam: a bright line where the two halves touch, as long as they do */}
+      <div style={{ position: "absolute", left: "50%", top: "-15%", width: 18, height: "130%", marginLeft: -9, background: "#ffffff", opacity: between(d.f, 9, 11) * (1 - between(d.leave, 0, 0.2)), transform: "rotate(7.7deg)", boxShadow: `0 0 40px 10px ${d.colors.highlight}` }} />
+      <div style={{ ...FILL, background: "#ffffff", opacity: 0.7 * spark }} />
+      <div style={{ ...SAFE, opacity: 1 - gone, transform: `scale(${1 - 0.25 * gone})` }}>
+        {d.logoBox(320, { marginBottom: 70, opacity: between(d.f, 10, 12), transform: `scale(${backOut(between(d.f, 10, 23), 2.3)})`, boxShadow: `0 0 0 14px #ffffff, 0 0 0 26px ${INK}` })}
+        <div style={{ padding: "30px 60px 22px", background: INK, transform: `translateX(${(1 - strip) * -1200}px) rotate(-4deg)`, boxShadow: `14px 14px 0 ${d.colors.highlight}` }}>
+          <Title d={d} color="#ffffff" line={() => ({})} />
+        </div>
+        <Name d={d} color="#ffffff" style={{ marginTop: 70, opacity: between(d.f, 26, 34), textShadow: `0 4px 0 ${INK}` }} />
+      </div>
+    </div>
+  );
+}
+
+const DRAW: Record<IntroId, (d: Drawn) => ReactNode> = { slam: Slam, bands: Bands, glitch: Glitch, neon: Neon, rush: Rush, sticker: Sticker, split: Split };
 
 /**
  * One frame of an intro, in a 1080 x 1920 box. It takes its frame as a number

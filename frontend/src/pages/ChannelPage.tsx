@@ -25,7 +25,8 @@ const SUB_STYLES: SubtitleStyle[] = ["bold", "karaoke", "minimal"];
 
 function Card({ title, hint, action, children }: { title: string; hint?: string; action?: ReactNode; children: ReactNode }) {
   return (
-    <article className="glass rounded-[18px] p-5 min-w-0">
+    // (a card being used comes above those after it: what it opens, a picker, may hang over the next card)
+    <article className="glass rounded-[18px] p-5 min-w-0 relative focus-within:z-20">
       <div className="flex items-start justify-between gap-3">
         <div>
           <h2 className="text-[16px] font-semibold tracking-[-0.01em] text-white">{title}</h2>

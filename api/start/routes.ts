@@ -97,6 +97,9 @@ router
         // Background musics of a video
         router.get('/musics', [() => import('#controllers/musics_controller'), 'index'])
         router.get('/musics/:id', [() => import('#controllers/musics_controller'), 'show'])
+        router.post('/musics', [() => import('#controllers/musics_controller'), 'store'])
+        router.put('/musics/:id', [() => import('#controllers/musics_controller'), 'update'])
+        router.delete('/musics/:id', [() => import('#controllers/musics_controller'), 'destroy'])
         router.get('/jobs/:id/loudness', [() => import('#controllers/musics_controller'), 'level'])
 
         // Searching the live, compilations (videos made of pieces of the live)

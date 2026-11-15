@@ -33,8 +33,12 @@ export interface MusicTrack {
   lufs: number;
   /** What it sounds like and what it is for, in English: read by the AI */
   about: string;
+  /** One the streamer added: its description is theirs (the AI wrote a first one, they can change it) */
+  own?: boolean;
+  description?: string;
 }
 
+/** The tracks that ship with the app (the streamer's own come from the API: see library.ts) */
 export const MUSICS: MusicTrack[] = catalogue.tracks;
 export const musicOf = (id: string | null | undefined): MusicTrack | undefined => (id ? MUSICS.find((track) => track.id === id) : undefined);
 

@@ -8,7 +8,6 @@ from types import SimpleNamespace
 import pytest
 
 from app.services import live_agent, music_library
-from app.services.provider_errors import ProviderUnavailable
 
 
 class Ears:
@@ -81,9 +80,9 @@ def test_a_track_is_kept_with_its_measures_when_nothing_can_listen(track):
     class Refused(Exception):
         status_code = 402
 
-    # No credits is said as such, not hidden behind an empty description
-    with pytest.raises(ProviderUnavailable):
-        music_library.describe(track, "fr", Ears(Refused("no credits")))
+    # No credits: the track is still kept with what was measured, and why nobody heard it is said
+    broke = music_library.describe(track, "fr", Ears(Refused("no credits")))
+    assert (broke["heard"], broke["why"], broke["seconds"]) == (False, "credits", 50.0)
 
 
 def test_a_file_too_short_is_refused(tmp_path):

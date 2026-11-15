@@ -1,3 +1,4 @@
+import type { MusicTrack } from "./music/mix";
 import type { AnalysisEta } from "./format";
 import type { CustomTemplate } from "./templates";
 import type { TemplateSpec } from "./templateSpec";
@@ -1246,10 +1247,31 @@ export async function chooseSound(
   return liveJson(await postJson(`${BASE}/jobs/${jobId}/sound`, body));
 }
 
-/** The background musics whose file is on this machine (ids of lib/music's catalogue) */
-export async function listMusics(): Promise<string[]> {
-  const json = await jsonOrThrow<{ musics: { id: string; available: boolean }[] }>(await fetch(`${BASE}/musics`), "Failed to load the musics");
-  return json.musics.filter((music) => music.available).map((music) => music.id);
+/** The background musics that can be played on this machine: those that ship (whose file is there), then the streamer's own */
+export async function listMusics(): Promise<MusicTrack[]> {
+  const json = await jsonOrThrow<{ musics: (MusicTrack & { available: boolean })[] }>(await fetch(`${BASE}/musics`), "Failed to load the musics");
+  return json.musics.filter((music) => music.available).map(({ available: _available, ...track }) => track);
+}
+
+/**
+ * The streamer adds a track of their own: the AI listens to it and says what it is for
+ * (`heard` false: it could not; `why`: "credits", "key" or "failed"). The track is there either way.
+ */
+export async function addMusic(file: File, language: string): Promise<{ music: MusicTrack; heard: boolean; why: string | null }> {
+  const body = new FormData();
+  body.append("file", file);
+  body.append("language", language);
+  return liveJson(await fetch(`${BASE}/musics`, { method: "POST", body }));
+}
+
+/** The streamer corrects what one of their tracks is */
+export async function updateMusic(id: string, patch: { name?: string; kinds?: string[]; description?: string }): Promise<MusicTrack> {
+  const res = await fetch(`${BASE}/musics/${encodeURIComponent(id)}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(patch) });
+  return (await jsonOrThrow<{ music: MusicTrack }>(res, "Failed to save the music")).music;
+}
+
+export async function deleteMusic(id: string): Promise<void> {
+  await jsonOrThrow(await fetch(`${BASE}/musics/${encodeURIComponent(id)}`, { method: "DELETE" }), "Failed to remove the music");
 }
 
 /** How loud a live's clips are (LUFS), null when nothing could be measured: what the preview sets the music against */

@@ -4,6 +4,7 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import i18n from "i18next";
 import "../../lib/i18n";
 import type { Compilation, CompilationItem } from "../../lib/api";
+import { MUSICS } from "../../lib/music/mix";
 import CompilationPanel from "./CompilationPanel";
 
 const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn(), info: vi.fn() }));
@@ -221,14 +222,14 @@ describe("the passages of a compilation", () => {
   it("asks the AI for the music and the intro, and says what it answered", () => {
     const onSound = vi.fn();
     const brand = { name: "Falkarst", logo: null, colors: { accent: "#42BF85", highlight: "#F7C502", dark: "#19405A", light: "#BDF3DA" }, font: "Anton" };
-    const { rerender } = render(<CompilationPanel {...base} compilation={video()} onChange={() => {}} brand={brand} musics={["phonk"]} onSound={onSound} />);
+    const { rerender } = render(<CompilationPanel {...base} compilation={video()} onChange={() => {}} brand={brand} musics={MUSICS.filter((track) => track.id === "phonk")} onSound={onSound} />);
     expect(screen.getByText(/Elle regarde quel genre de vidéo/)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /Musique et intro par l'IA/ }));
     expect(onSound).toHaveBeenCalledTimes(1);
     // While it thinks the button waits; then its answer takes the place of the explanation
-    rerender(<CompilationPanel {...base} compilation={video()} onChange={() => {}} brand={brand} musics={["phonk"]} onSound={onSound} sounding />);
+    rerender(<CompilationPanel {...base} compilation={video()} onChange={() => {}} brand={brand} musics={MUSICS.filter((track) => track.id === "phonk")} onSound={onSound} sounding />);
     expect((screen.getByRole("button", { name: /L'IA choisit la musique/ }) as HTMLButtonElement).disabled).toBe(true);
-    rerender(<CompilationPanel {...base} compilation={{ ...video(), music: { track: "phonk" } }} onChange={() => {}} brand={brand} musics={["phonk"]} onSound={onSound} soundNote="Une vidéo de skill : Drift Phonk." />);
+    rerender(<CompilationPanel {...base} compilation={{ ...video(), music: { track: "phonk" } }} onChange={() => {}} brand={brand} musics={MUSICS.filter((track) => track.id === "phonk")} onSound={onSound} soundNote="Une vidéo de skill : Drift Phonk." />);
     expect(screen.getByText("Une vidéo de skill : Drift Phonk.")).toBeTruthy();
     // The music it has is named on its row
     expect(screen.getByRole("button", { name: /Drift Phonk/ })).toBeTruthy();

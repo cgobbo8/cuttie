@@ -746,7 +746,22 @@
     "introPreferred": "Intro preferida",
     "introNone": "Ninguna",
     "noMusics": "No hay ninguna música instalada en este equipo.",
-    "musicFor": "Música para: {{kind}}"
+    "musicFor": "Música para: {{kind}}",
+    "ownMusics": "Tus músicas",
+    "ownMusicsHint": "Añade un archivo: la IA lo escucha y escribe para qué sirve (menos de un céntimo). Puedes corregirlo todo.",
+    "addMusic": "Añadir una música",
+    "musicListening": "La IA escucha…",
+    "musicAdded": "«{{name}}» añadida. Lee lo que dice la IA.",
+    "musicAddedUnheard": "«{{name}}» añadida. La IA no pudo escucharla: escribe la descripción.",
+    "musicAddedNoCredits": "«{{name}}» añadida. No quedan créditos para que la IA la escuche: escribe la descripción.",
+    "musicAddFailed": "No se pudo añadir esta música.",
+    "removeMusic": "Quitar {{name}}",
+    "musicRemoved": "Música quitada",
+    "musicSaved": "Música guardada",
+    "musicName": "Nombre de la música",
+    "musicKinds": "Tipos de vídeo a los que va",
+    "musicDescription": "Qué es esta música (la IA lo lee para elegir)",
+    "musicDescriptionHint": "A qué suena, para qué vídeos. La IA lee este texto para elegir."
   },
   "project": {
     "steps": "Pasos del proyecto",
@@ -1704,7 +1719,8 @@
         "lofi": "Lofi relajado, percusiones ligeras, sintetizadores aéreos. Para charlas.",
         "lofi2": "Lofi pausado con sintetizadores ligeros. Para charlas y momentos tranquilos.",
         "chill": "Lo-fi lento y suave, muy de fondo. Para charlas y juego tranquilo."
-      }
+      },
+      "unsorted": "Otras"
     },
     "soundAi": {
       "ai": "Música e intro por la IA",

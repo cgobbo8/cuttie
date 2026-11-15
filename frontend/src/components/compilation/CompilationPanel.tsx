@@ -26,7 +26,8 @@ import { clock } from "../../lib/format";
 import { frameAt, tileStyle } from "../../lib/storyboard";
 import { useToast } from "../Toast";
 import { introSeconds, isIntro } from "../../lib/intro/intros";
-import { musicOf } from "../../lib/music/mix";
+import { musicAbout, trackOf } from "../../lib/music/library";
+import type { MusicTrack } from "../../lib/music/mix";
 import IntroPicker, { type IntroBrand } from "./IntroPicker";
 import MusicPicker from "./MusicPicker";
 import TransitionPicker from "./TransitionPicker";
@@ -73,8 +74,8 @@ interface Props {
   editing?: boolean;
   /** What an intro is drawn with (the channel's logo and colours); without it the video's intro can't be chosen here */
   brand?: IntroBrand;
-  /** The background musics whose file is on this machine (none: the video's music can't be chosen here) */
-  musics?: string[];
+  /** The background musics that can be played on this machine (none: the video's music can't be chosen here) */
+  musics?: MusicTrack[];
   /** The streamer's favourite music for each kind of video, by kind */
   favourites?: Record<string, string>;
   /** The AI is choosing the video's music and intro; what it said of its choice; asking it */
@@ -285,6 +286,8 @@ export default function CompilationPanel({
     first?.scrollIntoView({ block: "center", behavior: "smooth" });
   }, [fresh, freshAt]);
   const ownLooks = allItems(compilation).filter((item) => item.template).length;
+  // The track the video plays, when it is one that can be played here
+  const track = trackOf(musics, compilation.music?.track);
   // The intro is part of the video: it counts in its length
   const opening = introSeconds(compilation.intro);
   const total = compilationLength(compilation) + opening;
@@ -614,16 +617,16 @@ export default function CompilationPanel({
           <div className="flex items-center gap-3">
             <span className="flex-1 min-w-0">
               <span className="block text-[13.5px] font-[550] text-white">{t("compilation.music.label")}</span>
-              <span className="block text-[12px] text-ink-3 truncate">{musicOf(compilation.music?.track) ? t(`compilation.music.about.${compilation.music!.track}`) : t("compilation.music.hint")}</span>
+              <span className="block text-[12px] text-ink-3 truncate">{(track && musicAbout(track, t)) || t("compilation.music.hint")}</span>
             </span>
             <span className="relative flex-none">
               <button onClick={() => setMenu(menu === "music" ? null : "music")} aria-haspopup="dialog" aria-expanded={menu === "music"} className="btn btn-glass btn-sm h-9 px-3 max-w-[170px]">
-                <Music2 className="w-3.5 h-3.5 flex-none text-accent" /> <span className="truncate">{musicOf(compilation.music?.track)?.name ?? t("compilation.music.none")}</span>
+                <Music2 className="w-3.5 h-3.5 flex-none text-accent" /> <span className="truncate">{track?.name ?? t("compilation.music.none")}</span>
               </button>
               {menu === "music" && (
                 <MusicPicker
-                  value={musicOf(compilation.music?.track) ? compilation.music! : null}
-                  available={musics}
+                  value={track ? compilation.music! : null}
+                  tracks={musics}
                   favourites={favourites}
                   onChange={(next) => {
                     const { music: _before, ...rest } = compilation;

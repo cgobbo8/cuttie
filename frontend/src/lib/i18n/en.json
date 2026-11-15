@@ -746,7 +746,22 @@
     "introPreferred": "Preferred intro",
     "introNone": "None",
     "noMusics": "No music is installed on this machine.",
-    "musicFor": "Music for: {{kind}}"
+    "musicFor": "Music for: {{kind}}",
+    "ownMusics": "Your musics",
+    "ownMusicsHint": "Add a file: the AI listens to it and writes what it is for (under a cent). You can correct everything.",
+    "addMusic": "Add a music",
+    "musicListening": "The AI is listening…",
+    "musicAdded": "“{{name}}” added. Read what the AI says of it.",
+    "musicAddedUnheard": "“{{name}}” added. The AI could not listen to it: write its description.",
+    "musicAddedNoCredits": "“{{name}}” added. No credits left for the AI to listen: write its description.",
+    "musicAddFailed": "This music could not be added.",
+    "removeMusic": "Remove {{name}}",
+    "musicRemoved": "Music removed",
+    "musicSaved": "Music saved",
+    "musicName": "Name of the music",
+    "musicKinds": "Kinds of video it suits",
+    "musicDescription": "What this music is (the AI reads it to choose)",
+    "musicDescriptionHint": "What it sounds like, for which videos. The AI reads this to choose."
   },
   "project": {
     "steps": "Project steps",
@@ -1704,7 +1719,8 @@
         "lofi": "Relaxed lofi, light drums, airy synths. For conversations.",
         "lofi2": "Laid-back lofi with light synths. For conversations and quiet moments.",
         "chill": "Slow, soft lo-fi that stays far back. For conversations and calm play."
-      }
+      },
+      "unsorted": "Others"
     },
     "soundAi": {
       "ai": "Music and intro by the AI",

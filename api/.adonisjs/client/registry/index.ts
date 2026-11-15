@@ -324,6 +324,24 @@ const routes = {
     tokens: [{"old":"/api/musics/:id","type":0,"val":"api","end":""},{"old":"/api/musics/:id","type":0,"val":"musics","end":""},{"old":"/api/musics/:id","type":1,"val":"id","end":""}],
     types: placeholder as Registry['musics.show']['types'],
   },
+  'musics.store': {
+    methods: ["POST"],
+    pattern: '/api/musics',
+    tokens: [{"old":"/api/musics","type":0,"val":"api","end":""},{"old":"/api/musics","type":0,"val":"musics","end":""}],
+    types: placeholder as Registry['musics.store']['types'],
+  },
+  'musics.update': {
+    methods: ["PUT"],
+    pattern: '/api/musics/:id',
+    tokens: [{"old":"/api/musics/:id","type":0,"val":"api","end":""},{"old":"/api/musics/:id","type":0,"val":"musics","end":""},{"old":"/api/musics/:id","type":1,"val":"id","end":""}],
+    types: placeholder as Registry['musics.update']['types'],
+  },
+  'musics.destroy': {
+    methods: ["DELETE"],
+    pattern: '/api/musics/:id',
+    tokens: [{"old":"/api/musics/:id","type":0,"val":"api","end":""},{"old":"/api/musics/:id","type":0,"val":"musics","end":""},{"old":"/api/musics/:id","type":1,"val":"id","end":""}],
+    types: placeholder as Registry['musics.destroy']['types'],
+  },
   'musics.level': {
     methods: ["GET","HEAD"],
     pattern: '/api/jobs/:id/loudness',

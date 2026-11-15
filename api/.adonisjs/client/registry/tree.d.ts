@@ -82,6 +82,9 @@ export interface ApiDefinition {
   musics: {
     index: typeof routes['musics.index']
     show: typeof routes['musics.show']
+    store: typeof routes['musics.store']
+    update: typeof routes['musics.update']
+    destroy: typeof routes['musics.destroy']
     level: typeof routes['musics.level']
   }
   compilations: {

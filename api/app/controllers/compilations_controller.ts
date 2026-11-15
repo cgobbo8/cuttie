@@ -345,7 +345,7 @@ export default class CompilationsController {
     // Only the tracks that can be played on this machine
     const musics = musicTracks()
       .filter((track) => musicFile(track.id))
-      .map((track) => ({ key: track.id, name: track.name, kinds: track.kinds, about: track.about }))
+      .map((track) => ({ key: track.id, name: track.name, kinds: track.kinds, about: track.about || track.description || track.genre || track.name }))
     try {
       const chosen = await chooseSound({
         video: {

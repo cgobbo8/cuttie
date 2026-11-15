@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Check, Pause, Play, Star } from "lucide-react";
-import { MUSIC_KINDS, MUSIC_VOLUMES, MUSICS, musicUrl, type MusicChoice, type MusicTrack } from "../../lib/music/mix";
+import { musicAbout } from "../../lib/music/library";
+import { MUSIC_KINDS, MUSIC_VOLUMES, musicUrl, type MusicChoice, type MusicTrack } from "../../lib/music/mix";
 
 interface Props {
   /** The music the video has (null: none) */
   value: MusicChoice | null;
-  /** The tracks whose file is on this machine */
-  available: string[];
+  /** The tracks that can be played on this machine: those that ship, then the streamer's own */
+  tracks: MusicTrack[];
   /** The streamer's favourite for each kind of video (brand kit), by kind */
   favourites?: Record<string, string>;
   onChange: (next: MusicChoice | null) => void;
@@ -45,7 +46,7 @@ export function useListen() {
 }
 
 /** The musics a video can play in the background, by the kind of video they suit, each one to listen to */
-export default function MusicPicker({ value, available, favourites = {}, onChange, onClose, className = "" }: Props) {
+export default function MusicPicker({ value, tracks, favourites = {}, onChange, onClose, className = "" }: Props) {
   const { t } = useTranslation();
   const box = useRef<HTMLDivElement>(null);
   const { playing, toggle } = useListen();
@@ -60,9 +61,11 @@ export default function MusicPicker({ value, available, favourites = {}, onChang
     };
   }, [onClose]);
 
-  const tracks = MUSICS.filter((track) => available.includes(track.id));
-  // Each track under the first kind it suits
-  const groups = MUSIC_KINDS.map((kind) => ({ kind, tracks: tracks.filter((track) => track.kinds[0] === kind) })).filter((group) => group.tracks.length > 0);
+  // Each track under the first kind it suits; one that says none comes last
+  const groups = [
+    ...MUSIC_KINDS.map((kind) => ({ kind: kind as string, tracks: tracks.filter((track) => track.kinds[0] === kind) })),
+    { kind: "", tracks: tracks.filter((track) => !MUSIC_KINDS.some((kind) => kind === track.kinds[0])) },
+  ].filter((group) => group.tracks.length > 0);
   const volume = value?.volume ?? MUSIC_VOLUMES.normal;
   const pick = (track: string | null) => onChange(track ? { ...(value ?? {}), track } : null);
 
@@ -87,7 +90,7 @@ export default function MusicPicker({ value, available, favourites = {}, onChang
         </button>
         {groups.map(({ kind, tracks: list }) => (
           <div key={kind}>
-            <p className="px-1 pt-2.5 pb-1 text-[11px] font-[600] tracking-[0.04em] uppercase text-ink-3">{t(`compilation.music.kind.${kind}`)}</p>
+            <p className="px-1 pt-2.5 pb-1 text-[11px] font-[600] tracking-[0.04em] uppercase text-ink-3">{kind ? t(`compilation.music.kind.${kind}`) : t("compilation.music.unsorted")}</p>
             {list.map((track) => {
               const chosen = value?.track === track.id;
               const loved = Object.entries(favourites).filter(([, id]) => id === track.id).map(([liked]) => t(`compilation.music.kind.${liked}`));
@@ -107,7 +110,7 @@ export default function MusicPicker({ value, available, favourites = {}, onChang
                       {loved.length > 0 && <Star className="w-3 h-3 flex-none fill-accent text-accent" aria-label={t("compilation.music.favourite", { kinds: loved.join(", ") })} />}
                       {chosen && <Check className="w-3.5 h-3.5 flex-none text-accent" strokeWidth={3} />}
                     </span>
-                    <span className="block text-[11.5px] leading-snug text-ink-3">{t(`compilation.music.about.${track.id}`)}</span>
+                    <span className="block text-[11.5px] leading-snug text-ink-3">{musicAbout(track, t)}</span>
                   </button>
                 </div>
               );

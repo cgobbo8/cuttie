@@ -142,16 +142,17 @@ Answer with JSON only: {{"genre": "...", "kinds": ["..."], "description": "...",
 
 def describe(path: str, language: str = "fr", client=None, hint: str = "") -> dict:
     """Everything the app keeps of a track: what is measured, and what is heard. A model that can't
-    be reached leaves the description empty (the streamer writes it): `heard` says which it was."""
+    be reached (no credits, a refused key, a failure) leaves the description empty for the streamer
+    to write: `heard` says which it was, `why` what went wrong ("credits", "key", "failed")."""
     from app.services.provider_errors import ProviderUnavailable
 
     measured = measure(path)
     try:
         heard = listen(path, measured, language, client, hint)
-    except ProviderUnavailable:
-        raise
     except Exception as e:
+        # No credits, a refused key, a model that fails: the track is added all the same, and why it was not heard is said
+        why = e.reason if isinstance(e, ProviderUnavailable) else "failed"
         logger.warning(f"Music {os.path.basename(path)} not listened to ({type(e).__name__}: {e}): kept with its measures only")
-        return {**measured, "genre": "", "kinds": [], "description": "", "about": "", "cost": 0.0, "heard": False}
+        return {**measured, "genre": "", "kinds": [], "description": "", "about": "", "cost": 0.0, "heard": False, "why": why}
     logger.info(f"Music {os.path.basename(path)}: {measured['bpm']} bpm, {measured['lufs']} LUFS, {heard['genre']}, for {', '.join(heard['kinds']) or 'nothing said'} (~{heard['cost']:.4f} $)")
     return {**measured, **heard, "heard": True}

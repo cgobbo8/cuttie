@@ -6,7 +6,8 @@
  * streamer was given or added), then next to the catalogue. One whose file is missing is
  * simply not offered.
  */
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { randomBytes } from 'node:crypto'
 import path from 'node:path'
 import { DATA_DIR } from '#services/data_paths'
 
@@ -27,6 +28,9 @@ export interface MusicTrack {
   lufs: number
   /** What it sounds like and what it is for, in English: read by the AI */
   about: string
+  /** One the streamer added themselves (kept in the data folder), with the description they see and can change */
+  own?: boolean
+  description?: string
 }
 
 /** What a video is, for choosing its music: the streamer can have a favourite for each */
@@ -37,17 +41,58 @@ const SHIPPED = () => path.resolve('./public/musics')
 const OWN = path.join(DATA_DIR, 'musics')
 const ID = /^[a-z0-9]{2,24}$/
 
+const usable = (t: any) => ID.test(t?.id ?? '') && Number.isFinite(t?.lufs) && Number.isFinite(t?.start)
+
 let catalogue: MusicTrack[] | null = null
-export function musicTracks(): MusicTrack[] {
+function shippedTracks(): MusicTrack[] {
   if (!catalogue) {
     try {
       const read = JSON.parse(readFileSync(path.join(SHIPPED(), 'catalogue.json'), 'utf-8'))
-      catalogue = (Array.isArray(read?.tracks) ? read.tracks : []).filter((t: any) => ID.test(t?.id ?? '') && Number.isFinite(t?.lufs) && Number.isFinite(t?.start))
+      catalogue = (Array.isArray(read?.tracks) ? read.tracks : []).filter(usable)
     } catch {
       catalogue = []
     }
   }
   return catalogue!
+}
+
+/** Most tracks a streamer can add */
+export const MAX_OWN_MUSICS = 40
+export const ownMusicsDir = () => OWN
+const OWN_CATALOGUE = path.join(OWN, 'catalogue.json')
+
+/** The tracks the streamer added, as they described them (read each time: it is theirs to change) */
+export function ownTracks(): MusicTrack[] {
+  try {
+    const read = JSON.parse(readFileSync(OWN_CATALOGUE, 'utf-8'))
+    return (Array.isArray(read?.tracks) ? read.tracks : []).filter(usable).map((t: MusicTrack) => ({ ...t, own: true }))
+  } catch {
+    return []
+  }
+}
+
+export function saveOwnTracks(tracks: MusicTrack[]): void {
+  mkdirSync(OWN, { recursive: true })
+  writeFileSync(OWN_CATALOGUE, JSON.stringify({ tracks }, null, 2))
+}
+
+/** An id no track has: the tracks that ship have names, the streamer's own a letter and eight random characters */
+export const newMusicId = () => `u${randomBytes(6).toString('hex').slice(0, 8)}`
+
+/** A track's file gone from the data folder (the streamer removed the track) */
+export function removeOwnFile(id: string): void {
+  if (ID.test(id)) rmSync(path.join(OWN, `${id}.mp3`), { force: true })
+}
+
+/** Every track there is: those that ship, then the streamer's own */
+export function musicTracks(): MusicTrack[] {
+  const shipped = shippedTracks()
+  return [...shipped, ...ownTracks().filter((track) => !shipped.some((s) => s.id === track.id))]
+}
+
+/** The kinds of video a track is said to suit, as sent: known kinds, three at most */
+export function parseKinds(raw: unknown): string[] {
+  return [...new Set((Array.isArray(raw) ? raw : []).filter((kind): kind is string => isMusicKind(kind)))].slice(0, 3)
 }
 
 export const findMusic = (id: unknown): MusicTrack | null => (typeof id === 'string' ? (musicTracks().find((track) => track.id === id) ?? null) : null)

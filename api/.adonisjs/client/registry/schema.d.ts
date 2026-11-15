@@ -643,6 +643,42 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/musics_controller').default['show']>>>
     }
   }
+  'musics.store': {
+    methods: ["POST"]
+    pattern: '/api/musics'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/musics_controller').default['store']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/musics_controller').default['store']>>>
+    }
+  }
+  'musics.update': {
+    methods: ["PUT"]
+    pattern: '/api/musics/:id'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { id: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/musics_controller').default['update']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/musics_controller').default['update']>>>
+    }
+  }
+  'musics.destroy': {
+    methods: ["DELETE"]
+    pattern: '/api/musics/:id'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { id: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/musics_controller').default['destroy']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/musics_controller').default['destroy']>>>
+    }
+  }
   'musics.level': {
     methods: ["GET","HEAD"]
     pattern: '/api/jobs/:id/loudness'

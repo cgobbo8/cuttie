@@ -328,6 +328,26 @@ export async function chooseLooks(
   return call('POST', `/clips/${encodeURIComponent(jobId)}/looks`, { body, timeoutMs: 10 * 60_000 })
 }
 
+/** A track the streamer adds, as the worker measured and heard it (`heard` false: nobody could listen, `why` says what went wrong) */
+export interface MusicDescribed {
+  seconds: number
+  bpm: number
+  start: number
+  lufs: number
+  genre: string
+  kinds: string[]
+  description: string
+  about: string
+  cost: number
+  heard: boolean
+  why?: string
+}
+
+/** Turns an added file into the track the app keeps (`target`, an MP3), measures it and has the AI listen to it (worker: music_library.py) */
+export async function describeMusic(body: { source: string; target: string; language: string; hint: string }): Promise<MusicDescribed> {
+  return call('POST', '/musics/describe', { body, timeoutMs: 5 * 60_000 })
+}
+
 /** What the AI chose for the sound of a video (worker: looks.choose_sound): any of them may be null */
 export interface SoundChoice {
   kind: string | null

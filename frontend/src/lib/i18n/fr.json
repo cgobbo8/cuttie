@@ -746,7 +746,22 @@
     "introPreferred": "Intro préférée",
     "introNone": "Aucune",
     "noMusics": "Aucune musique n'est installée sur cette machine.",
-    "musicFor": "Musique pour : {{kind}}"
+    "musicFor": "Musique pour : {{kind}}",
+    "ownMusics": "Tes musiques",
+    "ownMusicsHint": "Ajoute un fichier : l'IA l'écoute et écrit à quoi il sert (moins d'un centime). Tu peux tout corriger.",
+    "addMusic": "Ajouter une musique",
+    "musicListening": "L'IA écoute…",
+    "musicAdded": "« {{name}} » ajoutée. Relis ce que l'IA en dit.",
+    "musicAddedUnheard": "« {{name}} » ajoutée. L'IA n'a pas pu l'écouter : écris sa description.",
+    "musicAddedNoCredits": "« {{name}} » ajoutée. Plus de crédits pour que l'IA l'écoute : écris sa description.",
+    "musicAddFailed": "Cette musique n'a pas pu être ajoutée.",
+    "removeMusic": "Retirer {{name}}",
+    "musicRemoved": "Musique retirée",
+    "musicSaved": "Musique enregistrée",
+    "musicName": "Nom de la musique",
+    "musicKinds": "Types de vidéo auxquels elle va",
+    "musicDescription": "Ce qu'est cette musique (l'IA le lit pour choisir)",
+    "musicDescriptionHint": "À quoi elle ressemble, pour quelles vidéos. L'IA lit ce texte pour choisir."
   },
   "project": {
     "steps": "Étapes du projet",
@@ -1704,7 +1719,8 @@
         "lofi": "Lofi détendue, percussions légères, synthés aériens. Pour les discussions.",
         "lofi2": "Lofi posée aux synthés légers. Pour les discussions et les moments tranquilles.",
         "chill": "Lo-fi lente et douce, très en retrait. Pour les discussions et le jeu calme."
-      }
+      },
+      "unsorted": "Autres"
     },
     "soundAi": {
       "ai": "Musique et intro par l'IA",

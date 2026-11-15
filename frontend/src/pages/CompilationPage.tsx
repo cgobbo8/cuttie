@@ -17,7 +17,6 @@ import {
   getStoryboard,
   chooseSound,
   listAllCompilations,
-  listMusics,
   liveLoudness,
   listCompilations,
   LiveError,
@@ -68,7 +67,8 @@ import { buildMontage, framesOf, introHold, montageFrames, renderPieces, type Mo
 import { evenFrames, tileStyle } from "../lib/storyboard";
 import { isTransition, transitionSpan } from "../lib/transitions";
 import { introSeconds, introSound, isIntro } from "../lib/intro/intros";
-import { musicCurve, musicOf, musicUrl, passageLevel, PROGRAM_LUFS, speechShare, trackGain } from "../lib/music/mix";
+import { trackOf, useMusics } from "../lib/music/library";
+import { musicCurve, musicUrl, passageLevel, PROGRAM_LUFS, speechShare, trackGain } from "../lib/music/mix";
 import { fontFamily } from "../lib/fonts";
 import { introSoundUrl, type IntroBrand } from "../components/compilation/IntroPicker";
 import { clipTemplateContext } from "../lib/templateContext";
@@ -182,11 +182,8 @@ export default function CompilationPage() {
   // The video being joined into one clip for the layer editor
   const [editing, setEditing] = useState(false);
   // The background musics whose file is here, and how loud this live's clips are (what the preview sets the music against)
-  const [musics, setMusics] = useState<string[]>([]);
+  const musics = useMusics();
   const [liveLufs, setLiveLufs] = useState<number | null>(null);
-  useEffect(() => {
-    listMusics().then(setMusics).catch(() => {});
-  }, []);
   // The AI looking at the passages to choose their templates, and what it said of its choice (by compilation)
   const [looking, setLooking] = useState(false);
   const [looksNote, setLooksNote] = useState<{ id: string; note: string } | null>(null);
@@ -663,8 +660,8 @@ export default function CompilationPage() {
         };
       }
       // The music under the video: lower where people talk, more present where the game plays alone
-      const track = musicOf(all.music?.track);
-      if (track && musics.includes(track.id)) {
+      const track = trackOf(musics, all.music?.track);
+      if (track) {
         const levels = cuts.map((cut, i) => {
           // A clip that was never transcribed has no words: what is said in it counts as talk, not as silence
           const untold = cut.ctx.words.length === 0 && !!items[i].text.trim();
@@ -754,12 +751,12 @@ export default function CompilationPage() {
         // What the streamer changed while the AI was thinking stays
         const current = compilationsRef.current?.find((c) => c.id === source.id) ?? source;
         // A track whose file isn't on this machine can't be played: left out
-        const next = applySound(current, { music: choice.music && musics.includes(choice.music) ? choice.music : null, intro: choice.intro });
+        const next = applySound(current, { music: trackOf(musics, choice.music) ? choice.music : null, intro: choice.intro });
         change(next);
         setSoundNote({ id: source.id, note: choice.why });
         toast.success(
           t("compilation.soundAi.done", {
-            music: musicOf(next.music?.track)?.name ?? t("compilation.soundAi.none"),
+            music: trackOf(musics, next.music?.track)?.name ?? t("compilation.soundAi.none"),
             intro: isIntro(next.intro?.style) ? t(`compilation.intro.style.${next.intro.style}`) : t("compilation.soundAi.none"),
           }),
         );
@@ -809,7 +806,7 @@ export default function CompilationPage() {
   const playerProps = useMemo(() => {
     const montage = preview?.montage;
     if (!montage) return montage;
-    const track = musicOf(montage.music?.track);
+    const track = trackOf(musics, montage.music?.track);
     // The export levels the clips' sound before adding the music; here they play as they are: the music comes down by as much
     const trim = liveLufs === null ? 0.3 : Math.min(1, 10 ** ((liveLufs - PROGRAM_LUFS) / 20));
     return {
@@ -817,7 +814,7 @@ export default function CompilationPage() {
       ...(montage.intro?.sound ? { intro: { ...montage.intro, sound: introSoundUrl(montage.intro.sound), ...(liveLufs === null ? {} : { gain: trim }) } } : {}),
       ...(montage.music && track ? { music: { ...montage.music, src: musicUrl(track.id), from: track.start, gain: trackGain(track) * trim } } : {}),
     };
-  }, [liveLufs, preview]);
+  }, [liveLufs, musics, preview]);
   // The same passages in the same order: the same player, which keeps its place when a cut or a template changes
   const playerKey = preview ? `${compilation?.id}-${templateKey}-${preview.files.join(",")}` : "";
   useEffect(() => {

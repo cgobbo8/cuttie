@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { ArrowUp, Check, Loader2, Minus, Plus, Scissors, Sparkles } from "lucide-react";
+import { Virality } from "./SuggestionCard";
 
 export interface TalkTurn {
   ask: string;
@@ -13,9 +14,28 @@ export interface TalkTurn {
   recut?: number;
 }
 
+/** A video the AI proposed and nobody has had built yet: what it noticed, and the way to have it built */
+export interface Proposal {
+  pitch: string;
+  tags: string[];
+  /** 0-100: how well it should do as a short */
+  score: number;
+  /** About what building it costs, "≈ 0,04 $" */
+  cost: string | null;
+  /** It can't be built right now (no transcript, something else running) */
+  disabled: boolean;
+  onBuild: () => void;
+  /** Rewrite the request before having it built */
+  onEdit: () => void;
+}
+
 interface Props {
-  /** What the streamer first described */
+  /** What the streamer first described (or what the AI wrote in their place, see `byAi`) */
   brief: string;
+  /** The video is one the AI proposed: the first request is its own, written as the streamer would have */
+  byAi?: boolean;
+  /** ...and it is not built yet: the AI says what it noticed and offers to build it */
+  proposal?: Proposal | null;
   /** What the AI answered to it: what it built and why (absent on videos made before it was kept) */
   answer?: string;
   /** Passages in the video now */
@@ -51,7 +71,7 @@ const SHOWN_STEPS = 4;
  * change asked and what the AI did about it, what it is doing right now, and
  * where to ask for the next one. What it adds shows up in the video beside.
  */
-export default function PlanTalk({ brief, answer, passages, planning = false, turns, pending, trail, value, onValue, onSend, disabled, cost, onReveal, onAnother, failure }: Props) {
+export default function PlanTalk({ brief, byAi = false, proposal = null, answer, passages, planning = false, turns, pending, trail, value, onValue, onSend, disabled, cost, onReveal, onAnother, failure }: Props) {
   const { t } = useTranslation();
   const thread = useRef<HTMLDivElement>(null);
   const busy = pending !== null || planning;
@@ -73,7 +93,41 @@ export default function PlanTalk({ brief, answer, passages, planning = false, tu
   return (
     <div className="mt-3 flex flex-col rounded-[14px] border border-white/[0.08] bg-black/20 overflow-hidden">
       <div ref={thread} role="log" aria-label={t("compilation.changeTitle")} className="talk-thread flex flex-col gap-3.5 h-[max(360px,calc(100dvh-390px))] overflow-y-auto p-4">
-        <Mine label={t("compilation.changeYou")} text={brief} folded />
+        {byAi && (
+          <p className="self-end -mb-2 flex items-center gap-1.5 text-[11.5px] text-accent">
+            <Sparkles className="w-3 h-3" /> {t("suggestions.wrote")}
+          </p>
+        )}
+        <Mine label={t(byAi ? "suggestions.wrote" : "compilation.changeYou")} text={brief} folded={!proposal} />
+        {proposal && !planning && (
+          <Theirs label={t("compilation.aiNote")}>
+            <div className="flex items-start gap-3">
+              <p className="flex-1 min-w-0 text-[13.5px] leading-[1.45] text-ink-2">
+                <span className="text-white">{t("suggestions.noticed")}</span> {proposal.pitch}
+              </p>
+              <Virality score={proposal.score} size={42} />
+            </div>
+            {proposal.tags.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {proposal.tags.map((tag) => (
+                  <span key={tag} className="talk-chip">
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            )}
+            <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+              <button type="button" onClick={proposal.onBuild} disabled={proposal.disabled} className="btn btn-primary btn-sm">
+                <Sparkles className="w-3.5 h-3.5" /> {t("suggestions.build")}
+                {proposal.cost && <span className="mono text-[11.5px] opacity-60">{proposal.cost}</span>}
+              </button>
+              <button type="button" onClick={proposal.onEdit} disabled={proposal.disabled} className="text-[12px] text-ink-3 underline decoration-white/20 underline-offset-2 hover:text-ink-2 disabled:opacity-50">
+                {t("suggestions.edit")}
+              </button>
+            </div>
+            <p className="mt-2 text-[12px] leading-snug text-ink-3">{t("suggestions.buildHint", { cost: proposal.cost ?? "" })}</p>
+          </Theirs>
+        )}
         {planning && (
           <Theirs label={t("compilation.aiNote")} working>
             <ol role="status" aria-live="polite" className="flex flex-col gap-1.5">
@@ -144,8 +198,10 @@ export default function PlanTalk({ brief, answer, passages, planning = false, tu
         )}
       </div>
 
+      {/* A change is asked on a video: one that is not built yet has nothing to change */}
       <form
-        className="talk-composer m-3 mt-0 flex items-end gap-2 rounded-[14px] border border-white/10 bg-black/35 p-2 pl-3.5 focus-within:border-accent-line transition-colors"
+        hidden={!!proposal}
+        className={`talk-composer m-3 mt-0 items-end gap-2 rounded-[14px] border border-white/10 bg-black/35 p-2 pl-3.5 focus-within:border-accent-line transition-colors ${proposal ? "" : "flex"}`}
         onSubmit={(e) => {
           e.preventDefault();
           if (value.trim() && !disabled && !busy) onSend();
@@ -165,7 +221,7 @@ export default function PlanTalk({ brief, answer, passages, planning = false, tu
           {busy ? <Loader2 className="w-4 h-4 spinner" /> : <ArrowUp className="w-4 h-4" strokeWidth={2.6} />}
         </button>
       </form>
-      <div className="px-4 pb-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[11.5px] text-ink-3">
+      <div hidden={!!proposal} className={`px-4 pb-3 flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[11.5px] text-ink-3 ${proposal ? "" : "flex"}`}>
         <span>
           {t("compilation.changeEnter")}
           {cost && <span className="mono"> · {cost}</span>}

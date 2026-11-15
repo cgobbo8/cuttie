@@ -304,6 +304,9 @@ export interface TwitchVod {
     status: string;
     progress: string | null;
     clip_count: number;
+    /** Videos the AI proposed for it that nobody has opened yet, and whether it is looking for some right now */
+    suggested?: number;
+    looking?: boolean;
     /** Why it stopped, when it did */
     error?: string | null;
     notices?: JobNotice[];
@@ -496,6 +499,8 @@ export interface JobResponse {
   notices?: JobNotice[] | null;
   /** Its clips were deleted to free disk space (exports kept) */
   clips_freed_at: string | null;
+  /** Videos the AI proposed for this live that nobody has opened yet */
+  suggested: number;
 }
 
 /** e.g. segments Whisper could not transcribe (rate limits), or the AI provider refusing every call */
@@ -562,6 +567,8 @@ export interface JobSummary {
   clip_count: number;
   kept_count: number;
   export_count: number;
+  /** Videos the AI proposed for this live that nobody has opened yet */
+  suggested?: number;
   /** While analyzing: when it should be done */
   eta: AnalysisEta | null;
   /** Its clips were deleted to free disk space (exports kept) */
@@ -604,6 +611,7 @@ interface ServerJobResponse {
   timeline?: JobTimeline | null;
   notices?: JobNotice[] | null;
   clipsFreedAt?: string | null;
+  suggested?: number;
 }
 
 interface ServerHotPoint {
@@ -635,6 +643,7 @@ interface ServerJobSummary {
   eta?: AnalysisEta | null;
   clipsFreedAt?: string | null;
   clipsBytes?: number;
+  suggested?: number;
 }
 
 function mapJobResponse(raw: ServerJobResponse): JobResponse {
@@ -661,6 +670,7 @@ function mapJobResponse(raw: ServerJobResponse): JobResponse {
     timeline: raw.timeline ?? null,
     notices: raw.notices ?? null,
     clips_freed_at: raw.clipsFreedAt ?? null,
+    suggested: raw.suggested ?? 0,
   };
 }
 
@@ -689,6 +699,7 @@ function mapJobSummary(raw: ServerJobSummary): JobSummary {
     export_count: raw.exportCount ?? 0,
     clips_freed_at: raw.clipsFreedAt ?? null,
     clips_bytes: raw.clipsBytes ?? 0,
+    suggested: raw.suggested ?? 0,
   };
 }
 
@@ -1439,9 +1450,11 @@ export interface VideoPlan {
 }
 
 /** A whole video planned by the AI from a description, `target` seconds long */
-export async function planLiveVideo(jobId: string, brief: string, target: number, change?: PlanChange, lives: string[] = []): Promise<VideoPlan> {
+export async function planLiveVideo(jobId: string, brief: string, target: number, change?: PlanChange, lives: string[] = [], leads: number[] = []): Promise<VideoPlan> {
   // `lives`: other lives the video may take passages from (the AI works on all of them at once)
-  const plan = await liveJson<VideoPlan>(await postJson(`${BASE}/jobs/${jobId}/plan`, { brief, target, ...(change ?? {}), ...(lives.length > 0 ? { lives } : {}) }));
+  // `leads`: the moments already spotted for it (live seconds), when the video is one the AI proposed
+  const body = { brief, target, ...(change ?? {}), ...(lives.length > 0 ? { lives } : {}), ...(leads.length > 0 ? { leads } : {}) };
+  const plan = await liveJson<VideoPlan>(await postJson(`${BASE}/jobs/${jobId}/plan`, body));
   // A passage says its live only when it isn't this one
   return { ...plan, sections: plan.sections.map((s) => ({ ...s, hits: s.hits.map(({ job, ...hit }) => (job && job !== jobId ? { ...hit, job } : hit)) })) };
 }
@@ -1553,8 +1566,45 @@ export interface Compilation {
   asks?: { ask: string; note: string; added?: number; removed?: number; recut?: number }[];
   /** Other lives it takes passages from, besides the one it is kept with (job ids) */
   lives?: string[];
+  /** The AI proposed this video on its own once the live was analysed: `brief` is the request it wrote in the streamer's place */
+  suggestion?: CompilationSuggestion;
   created_at: string;
   updated_at: string;
+}
+
+/** What the AI saw in a live that makes a video it proposes */
+export interface CompilationSuggestion {
+  key: string;
+  /** One sentence said to the streamer: what it noticed */
+  pitch: string;
+  tags: string[];
+  /** The kind of video: funny, skill, suspense, chill, hype */
+  kind?: string;
+  /** 0-100: how well it should do as a short */
+  score: number;
+  /** The moments it spotted for it (live seconds): where the video is built from */
+  moments: number[];
+}
+
+/** What the AI looking through a live for videos to propose gave */
+export interface SuggestionsFound {
+  /** The videos just proposed, waiting to be built (none: nothing new) */
+  compilations: Compilation[];
+  /** Ideas it had in all, those already proposed included */
+  found: number;
+  note: string;
+  cost: number;
+  cached: boolean;
+}
+
+/** Has the AI look through an analysed live for compilations worth making (under a cent; asked again, it costs nothing) */
+export async function findSuggestions(jobId: string): Promise<SuggestionsFound> {
+  return liveJson<SuggestionsFound>(await postJson(`${BASE}/jobs/${jobId}/suggestions`, {}));
+}
+
+/** How many proposed videos of a live wait to be opened, and whether the AI is looking for some right now */
+export async function getSuggestions(jobId: string): Promise<{ suggested: number; looking: boolean; looked_at: string | null }> {
+  return jsonOrThrow(await fetch(`${BASE}/jobs/${jobId}/suggestions`), "Failed to load the suggestions");
 }
 
 export type CompilationDraft = Pick<Compilation, "name" | "sections" | "template" | "titles" | "hook" | "target" | "brief" | "answer" | "asks" | "lives">;
@@ -1610,6 +1660,12 @@ export interface CompilationSummary {
   parts: number;
   /** Built by describing it to the AI */
   described: boolean;
+  /** Proposed by the AI: what it saw in the live (how many moments), null when the streamer made it */
+  suggestion?: { pitch: string; tags: string[]; kind: string | null; score: number; moments: number } | null;
+  /** Proposed and not built yet: opening it builds it */
+  waiting?: boolean;
+  /** Length aimed for, seconds */
+  target?: number | null;
   /** A passage's clip that stands for it (null: none is cut yet), and the live that clip is in */
   cover: string | null;
   cover_job: string | null;
@@ -1636,6 +1692,9 @@ export interface LiveCompilations {
   vod_id: string | null;
   cover_clip: string | null;
   clips_freed: boolean;
+  /** When the AI looked through it for videos to propose (null: never), and whether it is doing so now */
+  looked_at?: string | null;
+  looking?: boolean;
   compilations: CompilationSummary[];
 }
 

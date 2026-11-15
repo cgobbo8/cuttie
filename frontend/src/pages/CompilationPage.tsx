@@ -78,6 +78,7 @@ import { titleCard } from "../lib/templateSpec";
 import { TEMPLATE_IDS } from "../lib/templates";
 import MontageComposition from "../components/remotion-editor/MontageComposition";
 import ModeSwitch from "../components/project/ModeSwitch";
+import { isWaiting } from "../lib/suggestions";
 import LivePicker from "../components/compilation/LivePicker";
 import CompilationGuide from "../components/compilation/CompilationGuide";
 import CompilationPanel from "../components/compilation/CompilationPanel";
@@ -208,6 +209,8 @@ export default function CompilationPage() {
   // Search results looked at before being added keep their id (and so their clip)
   const drafts = useRef(new Map<string, CompilationItem>());
 
+  // The proposed video this visit was opened to build (see ?build=1), built once
+  const buildFor = useRef<string | null>(null);
   const loaded = useRef<{ job: string; all: Promise<Compilation[]> } | null>(null);
   const remember = useCallback(
     (list: Compilation[]) => {
@@ -237,6 +240,8 @@ export default function CompilationPage() {
     const wantsLives = (search.get("lives") ?? "").split(",").filter((id) => id && id !== jobId).slice(0, MAX_OTHER_LIVES);
     // Asked once per live, even when this runs twice (development): a new compilation is created once
     const wantsNew = search.get("new") === "1";
+    // ?build=1: a video the AI proposed, opened from its card to be built
+    if (search.get("build") === "1" && search.get("c")) buildFor.current = search.get("c");
     if (loaded.current?.job !== jobId) {
       loaded.current = {
         job: jobId,
@@ -257,7 +262,8 @@ export default function CompilationPage() {
     loaded.current.all
       .then((all) => {
         if (cancelled) return;
-        const opened = (!wantsNew && all.find((c) => c.id === search.get("c"))) || all[all.length - 1];
+        // No compilation named: the last one of the streamer's own, rather than an idea of the AI nobody opened
+        const opened = (!wantsNew && all.find((c) => c.id === search.get("c"))) || [...all].reverse().find((c) => !isWaiting(c)) || all[all.length - 1];
         remember(all);
         setCompilations(all);
         setCurrentId(opened.id);
@@ -284,7 +290,7 @@ export default function CompilationPage() {
   }, [jobId, hasMusic]);
   // The address names the compilation on screen: a reload, or coming back from an export, opens it again
   useEffect(() => {
-    if (currentId && (search.get("c") !== currentId || search.has("new"))) setSearch({ c: currentId }, { replace: true });
+    if (currentId && (search.get("c") !== currentId || search.has("new") || search.has("build"))) setSearch({ c: currentId }, { replace: true });
   }, [currentId, search, setSearch]);
   const compilationsRef = useRef(compilations);
   compilationsRef.current = compilations;
@@ -510,8 +516,8 @@ export default function CompilationPage() {
     try {
       let planned: Compilation;
       if (allItems(compilation).length === 0) {
-        // The compilation on screen is empty: the plan fills it
-        planned = { ...compilation, name: plan.title || compilation.name, sections, target, titles: sections.length > 1 || compilation.titles, brief, answer: plan.note ?? "", asks: [] };
+        // The compilation on screen is empty: the plan fills it (a video the AI proposed keeps the name it was proposed under)
+        planned = { ...compilation, name: (compilation.suggestion ? compilation.name : plan.title) || compilation.name, sections, target, titles: sections.length > 1 || compilation.titles, brief, answer: plan.note ?? "", asks: [] };
         change(planned);
       } else {
         // Another video from the same lives
@@ -1000,7 +1006,7 @@ export default function CompilationPage() {
           <button onClick={startNew} className="btn btn-glass btn-sm">
             <Plus className="w-[15px] h-[15px]" /> {t("compilation.new")}
           </button>
-          <ModeSwitch jobId={jobId} current="compilations" />
+          <ModeSwitch jobId={jobId} current="compilations" suggested={(compilations ?? []).filter(isWaiting).length} />
         </div>
       </header>
 
@@ -1087,7 +1093,20 @@ export default function CompilationPage() {
           onPreview={watch}
           onAdd={add}
           onPlan={applyPlan}
-          talk={compilation.brief ? { brief: compilation.brief, answer: compilation.answer, passages: allItems(compilation).length, asks: compilation.asks ?? [] } : null}
+          talk={compilation.brief ? { brief: compilation.brief, answer: compilation.answer, passages: allItems(compilation).length, asks: compilation.asks ?? [], byAi: !!compilation.suggestion } : null}
+          proposal={
+            compilation.suggestion && isWaiting(compilation)
+              ? {
+                  id: compilation.id,
+                  pitch: compilation.suggestion.pitch,
+                  tags: compilation.suggestion.tags,
+                  score: compilation.suggestion.score,
+                  leads: compilation.suggestion.moments,
+                  target: compilation.target ?? 45,
+                  auto: buildFor.current === compilation.id,
+                }
+              : null
+          }
           current={() => planCurrent(compilation)}
           onChange={applyChange}
           onReveal={reveal}

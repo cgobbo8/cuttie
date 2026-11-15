@@ -14,6 +14,7 @@ import {
   type DetectedPalette,
   type VodFacecam,
 } from '#services/worker_client'
+import { isLooking, waitingCount } from '#services/suggestions'
 import { workerFailure } from '#services/worker_failure'
 
 const HEX = /^#[0-9a-fA-F]{6}$/
@@ -166,7 +167,7 @@ export default class BrandController {
     if (!channel) return { channel: null }
 
     const jobs = await Job.query()
-      .select('id', 'url', 'status', 'progress', 'error', 'notices', 'hot_points', 'timeline', 'created_at')
+      .select('id', 'url', 'status', 'progress', 'error', 'notices', 'hot_points', 'timeline', 'compilations', 'created_at')
       .orderBy('created_at', 'desc')
     const vods = channel.vods.map((vod) => {
       const job = jobs.find((j) => j.url?.includes(`/videos/${vod.id}`))
@@ -181,6 +182,9 @@ export default class BrandController {
               error: job.status === 'ERROR' ? job.error : null,
               notices: job.notices ?? [],
               clip_count: (job.hotPoints ?? []).filter((h: any) => h.clip_filename).length,
+              // Videos the AI proposed for this live that nobody has opened yet
+              suggested: waitingCount(job.compilations),
+              looking: isLooking(job.id),
               // When the analysis should be done (worker's estimate)
               eta: job.timeline?.eta ?? null,
             }

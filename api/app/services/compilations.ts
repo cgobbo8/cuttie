@@ -67,14 +67,40 @@ export interface Compilation {
   intro?: Intro
   /** The music it plays in the background (absent: none): a track of the catalogue, and how present it is (1: as set by the app) */
   music?: { track: string; volume?: number }
-  /** Described to the AI: what the streamer first asked for, then each change asked and what the AI answered */
+  /** Described to the AI: what the streamer first asked for, what the AI answered, then each change asked and its answer */
   brief?: string
+  answer?: string
   asks?: { ask: string; note: string; added?: number; removed?: number; recut?: number }[]
+  /**
+   * The AI proposed this video on its own once the live was analysed (services/suggestions.ts):
+   * `brief` is then the request it wrote in the streamer's place. Kept by the server, never
+   * taken from what the app sends.
+   */
+  suggestion?: Suggestion
   /** Other lives it takes passages from, besides the one it is kept with (job ids) */
   lives?: string[]
   created_at: string
   updated_at: string
 }
+
+/** What the AI saw in the live that makes a video it proposes */
+export interface Suggestion {
+  /** Names the idea from one look through the live to the next */
+  key: string
+  /** One sentence said to the streamer: what it noticed */
+  pitch: string
+  tags: string[]
+  /** The kind of video (see musics.MUSIC_KINDS) */
+  kind?: string
+  /** 0-100: how well it should do as a short */
+  score: number
+  /** The moments it spotted for it (live seconds): where the video is built from */
+  moments: number[]
+}
+
+/** A video the AI proposed that nobody has had built yet: no passage, no answer */
+export const isWaiting = (c: Pick<Compilation, 'suggestion' | 'answer' | 'sections'>): boolean =>
+  !!c.suggestion && !c.answer && c.sections.every((s) => s.items.length === 0)
 
 /** A preview's clip nobody added is deleted after this long */
 const UNUSED_PIECE_MS = 3600_000
@@ -305,6 +331,12 @@ export function summarizeCompilation(jobId: string, c: Compilation) {
     passages: items.length,
     parts: c.sections.filter((s) => s.items.length > 0).length,
     described: !!c.brief,
+    // Proposed by the AI: what it saw (how many moments, not which), and whether the video still waits to be built
+    suggestion: c.suggestion
+      ? { pitch: c.suggestion.pitch, tags: c.suggestion.tags, kind: c.suggestion.kind ?? null, score: c.suggestion.score, moments: c.suggestion.moments.length }
+      : null,
+    waiting: isWaiting(c),
+    target: c.target,
     cover: cover ? pieceFile(cover.id) : null,
     // The live that clip is in, the live it is kept with (where it opens, is saved, exported),
     // and every live it takes passages from (that one first)

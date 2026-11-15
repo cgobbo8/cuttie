@@ -37,6 +37,7 @@ function ProjectCard({
   onDelete: (job: JobSummary) => void;
 }) {
   const { t, i18n } = useTranslation();
+  const navigate = useNavigate();
   const stage: ProjectStage = projectStage(job);
   const { tag, title } = splitVodTitle(job.custom_title || job.vod_title);
   const date = job.stream_date ?? job.created_at;
@@ -125,6 +126,17 @@ function ProjectCard({
               <span className="inline-flex items-center gap-1.5">
                 <Download className="w-3.5 h-3.5 text-ink-3" /> {t("projects.exported", { count: job.export_count })}
               </span>
+            )}
+            {/* Videos the AI proposed for this live: straight to them */}
+            {!!job.suggested && (
+              <button
+                type="button"
+                onClick={(e) => stop(e, () => navigate(`/${job.job_id}/compilations`))}
+                title={t("suggestions.foundHint")}
+                className="inline-flex items-center gap-1.5 text-accent hover:underline underline-offset-2"
+              >
+                <Sparkles className="w-3.5 h-3.5" /> {t("suggestions.found", { count: job.suggested })}
+              </button>
             )}
             {/* What its clips take on this computer */}
             {job.clips_bytes > 0 && (

@@ -109,6 +109,8 @@ router
         router.post('/jobs/:id/looks', [() => import('#controllers/compilations_controller'), 'looks'])
         router.post('/jobs/:id/sound', [() => import('#controllers/compilations_controller'), 'sound'])
         router.post('/jobs/:id/plan', [() => import('#controllers/compilations_controller'), 'plan'])
+        router.get('/jobs/:id/suggestions', [() => import('#controllers/compilations_controller'), 'suggestions'])
+        router.post('/jobs/:id/suggestions', [() => import('#controllers/compilations_controller'), 'suggest'])
         router.post('/jobs/:id/pieces', [() => import('#controllers/compilations_controller'), 'pieces'])
         router.get('/jobs/:id/compilations', [() => import('#controllers/compilations_controller'), 'index'])
         router.post('/jobs/:id/compilations', [() => import('#controllers/compilations_controller'), 'store'])

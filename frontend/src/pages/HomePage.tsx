@@ -61,9 +61,22 @@ function Hero({ vod, busy, onAnalyze }: { vod: TwitchVod; busy: boolean; onAnaly
     <div className="glass-strong rounded-[20px] w-[560px] max-w-full px-7 pt-[26px] pb-6 animate-rise">
       <div className="flex flex-wrap items-center gap-2.5 text-[13px] text-ink-2">
         {job?.status === "DONE" ? (
-          <span className="chip chip-accent">
-            <Check className="w-3.5 h-3.5" strokeWidth={3} /> {t("start.momentsFound", { count: job.clip_count })}
-          </span>
+          <>
+            <span className="chip chip-accent">
+              <Check className="w-3.5 h-3.5" strokeWidth={3} /> {t("start.momentsFound", { count: job.clip_count })}
+            </span>
+            {/* Videos the AI proposed for this live: one click away */}
+            {!!job.suggested && (
+              <Link to={`/${job.id}/compilations`} title={t("suggestions.foundHint")} className="chip chip-accent hover:brightness-125 transition-[filter]">
+                <Sparkles className="w-3.5 h-3.5" /> {t("suggestions.found", { count: job.suggested })}
+              </Link>
+            )}
+            {job.looking && !job.suggested && (
+              <span className="chip chip-neutral">
+                <Loader2 className="w-3.5 h-3.5 animate-spin" /> {t("suggestions.finding")}
+              </span>
+            )}
+          </>
         ) : running ? (
           <span className="chip chip-accent">
             <Loader2 className="w-3.5 h-3.5 animate-spin" /> {t("start.analyzing")}
@@ -164,27 +177,36 @@ function LiveCard({ vod, index, busy, onAnalyze }: { vod: TwitchVod; index: numb
         )}
         {running && <div className="absolute inset-0 bg-black/35" />}
 
-        <span className="absolute top-2 left-2 chip glass-chip text-white">
-          {job?.status === "DONE" ? (
-            <>
-              <span className="w-1.5 h-1.5 rounded-full bg-accent" /> {t("start.momentsToSort", { count: job.clip_count })}
-            </>
-          ) : running ? (
-            <>
-              {t("start.analyzing")} · <span className="mono">{progress!.percent} %</span>
-            </>
-          ) : job?.status === "ERROR" ? (
-            <span className="text-red-300">{t("start.failed")}</span>
-          ) : (
-            <span className="text-ink-2 font-[550]">{t("start.toAnalyze")}</span>
+        <div className="absolute top-2 left-2 flex flex-col items-start gap-1.5">
+          <span className="chip glass-chip text-white">
+            {job?.status === "DONE" ? (
+              <>
+                <span className="w-1.5 h-1.5 rounded-full bg-accent" /> {t("start.momentsToSort", { count: job.clip_count })}
+              </>
+            ) : running ? (
+              <>
+                {t("start.analyzing")} · <span className="mono">{progress!.percent} %</span>
+              </>
+            ) : job?.status === "ERROR" ? (
+              <span className="text-red-300">{t("start.failed")}</span>
+            ) : (
+              <span className="text-ink-2 font-[550]">{t("start.toAnalyze")}</span>
+            )}
+          </span>
+          {/* Videos the AI proposed for this live: one click away */}
+          {job?.status === "DONE" && !!job.suggested && (
+            <Link to={`/${job.id}/compilations`} onClick={(e) => e.stopPropagation()} title={t("suggestions.foundHint")} className="chip glass-chip text-white hover:brightness-125 transition-[filter]">
+              <Sparkles className="w-3 h-3 text-accent" /> {t("suggestions.found", { count: job.suggested })}
+            </Link>
           )}
-        </span>
+        </div>
 
         {!running && (
           <span className="mono absolute bottom-2 right-2 h-5 px-1.5 rounded-[5px] flex items-center bg-black/70 text-[11px] text-white">
             {clock(vod.duration_seconds)}
           </span>
         )}
+
         {progress && (
           <div className="absolute inset-x-0 bottom-0 h-1 bg-white/20">
             <div className="h-full bg-accent shadow-[0_0_12px_var(--color-accent-glow)] transition-[width] duration-700" style={{ width: `${progress.percent}%` }} />
@@ -372,7 +394,8 @@ export default function HomePage() {
 
   // Keep progress fresh while something is being analyzed
   const hasActive =
-    (channel?.vods.some((v) => v.job && ACTIVE_STATUSES.has(v.job.status)) ?? false) ||
+    // ...and while the AI looks through a live just analysed for compilations to propose
+    (channel?.vods.some((v) => v.job && (ACTIVE_STATUSES.has(v.job.status) || v.job.looking)) ?? false) ||
     (jobs?.some((j) => ACTIVE_STATUSES.has(j.status)) ?? false);
   useEffect(() => {
     if (!hasActive) return;

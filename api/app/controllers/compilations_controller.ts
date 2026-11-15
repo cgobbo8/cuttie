@@ -32,10 +32,10 @@ import {
   liveSearchProgress,
   planLiveVideo,
   searchLive,
-  type LiveContext,
   type PlanChange,
   type LookTemplate,
 } from '#services/worker_client'
+import { isLooking, liveContext, suggestCompilations, waitingCount } from '#services/suggestions'
 import { dropFlats, flatCompilation, flattenCompilation } from '#services/compilation_flat'
 import { loadJobSharedData, readJobChat } from '#services/edit_env_resolver'
 import { camVisible } from '#services/facecam_resolver'
@@ -68,18 +68,6 @@ async function everyCompilation(userId: number | null): Promise<Compilation[]> {
   if (userId === null) return []
   const jobs = await Job.query().where('user_id', userId).whereNotNull('compilations')
   return jobs.flatMap((job) => job.compilations ?? [])
-}
-
-/** What the AI works from besides the transcript: the live's length, its voice energy, who and what, where to listen to it */
-function liveContext(job: Job): LiveContext {
-  return {
-    duration: job.vodDurationSeconds ?? 0,
-    energy: job.timeline?.energy ?? null,
-    meta: { streamer: job.streamer, game: job.vodGame, title: job.customTitle || job.vodTitle, date: job.streamDate ?? null },
-    url: job.url,
-    // The 50 or so candidates the analysis rated, clipped or not: the worker only kept the clipped ones
-    moments: job.timeline?.candidates ?? [],
-  }
 }
 
 /** Pieces being cut, one request at a time per live (two of them would fetch the same part twice) */
@@ -171,6 +159,9 @@ export default class CompilationsController {
           vod_id: job.url?.match(/videos\/(\d+)/)?.[1] ?? null,
           cover_clip: (job.hotPoints ?? []).find((hp: any) => hp.clip_filename)?.clip_filename ?? null,
           clips_freed: !!job.clipsFreedAt,
+          // When the AI looked through it for videos to propose (null: never), and whether it is doing so now
+          looked_at: job.suggestions?.at ?? null,
+          looking: isLooking(job.id),
           compilations: cards.get(job.id) ?? [],
         })),
     }
@@ -187,8 +178,10 @@ export default class CompilationsController {
 
     const now = new Date().toISOString()
     const name = typeof ctx.request.input('name') === 'string' && ctx.request.input('name').trim() ? ctx.request.input('name').trim().slice(0, 80) : source.name
+    // A copy is the streamer's own video, whoever proposed the one it is made from
+    const { suggestion: _proposed, ...own } = structuredClone(source)
     const copy: Compilation = {
-      ...structuredClone(source),
+      ...own,
       id: newId(),
       name,
       created_at: now,
@@ -504,8 +497,35 @@ export default class CompilationsController {
     })
     // A passage of a live that isn't one of them is not told to the AI
     if (change) for (const part of change.current) part.items = part.items.filter((item) => !item.job || others.some((live) => live.id === item.job))
+    // A video the AI proposed ({ leads: [seconds] }): the moments it had spotted for it, where the one that builds it starts
+    const leads = (Array.isArray(ctx.request.input('leads')) ? ctx.request.input('leads') : []).filter((at: unknown) => typeof at === 'number' && Number.isFinite(at) && at >= 0).slice(0, 40)
     try {
-      return await planLiveVideo(job.id, brief, target, liveContext(job), change, lives)
+      return await planLiveVideo(job.id, brief, target, liveContext(job), change, lives, change ? [] : leads)
+    } catch (err) {
+      return workerFailure(ctx.response, err)
+    }
+  }
+
+  // GET /api/jobs/:id/suggestions — how many proposed videos wait to be opened, and whether the AI is looking for some right now
+  async suggestions(ctx: HttpContext) {
+    const job = await ownJob(ctx)
+    if (!job) return ctx.response.notFound({ error: 'job not found' })
+    return { suggested: waitingCount(job.compilations), looking: isLooking(job.id), looked_at: job.suggestions?.at ?? null }
+  }
+
+  /**
+   * POST /api/jobs/:id/suggestions — the AI looks through the live for videos to propose
+   * (done by itself when an analysis ends; this is for a live analysed before, or to ask
+   * again). What it proposes is kept as compilations that wait to be built; an idea already
+   * proposed, even deleted since, is not proposed again.
+   */
+  async suggest(ctx: HttpContext) {
+    const job = await ownJob(ctx)
+    if (!job) return ctx.response.notFound({ error: 'job not found' })
+    if (job.status !== 'DONE') return ctx.response.conflict({ error: 'the live is not analysed yet' })
+    try {
+      const done = await suggestCompilations(job.id)
+      return { compilations: describeCompilations(job.id, done.created), found: done.found, note: done.note, cost: done.cost, cached: done.cached }
     } catch (err) {
       return workerFailure(ctx.response, err)
     }

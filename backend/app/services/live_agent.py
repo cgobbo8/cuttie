@@ -4,8 +4,13 @@ point, listens when words don't tell, and only then answers with the moments
 that really match. Many cheap, exact steps instead of one long read of the
 whole transcript: the answer is checked before it is given.
 
-The model that searches doesn't have to hear: `listen` hands a few seconds of
-the live to a small model that does (EARS_MODEL) and brings back what it heard.
+The model that searches doesn't have to hear or see: `listen` hands a few seconds
+of the live to a small model that hears (EARS_MODEL) and brings back what it heard,
+`look` hands three images to one that sees (EYES_MODEL) and brings back what is
+on screen: a kill, a win, a crash are often seen and never said.
+
+The same loop also looks for videos to propose when nobody asked for one
+(`suggest`, see live_ideas.py).
 
 Runs on OpenRouter (function calling). What a search costs is what the models
 bill: the tokens of every step are counted.
@@ -35,6 +40,15 @@ logger = logging.getLogger(__name__)
 SEARCH_MODEL = os.getenv("CUTTIE_SEARCH_MODEL", "openai/gpt-6-luna")
 FALLBACK_MODEL = os.getenv("CUTTIE_SEARCH_FALLBACK", "anthropic/claude-haiku-5.5")
 EARS_MODEL = os.getenv("CUTTIE_EARS_MODEL", "google/gemini-3.1-flash-lite")
+# The one that looks at images of the live (the same that chooses each passage's template, looks.py)
+EYES_MODEL = os.getenv("CUTTIE_EYES_MODEL", "google/gemini-3.1-flash-lite")
+# The one that looks for compilations to propose once a live is analysed, and what that may cost at most
+IDEAS_MODEL = os.getenv("CUTTIE_IDEAS_MODEL", SEARCH_MODEL)
+IDEAS_MAX_COST = float(os.getenv("CUTTIE_IDEAS_MAX_COST", "0.05"))
+IDEAS_STEPS = 30
+# Before its ideas are taken, the model is sent back to the phrases said this many times that none of them is about:
+# those among the first few that `recurring` gives, a handful named
+UNFOLLOWED_TIMES, UNFOLLOWED_AMONG, UNFOLLOWED_SHOWN = 10, 12, 6
 # The model that plans a whole video from its description. Finding moments is one thing; reading
 # what each part of a description means and sorting the moments between them is another, and the
 # cheap models don't: on a streamer's own description (two parts: everyone saying the evening is
@@ -51,13 +65,18 @@ PLAN_MAX_COST = float(os.getenv("CUTTIE_PLAN_MAX_COST", "0.12"))
 # How hard the searching model thinks between two tools (as on the benchmark: it reads, it doesn't ponder)
 REASONING = {"effort": "low"}
 # Changes when the instructions do: answers kept on disk under the old ones are asked again
-ANSWERS_VERSION = "4"
+ANSWERS_VERSION = "5"
 MAX_STEPS = 28
 PLAN_STEPS = 36
 # A planned video that comes to less than this share of the length asked is sent back once
 SHORT_PLAN = 0.75
 MAX_LISTENS = 12
 LISTEN_SECONDS = 30.0
+# Looks at the live's image: three frames each, over this many seconds at most, from a small rendition
+MAX_LOOKS = 8
+LOOK_SECONDS = 12.0
+LOOK_FRAMES = 3
+LOOK_HEIGHT = 480
 FETCH_TIMEOUT = 25
 FETCH_TRIES = 2
 TOOL_RESULT_CHARS = 12000
@@ -79,6 +98,22 @@ LISTEN_SPEC = {
             "question": {"type": "string", "description": "What you want to know, e.g. 'is he really angry or joking?'"},
         },
         "required": ["start", "end"],
+    },
+}
+
+LOOK_SPEC = {
+    "name": "look",
+    "description": f"Have {LOOK_FRAMES} images of a moment of the live looked at (spread over {LOOK_SECONDS:.0f} seconds at most) and get back what is on screen: what happens in the game "
+    "(a kill, a fight, a crash, a win, a defeat, a menu), what the screen says (kill feed, score, a message), and the streamer's face when the webcam shows. "
+    f"Use it when it is about something seen that may not be said, on the few moments that matter: {MAX_LOOKS} looks at most.",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "start": {"type": "string", "description": "H:MM:SS"},
+            "end": {"type": "string", "description": "H:MM:SS, a few seconds later (6 by default)"},
+            "question": {"type": "string", "description": "What you want to know, e.g. 'does he get a kill here?'"},
+        },
+        "required": ["start"],
     },
 }
 
@@ -149,6 +184,8 @@ _LINES = """A moment is the lines to keep, as `read` shows them: `start` is the 
 
 _SOUNDS = """The sound tools only point at where to look and they misfire: confirm what they report (shots, a siren, laughter, a shout) with `listen` before keeping it. You have enough listens: use them on your best candidates rather than giving up on them."""
 
+_SIGHTS = """`look` shows three images of a few seconds: it tells what is on screen then, not what happened before or after. Use it to confirm what the first analysis, a sound or the chat points at (a kill, a win, a crash, a face), not to browse the live."""
+
 _SCORES = """Score each moment honestly: 80-100 exactly what was asked, 50-79 what was asked in a milder form, under 50 only close to it."""
 
 SYSTEM = (
@@ -185,6 +222,68 @@ How to work:
     + _SCORES
     + """ A part with nothing that really matches gets its closest moments (3 at most, scored under 50) rather than staying empty, and the note says so. Never invent: every moment is one you read or listened to.
 9. Finish by calling `plan`. The note is your answer to the streamer, who reads it beside the video: for each part, what you put in it and why these moments, then what is only close or what you looked for and didn't find."""
+)
+
+
+IDEAS_SPEC = {
+    "name": "suggest",
+    "description": "Give the videos worth making from this live, the best first, once you have checked moments of each. Ends the work.",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "ideas": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "title": {"type": "string", "description": "The video's title as it would be posted: 2 to 6 words in the stream's language"},
+                        "brief": {
+                            "type": "string",
+                            "description": "The request the streamer would type to have this video made, in the stream's language and in their voice (\"Fais-moi une vidéo...\"): "
+                            "what the video shows, its parts in order when it has several and what each holds, the words or the events to look for. Two to four sentences, no times. "
+                            "It is handed as it is to the editor that builds the video, who knows nothing of what you found: say everything it needs.",
+                        },
+                        "seconds": {"type": "number", "description": "How long the video should be: 20 to 90"},
+                        "pitch": {"type": "string", "description": "One sentence in the stream's language, said to the streamer: what you noticed in the live that makes this video (with the count when you counted)"},
+                        "tags": {"type": "array", "items": {"type": "string"}, "description": "2 to 4 tags of one or two words, in the stream's language, lowercase: what kind of video, what is in it"},
+                        "kind": {"type": "string", "enum": ["funny", "skill", "suspense", "chill", "hype"], "description": "funny: makes people laugh; skill: great plays; suspense: tension; chill: calm talk; hype: a best-of, big moments"},
+                        "score": {"type": "number", "description": "0-100: how well this video should do as a short"},
+                        "moments": {"type": "array", "items": {"type": "string"}, "description": "The times (H:MM:SS) of every moment you found for it, checked or not: 4 at least"},
+                    },
+                    "required": ["title", "brief", "seconds", "pitch", "tags", "kind", "score", "moments"],
+                },
+            },
+            "note": {"type": "string", "description": "One or two sentences in the stream's language, said to the streamer: what you looked for in the live and what it has"},
+        },
+        "required": ["ideas", "note"],
+    },
+}
+
+# What makes a video of several moments, and how an idea is judged (also given to a model that reads the live in one go)
+IDEAS_WHAT = """A compilation is a short vertical video (20 to 90 seconds) made of several short moments of the live that share something. What to look for:
+- Something said again and again: a running joke, a catchphrase, a complaint, a name; or people saying something that turns out wrong (everyone says the evening is calm, then it all kicks off: a video in two parts, what they said, then what happened).
+- The same kind of thing happening many times: kills or great plays, fails, crashes, chases, arrests, fits of laughter, rages, scares, awkward silences, someone getting teased.
+- A story the live tells over time, with a beginning and an end: a mission that goes wrong, an argument and how it ends, a bet and who loses it.
+- The chat going wild several times about the same thing.
+- A best-of of the live: only when it has at least six strong moments of different kinds, and never the only idea when something more particular exists.
+An idea is one thing, said in one sentence, that someone who never watched the stream would get and watch to the end. It needs at least five moments that really belong together (a story: four), short enough to make a fast video. Two ideas never rest on the same moments.
+A live of several hours usually holds three to five such videos, of different kinds: go through every kind above before settling for fewer.
+Score each idea honestly, 0 to 100, on how well it should do as a short: 80 and more for a particular idea with many moments that are funny or impressive on their own; 60 to 79 for good material on a more usual idea; under 60 it is thin. Never propose an idea under 50, and never fill with weak ones: a live that really has one good idea gets one."""
+
+IDEAS_SYSTEM = (
+    _INTRO.format(task="The analysis of one live stream has just finished and nobody has asked for anything yet: you look through the live for the compilations worth making from it and propose them to the streamer, who can have each one built with a click.")
+    + """
+
+"""
+    + IDEAS_WHAT
+    + """
+
+How to work:
+1. Start with `overview`, `best_moments`, `recurring` and `chat_peaks`, all at once: what the live is, what happens in its best moments (and of which kinds), what is said again and again, when the chat reacts. Then the sounds and the loud moments that this game and what you saw call for (shots for a shooter, laughter, raised voices).
+2. Take the kinds of compilation one by one and follow each lead, counting: `search_speech` lists every time something is said, `find_sounds` every burst of a sound, and `best_moments` gives each moment's kind (several funny ones, several fails, several great plays or several rages make a video each). Words of the game that come back because they are the game (the name of a character, of a place) are not an idea; a sentence people keep saying about what happens is.
+3. Check each idea on three or four of its moments before keeping it, with `read`{listen} An idea whose moments you did not check is not proposed.
+4. Write each idea's `brief` as the streamer would ask for the video, naming what to look for (the words said, the kind of moment, who is in it, the order of the parts): the editor that builds it starts from this request alone. No times in it: every moment you found for the idea goes in `moments`, checked or not, where the editor will start.
+5. Finish by calling `suggest`: {most} ideas at most, the best first, none when the live has nothing that repeats or builds. Everything the streamer reads (title, brief, pitch, tags, note) is in the stream's language."""
 )
 
 
@@ -231,6 +330,9 @@ class AgentRun:
     steps: int = 0
     tool_calls: int = 0
     listens: int = 0
+    looks: int = 0
+    # Videos proposed when nobody asked for one (see IDEAS_SPEC)
+    ideas: list[dict] = field(default_factory=list)
     tokens_in: int = 0
     tokens_out: int = 0
     # Dollars billed by OpenRouter (0 when it didn't say)
@@ -314,6 +416,46 @@ def live_audio_url(vod_url: str) -> str | None:
         return None
 
 
+def live_video_url(vod_url: str) -> str | None:
+    """Where the live's image is read from, in a small rendition (a look sends three frames: no need for more), None when it can't be."""
+    if not vod_url.startswith(("https://", "http://")):
+        return None
+    try:
+        from app.services.frame_extractor import get_vod_direct_url
+
+        return get_vod_direct_url(vod_url, max_height=LOOK_HEIGHT) or None
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError):
+        return None
+
+
+def fetch_frames(video_url: str, times: list[float]) -> list[str]:
+    """One image of the live at each of these times, as data URLs in their order (those that could not be fetched left out).
+    Fetched together: a second or two each."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    os.makedirs(paths.WORK_DIR, exist_ok=True)
+
+    def one(at: float) -> str | None:
+        fd, path = tempfile.mkstemp(suffix=".jpg", dir=paths.WORK_DIR)
+        os.close(fd)
+        try:
+            command = ["ffmpeg", "-nostdin", "-loglevel", "error", "-y", "-rw_timeout", "10000000", "-ss", f"{max(0.0, at):.2f}", "-i", video_url,
+                       "-frames:v", "1", "-vf", f"scale=-2:{LOOK_HEIGHT}", "-q:v", "5", path]
+            subprocess.run(command, check=True, timeout=FETCH_TIMEOUT, capture_output=True)
+            with open(path, "rb") as f:
+                data = f.read()
+            return "data:image/jpeg;base64," + base64.b64encode(data).decode("ascii") if len(data) > 1000 else None
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as e:
+            logger.warning(f"Image of {hms(at)} not fetched: {type(e).__name__}")
+            return None
+        finally:
+            if os.path.isfile(path):
+                os.remove(path)
+
+    with ThreadPoolExecutor(max_workers=max(1, len(times))) as pool:
+        return [frame for frame in pool.map(one, times) if frame]
+
+
 def _worth_retrying(err: Exception) -> bool:
     """A dropped connection, a timeout, a provider that is busy: the same call may pass a moment later."""
     status = getattr(err, "status_code", None)
@@ -328,30 +470,36 @@ class Searcher:
     `on_step(tool, args)` is told what the search is doing, as it does it."""
 
     def __init__(self, tools: LiveTools | ManyLives, client, model: str, vod_url: str | list[str | None] | None = None, ears_model: str = EARS_MODEL,
-                 on_step=None, max_cost: float = MAX_COST) -> None:
+                 on_step=None, max_cost: float = MAX_COST, eyes_model: str = EYES_MODEL) -> None:
         """`tools`: one live's, or several lives' (`vod_url` is then each live's address, in their order)."""
         self.tools = tools
         self.many = len(tools.lives) if isinstance(tools, ManyLives) else 0
         self.client = client
         self.model = model
         self.ears_model = ears_model
+        self.eyes_model = eyes_model
         self.vod_url = vod_url
         self.on_step = on_step
         self.max_cost = max_cost
         # Where each live's sound is read from, once asked (None: it can't be)
         self._audio_urls: dict[int, str | None] = {}
+        # ...and its image, in a small rendition
+        self._video_urls: dict[int, str | None] = {}
         self.run = AgentRun(model=model)
 
-    def specs(self, final: dict = ANSWER_SPEC) -> list[dict]:
-        specs = list(self.tools.specs())
+    def specs(self, final: dict = ANSWER_SPEC, more: list[dict] | None = None) -> list[dict]:
+        """The tools of this work: the live's, `more` (tools of one kind of work only), the ears and the eyes
+        when the live can still be fetched, then the one that ends it."""
+        specs = [*self.tools.specs(), *(more or [])]
         urls = self.vod_url if isinstance(self.vod_url, list) else [self.vod_url]
-        if any(urls) and self.ears_model:
-            listen = LISTEN_SPEC
+        for spec, model in ((LISTEN_SPEC, self.ears_model), (LOOK_SPEC, self.eyes_model)):
+            if not any(urls) or not model:
+                continue
             if self.many:
-                listen = copy.deepcopy(LISTEN_SPEC)
-                listen["parameters"]["properties"]["live"] = {"type": "integer", "description": f"Which live: 1 to {self.many}"}
-                listen["parameters"]["required"] = ["live", *listen["parameters"]["required"]]
-            specs.append(listen)
+                spec = copy.deepcopy(spec)
+                spec["parameters"]["properties"]["live"] = {"type": "integer", "description": f"Which live: 1 to {self.many}"}
+                spec["parameters"]["required"] = ["live", *spec["parameters"]["required"]]
+            specs.append(spec)
         return [*specs, _for_lives(final, self.many) if self.many else final]
 
     def _system(self, system: str) -> str:
@@ -425,6 +573,53 @@ class Searcher:
             return {"error": "this part of the live could not be listened to"}
         return {**({"live": which + 1} if self.many else {}), "from": hms(a), "to": hms(b), "heard": (response.choices[0].message.content or "").strip()[:600]}
 
+    def look(self, start, end=None, question: str = "", live=None) -> dict:
+        """What is on screen at a moment of the live: three images of it, told by the model that sees."""
+        if self.run.looks >= MAX_LOOKS:
+            return {"error": "no looks left: decide with what you have"}
+        tools, which = self.tools, 0
+        if isinstance(tools, ManyLives):
+            picked = tools.of(live)
+            if not picked:
+                return {"error": f"`live` must be a number from 1 to {self.many}"}
+            which, tools = picked[0] - 1, picked[1]
+        urls = self.vod_url if isinstance(self.vod_url, list) else [self.vod_url]
+        a = parse_hms(start) or 0.0
+        if tools.duration:
+            a = min(a, max(0.0, tools.duration - 2.0))
+        b = parse_hms(end) if end else None
+        b = min(b if b is not None and b > a else a + 6.0, a + LOOK_SECONDS)
+        if which not in self._video_urls:
+            self._video_urls[which] = live_video_url((urls[which] if which < len(urls) else None) or "")
+        if not self._video_urls[which]:
+            return {"error": "the live's image can't be reached any more"}
+        frames = fetch_frames(str(self._video_urls[which]), [a + i * (b - a) / (LOOK_FRAMES - 1) for i in range(LOOK_FRAMES)])
+        if not frames:
+            return {"error": "this part of the live could not be fetched"}
+        self.run.looks += 1
+        ask = (
+            f"These are {len(frames)} images of a Twitch live stream, a few seconds apart, in order. In 2 or 3 short sentences, say what is on screen: "
+            "what happens in the game (a kill, a fight, a crash, a chase, a win or a defeat, a menu, nothing much), what the screen says when it matters "
+            "(kill feed, score, a message), and the streamer's face and gesture when a webcam shows. Only what you see, no guess about what is said."
+            + (f" The editor asks: {question[:200]}" if question else "")
+        )
+        try:
+            response = self._create(
+                model=self.eyes_model,
+                messages=[{"role": "user", "content": [{"type": "text", "text": ask}, *({"type": "image_url", "image_url": {"url": frame, "detail": "low"}} for frame in frames)]}],
+                temperature=0.2,
+                max_tokens=400,
+            )
+        except Exception as e:
+            from app.services.provider_errors import ProviderUnavailable
+
+            if isinstance(e, ProviderUnavailable):
+                raise
+            # The eyes failing doesn't end the search: it decides with what it read
+            logger.warning(f"AI search: looking at {hms(a)} failed: {type(e).__name__}: {e}")
+            return {"error": "this part of the live could not be looked at"}
+        return {**({"live": which + 1} if self.many else {}), "from": hms(a), "to": hms(b), "seen": (response.choices[0].message.content or "").strip()[:600]}
+
     def call(self, name: str, args: dict) -> dict:
         self.run.tool_calls += 1
         self.run.trace.append({"tool": name, "args": args})
@@ -433,11 +628,11 @@ class Searcher:
                 self.on_step(name, args)
             except Exception:  # what it tells is for show: never the search's problem
                 pass
-        if name == "listen":
+        if name in ("listen", "look"):
             try:
-                return self.listen(**args)
+                return self.listen(**args) if name == "listen" else self.look(**args)
             except TypeError as e:
-                return {"error": f"bad arguments for listen: {e}"}
+                return {"error": f"bad arguments for {name}: {e}"}
         return self.tools.call(name, args)
 
     def search(self, request: str, max_steps: int = MAX_STEPS) -> AgentRun:
@@ -448,9 +643,15 @@ class Searcher:
         self._log(f"{len(self.run.moments)} moments")
         return self.run
 
-    def plan(self, brief: str, target: float, max_steps: int = PLAN_STEPS) -> AgentRun:
-        """A whole video from its description: its parts and their moments (run.title, run.sections, run.note)."""
+    def plan(self, brief: str, target: float, max_steps: int = PLAN_STEPS, leads: list[float] | None = None) -> AgentRun:
+        """A whole video from its description: its parts and their moments (run.title, run.sections, run.note).
+        `leads`: moments already spotted for it in the live (seconds), when the video is one the AI proposed."""
         ask = f"The video the streamer describes: « {brief} »\nIts length: about {target:.0f} seconds in all."
+        if leads:
+            ask += (
+                "\nThis video was proposed after a first look through the live, which spotted moments for it around these times: "
+                f"{', '.join(hms(at) for at in sorted(leads)[:30])}. Start there: `read` them, keep those that fit, then look for the others."
+            )
         given = self._work(self._system(PLAN_SYSTEM), ask, PLAN_SPEC, max_steps, review=lambda plan: _short_plan(plan, target, self.tools.spoken))
         sections = given.get("sections")
         for raw in sections if isinstance(sections, list) else []:
@@ -479,21 +680,65 @@ class Searcher:
         self._log(f"revised: {len(self.run.sections)} parts, {sum(len(s['moments']) for s in self.run.sections)} moments")
         return self.run
 
+    def suggest(self, most: int = 5, max_steps: int = IDEAS_STEPS) -> AgentRun:
+        """The videos worth making from this live when nobody asked for one (run.ideas, run.note)."""
+        from app.services.live_tools import RECURRING_SPEC
+
+        ask = "The analysis of this live stream has just finished. Look through it and propose the compilations worth making from it."
+        given = self._work(IDEAS_SYSTEM.replace("{most}", str(most)), ask, IDEAS_SPEC, max_steps, more=[RECURRING_SPEC], review=self._unfollowed)
+        ideas = given.get("ideas")
+        self.run.ideas = [idea for idea in ideas if isinstance(idea, dict)][: 2 * most] if isinstance(ideas, list) else []
+        self._log(f"{len(self.run.ideas)} ideas")
+        return self.run
+
+    def _unfollowed(self, answer: dict) -> str | None:
+        """What is said again and again in the live that none of the proposed videos is about: sent back once
+        before the ideas are taken, so that a running joke said twenty times is never left out because the
+        model went after something else first. None when every such phrase was followed (or there is none)."""
+        from app.services import live_ideas
+
+        if isinstance(self.tools, ManyLives):
+            return None
+        ideas = [idea for idea in answer.get("ideas") or [] if isinstance(idea, dict)]
+        told = " ".join(" ".join(str(part) for part in (idea.get("title"), idea.get("brief"), idea.get("pitch"), *(idea.get("tags") or []))) for idea in ideas)
+        about = {live_search.stem(word) for word in live_search.tokens(told)}
+        missed = []
+        for phrase in (self.tools.call("recurring", {}).get("phrases") or [])[:UNFOLLOWED_AMONG]:
+            # The words that carry it: "franchement c'est calme" is followed by an idea about the calm
+            words = [live_search.stem(word) for word in live_search.tokens(phrase["said"]) if word not in live_ideas._COMMON]
+            if phrase["times"] >= UNFOLLOWED_TIMES and words and not all(word in about for word in words):
+                missed.append(f"« {phrase['said']} » x{phrase['times']}")
+        if not missed:
+            return None
+        return (
+            f"Before you end: `recurring` showed these said again and again, and none of your ideas is about them: {', '.join(missed[:UNFOLLOWED_SHOWN])}. "
+            "Most are plain words of the game; one may be what people keep saying about what happens (a running joke, a complaint, a prediction that turns out wrong). "
+            "For those that could be, `search_speech` it and `read` two or three of its lines. Then call `suggest` again with all your ideas: "
+            "the same ones when none of these is an idea, one more when one is."
+        )
+
     def _log(self, found: str) -> None:
         logger.info(
-            f"AI search with {self.model}: {found} in {self.run.steps} steps, {self.run.tool_calls} tool calls, {self.run.listens} listens, "
+            f"AI search with {self.model}: {found} in {self.run.steps} steps, {self.run.tool_calls} tool calls, {self.run.listens} listens, {self.run.looks} looks, "
             f"{self.run.tokens_in} tokens in, {self.run.tokens_out} out (~{self.run.cost:.4f} $), {self.run.seconds:.0f} s"
         )
 
-    def _work(self, system: str, ask: str, final: dict, max_steps: int, review=None) -> dict:
+    def _work(self, system: str, ask: str, final: dict, max_steps: int, review=None, more: list[dict] | None = None) -> dict:
         """The loop: the model calls tools until it calls `final` (forced when the steps or the money run out).
-        `review(answer)` may send a first answer back once, with what is wrong with it."""
+        `review(answer)` may send a first answer back once, with what is wrong with it; `more`: tools of this work only."""
         t0 = time.time()
-        specs = self.specs(final)
+        specs = self.specs(final, more)
         final = specs[-1]
-        can_listen = any(s["name"] == "listen" for s in specs)
+        names = {s["name"] for s in specs}
+        # What it checks a moment with besides reading it, when the live can still be fetched
+        senses = ""
+        if "listen" in names:
+            senses += ", with `listen` when the words don't tell"
+        if "look" in names:
+            senses += ", with `look` when it is about what is seen rather than said"
+        senses += "." + (" " + _SOUNDS if "listen" in names else "") + (" " + _SIGHTS if "look" in names else "")
         messages: list[dict] = [
-            {"role": "system", "content": system.format(listen=", and with `listen` when the words don't tell. " + _SOUNDS if can_listen else ".")},
+            {"role": "system", "content": system.format(listen=senses)},
             {"role": "user", "content": ask},
         ]
         functions = [{"type": "function", "function": s} for s in specs]
@@ -515,7 +760,7 @@ class Searcher:
             calls = message.tool_calls or []
             if not calls:
                 # Answered in plain text instead of the tool: taken as it is when it is the JSON asked for
-                in_text = _answer_in_text(message.content or "", "sections" if final["name"] == PLAN_SPEC["name"] else "moments")
+                in_text = _answer_in_text(message.content or "", {PLAN_SPEC["name"]: "sections", IDEAS_SPEC["name"]: "ideas"}.get(final["name"], "moments"))
                 if in_text is not None:
                     given = in_text
                     self.run.finished = True

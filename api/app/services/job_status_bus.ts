@@ -7,6 +7,7 @@
 import Job, { type JobNotice, type JobTimeline, type TimelineCandidate } from '#models/job'
 import Creator from '#models/creator'
 import transmit from '@adonisjs/transmit/services/main'
+import { afterAnalysis } from '#services/suggestions'
 
 export interface HotPointData {
   clip_filename: string
@@ -90,6 +91,8 @@ class JobStatusBus {
       return
     }
 
+    // The analysis ends with this update: the AI then looks through the live for videos to propose
+    const analysed = update.status === 'DONE' && job.status !== 'DONE'
     if (update.status) job.status = update.status
     if (update.progress !== undefined) job.progress = update.progress
     if (update.error !== undefined) job.error = update.error ?? null
@@ -137,6 +140,7 @@ class JobStatusBus {
     }
 
     await job.save()
+    if (analysed) afterAnalysis(job.id)
   }
 }
 

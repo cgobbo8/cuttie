@@ -763,6 +763,30 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/compilations_controller').default['plan']>>>
     }
   }
+  'compilations.suggestions': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/jobs/:id/suggestions'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { id: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/compilations_controller').default['suggestions']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/compilations_controller').default['suggestions']>>>
+    }
+  }
+  'compilations.suggest': {
+    methods: ["POST"]
+    pattern: '/api/jobs/:id/suggestions'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { id: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/compilations_controller').default['suggest']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/compilations_controller').default['suggest']>>>
+    }
+  }
   'compilations.pieces': {
     methods: ["POST"]
     pattern: '/api/jobs/:id/pieces'

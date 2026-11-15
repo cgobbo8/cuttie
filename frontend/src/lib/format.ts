@@ -126,6 +126,9 @@ export function analysisProgress(
  */
 export const ANALYSIS_COST = 0.3;
 
+/** What having a described video built costs, about (measured: 0.03 to 0.04 $ with the model that plans) */
+export const PLAN_COST = 0.04;
+
 /** "≈ 0,30 $" in the language's numbers */
 export function aboutCost(dollars: number, lang: string): string {
   return `≈ ${new Intl.NumberFormat(lang, { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(dollars)} $`;

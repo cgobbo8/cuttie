@@ -864,10 +864,11 @@ def _many_cost(others: list[dict] | None) -> float:
 
 def plan_video(
     job_id: str, brief: str, target: float, meta: dict, duration: float, energy: list[float] | None = None, lag: float = 5.0,
-    url: str | None = None, moments: list[dict] | None = None, others: list[dict] | None = None,
+    url: str | None = None, moments: list[dict] | None = None, others: list[dict] | None = None, leads: list[float] | None = None,
 ) -> dict:
     """A whole video from a description: sections (a title, moments in playing order).
-    `others`: more lives the video may take moments from; each hit then says its live (`job`)."""
+    `others`: more lives the video may take moments from; each hit then says its live (`job`).
+    `leads`: moments already spotted for this video (live seconds), when it is one the AI proposed (live_ideas.py)."""
     transcript = load_cached(job_id)
     if not transcript:
         raise NoTranscript(job_id)
@@ -888,7 +889,7 @@ def plan_video(
     # More lives to go through: more steps, and more to spend at most
     steps = live_agent.PLAN_STEPS + MORE_STEPS * len(others or [])
     run, _tools, cost = _ask(
-        job_id, duration, lag, url, lambda searcher: searcher.plan(brief, target, max_steps=steps), moments,
+        job_id, duration, lag, url, lambda searcher: searcher.plan(brief, target, max_steps=steps, leads=leads), moments,
         models=[live_agent.PLAN_MODEL, live_agent.SEARCH_MODEL, live_agent.FALLBACK_MODEL], max_cost=_many_cost(others),
         others=others, date=meta.get("date"),
     )

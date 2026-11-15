@@ -134,6 +134,18 @@ class PlanRequest(BaseModel):
     # More lives the video takes moments from (each moment of the answer then says its live: `job`;
     # in `current`, an item of another live says so the same way)
     lives: list[OtherLive] = []
+    # The video is one the AI proposed: the moments it had spotted for it (live seconds)
+    leads: list[float] = []
+
+
+class IdeasRequest(BaseModel):
+    """A live to look through for compilations worth making (what a search is given, and no question)."""
+
+    duration: float = 0.0
+    energy: list[float] | None = None
+    meta: dict = {}
+    url: str | None = None
+    moments: list[dict] = []
 
 
 class LivePiece(BaseModel):
@@ -512,8 +524,19 @@ def plan_video(job_id: str, req: PlanRequest) -> dict:
             )
         return live_search.plan_video(
             _check_job_id(job_id), brief, max(10.0, min(req.target, 600.0)), req.meta, req.duration, req.energy, url=req.url, moments=req.moments[:400],
-            others=others,
+            others=others, leads=[at for at in req.leads[:40] if at >= 0] or None,
         )
+    except Exception as e:
+        raise _ai_errors(e) from e
+
+
+@app.post("/jobs/{job_id}/ideas", dependencies=[Depends(require_secret)])
+def live_ideas(job_id: str, req: IdeasRequest) -> dict:
+    """The compilations worth making from a live, found by the AI on its own (each with the request to build it from)."""
+    from app.services import live_ideas as ideas
+
+    try:
+        return ideas.suggest_videos(_check_job_id(job_id), req.meta, req.duration, req.energy, url=req.url, moments=req.moments[:400])
     except Exception as e:
         raise _ai_errors(e) from e
 

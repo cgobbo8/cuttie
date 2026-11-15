@@ -384,6 +384,18 @@ const routes = {
     tokens: [{"old":"/api/jobs/:id/plan","type":0,"val":"api","end":""},{"old":"/api/jobs/:id/plan","type":0,"val":"jobs","end":""},{"old":"/api/jobs/:id/plan","type":1,"val":"id","end":""},{"old":"/api/jobs/:id/plan","type":0,"val":"plan","end":""}],
     types: placeholder as Registry['compilations.plan']['types'],
   },
+  'compilations.suggestions': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/jobs/:id/suggestions',
+    tokens: [{"old":"/api/jobs/:id/suggestions","type":0,"val":"api","end":""},{"old":"/api/jobs/:id/suggestions","type":0,"val":"jobs","end":""},{"old":"/api/jobs/:id/suggestions","type":1,"val":"id","end":""},{"old":"/api/jobs/:id/suggestions","type":0,"val":"suggestions","end":""}],
+    types: placeholder as Registry['compilations.suggestions']['types'],
+  },
+  'compilations.suggest': {
+    methods: ["POST"],
+    pattern: '/api/jobs/:id/suggestions',
+    tokens: [{"old":"/api/jobs/:id/suggestions","type":0,"val":"api","end":""},{"old":"/api/jobs/:id/suggestions","type":0,"val":"jobs","end":""},{"old":"/api/jobs/:id/suggestions","type":1,"val":"id","end":""},{"old":"/api/jobs/:id/suggestions","type":0,"val":"suggestions","end":""}],
+    types: placeholder as Registry['compilations.suggest']['types'],
+  },
   'compilations.pieces': {
     methods: ["POST"],
     pattern: '/api/jobs/:id/pieces',

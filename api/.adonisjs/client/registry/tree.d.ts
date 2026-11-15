@@ -94,6 +94,8 @@ export interface ApiDefinition {
     looks: typeof routes['compilations.looks']
     sound: typeof routes['compilations.sound']
     plan: typeof routes['compilations.plan']
+    suggestions: typeof routes['compilations.suggestions']
+    suggest: typeof routes['compilations.suggest']
     pieces: typeof routes['compilations.pieces']
     index: typeof routes['compilations.index']
     store: typeof routes['compilations.store']

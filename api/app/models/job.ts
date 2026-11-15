@@ -2,6 +2,7 @@ import { JobSchema } from '#database/schema'
 import { column } from '@adonisjs/lucid/orm'
 import type { FacecamRect } from '#services/brand_kit'
 import type { Compilation } from '#services/compilations'
+import type { JobSuggestions } from '#services/suggestions'
 
 export default class Job extends JobSchema {
   static selfAssignPrimaryKey = true
@@ -67,6 +68,13 @@ export default class Job extends JobSchema {
     consume: (value) => (typeof value === 'string' ? JSON.parse(value) : value),
   })
   declare compilations: Compilation[] | null
+
+  /** What the AI proposed for this live once it was analysed (see services/suggestions.ts) */
+  @column({
+    prepare: (value) => (value !== null && value !== undefined ? JSON.stringify(value) : null),
+    consume: (value) => (typeof value === 'string' ? JSON.parse(value) : value),
+  })
+  declare suggestions: JobSuggestions | null
 }
 
 /** e.g. { kind: 'transcription', failed: 37, total: 200 } */

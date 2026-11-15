@@ -288,9 +288,42 @@ export interface OtherLive {
 
 /** A whole video planned by the AI from a description; with `change`, the video it already planned, changed as asked */
 
-export async function planLiveVideo(jobId: string, brief: string, target: number, context: LiveContext, change?: PlanChange, lives: OtherLive[] = []): Promise<VideoPlan> {
-  const body = { brief, target, ...context, ...(change ?? {}), ...(lives.length > 0 ? { lives } : {}) }
+export async function planLiveVideo(
+  jobId: string,
+  brief: string,
+  target: number,
+  context: LiveContext,
+  change?: PlanChange,
+  lives: OtherLive[] = [],
+  /** The moments already spotted for this video (live seconds), when it is one the AI proposed */
+  leads: number[] = []
+): Promise<VideoPlan> {
+  const body = { brief, target, ...context, ...(change ?? {}), ...(lives.length > 0 ? { lives } : {}), ...(leads.length > 0 ? { leads } : {}) }
   return call('POST', `/jobs/${encodeURIComponent(jobId)}/plan`, { body, timeoutMs: 30 * 60_000 })
+}
+
+/** A video worth making from a live, as the AI proposes it (worker: live_ideas.py) */
+export interface LiveIdea {
+  /** Names the idea from one look through the live to the next */
+  key: string
+  title: string
+  /** The request a streamer would type to get this video: what it is built from */
+  brief: string
+  /** How long the video should be */
+  seconds: number
+  /** One sentence: what the AI noticed in the live */
+  pitch: string
+  tags: string[]
+  kind: string | null
+  /** 0-100: how well it should do as a short */
+  score: number
+  /** The moments spotted for it, live seconds */
+  moments: number[]
+}
+
+/** The compilations worth making from a live, found by the AI on its own (kept on the worker's disk: asked again, it costs nothing) */
+export async function findLiveIdeas(jobId: string, context: LiveContext): Promise<{ ideas: LiveIdea[]; note: string; cost: number; cached: boolean }> {
+  return call('POST', `/jobs/${encodeURIComponent(jobId)}/ideas`, { body: context, timeoutMs: 15 * 60_000 })
 }
 
 /** A template as the AI is told about it: what it shows and what it is good for (written by the app from the template) */

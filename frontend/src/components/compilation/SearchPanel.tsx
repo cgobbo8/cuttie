@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { Check, Loader2, MessageCircle, Mic, Play, Plus, Search, Sparkles } from "lucide-react";
 import {
@@ -36,8 +36,14 @@ interface Props {
   onAdd: (hits: LiveHit[], query: string) => void;
   /** The AI planned a whole video from `brief` */
   onPlan: (plan: VideoPlan, target: number, brief: string) => void;
-  /** The video on screen was described to the AI: what was asked first, each change since and its answer */
-  talk?: { brief: string; answer?: string; passages?: number; asks: TalkTurn[] } | null;
+  /** The video on screen was described to the AI: what was asked first, each change since and its answer (`byAi`: the AI proposed it and wrote that first request itself) */
+  talk?: { brief: string; answer?: string; passages?: number; asks: TalkTurn[]; byAi?: boolean } | null;
+  /**
+   * The video on screen is one the AI proposed and that is not built yet: what it noticed, the
+   * moments it spotted (where building starts), the length it should have. `auto`: build it
+   * at once (it was opened to be built). `id` tells one proposed video from another.
+   */
+  proposal?: { id: string; pitch: string; tags: string[]; score: number; leads: number[]; target: number; auto: boolean } | null;
   /** The video as it is now, as the AI is told about it when a change is asked */
   current?: () => PlanChange["current"];
   /** The AI changed the video as asked (`ask`) */
@@ -64,7 +70,7 @@ const head = (text: string) => (text.length > AROUND ? `${text.slice(0, text.las
 const PROGRESS_EVERY = 1200;
 
 /** Looking for moments in the whole live: by words, by asking the AI, or by describing the whole video */
-export default function SearchPanel({ jobId, storyboards, lives, info, previewed, isAdded, onPreview, onAdd, onPlan, onResults, talk, current, onChange, onReveal }: Props) {
+export default function SearchPanel({ jobId, storyboards, lives, info, previewed, isAdded, onPreview, onAdd, onPlan, onResults, talk, proposal = null, current, onChange, onReveal }: Props) {
   const { t, i18n } = useTranslation();
   const toast = useToast();
   // Describing the video to the AI is the main way in; searching by hand comes second
@@ -90,6 +96,8 @@ export default function SearchPanel({ jobId, storyboards, lives, info, previewed
   /** The change being worked on, and each thing the AI did for it so far */
   const [pending, setPending] = useState<string | null>(null);
   const [trail, setTrail] = useState<string[]>([]);
+  /** A video the AI proposed is being built from the request it wrote */
+  const [building, setBuilding] = useState(false);
   /** A video is being built from its description: watched in the conversation, like a change */
   const planning = busy === "plan" && pending === null;
   const inTalk = tab === "describe" && (talking || planning);
@@ -177,6 +185,46 @@ export default function SearchPanel({ jobId, storyboards, lives, info, previewed
     } finally {
       setBusy(null);
     }
+  };
+
+  /** A video the AI proposed is built from the request it wrote, starting from the moments it had spotted */
+  const build = async () => {
+    if (busy || !talk || !proposal) return;
+    setBusy("plan");
+    setBuilding(true);
+    setFailure(null);
+    try {
+      const planned = await planLiveVideo(jobId, talk.brief, proposal.target, undefined, others, proposal.leads);
+      const count = planned.sections.reduce((sum, s) => sum + s.hits.length, 0);
+      if (count === 0) {
+        toast.info(t("compilation.planEmpty"));
+        return;
+      }
+      onPlan(planned, proposal.target, talk.brief);
+      toast.success([t("compilation.planned", { count }), paid(planned)].filter(Boolean).join(" · "));
+    } catch (err) {
+      setFailure(err instanceof LiveError ? err.reason : "failed");
+    } finally {
+      setBusy(null);
+      setBuilding(false);
+    }
+  };
+  // Opened to be built (from its card): built once the live is known to be readable, once
+  const builtFor = useRef<string | null>(null);
+  const buildRef = useRef(build);
+  buildRef.current = build;
+  useEffect(() => {
+    if (!proposal?.auto || !info?.transcript || builtFor.current === proposal.id) return;
+    builtFor.current = proposal.id;
+    setTab("describe");
+    buildRef.current();
+  }, [proposal?.auto, proposal?.id, info?.transcript]);
+  /** The request the AI wrote, to rewrite before having the video built */
+  const editProposal = () => {
+    if (!talk || !proposal) return;
+    setBrief(talk.brief);
+    setTarget(proposal.target);
+    setAnother(true);
   };
 
   /** A change asked on the video the AI planned: it starts from the video as it is and from what was asked before */
@@ -267,7 +315,9 @@ export default function SearchPanel({ jobId, storyboards, lives, info, previewed
         </form>
       ) : talking || planning ? (
         <PlanTalk
-          brief={planning ? brief.trim() : talk!.brief}
+          brief={planning && !building ? brief.trim() : talk!.brief}
+          byAi={!!talk?.byAi && (!planning || building)}
+          proposal={proposal && !planning ? { pitch: proposal.pitch, tags: proposal.tags, score: proposal.score, cost: planCost, disabled: !info?.transcript || !!busy, onBuild: build, onEdit: editProposal } : null}
           answer={planning ? undefined : talk!.answer}
           passages={planning ? undefined : talk!.passages}
           planning={planning}

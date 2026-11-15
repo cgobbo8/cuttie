@@ -1,4 +1,5 @@
 import { deletePiece, movedTo, withoutLive } from '#services/compilations'
+import { waitingCount } from '#services/suggestions'
 import type { HttpContext } from '@adonisjs/core/http'
 import { randomUUID } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
@@ -194,6 +195,8 @@ export default class JobsController {
         clipCount: (job.hotPoints ?? []).filter((hp: any) => hp.clip_filename).length,
         keptCount: Object.values(job.selection ?? {}).filter((sel) => sel.state === 'kept').length,
         exportCount: exportCounts.get(job.id) ?? 0,
+        // Videos the AI proposed for this live that nobody has opened yet
+        suggested: waitingCount(job.compilations),
         // Clips deleted to free disk space (exports kept), and what freeing them would give back
         clipsFreedAt: job.clipsFreedAt?.toISO() ?? null,
         clipsBytes: freeableBytes(job.id),
@@ -218,6 +221,8 @@ export default class JobsController {
     if (!job || job.userId !== user.id) return response.notFound({ error: 'job not found' })
 
     const data = job.serialize()
+    // Videos the AI proposed for this live that nobody has opened yet
+    data.suggested = waitingCount(job.compilations)
 
     // Enrich hotPoints with chatMessageCount per clip
     if (data.hotPoints?.length) {

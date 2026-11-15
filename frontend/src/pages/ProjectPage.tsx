@@ -82,6 +82,12 @@ export default function ProjectPage() {
   // Live updates while the analysis runs
   useTransmitChannel(jobId ? `jobs/${jobId}` : null, (raw: unknown) => {
     const data = raw as Record<string, any>;
+    // The AI looked through the live once analysed: it proposes compilations (counted next to "Compilations")
+    if (data.type === "suggestions") {
+      if (data.count > 0) toast.success(t("suggestions.toast", { count: data.count }));
+      setJob((prev) => (prev ? { ...prev, suggested: data.suggested ?? prev.suggested } : prev));
+      return;
+    }
     setJob((prev) => {
       if (!prev) return prev;
       // Live view of the analysis
@@ -382,7 +388,7 @@ export default function ProjectPage() {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {!processing && job.status === "DONE" && <ModeSwitch jobId={jobId} current="clips" />}
+          {!processing && job.status === "DONE" && <ModeSwitch jobId={jobId} current="clips" suggested={job.suggested} />}
         <Stepper
           current={processing ? "analyze" : "choose"}
           links={stepLinks}

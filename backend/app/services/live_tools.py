@@ -86,6 +86,16 @@ SPECS: list[dict] = [
     },
 ]
 
+# For the AI that looks for videos to propose (live_ideas.py), not for a search: what is said again and again
+RECURRING_SPEC: dict = {
+    "name": "recurring",
+    "description": "The words and phrases that come back in this live, the most telling first: said on many lines and, when the streamer has other lives "
+    "to compare with, much more often than in those (`more_than_usual`). Each with how many times, when it is first and last said and a few of the times. "
+    "A running joke, a catchphrase, a complaint, a name everyone repeats show here; so do plain words of the game, which mean nothing: "
+    "`search_speech` lists every time one is said, `read` shows what it is about.",
+    "parameters": {"type": "object", "properties": {}},
+}
+
 
 def _seconds(value, fallback: float = 0.0) -> float:
     parsed = parse_hms(value) if not isinstance(value, (int, float)) else float(value)
@@ -118,6 +128,8 @@ class LiveTools:
         self.sounds = sound_index.load(job_id)
         self.duration = duration or (self.transcript.segments[-1][1] if self.transcript else 0.0)
         self.chat_lag = chat_lag
+        # What comes back in the live, once counted (see tool_recurring)
+        self._recurring: tuple[list[dict], int] | None = None
 
     def specs(self) -> list[dict]:
         """The tools this live can answer (no sound tools when it was never listened to)."""
@@ -197,6 +209,23 @@ class LiveTools:
             }))
         rows.sort(key=lambda r: (-r[0], r[1]))
         return {"found": len(rows), "moments": [row for _score, _t, row in rows[:MAX_BEST]]}
+
+    def tool_recurring(self) -> dict:
+        from app.services import live_ideas
+
+        if not self.transcript:
+            return {"error": "this live has no transcript"}
+        # Counted once: the model asks, then its ideas are checked against the same list
+        if self._recurring is None:
+            others = live_ideas._other_lives(self.job_id)
+            self._recurring = (live_ideas.recurring(self.transcript, others), len(others))
+        phrases, compared = self._recurring
+        others = [None] * compared
+        return {
+            "found": len(phrases),
+            "compared_with": f"{len(others)} other live(s) of the streamer" if others else "nothing (no other live to compare with: plain words of the game show too)",
+            "phrases": phrases,
+        }
 
     def tool_chat_peaks(self) -> dict:
         peaks = live_search.chat_peaks(self.chat, self.chat_lag, self.duration)

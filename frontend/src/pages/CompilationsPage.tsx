@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { useTranslation } from "react-i18next";
-import { ArrowLeft, ArrowRight, Layers, Loader2, Plus, Sparkles } from "lucide-react";
+import { ArrowLeft, ArrowRight, Layers, Lightbulb, Loader2, Plus, Sparkles } from "lucide-react";
 import {
+  LiveError,
   clipThumbUrl,
   deleteCompilation,
   duplicateCompilation,
+  findSuggestions,
   listAllCompilations,
   listCompilations,
   saveCompilation,
@@ -15,7 +17,9 @@ import {
 import { useChannel } from "../lib/ChannelContext";
 import { copyName, libraryCount, libraryGroups, liveWhen, namesKeptWith, plainDate } from "../lib/compilationLibrary";
 import { hoursMinutes, splitVodTitle } from "../lib/format";
+import { waitingIn, withProposedFirst } from "../lib/suggestions";
 import CompilationCard from "../components/compilation/CompilationCard";
+import SuggestionCard from "../components/compilation/SuggestionCard";
 import LivePicker from "../components/compilation/LivePicker";
 import ModeSwitch from "../components/project/ModeSwitch";
 import ConfirmModal from "../components/ConfirmModal";
@@ -28,6 +32,8 @@ import { useToast } from "../components/Toast";
  * (clips on one side, compilations on the other).
  * A compilation made from several lives is with each of them: the same card, the
  * same compilation (`home`: the live it is kept with, where every action on it goes).
+ * The videos the AI proposed for a live come first, each on a card of its own: an
+ * idea with what it noticed, opened to have it built.
  */
 export default function CompilationsPage() {
   const { t, i18n } = useTranslation();
@@ -40,6 +46,8 @@ export default function CompilationsPage() {
   const [picking, setPicking] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [toDelete, setToDelete] = useState<CompilationSummary | null>(null);
+  // The live the AI is being asked to look through for ideas
+  const [finding, setFinding] = useState<string | null>(null);
 
   // Every live, even for one live's page: its cards name the other lives they are made from
   const load = useCallback(() => listAllCompilations().then(setLives), []);
@@ -49,6 +57,30 @@ export default function CompilationsPage() {
       setLives([]);
     });
   }, [load]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // A live just analysed: the AI is looking through it, what it proposes shows up when it is done
+  const looking = (lives ?? []).some((live) => live.looking);
+  useEffect(() => {
+    if (!looking) return;
+    const timer = window.setInterval(() => load().catch(() => {}), 4000);
+    return () => window.clearInterval(timer);
+  }, [looking, load]);
+
+  /** Has the AI look through a live for compilations worth making */
+  const findIdeas = async (id: string) => {
+    if (finding) return;
+    setFinding(id);
+    try {
+      const found = await findSuggestions(id);
+      await load();
+      if (found.compilations.length > 0) toast.success(t("suggestions.proposed", { count: found.compilations.length }));
+      else toast.info(t("suggestions.nothingNew"));
+    } catch (err) {
+      toast.error(err instanceof LiveError ? t(`compilation.failure.${err.reason}`) : err instanceof Error ? err.message : t("common.error"));
+    } finally {
+      setFinding(null);
+    }
+  };
 
   // The live's own picture while it has no clip (or its clips were freed)
   const vodThumbs = useMemo(() => new Map((channel?.vods ?? []).map((v) => [v.id, v.thumbnail_url])), [channel]);
@@ -62,6 +94,7 @@ export default function CompilationsPage() {
   const groups = useMemo(() => libraryGroups(lives ?? [], jobId ?? (filter || null)), [lives, jobId, filter]);
   const withSome = useMemo(() => libraryGroups(lives ?? []), [lives]);
   const total = libraryCount(lives ?? []);
+  const proposed = waitingIn(lives ?? []);
   /** "9 nov. · Le titre du live", for each live a compilation is made from */
   const madeFrom = (c: CompilationSummary) =>
     c.lives.flatMap((id) => {
@@ -109,7 +142,7 @@ export default function CompilationsPage() {
     if (gone)
       run(gone.id, async () => {
         await deleteCompilation(gone.home, gone.id);
-        toast.success(t("compilation.deleted"));
+        toast.success(t(gone.waiting ? "suggestions.dismissed" : "compilation.deleted"));
       });
   };
 
@@ -123,7 +156,11 @@ export default function CompilationsPage() {
 
   const grid = "grid gap-4 grid-cols-[repeat(auto-fill,minmax(250px,1fr))]";
   const cards = (live: LiveCompilations) =>
-    live.compilations.map((c) => (
+    withProposedFirst(live.compilations).map((c) =>
+      c.waiting ? (
+        // An idea of the AI, not built yet
+        <SuggestionCard key={`${c.home}/${c.id}`} jobId={c.home} compilation={c} fallback={liveCover(live)} busy={busy === c.id} onDismiss={() => setToDelete(c)} />
+      ) : (
       <CompilationCard
         key={`${c.home}/${c.id}`}
         jobId={c.home}
@@ -135,7 +172,29 @@ export default function CompilationsPage() {
         onRename={(name) => rename(c, name)}
         onDelete={() => setToDelete(c)}
       />
-    ));
+      ),
+    );
+  /** A live the AI never looked through (analysed before it did so by itself): it can be asked to */
+  const canFind = (live: LiveCompilations | null | undefined): live is LiveCompilations => !!live && !live.looked_at && !live.looking;
+  const ideasTile = (live: LiveCompilations) => (
+    <button
+      type="button"
+      onClick={() => findIdeas(live.job_id)}
+      disabled={!!finding}
+      className="group rounded-[18px] border border-dashed border-accent-line/50 hover:border-accent-line bg-accent-soft/20 hover:bg-accent-soft/40 transition-colors min-h-[220px] p-5 flex flex-col items-start justify-end text-left disabled:cursor-wait"
+    >
+      <span className="w-10 h-10 rounded-[12px] bg-accent-soft grid place-items-center text-accent">
+        {finding === live.job_id ? <Loader2 className="w-[18px] h-[18px] animate-spin" /> : <Lightbulb className="w-[18px] h-[18px]" />}
+      </span>
+      <span className="mt-3 text-[15px] font-[600] text-white">{t(finding === live.job_id ? "suggestions.finding" : "suggestions.findTitle")}</span>
+      <span className="mt-1 text-[12.5px] leading-snug text-ink-2">{t("suggestions.findHint")}</span>
+    </button>
+  );
+  const lookingNote = (
+    <p role="status" className="flex items-center gap-2 text-[12.5px] text-ink-2">
+      <Loader2 className="w-3.5 h-3.5 animate-spin text-accent" /> {t("suggestions.looking")}
+    </p>
+  );
   /** The way in: describe a video, the AI builds it */
   const newTile = (
     <button
@@ -164,6 +223,11 @@ export default function CompilationsPage() {
           <p className="mt-2 text-[13.5px] text-ink-2 max-w-[62ch]">
             {jobId && own ? [liveTitle(own), liveLine(own)].filter(Boolean).join(" · ") : total > 0 ? t("compilations.count", { count: total }) : t("compilations.subtitle")}
           </p>
+          {!jobId && proposed > 0 && (
+            <p className="mt-1.5 flex items-center gap-1.5 text-[13px] text-accent">
+              <Sparkles className="w-3.5 h-3.5" /> {t("suggestions.waiting", { count: proposed })}
+            </p>
+          )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {!jobId && withSome.length > 1 && (
@@ -181,15 +245,19 @@ export default function CompilationsPage() {
               <Plus className="w-[15px] h-[15px]" /> {t("compilation.new")}
             </button>
           )}
-          {jobId && <ModeSwitch jobId={jobId} current="compilations" />}
+          {jobId && <ModeSwitch jobId={jobId} current="compilations" suggested={waitingIn(lives, jobId)} />}
         </div>
       </header>
 
       {jobId ? (
-        <section className={`mt-7 ${grid}`}>
-          {newTile}
-          {groups[0] && cards(groups[0])}
-        </section>
+        <>
+          {own?.looking && <div className="mt-5">{lookingNote}</div>}
+          <section className={`mt-7 ${grid}`}>
+            {newTile}
+            {canFind(own) && ideasTile(own)}
+            {groups[0] && cards(groups[0])}
+          </section>
+        </>
       ) : lives.length === 0 ? (
         <section className="mt-10 glass rounded-[20px] p-8 max-w-[560px]">
           <Layers className="w-7 h-7 text-ink-3" />
@@ -208,8 +276,15 @@ export default function CompilationsPage() {
               <div className="min-w-0">
                 <h2 className="text-[16px] font-[600] tracking-[-0.01em] text-white truncate">{liveTitle(live)}</h2>
                 <p className="mt-0.5 text-[12.5px] text-ink-3">{liveLine(live)}</p>
+                {live.looking && <div className="mt-1.5">{lookingNote}</div>}
               </div>
               <div className="flex items-center gap-1.5">
+                {canFind(live) && (
+                  <button onClick={() => findIdeas(live.job_id)} disabled={!!finding} title={t("suggestions.findHint")} className="btn btn-ghost btn-sm">
+                    {finding === live.job_id ? <Loader2 className="w-[15px] h-[15px] animate-spin" /> : <Lightbulb className="w-[15px] h-[15px] text-accent" />}
+                    {t(finding === live.job_id ? "suggestions.finding" : "suggestions.find")}
+                  </button>
+                )}
                 <Link to={`/${live.job_id}/compilations`} className="btn btn-ghost btn-sm">
                   {t("compilations.openLive")}
                 </Link>
@@ -240,9 +315,13 @@ export default function CompilationsPage() {
 
       <ConfirmModal
         open={!!toDelete}
-        title={t("compilation.deleteTitle")}
+        title={t(toDelete?.waiting ? "suggestions.dismissTitle" : "compilation.deleteTitle")}
         message={[
-          toDelete?.exported_at ? t("compilations.deleteExported", { name: toDelete.name }) : t("compilations.deleteMessage", { name: toDelete?.name ?? "" }),
+          toDelete?.waiting
+            ? t("suggestions.dismissMessage", { name: toDelete.name })
+            : toDelete?.exported_at
+              ? t("compilations.deleteExported", { name: toDelete.name })
+              : t("compilations.deleteMessage", { name: toDelete?.name ?? "" }),
           // The same compilation is listed with each of its lives: it goes from all of them
           toDelete && toDelete.lives.length > 1 ? t("compilations.deleteEverywhere", { count: toDelete.lives.length }) : null,
         ]

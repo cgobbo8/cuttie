@@ -6,7 +6,7 @@ import path from 'node:path'
 import db from '@adonisjs/lucid/services/db'
 import User from '#models/user'
 import Job from '#models/job'
-import { clipDir } from '#services/data_paths'
+import { clipDir, DATA_DIR } from '#services/data_paths'
 
 test.group('Compilations', (group) => {
   group.each.setup(() => testUtils.db().withGlobalTransaction())
@@ -223,6 +223,47 @@ test.group('Compilations', (group) => {
     assert.notProperty(await save({ style: 'wobble' }), 'intro')
     await save({ style: 'slam' })
     assert.notProperty(await save(undefined), 'intro')
+  })
+
+  test('keeps the music a video plays, and offers the tracks whose file is on this machine', async ({ client, assert }) => {
+    const { user, job, dir } = await setup()
+    const url = `/api/jobs/${job.id}/compilations`
+    const { compilation } = (await client.post(url).loginAs(user).json({ name: 'Calme' })).body() as any
+    const save = async (music: unknown) => ((await client.put(`${url}/${compilation.id}`).loginAs(user).json({ ...compilation, ...(music === undefined ? {} : { music }) })).body() as any).compilation
+
+    // A track of the catalogue, with how present it is; a setting of 1 is the app's own and is not kept
+    assert.deepEqual((await save({ track: 'phonk', volume: 1.6, mood: 'x' })).music, { track: 'phonk', volume: 1.6 })
+    assert.deepEqual((await save({ track: 'lofi', volume: 1 })).music, { track: 'lofi' })
+    assert.deepEqual((await save({ track: 'lofi', volume: 9 })).music, { track: 'lofi', volume: 2 })
+    // A track nobody knows is not kept; no music sent: the one it had is gone
+    assert.notProperty(await save({ track: 'kazoo' }), 'music')
+    await save({ track: 'lofi' })
+    assert.notProperty(await save(undefined), 'music')
+
+    // The library: what each track is, never where its file is; one added to the data folder is there to play
+    const own = path.join(DATA_DIR, 'musics')
+    mkdirSync(own, { recursive: true })
+    cleanup.push(own)
+    writeFileSync(path.join(own, 'chill.mp3'), 'ID3 not really a song')
+    const library = (await client.get('/api/musics').loginAs(user)).body() as any
+    assert.deepEqual(library.kinds, ['funny', 'skill', 'suspense', 'chill', 'hype'])
+    const chill = library.musics.find((m: any) => m.id === 'chill')
+    assert.deepInclude(chill, { name: 'Chill Lo-Fi', genre: 'lofi', available: true })
+    for (const key of ['kinds', 'bpm', 'start', 'lufs', 'about']) assert.property(chill, key)
+    for (const key of ['file', 'source']) assert.notProperty(chill, key)
+    const played = await client.get('/api/musics/chill').loginAs(user).header('range', 'bytes=0-2')
+    played.assertStatus(206)
+    assert.equal(played.header('content-type'), 'audio/mpeg')
+    assert.equal(played.header('content-range'), 'bytes 0-2/21')
+    ;(await client.get('/api/musics/kazoo').loginAs(user)).assertStatus(404)
+    ;(await client.get('/api/musics/..%2F..%2Fsettings').loginAs(user)).assertStatus(404)
+
+    // How loud the live's clips are: measured once, then read next to them; nothing to measure: null
+    assert.deepEqual((await client.get(`/api/jobs/${job.id}/loudness`).loginAs(user)).body(), { lufs: null })
+    writeFileSync(path.join(dir, '_loudness.json'), JSON.stringify({ lufs: -26.4 }))
+    assert.deepEqual((await client.get(`/api/jobs/${job.id}/loudness`).loginAs(user)).body(), { lufs: -26.4 })
+    const stranger = await User.create({ fullName: 'Autre', email: `m-${randomUUID()}@cuttie.app`, password: 'password123' })
+    ;(await client.get(`/api/jobs/${job.id}/loudness`).loginAs(stranger)).assertStatus(404)
   })
 
   test('lists every live with its compilations, says which are exported, and duplicates one with clips of its own', async ({ client, assert }) => {
@@ -557,6 +598,12 @@ test.group('Compilations', (group) => {
     }
     // A well-formed one gets as far as the clips
     ;(await client.post(url).loginAs(user).json({ pieces, overlays: [], intro })).assertStatus(404)
+
+    // A music: a track of the catalogue, with a level curve that is one
+    const curve = { start: 0.7, ramps: [[1.5, 0.5, 0.09], [4, 1, 0]] }
+    for (const bad of [{ track: 'kazoo', curve }, { track: 'phonk' }, { track: 'phonk', curve: { start: 3, ramps: [] } }, { track: 'phonk', curve: { start: 0.5, ramps: [[5, 1, 0.2], [2, 1, 0]] } }, { track: 'phonk', curve: { start: 0.5, ramps: [[1, 1, 'loud']] } }]) {
+      ;(await client.post(url).loginAs(user).json({ pieces, overlays: [], music: bad })).assertStatus(400)
+    }
 
     // With its clip there, the export is queued under what it stands for
     writeFileSync(path.join(dir, 'a.mp4'), '')

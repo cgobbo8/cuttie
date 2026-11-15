@@ -1213,7 +1213,7 @@ export interface MontageRenderPiece {
  */
 export async function startMontageRender(
   jobId: string,
-  montage: { key: string; name?: string; pieces: MontageRenderPiece[]; overlays: { layer: unknown; z: number }[]; intro?: { style: string; title: string; name: string; logo: string | null; colors: BrandColors; font: string; sound?: string } },
+  montage: { key: string; name?: string; pieces: MontageRenderPiece[]; overlays: { layer: unknown; z: number }[]; intro?: { style: string; title: string; name: string; logo: string | null; colors: BrandColors; font: string; sound?: string }; music?: { track: string; curve: { start: number; ramps: [number, number, number][] } } },
   renderOptions?: { width?: number; height?: number; fps?: number },
 ): Promise<string> {
   const res = await fetch(`${BASE}/jobs/${jobId}/montage-render`, {
@@ -1223,6 +1223,18 @@ export async function startMontageRender(
   });
   const json = await jsonOrThrow<{ render_id: string }>(res, "Render failed");
   return json.render_id;
+}
+
+/** The background musics whose file is on this machine (ids of lib/music's catalogue) */
+export async function listMusics(): Promise<string[]> {
+  const json = await jsonOrThrow<{ musics: { id: string; available: boolean }[] }>(await fetch(`${BASE}/musics`), "Failed to load the musics");
+  return json.musics.filter((music) => music.available).map((music) => music.id);
+}
+
+/** How loud a live's clips are (LUFS), null when nothing could be measured: what the preview sets the music against */
+export async function liveLoudness(jobId: string): Promise<number | null> {
+  const json = await jsonOrThrow<{ lufs: number | null }>(await fetch(`${BASE}/jobs/${jobId}/loudness`), "Failed to measure the live");
+  return json.lufs;
 }
 
 export async function getRenderStatus(renderId: string): Promise<RenderStatus> {
@@ -1489,6 +1501,8 @@ export interface Compilation {
   transition?: string;
   /** The jingle it opens with (absent: none): its style, its own title (else the video's name), its sound (else its style's; "none": silent) */
   intro?: { style: string; title?: string; sound?: string };
+  /** The music it plays in the background (absent: none): a track of the catalogue, and how present it is (1: as Cuttie sets it) */
+  music?: { track: string; volume?: number };
   /** Described to the AI: what was first asked for, then each change asked and what the AI answered */
   brief?: string;
   /** What the AI answered to the description: what it built and why */

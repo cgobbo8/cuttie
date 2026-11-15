@@ -71,6 +71,7 @@ cuttie/
 │   │   │   ├── internal_controller.ts        # evenements de statut pousses par le worker
 │   │   │   ├── spa_controller.ts             # sert frontend/dist (FRONTEND_DIST)
 │   │   │   ├── renders_controller.ts         # Remotion renders (un clip, ou un montage de plusieurs morceaux)
+│   │   │   ├── musics_controller.ts          # musiques de fond : catalogue, lecture d'une piste, niveau des clips d'un live
 │   │   │   ├── compilations_controller.ts    # recherche dans le live, plan de video par l'IA, compilations, decoupe des passages
 │   │   │   ├── assets_controller.ts          # Upload/serve assets
 │   │   │   └── profile_controller.ts         # Profil utilisateur
@@ -182,7 +183,7 @@ cuttie/
         │   ├── welcome/                       # Etapes du premier lancement + mur de lives
         │   ├── project/                       # AnalysisView, MomentPlayer/List/Details, VodTimeline, Stepper, RenderCard, ModeSwitch (Clips | Compilations)
         │   ├── montage/                       # TemplatePicker (onglets Mes modeles / Modeles Cuttie, etoile par defaut), TemplateSketch, CamSheet
-        │   ├── compilation/                   # LivePicker (choisir un live, ou plusieurs), CompilationCard (une compilation dans la bibliotheque), SearchPanel (mots / IA / decrire la video), PiecePreview (un passage et sa coupe), PlanTalk (la conversation avec l'IA sur une video decrite), CompilationPanel (parties, passages a cocher / glisser, transitions, duree), TransitionPicker (les transitions, chacune jouee en petit), IntroPicker (les intros, jouees en petit avec le logo et les couleurs de la chaine, titre et bruitage), CompilationGuide (l'ecran explique en 4 etapes a la premiere visite)
+        │   ├── compilation/                   # LivePicker (choisir un live, ou plusieurs), CompilationCard (une compilation dans la bibliotheque), SearchPanel (mots / IA / decrire la video), PiecePreview (un passage et sa coupe), PlanTalk (la conversation avec l'IA sur une video decrite), CompilationPanel (parties, passages a cocher / glisser, transitions, duree), TransitionPicker (les transitions, chacune jouee en petit), IntroPicker (les intros, jouees en petit avec le logo et les couleurs de la chaine, titre et bruitage), MusicPicker (les musiques par type de video, a ecouter, presence), CompilationGuide (l'ecran explique en 4 etapes a la premiere visite)
         │   ├── template-editor/               # EditorCanvas (apercu + poignees), LayerList (calques), Panels (reglages), Scrubber (timeline)
         │   ├── KeyField.tsx                   # Champ de cle API verifie aupres du fournisseur
         │   ├── WebcamFrame.tsx                # Frame + rectangle de cam deplacable
@@ -212,6 +213,7 @@ cuttie/
             ├── montage.ts                     # morceaux d'un clip (couper, garder, enlever les silences, caler sur les mots) -> ce que Remotion joue
             ├── compilation.ts                 # compilations : resultats -> passages, parties, ordre (un passage ou plusieurs a la fois), transitions, ajuster a une duree
             ├── transitions.ts                 # les 7 transitions toutes faites entre deux morceaux d'un montage (copie cote API)
+            ├── music/                         # musique de fond : catalogue.json (les pistes : types de video, mesures), mix.ts (niveau selon ce qui joue), curve.ts (la courbe, copiee cote API)
             ├── intro/                         # les 5 intros toutes faites d'une compilation : intros.ts (styles, durees, bruitages), IntroCard.tsx (le dessin) ; copie cote API
             ├── compilationLibrary.ts          # la bibliotheque : ou en est une compilation (vide, brouillon, exportee, modifiee depuis), groupes par live, nom d'une copie
             ├── editorTypes.ts                 # Types editeur (layers, state)
@@ -366,6 +368,18 @@ Une compilation peut s'ouvrir sur une intro : un jingle de 1,5 a 2 s avec le log
 - Verifie sur un vrai export (compilation de 14 passages, intro Impact) : 73,4 s au lieu de 71,8, -14,0 LUFS, bruitage dans la premiere seconde, intro qui s'efface sur le premier passage.
 - Pas repris dans l'editeur a calques (comme les transitions). Les sons n'ont pas ete ecoutes par une oreille humaine avant livraison : mesures seulement (niveau, forme).
 
+## Musique de fond
+
+Une compilation peut jouer une musique sous toute la video (`compilation.music = { track, volume? }`, absente : aucune). Demande du streamer : forte pendant l'intro, baissee quand ca parle, plus presente sur les passages de pur jeu (kills), ou l'on doit quand meme entendre le streamer et les bruits forts du jeu.
+
+- **Catalogue** (`frontend/src/lib/music/catalogue.json`, copie dans `api/public/musics` par `scripts/sync-remotion.mjs`) : pour chaque piste son nom, son auteur, son genre, les types de video auxquels elle va (`kinds` parmi drole, skill, suspense, pose, best-of), ce qu'elle est en une phrase pour l'IA (`about`), et trois mesures (`scripts/make-musics.py --measure`) : tempo, niveau enregistre (`lufs`), endroit ou elle bat son plein (`start` : la video la demarre la). Les descriptions affichees sont dans les fichiers de langue (`compilation.music.about.<id>`). 13 pistes choisies par Corentin (phonk, hip-hop, synthwave, chiptune, lofi) ; aucune de suspense. Categories et descriptions ecrites d'apres le titre et les mesures, sans ecoute humaine.
+- **Fichiers** : `<data dir>/musics/<id>.mp3` d'abord, sinon `api/public/musics/<id>.mp3` (mis la par `scripts/make-musics.py <dossier>`, 128 kb/s, 24 Mo en tout). Une piste dont le fichier manque n'est pas proposee (`GET /api/musics` dit lesquelles sont la). Les mp3 ne sont PAS dans git (`.gitignore`) tant que Corentin n'a pas decide : le depot est public, et y mettre les pistes entieres revient a les redistribuer.
+- **Niveau** (`frontend/src/lib/music/mix.ts`) : la piste est d'abord ramenee au niveau du son de la video (-14 LUFS), puis multipliee par une courbe (`curve.ts`, copie cote API) : 0,7 pendant l'intro, 0,09 sous un passage ou l'on parle (environ 20 dB sous la voix), 0,3 sous un passage de jeu, entre les deux selon la part du passage ou quelqu'un parle (`speechShare`, mots dates du clip : parle a partir de 45 %, jeu sous 12 %), pentes de 0,4 s a cheval sur les coupes, fondu d'1 s a la fin. « Presence » (discrete, normale, forte) multiplie le tout.
+- **Apercu** : le lecteur joue la piste (`<Audio loop>`, depuis `start`) avec cette courbe. Les clips y jouent tels quels alors que l'export monte leur son a -14 LUFS : la musique (et le bruitage de l'intro) est donc baissee d'autant dans l'apercu, d'apres le niveau mesure des clips du live (`GET /api/jobs/:id/loudness`, garde dans `_loudness.json`), pour que l'equilibre entendu soit celui de l'export.
+- **Export** : le moteur de rendu ne joue pas la musique. Elle est mixee par ffmpeg apres la mise a niveau (`sound_level.levelArgs`, `music`) : lue en boucle depuis `start`, courbe ecrite en expression (`curveGain`), limiteur au pic autorise. Une piste qui reprend au debut perd son horloge : on lui en redonne une (`asetpts`), sinon son niveau restait fige.
+- Mesure sur un vrai export (compilation de 14 passages parles, intro Impact, Drift Phonk) : -14,0 LUFS ; musique seule a -17,9 dB pendant l'intro, -35,5 dB sous les passages (voix entre -16 et -21 dB au meme moment), eteinte a la fin ; duree inchangee.
+- Pas fait : musique sur un clip seul (Monter / Exporter), ajouter sa propre piste depuis l'app, baisse mot par mot (le niveau est fixe par passage).
+
 ## Une compilation dans l'editeur a calques
 
 L'editeur a calques (`RemotionEditor`) travaille sur un clip : une video, une horloge, un jeu de calques. Une compilation en est plusieurs. « Ouvrir dans l'editeur » la colle donc en un seul clip, que l'editeur ouvre comme n'importe quel autre.
@@ -432,6 +446,9 @@ L'editeur a calques (`RemotionEditor`) travaille sur un clip : une video, une ho
 | `/api/jobs/{id}/compilations/{compId}` | PUT/DELETE | Token | Enregistrer / supprimer une compilation |
 | `/api/jobs/{id}/compilations/{compId}/duplicate` | POST | Token | Copie d'une compilation, avec ses propres clips (fichiers copies) |
 | `/api/jobs/{id}/compilations/{compId}/flatten` | POST | Token | La compilation collee en un seul clip pour l'editeur a calques (409 : un passage n'est pas decoupe) |
+| `/api/musics`                         | GET     | Token    | Les musiques de fond du catalogue, et lesquelles ont leur fichier sur cette machine |
+| `/api/musics/{id}`                    | GET     | Token    | Une piste (Range), pour l'ecouter et la jouer sous l'apercu |
+| `/api/jobs/{id}/loudness`             | GET     | Token    | Niveau des clips du live (LUFS) : ce contre quoi l'apercu regle la musique |
 | `/api/compilations[?job_id=]`         | GET     | Token    | Les lives analyses et leurs compilations (duree, passages, dernier export) ; une compilation de plusieurs lives est sous chacun (`home` : celui qui la garde) |
 | `/api/renders/{id}`                   | GET     | Token    | Status d'un export               |
 | `/api/assets`                         | GET     | Token    | Liste des assets                 |

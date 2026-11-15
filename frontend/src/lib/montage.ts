@@ -11,6 +11,7 @@
 
 import type { ChatMessage, Layer, SubtitleWord } from "./editorTypes";
 import { introSpan, isIntro } from "./intro/intros";
+import type { MusicCurve } from "./music/curve";
 import type { TemplateContext } from "./templates";
 
 /** A part of a clip, [start, end] in clip seconds */
@@ -234,6 +235,22 @@ export interface MontageIntro {
    * renderer: its name; the export mixes it in once the video's own sound is levelled.
    */
   sound?: string;
+  /** In the page only: what brings the sound to the level of the clips as they play there */
+  gain?: number;
+}
+
+/** The music a montage plays in the background, and its level over the video (see lib/music) */
+export interface MontageMusic {
+  track: string;
+  curve: MusicCurve;
+  /**
+   * In the page only: the address of the track, where it starts in it (seconds), and what
+   * brings it to the level of the clips as they play there. The export is sent the track
+   * and the curve, and mixes the music in once the video's own sound is levelled.
+   */
+  src?: string;
+  from?: number;
+  gain?: number;
 }
 
 export interface MontageProps {
@@ -242,6 +259,7 @@ export interface MontageProps {
   overlays: PlacedLayer[];
   /** A jingle before the first piece: the pieces and the overlays start once it has held the screen */
   intro?: MontageIntro;
+  music?: MontageMusic;
   // Remotion's props are a record
   [key: string]: unknown;
 }

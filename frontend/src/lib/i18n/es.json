@@ -1656,6 +1656,44 @@
         "drum": "Tambores"
       },
       "chosen": "Intro elegida por la IA: {{name}}"
+    },
+    "music": {
+      "label": "Música",
+      "hint": "Bajo todo el vídeo: fuerte durante la intro, más baja cuando se habla",
+      "none": "Ninguna",
+      "pick": "Música del vídeo",
+      "volume": "Presencia bajo los trozos",
+      "level": {
+        "low": "Discreta",
+        "normal": "Normal",
+        "high": "Fuerte"
+      },
+      "listen": "Escuchar {{name}}",
+      "stop": "Parar {{name}}",
+      "favourite": "Tu favorita para: {{kinds}}",
+      "chosen": "Música elegida por la IA: {{name}}",
+      "kind": {
+        "funny": "Divertido",
+        "skill": "Skill y acción",
+        "suspense": "Suspense",
+        "chill": "Tranquilo, charla",
+        "hype": "Best-of, energía"
+      },
+      "about": {
+        "phonk": "Phonk nervioso de bajos pesados. Para kills, acción y grandes jugadas.",
+        "phonk2": "Phonk lento, muy grave, amenazante. Para una racha de kills o una tensión que crece.",
+        "phonk3": "Phonk rápido y oscuro, con pausas. Para persecuciones y combates intensos.",
+        "hiphop": "Hip-hop enérgico y contundente. Para un best-of o momentos de bromas.",
+        "stream": "Tema de inicio de directo que va creciendo. Para el best-of de una noche.",
+        "vlog": "Música de vlog, ligera y alegre. Para momentos divertidos entre amigos.",
+        "synthwave": "Synthwave retro, ambiente arcade y neones. Para conducir, la noche, jugadas con estilo.",
+        "chiptune": "Chiptune rápido, como una consola antigua. Para fails y puro caos.",
+        "pixel": "Chiptune tranquilo y tierno. Para humor amable y momentos acogedores.",
+        "retro": "8-bit muy rápido, de dibujos animados. Para fails encadenados.",
+        "lofi": "Lofi animado pero relajado. Para conversaciones e historias contadas.",
+        "lofi2": "Lofi pausado y cálido. Para un vídeo donde se habla mucho.",
+        "chill": "Lo-fi apagado, muy de fondo. Para charlas serias y ambientes nocturnos."
+      }
     }
   },
   "compilations": {

@@ -11,6 +11,9 @@
  * - intros of a compilation: frontend/src/lib/intro/* -> api/remotion/intro, copied as is,
  *   and their sounds frontend/public/sounds/*.mp3 -> api/public/sounds (the export mixes
  *   them in; they are made by scripts/make-intro-sounds.py).
+ * - background music: frontend/src/lib/music/curve.ts -> api/remotion/music (the level of the
+ *   music over the video) and catalogue.json -> api/public/musics (what the tracks are). The
+ *   tracks themselves are put in api/public/musics by scripts/make-musics.py.
  *
  * Run after adding a font or touching a widget: node scripts/sync-remotion.mjs
  * (frontend/src/lib/remotionSync.test.ts fails when they drift apart).
@@ -65,5 +68,8 @@ function mirror(source, target, keep) {
 // The tests of the intros stay with the editor
 const intros = mirror("frontend/src/lib/intro", "api/remotion/intro", /^(?!.*\.test\.).*\.tsx?$/);
 const sounds = mirror("frontend/public/sounds", "api/public/sounds", /\.mp3$/);
+// Background music: the curve the preview plays is the one the export mixes; the catalogue says what the tracks are
+mirror("frontend/src/lib/music", "api/remotion/music", /^curve\.ts$/);
+mirror("frontend/src/lib/music", "api/public/musics", /^catalogue\.json$/);
 
 console.log(`Synced ${CLIP_FONTS.length} fonts, ${widgets} widgets, the transitions, ${intros} intro files and ${sounds} sounds into api/`);

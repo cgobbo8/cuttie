@@ -619,6 +619,42 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/jobs_controller').default['renameClip']>>>
     }
   }
+  'musics.index': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/musics'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/musics_controller').default['index']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/musics_controller').default['index']>>>
+    }
+  }
+  'musics.show': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/musics/:id'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { id: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/musics_controller').default['show']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/musics_controller').default['show']>>>
+    }
+  }
+  'musics.level': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/jobs/:id/loudness'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { id: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/musics_controller').default['level']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/musics_controller').default['level']>>>
+    }
+  }
   'compilations.search_info': {
     methods: ["GET","HEAD"]
     pattern: '/api/jobs/:id/search/info'

@@ -9,7 +9,8 @@ import { uploadFile, getPresignedDownloadUrl, deleteObject, storagePath } from '
 import { clipDir } from '#services/data_paths'
 import { introFade, introFrames, isIntro, isIntroSound, isTransition } from '#services/compilations'
 import { enqueueRender } from '#services/render_queue'
-import { levelSound } from '#services/sound_level'
+import { levelSound, type Music } from '#services/sound_level'
+import { findMusic, musicFile, parseCurve, trackGain, type MusicCurve } from '#services/musics'
 import { loadJobSharedData, resolveEditEnv } from '#services/edit_env_resolver'
 import { resolveThemeForClip, type ThemeLayerTemplate } from '#services/theme_resolver'
 import type { Layer } from '../../remotion/editorTypes.js'
@@ -181,6 +182,7 @@ export default class RendersController {
       pieces?: unknown
       overlays?: unknown
       intro?: unknown
+      music?: unknown
       render_options?: { width?: number; height?: number; fps?: number }
     }
     const pieces = parsePieces(body.pieces)
@@ -190,6 +192,15 @@ export default class RendersController {
     }
     const intro = parseMontageIntro(body.intro)
     if (intro === null) return response.badRequest({ error: 'intro: { style, title, name, logo, colors, font, sound? } with a style and a sound this app has' })
+    // A music under the whole video: a track of the catalogue whose file is here, and its level over the video
+    let music: { track: string; curve: MusicCurve } | undefined
+    if (body.music !== undefined && body.music !== null) {
+      const asked = body.music as any
+      const curve = parseCurve(asked?.curve)
+      if (!findMusic(asked?.track) || !curve) return response.badRequest({ error: 'music: { track, curve: { start, ramps: [[at, over, to]] } } with a track this app has' })
+      if (!musicFile(asked.track)) return response.status(409).send({ error: 'music_missing', track: asked.track })
+      music = { track: asked.track, curve }
+    }
     // Pieces of other lives: the user's own only
     const others = [...new Set(pieces.map((piece) => piece.jobId).filter((id): id is string => !!id && id !== jobId))]
     if (others.length > 0) {
@@ -217,7 +228,7 @@ export default class RendersController {
     })
 
     enqueueRender(() =>
-      runRender({ renderId, jobId, clipFilename: key, layers: [], outputPath, outputFilename, renderOptions: body.render_options, montage: { pieces, overlays, ...(intro ? { intro } : {}) } })
+      runRender({ renderId, jobId, clipFilename: key, layers: [], outputPath, outputFilename, renderOptions: body.render_options, montage: { pieces, overlays, ...(intro ? { intro } : {}), ...(music ? { music } : {}) } })
     )
     return response.created({ render_id: renderId })
   }
@@ -424,7 +435,7 @@ async function runRender(opts: {
   trim?: { start: number; end: number }
   renderOptions?: { width?: number; height?: number; fps?: number }
   /** Several pieces one after the other instead of one clip (`layers` and `trim` unused) */
-  montage?: { pieces: MontagePiece[]; overlays: PlacedLayer[]; intro?: MontageIntro }
+  montage?: { pieces: MontagePiece[]; overlays: PlacedLayer[]; intro?: MontageIntro; music?: { track: string; curve: MusicCurve } }
 }) {
   const { renderId, jobId, clipFilename, layers, outputPath, outputFilename, trim, renderOptions, montage } = opts
 
@@ -468,7 +479,15 @@ async function runRender(opts: {
     }
     // The intro's sound goes in once the video's own is levelled: as loud as it was made to be
     const jingle = introSoundFile(montage?.intro?.sound)
-    const levelled = await levelSound(outputPath, cuts, jingle ? { file: jingle, gain: 1, fade: introFade(montage?.intro?.style) ?? undefined } : undefined)
+    // ...and so does the music under the video: brought to the same level first, then down by its curve
+    const track = findMusic(montage?.music?.track)
+    const trackFile = musicFile(montage?.music?.track)
+    const last = montage?.pieces.at(-1)
+    const music: Music | undefined =
+      montage?.music && track && trackFile && last
+        ? { file: trackFile, from: track.start, gain: trackGain(track), curve: montage.music.curve, seconds: (frames + Math.max(1, Math.round(last.duration * fps))) / fps }
+        : undefined
+    const levelled = await levelSound(outputPath, cuts, jingle ? { file: jingle, gain: 1, fade: introFade(montage?.intro?.style) ?? undefined } : undefined, music)
     if (levelled) console.log(`[Render] ${outputFilename}: sound brought from ${levelled.from.toFixed(1)} to ${levelled.to.toFixed(1)} LUFS`)
     const sizeMb = levelled ? statSync(outputPath).size / 1024 / 1024 : rendered.sizeMb
 

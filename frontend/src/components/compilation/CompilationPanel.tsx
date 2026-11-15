@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type RefObject } from "react";
 import { useTranslation } from "react-i18next";
-import { ArrowDown, ArrowRight, ArrowUp, Blend, Check, Clapperboard, FolderInput, Layers, Loader2, Plus, Sparkles, Trash2, X, LayoutTemplate } from "lucide-react";
+import { ArrowDown, ArrowRight, ArrowUp, Blend, Check, Clapperboard, FolderInput, Layers, Loader2, Music2, Plus, Sparkles, Trash2, X, LayoutTemplate } from "lucide-react";
 import type { Compilation, CompilationItem, CompilationSection, TwitchStoryboard } from "../../lib/api";
 import {
   PLAIN_CUT,
@@ -26,7 +26,9 @@ import { clock } from "../../lib/format";
 import { frameAt, tileStyle } from "../../lib/storyboard";
 import { useToast } from "../Toast";
 import { introSeconds, isIntro } from "../../lib/intro/intros";
+import { musicOf } from "../../lib/music/mix";
 import IntroPicker, { type IntroBrand } from "./IntroPicker";
+import MusicPicker from "./MusicPicker";
 import TransitionPicker from "./TransitionPicker";
 
 interface Props {
@@ -71,6 +73,10 @@ interface Props {
   editing?: boolean;
   /** What an intro is drawn with (the channel's logo and colours); without it the video's intro can't be chosen here */
   brand?: IntroBrand;
+  /** The background musics whose file is on this machine (none: the video's music can't be chosen here) */
+  musics?: string[];
+  /** The streamer's favourite music for each kind of video, by kind */
+  favourites?: Record<string, string>;
 }
 
 /** Where passages being dragged would land: in a part, before one of its passages (null: at its end) */
@@ -183,6 +189,8 @@ export default function CompilationPanel({
   onEdit,
   editing = false,
   brand,
+  musics = [],
+  favourites,
 }: Props) {
   const { t, i18n } = useTranslation();
   const toast = useToast();
@@ -218,7 +226,7 @@ export default function CompilationPanel({
   }, [picked.size]);
 
   // What is open: the list of parts to move the picked passages to, or the transitions (of the video, of the picked ones, of one passage)
-  const [menu, setMenu] = useState<"move" | "video" | "picked" | "intro" | { item: string } | null>(null);
+  const [menu, setMenu] = useState<"move" | "video" | "picked" | "intro" | "music" | { item: string } | null>(null);
   const partName = (section: CompilationSection, among = compilation.sections) => section.title.trim() || t("compilation.partN", { n: among.indexOf(section) + 1 });
   const moveTo = (sectionId: string | null) => {
     setMenu(null);
@@ -586,6 +594,33 @@ export default function CompilationPanel({
                   onChange={(next) => {
                     const { intro: _before, ...rest } = compilation;
                     onChange(next ? { ...rest, intro: next } : rest);
+                  }}
+                  onClose={() => setMenu(null)}
+                  className="right-0 bottom-full mb-2"
+                />
+              )}
+            </span>
+          </div>
+        )}
+        {/* A music under the whole video: up front during the intro, turned down when people talk */}
+        {musics.length > 0 && (
+          <div className="flex items-center gap-3">
+            <span className="flex-1 min-w-0">
+              <span className="block text-[13.5px] font-[550] text-white">{t("compilation.music.label")}</span>
+              <span className="block text-[12px] text-ink-3 truncate">{musicOf(compilation.music?.track) ? t(`compilation.music.about.${compilation.music!.track}`) : t("compilation.music.hint")}</span>
+            </span>
+            <span className="relative flex-none">
+              <button onClick={() => setMenu(menu === "music" ? null : "music")} aria-haspopup="dialog" aria-expanded={menu === "music"} className="btn btn-glass btn-sm h-9 px-3 max-w-[170px]">
+                <Music2 className="w-3.5 h-3.5 flex-none text-accent" /> <span className="truncate">{musicOf(compilation.music?.track)?.name ?? t("compilation.music.none")}</span>
+              </button>
+              {menu === "music" && (
+                <MusicPicker
+                  value={musicOf(compilation.music?.track) ? compilation.music! : null}
+                  available={musics}
+                  favourites={favourites}
+                  onChange={(next) => {
+                    const { music: _before, ...rest } = compilation;
+                    onChange(next ? { ...rest, music: next } : rest);
                   }}
                   onClose={() => setMenu(null)}
                   className="right-0 bottom-full mb-2"

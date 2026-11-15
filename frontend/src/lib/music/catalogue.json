@@ -1,0 +1,228 @@
+{
+  "note": "The musics a video can play in the background. `start`: where a track is in full swing (seconds), `lufs`: its loudness as recorded; both measured (scripts/make-musics.py). `about` is what the AI reads to choose one.",
+  "kinds": [
+    "funny",
+    "skill",
+    "suspense",
+    "chill",
+    "hype"
+  ],
+  "tracks": [
+    {
+      "id": "phonk",
+      "name": "Drift Phonk",
+      "author": "sub_clair",
+      "source": "pixabay.com, 550480",
+      "file": "sub_clair-drift-phonk-550480.mp3",
+      "genre": "phonk",
+      "kinds": [
+        "skill",
+        "hype"
+      ],
+      "bpm": 117,
+      "seconds": 83.9,
+      "start": 5.2,
+      "lufs": -7.4,
+      "about": "Drift phonk, about 117 BPM: heavy bass, aggressive, driving. For kills, action, clutch plays, anything that shows skill."
+    },
+    {
+      "id": "phonk2",
+      "name": "Drift Phonk II",
+      "author": "sub_clair",
+      "source": "pixabay.com, 607579",
+      "file": "sub_clair-drift-phonk-607579.mp3",
+      "genre": "phonk",
+      "kinds": [
+        "skill"
+      ],
+      "bpm": 96,
+      "seconds": 132.6,
+      "start": 9.41,
+      "lufs": -9.7,
+      "about": "Drift phonk, slower (about 96 BPM) and very bass-heavy: menacing, confident. For domination, kill streaks, a slow build of tension before action."
+    },
+    {
+      "id": "phonk3",
+      "name": "Night Drift",
+      "author": "zephiramusic",
+      "source": "pixabay.com, 616472",
+      "file": "zephiramusic-drift-phonk-616472.mp3",
+      "genre": "phonk",
+      "kinds": [
+        "skill",
+        "suspense"
+      ],
+      "bpm": 136,
+      "seconds": 134.6,
+      "start": 14.0,
+      "lufs": -14.0,
+      "about": "Drift phonk, fast (about 136 BPM), dark, with breaks between its heavy parts. For chases, intense fights, or a tense video that explodes now and then."
+    },
+    {
+      "id": "hiphop",
+      "name": "Energetic Hip-Hop",
+      "author": "skilsel",
+      "source": "pixabay.com, 8303",
+      "file": "skilsel-energetic-hip-hop-8303.mp3",
+      "genre": "hip-hop",
+      "kinds": [
+        "hype",
+        "funny"
+      ],
+      "bpm": 100,
+      "seconds": 114.4,
+      "start": 2.53,
+      "lufs": -7.4,
+      "about": "Energetic hip-hop beat, punchy and confident. For best-ofs, highlights, banter, a video that should feel like a show."
+    },
+    {
+      "id": "stream",
+      "name": "Stream Starting",
+      "author": "the_mountain",
+      "source": "pixabay.com, 593068",
+      "file": "the_mountain-stream-starting-593068.mp3",
+      "genre": "electronic",
+      "kinds": [
+        "hype",
+        "chill"
+      ],
+      "bpm": 89,
+      "seconds": 134.8,
+      "start": 0.12,
+      "lufs": -9.8,
+      "about": "A 'stream starting' theme, mid-tempo, that builds up. For best-ofs of an evening, recaps, a video that presents the channel."
+    },
+    {
+      "id": "vlog",
+      "name": "Vlog Intro",
+      "author": "kulakovka",
+      "source": "pixabay.com, 298919",
+      "file": "kulakovka-vlog-intro-298919.mp3",
+      "genre": "pop",
+      "kinds": [
+        "funny",
+        "chill"
+      ],
+      "bpm": 89,
+      "seconds": 114.1,
+      "start": 0.05,
+      "lufs": -7.7,
+      "about": "Upbeat, sunny vlog music. For light, good-humoured videos: funny moments between friends, wholesome or silly scenes."
+    },
+    {
+      "id": "synthwave",
+      "name": "Arcade Retro Nights",
+      "author": "alex-morgan",
+      "source": "pixabay.com, 573647",
+      "file": "alex-morgan-synthwave-arcade-retro-nights-573647.mp3",
+      "genre": "synthwave",
+      "kinds": [
+        "hype",
+        "skill"
+      ],
+      "bpm": 123,
+      "seconds": 137.4,
+      "start": 16.49,
+      "lufs": -8.7,
+      "about": "Synthwave, about 123 BPM: retro arcade, neon, driving. For racing, night scenes, stylish plays, anything with an 80s feel."
+    },
+    {
+      "id": "chiptune",
+      "name": "Pixel Chiptune",
+      "author": "alex-morgan",
+      "source": "pixabay.com, 583271",
+      "file": "alex-morgan-video-game-pixel-chiptune-music-583271.mp3",
+      "genre": "chiptune",
+      "kinds": [
+        "funny"
+      ],
+      "bpm": 144,
+      "seconds": 146.9,
+      "start": 11.36,
+      "lufs": -9.0,
+      "about": "Fast chiptune (about 144 BPM), like an old console game: playful, frantic. For fails, chaos, absurd or silly moments."
+    },
+    {
+      "id": "pixel",
+      "name": "Pixel Art Soundtrack",
+      "author": "echoes_of_lumen",
+      "source": "pixabay.com, 588667",
+      "file": "echoes_of_lumen-pixel-art-game-soundtrack-chiptune-588667.mp3",
+      "genre": "chiptune",
+      "kinds": [
+        "funny",
+        "chill"
+      ],
+      "bpm": 112,
+      "seconds": 112.3,
+      "start": 0.05,
+      "lufs": -9.0,
+      "about": "Chiptune at a walking pace (about 112 BPM): cute, light-hearted, a little nostalgic. For gentle humour and cosy game moments."
+    },
+    {
+      "id": "retro",
+      "name": "8-Bit Retro",
+      "author": "the_mountain",
+      "source": "pixabay.com, 522443",
+      "file": "the_mountain-8-bit-retro-522443.mp3",
+      "genre": "chiptune",
+      "kinds": [
+        "funny"
+      ],
+      "bpm": 161,
+      "seconds": 66.4,
+      "start": 2.65,
+      "lufs": -9.2,
+      "about": "Very fast 8-bit tune (about 161 BPM): cartoonish, hectic. For slapstick, fails in a row, a sped-up feeling."
+    },
+    {
+      "id": "lofi",
+      "name": "Lofi Upbeat",
+      "author": "jonasblakewood",
+      "source": "pixabay.com, 583358",
+      "file": "jonasblakewood-lofi-upbeat-lofi-upbeat-music-583358.mp3",
+      "genre": "lofi",
+      "kinds": [
+        "chill"
+      ],
+      "bpm": 108,
+      "seconds": 136.5,
+      "start": 6.62,
+      "lufs": -7.8,
+      "about": "Upbeat lofi (about 108 BPM): relaxed but bright. For conversations, stories told on stream, calm role-play scenes."
+    },
+    {
+      "id": "lofi2",
+      "name": "Lofi Upbeat II",
+      "author": "kulakovka",
+      "source": "pixabay.com, 611601",
+      "file": "kulakovka-lofi-upbeat-611601.mp3",
+      "genre": "lofi",
+      "kinds": [
+        "chill"
+      ],
+      "bpm": 92,
+      "seconds": 100.1,
+      "start": 3.95,
+      "lufs": -9.6,
+      "about": "Laid-back lofi (about 92 BPM): warm, unhurried. For long talks, chill moments, a video that is mostly people speaking."
+    },
+    {
+      "id": "chill",
+      "name": "Chill Lo-Fi",
+      "author": "zephiramusic",
+      "source": "pixabay.com, 585361",
+      "file": "zephiramusic-chill-lo-fi-585361.mp3",
+      "genre": "lofi",
+      "kinds": [
+        "chill",
+        "suspense"
+      ],
+      "bpm": 72,
+      "seconds": 106.0,
+      "start": 0.05,
+      "lufs": -15.1,
+      "about": "Muffled, mellow lo-fi with little treble: stays in the background. For serious or quiet discussions, late-night moods, low-key tension."
+    }
+  ]
+}

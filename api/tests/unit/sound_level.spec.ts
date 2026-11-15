@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdtempSync, rmSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { TARGET, levelArgs, levelSound, measureLoudness, needsLevelling, parseLoudness, smoothCuts } from '#services/sound_level'
+import { TARGET, curveGain, levelArgs, levelSound, measureLoudness, needsLevelling, parseLoudness, smoothCuts } from '#services/sound_level'
 
 const PRINTED = `Input #0, mov,mp4, from 'export.mp4':
   Stream #0:1: Audio: aac
@@ -190,7 +190,62 @@ test.group('Sound of the exports', () => {
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }
-  }).skip(!hasFfmpeg(), 'ffmpeg is not installed')
+  })
+    .skip(!hasFfmpeg(), 'ffmpeg is not installed')
+    .timeout(30_000)
+
+  test('a music is read over and over under the video, its level a line that bends where the curve says', ({ assert }) => {
+    const curve = { start: 0.7, ramps: [[1.5, 0.5, 0.09], [8.4, 0.4, 0.3], [12.6, 1, 0]] as [number, number, number][] }
+    // Each change is a slope added to what came before: down 0.61, up 0.21, down 0.3
+    assert.equal(curveGain(curve), '0.7000-0.6100*clip((t-1.500)/0.500,0,1)+0.2100*clip((t-8.400)/0.400,0,1)-0.3000*clip((t-12.600)/1.000,0,1)')
+    assert.equal(curveGain({ start: 0.09, ramps: [] }), '0.0900')
+
+    const music = { file: 'phonk.mp3', from: 5.2, gain: 0.468, curve, seconds: 13.6 }
+    const args = levelArgs('in.mp4', 'out.mp4', parseLoudness(PRINTED)!, [], { file: 'boom.mp3', gain: 1 }, music)
+    // The video, the jingle, then the music started where it is in full swing and looped
+    assert.deepEqual(args.slice(3, 13), ['-i', 'in.mp4', '-i', 'boom.mp3', '-stream_loop', '-1', '-ss', '5.200', '-i', 'phonk.mp3'])
+    const graph = args[args.indexOf('-filter_complex') + 1]
+    assert.include(graph, `[2:a:0]aresample=48000,asetpts=N/SR/TB,atrim=0:13.600,asetnsamples=n=1024:p=0,volume='0.4680*(${curveGain(curve)})':eval=frame[music]`)
+    assert.include(graph, '[video][jingle][music]amix=inputs=3:duration=first:dropout_transition=0:normalize=0,alimiter=')
+    // Without a jingle the music is the second input
+    const alone = levelArgs('in.mp4', 'out.mp4', null, [], undefined, music)
+    assert.include(alone[alone.indexOf('-filter_complex') + 1], '[1:a:0]aresample=48000,asetpts=N/SR/TB,atrim=0:13.600')
+    assert.include(alone[alone.indexOf('-filter_complex') + 1], '[video][music]amix=inputs=2')
+  })
+
+  test('the music of an export is loud under the intro, low under the talk, and gone at the end', async ({ assert }) => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'cuttie-music-'))
+    const file = path.join(dir, 'montage.mp4')
+    const track = path.join(dir, 'track.mp3')
+    try {
+      // A silent video (what is measured is then the music alone), and a 3 s "track" that must loop to cover its 8 s
+      execFileSync('ffmpeg', [
+        '-v', 'error', '-y',
+        '-f', 'lavfi', '-i', 'testsrc=size=180x320:rate=30:duration=8',
+        '-f', 'lavfi', '-i', "aevalsrc='0.0001*sin(2*PI*220*t)':s=48000:d=8",
+        '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '192k', '-shortest', file,
+      ])
+      execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', "aevalsrc='0.5*sin(2*PI*880*t)':s=48000:d=3", track])
+      const loudest = (from: number, length: number) => {
+        const raw = execFileSync('ffmpeg', ['-v', 'error', '-ss', String(from), '-t', String(length), '-i', file, '-vn', '-ac', '1', '-ar', '48000', '-f', 's16le', '-'], { maxBuffer: 1 << 26 })
+        let peak = 0
+        for (let i = 0; i + 1 < raw.length; i += 2) peak = Math.max(peak, Math.abs(raw.readInt16LE(i)))
+        return peak / 32768
+      }
+      const curve = { start: 0.8, ramps: [[2, 0.5, 0.1], [7, 1, 0]] as [number, number, number][] }
+      const args = levelArgs(file, path.join(dir, 'out.mp4'), null, [], undefined, { file: track, from: 0.5, gain: 1, curve, seconds: 8 })
+      execFileSync('ffmpeg', args)
+      execFileSync('ffmpeg', ['-v', 'error', '-y', '-i', path.join(dir, 'out.mp4'), '-c', 'copy', file])
+      // 0.5 × 0.8 during the intro, 0.5 × 0.1 under the passages (well past the track's own 3 s: it started over), nothing at the very end
+      assert.closeTo(loudest(0.5, 1), 0.4, 0.05)
+      assert.closeTo(loudest(4, 2), 0.05, 0.015)
+      assert.isBelow(loudest(7.9, 0.1), 0.012)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+    .skip(!hasFfmpeg(), 'ffmpeg is not installed')
+    .timeout(30_000)
 
   test('a file that is not a video is left as it is', async ({ assert }) => {
     assert.isNull(await levelSound(path.join(tmpdir(), 'cuttie-no-such-export.mp4')))

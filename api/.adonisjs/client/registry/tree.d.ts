@@ -79,6 +79,11 @@ export interface ApiDefinition {
     destroyClip: typeof routes['jobs.destroy_clip']
     renameClip: typeof routes['jobs.rename_clip']
   }
+  musics: {
+    index: typeof routes['musics.index']
+    show: typeof routes['musics.show']
+    level: typeof routes['musics.level']
+  }
   compilations: {
     searchInfo: typeof routes['compilations.search_info']
     searchProgress: typeof routes['compilations.search_progress']

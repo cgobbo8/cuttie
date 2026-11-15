@@ -1656,6 +1656,44 @@
         "drum": "Tambours"
       },
       "chosen": "Intro choisie par l'IA : {{name}}"
+    },
+    "music": {
+      "label": "Musique",
+      "hint": "Sous toute la vidéo : forte pendant l'intro, baissée quand ça parle",
+      "none": "Aucune",
+      "pick": "Musique de la vidéo",
+      "volume": "Présence sous les passages",
+      "level": {
+        "low": "Discrète",
+        "normal": "Normale",
+        "high": "Forte"
+      },
+      "listen": "Écouter {{name}}",
+      "stop": "Arrêter {{name}}",
+      "favourite": "Ta préférée pour : {{kinds}}",
+      "chosen": "Musique choisie par l'IA : {{name}}",
+      "kind": {
+        "funny": "Drôle",
+        "skill": "Skill et action",
+        "suspense": "Suspense",
+        "chill": "Posé, discussion",
+        "hype": "Best-of, énergie"
+      },
+      "about": {
+        "phonk": "Phonk nerveux aux basses lourdes. Pour les kills, l'action, les gros plays.",
+        "phonk2": "Phonk plus lent, très grave, menaçant. Pour une série de kills ou une tension qui monte.",
+        "phonk3": "Phonk rapide et sombre, avec des respirations. Pour les poursuites et les combats intenses.",
+        "hiphop": "Hip-hop énergique, qui claque. Pour un best-of ou des moments de vannes.",
+        "stream": "Thème de début de stream, qui monte petit à petit. Pour le best-of d'une soirée.",
+        "vlog": "Musique de vlog, légère et joyeuse. Pour les moments drôles entre amis.",
+        "synthwave": "Synthwave rétro, ambiance arcade et néons. Pour la conduite, la nuit, les plays stylés.",
+        "chiptune": "Chiptune rapide, façon vieille console. Pour les fails et le grand n'importe quoi.",
+        "pixel": "Chiptune tranquille et mignonne. Pour l'humour gentil et les moments cosy.",
+        "retro": "8-bit très rapide, façon dessin animé. Pour les fails qui s'enchaînent.",
+        "lofi": "Lofi entraînante mais détendue. Pour les discussions et les histoires racontées.",
+        "lofi2": "Lofi posée et chaleureuse. Pour une vidéo où ça parle beaucoup.",
+        "chill": "Lo-fi feutrée, très en retrait. Pour les discussions sérieuses et les ambiances de nuit."
+      }
     }
   },
   "compilations": {

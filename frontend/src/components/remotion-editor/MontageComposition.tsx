@@ -2,6 +2,7 @@ import { AbsoluteFill, Audio, Freeze, Img, Sequence, Series, useCurrentFrame, us
 import IntroCard, { INTRO_W } from "../../lib/intro/IntroCard";
 import { introFade, introSpan, introVolume, isIntro } from "../../lib/intro/intros";
 import { framesOf, type MontageIntro, type MontageProps, type MontageSegment } from "../../lib/montage";
+import { gainAt } from "../../lib/music/curve";
 import { isTransition, lookStyle, transitionAt } from "../../lib/transitions";
 import { audibleLayerId, LayerBox } from "./CuttieComposition";
 
@@ -51,7 +52,7 @@ function Piece({ segment, before, next }: { segment: MontageSegment; before?: Mo
   );
 }
 
-/** How loud an intro's sound plays in the page. The export sets it against the video's levelled sound instead */
+/** How loud an intro's sound plays in the page when the clips' own level isn't known. The export sets it against the video's levelled sound instead */
 const INTRO_VOLUME = 0.5;
 
 /** The intro, above everything: drawn in its own 1080-wide box, brought to the video's size */
@@ -76,7 +77,7 @@ function Intro({ intro }: { intro: MontageIntro }) {
  * the screen first: pieces and overlays start after it, and it leaves over the
  * first frames of the first piece.
  */
-export default function MontageComposition({ segments, overlays, intro }: MontageProps) {
+export default function MontageComposition({ segments, overlays, intro, music }: MontageProps) {
   const { fps } = useVideoConfig();
   const opening = intro && isIntro(intro.style) ? introSpan(intro.style, fps) : null;
   return (
@@ -108,8 +109,18 @@ export default function MontageComposition({ segments, overlays, intro }: Montag
       {opening && intro?.sound && isIntro(intro.style) && (
         // It fades out as the video starts: a sound longer than its intro doesn't play on over the first words
         <Sequence durationInFrames={opening.hold + introFade(intro.style, fps).frames} layout="none">
-          <Audio src={intro.sound} volume={(f) => INTRO_VOLUME * introVolume(f, intro.style as Parameters<typeof introVolume>[1], fps)} />
+          <Audio src={intro.sound} volume={(f) => (intro.gain ?? INTRO_VOLUME) * introVolume(f, intro.style as Parameters<typeof introVolume>[1], fps)} />
         </Sequence>
+      )}
+      {music?.src && (
+        // Under the whole video, started where the track is in full swing, its level following what plays
+        <Audio
+          src={music.src}
+          loop
+          loopVolumeCurveBehavior="extend"
+          trimBefore={Math.round((music.from ?? 0) * fps)}
+          volume={(f) => Math.min(1, (music.gain ?? 1) * gainAt(music.curve, f / fps))}
+        />
       )}
     </AbsoluteFill>
   );

@@ -14,6 +14,7 @@ import { copyFileSync, existsSync, readdirSync, rmSync, statSync } from 'node:fs
 import path from 'node:path'
 import { dropClipCaches, readClipMeta } from '#services/clip_extend'
 import { clipDir } from '#services/data_paths'
+import { findMusic } from '#services/musics'
 
 export interface CompilationItem {
   /** Also names its clip: piece_<id>.mp4 */
@@ -64,6 +65,8 @@ export interface Compilation {
   transition?: string
   /** The jingle it opens with (absent: none) */
   intro?: Intro
+  /** The music it plays in the background (absent: none): a track of the catalogue, and how present it is (1: as set by the app) */
+  music?: { track: string; volume?: number }
   /** Described to the AI: what the streamer first asked for, then each change asked and what the AI answered */
   brief?: string
   asks?: { ask: string; note: string; added?: number; removed?: number; recut?: number }[]
@@ -119,6 +122,13 @@ export function parseIntro(raw: any): Intro | null {
   if (!raw || typeof raw !== 'object' || !isIntro(raw.style)) return null
   const title = typeof raw.title === 'string' ? raw.title.trim().slice(0, 80) : ''
   return { style: raw.style, ...(title ? { title } : {}), ...(isIntroSound(raw.sound) || raw.sound === 'none' ? { sound: raw.sound } : {}) }
+}
+
+/** A compilation's music as the app sends it, null when it isn't a track of the catalogue */
+export function parseMusic(raw: any): { track: string; volume?: number } | null {
+  if (!raw || typeof raw !== 'object' || !findMusic(raw.track)) return null
+  const volume = Number(raw.volume)
+  return { track: raw.track, ...(Number.isFinite(volume) && volume !== 1 ? { volume: Math.min(2, Math.max(0.3, Math.round(volume * 100) / 100)) } : {}) }
 }
 
 /** Frames an intro holds the screen before the first piece, at the video's own rate (0: not an intro) */
@@ -210,6 +220,7 @@ export function parseCompilation(raw: any, liveDuration: number, others?: Map<st
     target: Number.isFinite(target) && target >= 5 && target <= 1800 ? Math.round(target) : null,
     ...(isTransition(raw.transition) ? { transition: raw.transition } : {}),
     ...(parseIntro(raw.intro) ? { intro: parseIntro(raw.intro)! } : {}),
+    ...(parseMusic(raw.music) ? { music: parseMusic(raw.music)! } : {}),
     ...(lives.length > 0 ? { lives } : {}),
     ...(text(raw.brief, MAX_BRIEF) ? { brief: text(raw.brief, MAX_BRIEF) } : {}),
     // What the AI answered to the description: what it built and why

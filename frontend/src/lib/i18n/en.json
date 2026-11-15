@@ -1656,6 +1656,44 @@
         "drum": "Drums"
       },
       "chosen": "Intro chosen by the AI: {{name}}"
+    },
+    "music": {
+      "label": "Music",
+      "hint": "Under the whole video: up front during the intro, turned down when people talk",
+      "none": "None",
+      "pick": "The video's music",
+      "volume": "How present it is under the passages",
+      "level": {
+        "low": "Discreet",
+        "normal": "Normal",
+        "high": "Strong"
+      },
+      "listen": "Listen to {{name}}",
+      "stop": "Stop {{name}}",
+      "favourite": "Your favourite for: {{kinds}}",
+      "chosen": "Music chosen by the AI: {{name}}",
+      "kind": {
+        "funny": "Funny",
+        "skill": "Skill and action",
+        "suspense": "Suspense",
+        "chill": "Calm, talking",
+        "hype": "Best-of, energy"
+      },
+      "about": {
+        "phonk": "Nervous phonk with heavy bass. For kills, action, big plays.",
+        "phonk2": "Slower, very deep, menacing phonk. For a kill streak or tension that builds.",
+        "phonk3": "Fast, dark phonk with pauses. For chases and intense fights.",
+        "hiphop": "Energetic, punchy hip-hop. For a best-of or banter.",
+        "stream": "A stream-starting theme that builds up. For the best-of of an evening.",
+        "vlog": "Light, cheerful vlog music. For funny moments between friends.",
+        "synthwave": "Retro synthwave, arcade and neon. For driving, night scenes, stylish plays.",
+        "chiptune": "Fast chiptune, like an old console. For fails and utter nonsense.",
+        "pixel": "Calm, cute chiptune. For gentle humour and cosy moments.",
+        "retro": "Very fast 8-bit, cartoon-like. For fails in a row.",
+        "lofi": "Upbeat but relaxed lofi. For conversations and stories being told.",
+        "lofi2": "Laid-back, warm lofi. For a video where people talk a lot.",
+        "chill": "Muffled lo-fi that stays far back. For serious talks and late-night moods."
+      }
     }
   },
   "compilations": {

@@ -312,6 +312,24 @@ const routes = {
     tokens: [{"old":"/api/jobs/:id/clips/:clipFilename/name","type":0,"val":"api","end":""},{"old":"/api/jobs/:id/clips/:clipFilename/name","type":0,"val":"jobs","end":""},{"old":"/api/jobs/:id/clips/:clipFilename/name","type":1,"val":"id","end":""},{"old":"/api/jobs/:id/clips/:clipFilename/name","type":0,"val":"clips","end":""},{"old":"/api/jobs/:id/clips/:clipFilename/name","type":1,"val":"clipFilename","end":""},{"old":"/api/jobs/:id/clips/:clipFilename/name","type":0,"val":"name","end":""}],
     types: placeholder as Registry['jobs.rename_clip']['types'],
   },
+  'musics.index': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/musics',
+    tokens: [{"old":"/api/musics","type":0,"val":"api","end":""},{"old":"/api/musics","type":0,"val":"musics","end":""}],
+    types: placeholder as Registry['musics.index']['types'],
+  },
+  'musics.show': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/musics/:id',
+    tokens: [{"old":"/api/musics/:id","type":0,"val":"api","end":""},{"old":"/api/musics/:id","type":0,"val":"musics","end":""},{"old":"/api/musics/:id","type":1,"val":"id","end":""}],
+    types: placeholder as Registry['musics.show']['types'],
+  },
+  'musics.level': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/jobs/:id/loudness',
+    tokens: [{"old":"/api/jobs/:id/loudness","type":0,"val":"api","end":""},{"old":"/api/jobs/:id/loudness","type":0,"val":"jobs","end":""},{"old":"/api/jobs/:id/loudness","type":1,"val":"id","end":""},{"old":"/api/jobs/:id/loudness","type":0,"val":"loudness","end":""}],
+    types: placeholder as Registry['musics.level']['types'],
+  },
   'compilations.search_info': {
     methods: ["GET","HEAD"],
     pattern: '/api/jobs/:id/search/info',

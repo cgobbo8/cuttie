@@ -16,6 +16,8 @@ import {
   getLiveSearchInfo,
   getStoryboard,
   listAllCompilations,
+  listMusics,
+  liveLoudness,
   listCompilations,
   LiveError,
   saveCompilation,
@@ -63,6 +65,7 @@ import { buildMontage, framesOf, introHold, montageFrames, renderPieces, type Mo
 import { evenFrames, tileStyle } from "../lib/storyboard";
 import { isTransition, transitionSpan } from "../lib/transitions";
 import { introSeconds, introSound, isIntro } from "../lib/intro/intros";
+import { musicCurve, musicOf, musicUrl, passageLevel, PROGRAM_LUFS, speechShare, trackGain } from "../lib/music/mix";
 import { fontFamily } from "../lib/fonts";
 import { introSoundUrl, type IntroBrand } from "../components/compilation/IntroPicker";
 import { clipTemplateContext } from "../lib/templateContext";
@@ -175,6 +178,12 @@ export default function CompilationPage() {
   const [exporting, setExporting] = useState(false);
   // The video being joined into one clip for the layer editor
   const [editing, setEditing] = useState(false);
+  // The background musics whose file is here, and how loud this live's clips are (what the preview sets the music against)
+  const [musics, setMusics] = useState<string[]>([]);
+  const [liveLufs, setLiveLufs] = useState<number | null>(null);
+  useEffect(() => {
+    listMusics().then(setMusics).catch(() => {});
+  }, []);
   // The AI looking at the passages to choose their templates, and what it said of its choice (by compilation)
   const [looking, setLooking] = useState(false);
   const [looksNote, setLooksNote] = useState<{ id: string; note: string } | null>(null);
@@ -257,6 +266,18 @@ export default function CompilationPage() {
   }, [jobId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const compilation = compilations?.find((c) => c.id === currentId) ?? null;
+  // Measured once a music or an intro is chosen (a few seconds of ffmpeg the first time, then kept with the clips)
+  const hasMusic = !!compilation?.music || !!compilation?.intro;
+  useEffect(() => {
+    if (!jobId || !hasMusic) return;
+    let stale = false;
+    liveLoudness(jobId)
+      .then((lufs) => !stale && setLiveLufs(lufs))
+      .catch(() => {});
+    return () => {
+      stale = true;
+    };
+  }, [jobId, hasMusic]);
   // The address names the compilation on screen: a reload, or coming back from an export, opens it again
   useEffect(() => {
     if (currentId && (search.get("c") !== currentId || search.has("new"))) setSearch({ c: currentId }, { replace: true });
@@ -630,9 +651,22 @@ export default function CompilationPage() {
           ...(sound ? { sound } : {}),
         };
       }
+      // The music under the video: lower where people talk, more present where the game plays alone
+      const track = musicOf(all.music?.track);
+      if (track && musics.includes(track.id)) {
+        const levels = cuts.map((cut, i) => {
+          // A clip that was never transcribed has no words: what is said in it counts as talk, not as silence
+          const untold = cut.ctx.words.length === 0 && !!items[i].text.trim();
+          return passageLevel(speechShare(cut.ctx.words, cut.start, cut.end), untold);
+        });
+        montage.music = {
+          track: track.id,
+          curve: musicCurve(montage.segments.map((segment, i) => ({ seconds: segment.duration, level: levels[i] })), montage.intro ? introSeconds(all.intro) : 0, all.music?.volume ?? 1),
+        };
+      }
       return { montage, files, jobs, ids: items.map((item) => item.id) };
     },
-    [channel, customs, job, jobId, kit, templateKey],
+    [channel, customs, job, jobId, kit, musics, templateKey],
   );
 
   // What the intro picker draws its sketches with
@@ -725,11 +759,19 @@ export default function CompilationPage() {
   }, [preview]);
   const marksRef = useRef(marks);
   marksRef.current = marks;
-  // In the page the intro's sound is a file the player plays (the export mixes it in afterwards)
+  // In the page the intro's sound and the music are files the player plays (the export mixes them in afterwards)
   const playerProps = useMemo(() => {
     const montage = preview?.montage;
-    return montage?.intro?.sound ? { ...montage, intro: { ...montage.intro, sound: introSoundUrl(montage.intro.sound) } } : montage;
-  }, [preview]);
+    if (!montage) return montage;
+    const track = musicOf(montage.music?.track);
+    // The export levels the clips' sound before adding the music; here they play as they are: the music comes down by as much
+    const trim = liveLufs === null ? 0.3 : Math.min(1, 10 ** ((liveLufs - PROGRAM_LUFS) / 20));
+    return {
+      ...montage,
+      ...(montage.intro?.sound ? { intro: { ...montage.intro, sound: introSoundUrl(montage.intro.sound), ...(liveLufs === null ? {} : { gain: trim }) } } : {}),
+      ...(montage.music && track ? { music: { ...montage.music, src: musicUrl(track.id), from: track.start, gain: trackGain(track) * trim } } : {}),
+    };
+  }, [liveLufs, preview]);
   // The same passages in the same order: the same player, which keeps its place when a cut or a template changes
   const playerKey = preview ? `${compilation?.id}-${templateKey}-${preview.files.join(",")}` : "";
   useEffect(() => {
@@ -791,7 +833,7 @@ export default function CompilationPage() {
       await saveCompilation(jobId, compilation);
       await startMontageRender(
         jobId,
-        { key: `comp_${compilation.id}.mp4`, name: compilation.name, pieces: renderPieces(built.montage, built.files, built.jobs), overlays: built.montage.overlays, ...(built.montage.intro ? { intro: built.montage.intro } : {}) },
+        { key: `comp_${compilation.id}.mp4`, name: compilation.name, pieces: renderPieces(built.montage, built.files, built.jobs), overlays: built.montage.overlays, ...(built.montage.intro ? { intro: built.montage.intro } : {}), ...(built.montage.music ? { music: built.montage.music } : {}) },
         { width: 1080, height: 1920, fps: FPS },
       );
       navigate(`/${jobId}/export`);
@@ -1146,6 +1188,7 @@ export default function CompilationPage() {
           onEdit={openEditor}
           editing={editing}
           brand={brand}
+          musics={musics}
           cutting={cutting}
           templates={templates}
           onActivate={setActiveSection}

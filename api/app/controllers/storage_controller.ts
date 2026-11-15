@@ -1,6 +1,7 @@
 import type { HttpContext } from '@adonisjs/core/http'
-import { createReadStream, statSync } from 'node:fs'
+import { statSync } from 'node:fs'
 import path from 'node:path'
+import { streamFile } from '#services/file_stream'
 import { storagePath, verifySignature } from '#services/storage'
 
 const MIME_TYPES: Record<string, string> = {
@@ -40,7 +41,6 @@ export default class StorageController {
     }
 
     response.header('Content-Type', MIME_TYPES[path.extname(filePath).toLowerCase()] ?? 'application/octet-stream')
-    response.header('Accept-Ranges', 'bytes')
     response.header('Cache-Control', 'private, max-age=3600')
     // Signed URLs are capabilities: let <video crossOrigin> and the Remotion renderer read them
     response.header('Access-Control-Allow-Origin', '*')
@@ -54,29 +54,6 @@ export default class StorageController {
       )
     }
 
-    const range = request.header('range')
-    if (!range) {
-      response.header('Content-Length', String(size))
-      return response.stream(createReadStream(filePath))
-    }
-
-    const match = /^bytes=(\d*)-(\d*)$/.exec(range.trim())
-    let start = match?.[1] ? Number(match[1]) : NaN
-    let end = match?.[2] ? Number(match[2]) : size - 1
-    if (match && !match[1] && match[2]) {
-      // Suffix range: last N bytes
-      start = Math.max(0, size - Number(match[2]))
-      end = size - 1
-    }
-    if (!match || Number.isNaN(start) || start > end || start >= size) {
-      response.header('Content-Range', `bytes */${size}`)
-      return response.status(416).send('')
-    }
-    end = Math.min(end, size - 1)
-
-    response.status(206)
-    response.header('Content-Range', `bytes ${start}-${end}/${size}`)
-    response.header('Content-Length', String(end - start + 1))
-    return response.stream(createReadStream(filePath, { start, end }))
+    return streamFile({ request, response }, filePath, size)
   }
 }

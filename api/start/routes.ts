@@ -94,6 +94,11 @@ router
         router.post('/jobs/:id/restore', [() => import('#controllers/disk_controller'), 'restoreJob'])
         router.delete('/jobs/:id/clips/:clipFilename', [() => import('#controllers/jobs_controller'), 'destroyClip'])
         router.patch('/jobs/:id/clips/:clipFilename/name', [() => import('#controllers/jobs_controller'), 'renameClip'])
+        // Background musics of a video
+        router.get('/musics', [() => import('#controllers/musics_controller'), 'index'])
+        router.get('/musics/:id', [() => import('#controllers/musics_controller'), 'show'])
+        router.get('/jobs/:id/loudness', [() => import('#controllers/musics_controller'), 'level'])
+
         // Searching the live, compilations (videos made of pieces of the live)
         router.get('/jobs/:id/search/info', [() => import('#controllers/compilations_controller'), 'searchInfo'])
         router.get('/jobs/:id/search/progress', [() => import('#controllers/compilations_controller'), 'searchProgress'])

@@ -2,6 +2,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { INTRO_IDS, INTRO_SOUND_IDS, introSpan } from "./intro/intros";
+import { MUSIC_KINDS } from "./music/mix";
 import { TRANSITION_IDS } from "./transitions";
 
 /** The server renderer must draw exactly what the editor shows (scripts/sync-remotion.mjs) */
@@ -52,6 +53,17 @@ describe("editor and server renderer stay in sync", () => {
     expect(stored).toEqual(INTRO_IDS.map((id) => [id, introSpan(id, 30).hold, introSpan(id, 30).out]));
     const sounds = service.match(/export const INTRO_SOUNDS = \[([^\]]+)\]/)?.[1].match(/[a-z0-9]+/g);
     expect(sounds).toEqual([...INTRO_SOUND_IDS]);
+  });
+
+  it("mixes the music with the curve the preview plays, and reads the same catalogue", () => {
+    const same = (front: string, server: string) => {
+      expect(existsSync(path.join(root, server)), `${server} missing: run node scripts/sync-remotion.mjs`).toBe(true);
+      expect(readFileSync(path.join(root, server), "utf-8"), `${server} differs: run node scripts/sync-remotion.mjs`).toBe(readFileSync(path.join(root, front), "utf-8"));
+    };
+    same("frontend/src/lib/music/curve.ts", "api/remotion/music/curve.ts");
+    same("frontend/src/lib/music/catalogue.json", "api/public/musics/catalogue.json");
+    const service = readFileSync(path.join(root, "api/app/services/musics.ts"), "utf-8");
+    expect(service.match(/export const MUSIC_KINDS = \[([^\]]+)\]/)?.[1].match(/[a-z]+/g)).toEqual([...MUSIC_KINDS]);
   });
 
   it("ships every clip font to the server", () => {

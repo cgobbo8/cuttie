@@ -5,6 +5,8 @@
  */
 
 import Job from '#models/job'
+import { isIntro } from '#services/compilations'
+import { findMusic, MUSIC_KINDS } from '#services/musics'
 import { readSettings, writeSettings } from '#services/user_settings'
 
 export interface FacecamRect {
@@ -259,6 +261,13 @@ export interface BrandKit {
   templates: (CustomTemplate | TemplateSpec)[]
   /** Template applied to new projects: a built-in layout or a custom template id */
   default_template: string | null
+  /**
+   * The streamer's favourite background music for each kind of video (kind -> track of the
+   * catalogue): what the AI takes first when it chooses the music of a video of that kind
+   */
+  musics: Record<string, string>
+  /** The intro they prefer (null: none): new compilations open with it, and the AI takes it when it gives a video an intro */
+  intro: string | null
 }
 
 export const DEFAULT_BRAND_KIT: BrandKit = {
@@ -272,6 +281,8 @@ export const DEFAULT_BRAND_KIT: BrandKit = {
   subtitles: { style: 'bold' },
   templates: [],
   default_template: null,
+  musics: {},
+  intro: null,
 }
 
 /** Merge stored data over the defaults, migrating the v1 shape ({ primary, secondary }) */
@@ -290,7 +301,20 @@ function normalize(stored: Record<string, any>): BrandKit {
     templates: parseCustomTemplates(stored.templates ?? []) ?? [],
     widget: { ...DEFAULT_BRAND_KIT.widget, ...(stored.widget ?? {}) },
     subtitles: { ...DEFAULT_BRAND_KIT.subtitles, ...(stored.subtitles ?? {}) },
+    musics: parseFavourites(stored.musics),
+    intro: isIntro(stored.intro) ? stored.intro : null,
   }
+}
+
+/** Favourite musics as stored or sent: one track of the catalogue for a kind of video, nothing else */
+export function parseFavourites(raw: unknown): Record<string, string> {
+  const favourites: Record<string, string> = {}
+  if (!raw || typeof raw !== 'object') return favourites
+  for (const kind of MUSIC_KINDS) {
+    const track = (raw as Record<string, unknown>)[kind]
+    if (findMusic(track)) favourites[kind] = track as string
+  }
+  return favourites
 }
 
 export async function getBrandKit(): Promise<BrandKit> {

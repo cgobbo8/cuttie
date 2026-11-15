@@ -739,7 +739,14 @@
     "myTemplates": "Mes modèles",
     "myTemplatesHint": "Tes mises en page à toi, prêtes dans Monter.",
     "noTemplates": "Pas encore de modèle perso. Pars d'une des mises en page de Cuttie et ajuste-la.",
-    "createTemplate": "Créer un modèle"
+    "createTemplate": "Créer un modèle",
+    "soundTitle": "Musique et intro",
+    "soundHint": "Tes préférées par type de vidéo. L'IA les prend en premier quand elle choisit, et les nouvelles compilations s'ouvrent avec ton intro.",
+    "musicAny": "Au choix de l'IA",
+    "introPreferred": "Intro préférée",
+    "introNone": "Aucune",
+    "noMusics": "Aucune musique n'est installée sur cette machine.",
+    "musicFor": "Musique pour : {{kind}}"
   },
   "project": {
     "steps": "Étapes du projet",

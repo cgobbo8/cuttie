@@ -9,6 +9,8 @@ import { useLatestMoments } from "../lib/useLatestMoment";
 import { useToast } from "../components/Toast";
 import TemplatePreview, { useDefaultTemplate } from "../components/TemplatePreview";
 import TemplateSketch from "../components/montage/TemplateSketch";
+import SoundPrefs from "../components/SoundPrefs";
+import { fontFamily } from "../lib/fonts";
 import type { TemplateContext } from "../lib/templates";
 import { customTemplates } from "../lib/templateKeys";
 import { buildFromSpec } from "../lib/templateSpec";
@@ -318,6 +320,15 @@ export default function ChannelPage() {
                 </button>
               ))}
             </div>
+          </Card>
+
+          {/* Their favourite background music for each kind of video, and the intro they prefer */}
+          <Card title={t("brand.soundTitle")} hint={t("brand.soundHint")}>
+            <SoundPrefs
+              kit={kit}
+              brand={{ name: channel?.display_name ?? channel?.login ?? kit.twitch_login ?? "", logo: channel?.avatar_url ?? null, colors: kit.colors, font: fontFamily("luckiest") }}
+              onSave={(patch) => save(patch)}
+            />
           </Card>
 
           {/* The streamer's own templates */}

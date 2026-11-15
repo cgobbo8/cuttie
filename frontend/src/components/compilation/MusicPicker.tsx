@@ -17,7 +17,7 @@ interface Props {
 }
 
 /** Plays a track from where it is in full swing: one at a time, stopped when the picker closes */
-function useListen() {
+export function useListen() {
   const audio = useRef<HTMLAudioElement | null>(null);
   const [playing, setPlaying] = useState<string | null>(null);
   const stop = () => {

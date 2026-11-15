@@ -1189,6 +1189,7 @@ export default function CompilationPage() {
           editing={editing}
           brand={brand}
           musics={musics}
+          favourites={kit?.musics}
           cutting={cutting}
           templates={templates}
           onActivate={setActiveSection}

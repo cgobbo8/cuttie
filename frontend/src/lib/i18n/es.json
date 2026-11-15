@@ -739,7 +739,14 @@
     "myTemplates": "Mis plantillas",
     "myTemplatesHint": "Tus propios diseños, listos en Montar.",
     "noTemplates": "Todavía no hay plantillas propias. Parte de uno de los diseños de Cuttie y ajústalo.",
-    "createTemplate": "Crear una plantilla"
+    "createTemplate": "Crear una plantilla",
+    "soundTitle": "Música e intro",
+    "soundHint": "Tus favoritas para cada tipo de vídeo. La IA las toma primero cuando elige, y las nuevas compilaciones empiezan con tu intro.",
+    "musicAny": "A elección de la IA",
+    "introPreferred": "Intro preferida",
+    "introNone": "Ninguna",
+    "noMusics": "No hay ninguna música instalada en este equipo.",
+    "musicFor": "Música para: {{kind}}"
   },
   "project": {
     "steps": "Pasos del proyecto",

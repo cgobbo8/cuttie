@@ -1,7 +1,8 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import path from 'node:path'
 import Job from '#models/job'
-import { getBrandKit, parseCustomTemplates, parseFacecamRect, saveBrandKit, TEMPLATE_BASES, type BrandKit } from '#services/brand_kit'
+import { getBrandKit, parseCustomTemplates, parseFacecamRect, parseFavourites, saveBrandKit, TEMPLATE_BASES, type BrandKit } from '#services/brand_kit'
+import { isIntro } from '#services/compilations'
 import { getClipDimensions } from '#services/edit_env_resolver'
 import { getPresignedUrl, headObject, listObjects } from '#services/storage'
 import { fetchChannel, fetchStoryboard, type TwitchChannel, type TwitchVod } from '#services/twitch'
@@ -135,6 +136,12 @@ export default class BrandController {
         return response.badRequest({ error: 'Modèle par défaut inconnu' })
       }
       patch.default_template = key
+    }
+    // Favourite musics, by kind of video: the whole list as the app has it (a kind left out has none)
+    if (body.musics !== undefined) patch.musics = parseFavourites(body.musics)
+    if (body.intro !== undefined) {
+      if (body.intro !== null && !isIntro(body.intro)) return response.badRequest({ error: 'Intro inconnue' })
+      patch.intro = body.intro
     }
     if (body.subtitles !== undefined) {
       const { style } = body.subtitles ?? {}

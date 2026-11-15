@@ -1,4 +1,5 @@
 import type { HttpContext } from '@adonisjs/core/http'
+import { getBrandKit } from '#services/brand_kit'
 import { randomBytes } from 'node:crypto'
 import logger from '@adonisjs/core/services/logger'
 import db from '@adonisjs/lucid/services/db'
@@ -107,6 +108,9 @@ export default class CompilationsController {
     const parsed = parseCompilation({ ...body, sections: Array.isArray(body.sections) ? body.sections : [] }, job.vodDurationSeconds ?? 0, others)
     if (!parsed) return ctx.response.badRequest({ error: 'invalid compilation' })
     if (parsed.sections.length === 0) parsed.sections = [{ id: newId(), title: '', query: '', items: [] }]
+    // The intro the streamer prefers (their brand kit), unless this one comes with its own
+    const preferred = (await getBrandKit()).intro
+    if (!parsed.intro && preferred) parsed.intro = { style: preferred }
     const now = new Date().toISOString()
     const compilation: Compilation = { id: newId(), ...parsed, created_at: now, updated_at: now }
     job.compilations = [...existing, compilation]

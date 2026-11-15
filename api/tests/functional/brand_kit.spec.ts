@@ -2,6 +2,7 @@ import { test } from '@japa/runner'
 import testUtils from '@adonisjs/core/services/test_utils'
 import { randomUUID } from 'node:crypto'
 import User from '#models/user'
+import Job from '#models/job'
 import { brandFacecamFor, DEFAULT_BRAND_KIT } from '#services/brand_kit'
 import { readSettings, writeSettings } from '#services/user_settings'
 
@@ -44,6 +45,30 @@ test.group('Brand kit', (group) => {
     assert.equal(kit.colors.dark, DEFAULT_BRAND_KIT.colors.dark)
     assert.deepEqual(kit.widget, { enabled: true, timing: 'end' })
     assert.equal(kit.subtitles.style, 'karaoke')
+  })
+
+  test('keeps a favourite music for each kind of video and the preferred intro, which new compilations open with', async ({ client, assert }) => {
+    const user = await makeUser()
+    const fresh = (await client.get('/api/brand-kit').loginAs(user)).body()
+    assert.deepEqual([fresh.musics, fresh.intro], [{}, null])
+
+    // A track of the catalogue for a kind there is; a kind or a track nobody knows is left out
+    const saved = (await client.put('/api/brand-kit').loginAs(user).json({ musics: { skill: 'phonk', chill: 'lofi', funny: 'kazoo', epic: 'phonk' }, intro: 'rush' })).body()
+    assert.deepEqual(saved.musics, { skill: 'phonk', chill: 'lofi' })
+    assert.equal(saved.intro, 'rush')
+    // The list sent is the whole list: a kind left out has no favourite any more; the intro is untouched
+    const fewer = (await client.put('/api/brand-kit').loginAs(user).json({ musics: { skill: 'phonk2' } })).body()
+    assert.deepEqual([fewer.musics, fewer.intro], [{ skill: 'phonk2' }, 'rush'])
+    ;(await client.put('/api/brand-kit').loginAs(user).json({ intro: 'wobble' })).assertStatus(400)
+
+    // A new compilation opens with that intro, unless it comes with its own
+    const job = await Job.create({ id: randomUUID(), url: 'https://twitch.tv/videos/123', status: 'DONE', userId: user.id, vodDurationSeconds: 3600 })
+    const url = `/api/jobs/${job.id}/compilations`
+    assert.deepEqual(((await client.post(url).loginAs(user).json({ name: 'Une' })).body() as any).compilation.intro, { style: 'rush' })
+    assert.deepEqual(((await client.post(url).loginAs(user).json({ name: 'Deux', intro: { style: 'neon', sound: 'none' } })).body() as any).compilation.intro, { style: 'neon', sound: 'none' })
+    // No preferred intro: none
+    ;(await client.put('/api/brand-kit').loginAs(user).json({ intro: null })).assertStatus(200)
+    assert.notProperty(((await client.post(url).loginAs(user).json({ name: 'Trois' })).body() as any).compilation, 'intro')
   })
 
   test('rejects invalid values', async ({ client }) => {

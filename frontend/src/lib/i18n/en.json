@@ -739,7 +739,14 @@
     "myTemplates": "My templates",
     "myTemplatesHint": "Your own layouts, ready in Edit.",
     "noTemplates": "No custom template yet. Start from one of Cuttie's layouts and adjust it.",
-    "createTemplate": "Create a template"
+    "createTemplate": "Create a template",
+    "soundTitle": "Music and intro",
+    "soundHint": "Your favourites for each kind of video. The AI takes them first when it chooses, and new compilations open with your intro.",
+    "musicAny": "Up to the AI",
+    "introPreferred": "Preferred intro",
+    "introNone": "None",
+    "noMusics": "No music is installed on this machine.",
+    "musicFor": "Music for: {{kind}}"
   },
   "project": {
     "steps": "Project steps",

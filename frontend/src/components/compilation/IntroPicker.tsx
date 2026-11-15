@@ -22,7 +22,7 @@ export interface IntroBrand {
 }
 
 /** The frame the sketches are on: they all share one clock */
-function useLoop(): number {
+export function useIntroLoop(): number {
   const [frame, setFrame] = useState(STILL);
   useEffect(() => {
     if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
@@ -69,7 +69,7 @@ interface Props {
 export default function IntroPicker({ value, brand, name, onChange, onClose, className = "" }: Props) {
   const { t } = useTranslation();
   const box = useRef<HTMLDivElement>(null);
-  const frame = useLoop();
+  const frame = useIntroLoop();
   const [title, setTitle] = useState(value?.title ?? "");
   const playing = useRef<HTMLAudioElement | null>(null);
   useEffect(() => {

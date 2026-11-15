@@ -231,6 +231,10 @@ export interface BrandKit {
   templates: (TemplateSpec | CustomTemplate)[];
   /** Template applied to new projects (a built-in id or a custom template id) */
   default_template: string | null;
+  /** The favourite background music for each kind of video (kind -> track): what the AI takes first for a video of that kind */
+  musics: Record<string, string>;
+  /** The preferred intro (null: none): new compilations open with it, the AI takes it when it gives a video an intro */
+  intro: string | null;
 }
 
 export type BrandKitPatch = Partial<Omit<BrandKit, "colors" | "widget">> & {

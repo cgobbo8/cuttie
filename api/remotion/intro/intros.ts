@@ -10,24 +10,28 @@
  * which is already playing underneath (nothing of the video is covered for
  * long, and its sound starts on time).
  *
- * "hook" is the odd one: no jingle, the best few seconds of the video play
- * first (a moment of the video, shown again at its place later), framed by
- * the channel's colours, then the video starts. It holds the screen for as
- * long as that moment lasts.
+ * An intro is one of two kinds. A jingle: one of twelve ready-made openings
+ * drawn over the whole screen. Or the "hook": no jingle, the best few seconds
+ * of the video play first (a moment of the video, shown again at its place
+ * later), then the video starts; it holds the screen for as long as that
+ * moment lasts, and is framed by one of twelve looks, each with the name and
+ * the feel of a jingle (`look`).
  */
-export const INTRO_IDS = ["hook", "slam", "bands", "glitch", "neon", "rush", "split", "arcade", "news", "shatter", "countdown"] as const;
+export const JINGLE_IDS = ["slam", "bands", "glitch", "neon", "rush", "sticker", "split", "arcade", "news", "shatter", "countdown", "fuse"] as const;
+export type JingleId = (typeof JINGLE_IDS)[number];
+export const isJingle = (value: unknown): value is JingleId => typeof value === "string" && (JINGLE_IDS as readonly string[]).includes(value);
+export const INTRO_IDS = ["hook", ...JINGLE_IDS] as const;
 export type IntroId = (typeof INTRO_IDS)[number];
 export const isIntro = (value: unknown): value is IntroId => typeof value === "string" && (INTRO_IDS as readonly string[]).includes(value);
+/** The look a hook has when none is chosen: the fuse that burns round the picture */
+export const DEFAULT_HOOK_LOOK: JingleId = "fuse";
 
 /** The sound effects made for the intros, one timed on each (frontend/public/sounds/intro-<id>.mp3, made by scripts/make-intro-sounds.py) */
-export const INTRO_SOUND_IDS = ["boom", "swish", "zap", "shine", "rush", "drum", "clash", "coin", "sting", "glass", "beep"] as const;
+export const INTRO_SOUND_IDS = ["boom", "swish", "zap", "shine", "rush", "drum", "clash", "coin", "sting", "glass", "beep", "fizz"] as const;
 export type IntroSoundId = (typeof INTRO_SOUND_IDS)[number];
 export const isIntroSound = (value: unknown): value is IntroSoundId => typeof value === "string" && (INTRO_SOUND_IDS as readonly string[]).includes(value);
 /** `intro.sound` when the intro is silent */
 export const NO_SOUND = "none";
-
-/** A style that is gone, and the one that stands for it where it was kept (a video, the channel's preferred intro) */
-export const FORMER_INTROS: Record<string, IntroId> = { sticker: "bands" };
 
 /** Frames at 30 fps, and the sound each intro plays unless another is chosen (the hook has none: its moment is heard) */
 const SPANS: Record<IntroId, { hold: number; out: number; sound: IntroSoundId | null }> = {
@@ -38,11 +42,13 @@ const SPANS: Record<IntroId, { hold: number; out: number; sound: IntroSoundId | 
   glitch: { hold: 45, out: 6, sound: "zap" },
   neon: { hold: 60, out: 10, sound: "shine" },
   rush: { hold: 46, out: 7, sound: "rush" },
+  sticker: { hold: 54, out: 10, sound: "drum" },
   split: { hold: 50, out: 12, sound: "clash" },
   arcade: { hold: 56, out: 8, sound: "coin" },
   news: { hold: 54, out: 10, sound: "sting" },
   shatter: { hold: 50, out: 12, sound: "glass" },
   countdown: { hold: 60, out: 8, sound: "beep" },
+  fuse: { hold: 54, out: 10, sound: "fizz" },
 };
 
 /** The intro a compilation keeps: its style, its own title (else the video's name), its sound (else its style's; "none": silent) */
@@ -54,7 +60,12 @@ export interface IntroChoice {
   follow?: boolean;
   /** The "hook" intro: the moment of the video it plays first */
   hook?: HookChoice;
+  /** The "hook" intro: the look that frames its moment, by the name of a jingle (absent: the fuse) */
+  look?: string;
 }
+
+/** The look that frames a hook's moment */
+export const hookLook = (intro: Pick<IntroChoice, "look"> | null | undefined): JingleId => (isJingle(intro?.look) ? intro.look : DEFAULT_HOOK_LOOK);
 
 /**
  * The moment a "hook" intro plays: a passage of the video and the part of it that is shown

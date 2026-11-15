@@ -26,7 +26,7 @@ import {
 import { clock } from "../../lib/format";
 import { frameAt, tileStyle } from "../../lib/storyboard";
 import { useToast } from "../Toast";
-import { isIntro } from "../../lib/intro/intros";
+import { hookLook, isIntro } from "../../lib/intro/intros";
 import { trackOf } from "../../lib/music/library";
 import type { MusicTrack } from "../../lib/music/mix";
 import IntroPicker, { type HookMenu, type IntroBrand } from "./IntroPicker";
@@ -614,7 +614,10 @@ export default function CompilationPanel({
                 label={t("compilation.intro.label")}
                 value={
                   isIntro(compilation.intro?.style)
-                    ? t("compilation.intro.value", { name: t(`compilation.intro.style.${compilation.intro.style}`), seconds: new Intl.NumberFormat(i18n.language, { maximumFractionDigits: 1 }).format(opening) })
+                    ? t("compilation.intro.value", {
+                        name: compilation.intro.style === "hook" ? `${t("compilation.intro.style.hook")} ${t(`compilation.intro.style.${hookLook(compilation.intro)}`)}` : t(`compilation.intro.style.${compilation.intro.style}`),
+                        seconds: new Intl.NumberFormat(i18n.language, { maximumFractionDigits: 1 }).format(opening),
+                      })
                     : t("compilation.intro.none")
                 }
                 set={isIntro(compilation.intro?.style)}

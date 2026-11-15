@@ -66,6 +66,14 @@ test.group('Brand kit', (group) => {
     const url = `/api/jobs/${job.id}/compilations`
     assert.deepEqual(((await client.post(url).loginAs(user).json({ name: 'Une' })).body() as any).compilation.intro, { style: 'rush' })
     assert.deepEqual(((await client.post(url).loginAs(user).json({ name: 'Deux', intro: { style: 'neon', sound: 'none' } })).body() as any).compilation.intro, { style: 'neon', sound: 'none' })
+    // The hook as the preferred intro, with the look they like it framed with: a new compilation opens on it
+    const hooked = (await client.put('/api/brand-kit').loginAs(user).json({ intro: 'hook', intro_look: 'glitch' })).body()
+    assert.deepEqual([hooked.intro, hooked.intro_look], ['hook', 'glitch'])
+    assert.deepEqual(((await client.post(url).loginAs(user).json({ name: 'Hook' })).body() as any).compilation.intro, { style: 'hook', look: 'glitch' })
+    // A look is a jingle's name, and only the hook has one
+    ;(await client.put('/api/brand-kit').loginAs(user).json({ intro: 'hook', intro_look: 'hook' })).assertStatus(400)
+    const jingle = (await client.put('/api/brand-kit').loginAs(user).json({ intro: 'neon', intro_look: 'glitch' })).body()
+    assert.deepEqual([jingle.intro, jingle.intro_look], ['neon', null])
     // No preferred intro: none
     ;(await client.put('/api/brand-kit').loginAs(user).json({ intro: null })).assertStatus(200)
     assert.notProperty(((await client.post(url).loginAs(user).json({ name: 'Trois' })).body() as any).compilation, 'intro')

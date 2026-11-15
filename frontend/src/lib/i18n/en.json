@@ -1686,11 +1686,13 @@
         "glitch": "Glitch",
         "neon": "Neon",
         "rush": "Speed",
+        "sticker": "Stickers",
         "split": "Versus",
         "arcade": "Arcade",
         "news": "Breaking news",
         "shatter": "Shatter",
-        "countdown": "Countdown"
+        "countdown": "Countdown",
+        "fuse": "Fuse"
       },
       "sounds": {
         "boom": "Impact",
@@ -1703,13 +1705,14 @@
         "coin": "Coin",
         "sting": "News sting",
         "glass": "Broken glass",
-        "beep": "Beeps"
+        "beep": "Beeps",
+        "fizz": "Fuse and blast"
       },
       "chosen": "Intro chosen by the AI: {{name}}",
       "followLabel": "Follow",
       "followDone": "Following",
       "followToggle": "The channel's “Follow” button",
-      "noneHint": "Without an intro, the video starts straight away. Pick one to set its sound and the follow button.",
+      "noneHint": "Without an intro the video starts right away. “Classic intro”: a jingle with your logo and the title. “Hook”: the best moment of the video plays first.",
       "hook": {
         "hint": "The best moment of the video plays first, under its title, then the video starts. It plays again at its place.",
         "label": "The hook's moment",
@@ -1723,7 +1726,13 @@
         "until": "End of the hook",
         "play": "See the hook"
       },
-      "value": "{{name}} · +{{seconds}} s"
+      "value": "{{name}} · +{{seconds}} s",
+      "kind": "What the video opens with",
+      "mode": {
+        "none": "None",
+        "jingle": "Classic intro",
+        "hook": "Hook"
+      }
     },
     "music": {
       "label": "Music",

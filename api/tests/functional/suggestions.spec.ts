@@ -29,6 +29,8 @@ test.group('Compilations proposed by the AI', (group) => {
   // Stands for the worker: answers what a test tells it to, and keeps what it was asked
   let server: Server
   let ideas: LiveIdea[] = []
+  // What it chooses for the opening of a video
+  let sound: { intro: string | null; look: string | null } = { intro: 'news', look: null }
   const asked: { url: string; body: any }[] = []
   group.setup(async () => {
     server = createServer((req, res) => {
@@ -40,7 +42,7 @@ test.group('Compilations proposed by the AI', (group) => {
         if (req.url?.endsWith('/ideas')) res.end(JSON.stringify({ ideas, note: 'Un running gag et une histoire.', cost: 0.006, cached: false }))
         else if (req.url?.endsWith('/plan')) res.end(JSON.stringify({ title: 'Calme', sections: [], note: '' }))
         else if (req.url?.endsWith('/search')) res.end(JSON.stringify({ hits: [], total: 0, transcript: true, cached: false, cost: 0.002 }))
-        else if (req.url?.endsWith('/sound')) res.end(JSON.stringify({ kind: 'funny', music: null, intro: 'news', why: 'Flash info.', teaser: 3, transition: 'pop', cost: 0.0004 }))
+        else if (req.url?.endsWith('/sound')) res.end(JSON.stringify({ kind: 'funny', music: null, intro: sound.intro, look: sound.look, why: 'Flash info.', teaser: 3, transition: 'pop', cost: 0.0004 }))
         else res.writeHead(404).end('{}')
       })
     })
@@ -82,7 +84,7 @@ test.group('Compilations proposed by the AI', (group) => {
       ],
       new Set(['bbbbbbbbbbbb']),
       2,
-      'slam',
+      { style: 'slam' },
       '2026-11-15T10:00:00.000Z'
     )
     assert.deepEqual(made.map((c) => c.name), ['La malédiction du calme', 'La Brigade du Tigre'])
@@ -225,7 +227,8 @@ test.group('Compilations proposed by the AI', (group) => {
       updated_at: at,
     })
     job.compilations = [
-      video('aiolder111', { style: 'neon', by: 'ai' }, '2026-11-10T10:00:00.000Z'),
+      // (a hook's graphics are its look: that is what must not be repeated)
+      video('aiolder111', { style: 'hook', look: 'neon', by: 'ai' }, '2026-11-10T10:00:00.000Z'),
       // Picked by the streamer, however often: their taste, nothing to stay away from
       video('byhand1111', { style: 'slam' }, '2026-11-14T10:00:00.000Z'),
       video('byhand2222', { style: 'slam' }, '2026-11-15T09:00:00.000Z'),
@@ -253,6 +256,14 @@ test.group('Compilations proposed by the AI', (group) => {
     assert.equal((chosen.body() as any).teaser, 3)
     // ...and how its passages follow each other
     assert.equal((chosen.body() as any).transition, 'pop')
+    // No look for a jingle. A hook comes with the graphics that frame it, when they are ones this app draws
+    assert.isNull((chosen.body() as any).look)
+    sound = { intro: 'hook', look: 'glitch' }
+    const hooked = (await client.post(`/api/jobs/${job.id}/sound`).loginAs(user).json({ title: 'Calme', said: [] })).body() as any
+    assert.deepEqual([hooked.intro, hooked.look], ['hook', 'glitch'])
+    sound = { intro: 'hook', look: 'wobble' }
+    assert.isNull(((await client.post(`/api/jobs/${job.id}/sound`).loginAs(user).json({ title: 'Calme', said: [] })).body() as any).look)
+    sound = { intro: 'news', look: null }
     assert.deepEqual(asked[0].body.recent_intros, ['arcade', 'bands', 'neon'])
 
     // Saved by the app, an intro keeps who chose it; picked again by hand, it no longer says the AI did

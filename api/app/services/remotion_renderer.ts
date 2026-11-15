@@ -389,6 +389,8 @@ export interface MontageIntro {
   sound?: string
   /** The "hook" intro: the moment of the video it plays first, a piece of its own (its clip, its layers with the title on them) */
   hook?: MontagePiece
+  /** The "hook" intro: the look that frames its moment, by the name of a jingle */
+  look?: string
 }
 
 /** Where an intro's sound is on this machine (null: not one that ships with the app) */

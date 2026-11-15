@@ -25,7 +25,7 @@ import { buildAny, customTemplates, defaultTemplateKey, findCustom, hookOf, isBu
 import { clipTemplateContext } from "../lib/templateContext";
 import { buildMontage, montageFrames, renderPieces, type MontageProps } from "../lib/montage";
 import { fontFamily } from "../lib/fonts";
-import { FORMER_INTROS, isIntro, type IntroChoice } from "../lib/intro/intros";
+import { isIntro, type IntroChoice } from "../lib/intro/intros";
 import { trackOf, useMusics } from "../lib/music/library";
 import type { MusicChoice } from "../lib/music/mix";
 import { favouriteFor, introOf, kindOfClip, montageIntro, montageMusic, playable } from "../lib/music/sound";
@@ -71,10 +71,7 @@ function usePrefs(jobId: string | undefined) {
   const key = `cuttie_montage_${jobId}`;
   const [prefs, setPrefs] = useState<MontagePrefs>(() => {
     try {
-      const stored: MontagePrefs = { ...DEFAULT_PREFS, ...JSON.parse(localStorage.getItem(key) ?? "{}") };
-      // An intro style that is gone: the one that stands for it now
-      const now = FORMER_INTROS[stored.intro?.style ?? ""];
-      return now && stored.intro ? { ...stored, intro: { ...stored.intro, style: now } } : stored;
+      return { ...DEFAULT_PREFS, ...JSON.parse(localStorage.getItem(key) ?? "{}") };
     } catch {
       return DEFAULT_PREFS;
     }

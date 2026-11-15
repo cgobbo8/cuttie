@@ -133,19 +133,18 @@ export const isTransition = (value: unknown): value is string => typeof value ==
  * video starts, then how long it takes to leave over the first piece, in frames at 30 a second.
  * And the sound effects one can play (api/public/sounds/intro-<id>.mp3). "hook" is the odd one:
  * no jingle, a moment of the video plays first, and it holds the screen for as long as that
- * moment lasts (its number here is only what the picker's sketch plays).
+ * moment lasts (its number here is only what the picker's sketch plays); what frames that moment
+ * is one of twelve looks, each named after a jingle.
  */
 export const INTROS: Record<string, [number, number]> = {
-  hook: [150, 8], slam: [48, 8], bands: [54, 12], glitch: [45, 6], neon: [60, 10], rush: [46, 7], split: [50, 12],
-  arcade: [56, 8], news: [54, 10], shatter: [50, 12], countdown: [60, 8],
+  hook: [150, 8], slam: [48, 8], bands: [54, 12], glitch: [45, 6], neon: [60, 10], rush: [46, 7], sticker: [54, 10],
+  split: [50, 12], arcade: [56, 8], news: [54, 10], shatter: [50, 12], countdown: [60, 8], fuse: [54, 10],
 }
-export const INTRO_SOUNDS = ['boom', 'swish', 'zap', 'shine', 'rush', 'drum', 'clash', 'coin', 'sting', 'glass', 'beep']
+export const INTRO_SOUNDS = ['boom', 'swish', 'zap', 'shine', 'rush', 'drum', 'clash', 'coin', 'sting', 'glass', 'beep', 'fizz']
 export const isIntro = (value: unknown): value is string => typeof value === 'string' && Object.hasOwn(INTROS, value)
 export const isIntroSound = (value: unknown): value is string => typeof value === 'string' && INTRO_SOUNDS.includes(value)
-/** A style that is gone, and the one that stands for it where it was kept (a video, the channel's preferred intro) */
-const FORMER_INTROS: Record<string, string> = { sticker: 'bands' }
-/** The intro a stored style stands for today, null when it is none */
-export const introStyle = (value: unknown): string | null => (isIntro(value) ? value : typeof value === 'string' && Object.hasOwn(FORMER_INTROS, value) ? FORMER_INTROS[value] : null)
+/** A jingle: any intro but the hook. It is also what a look of the hook is named after */
+export const isJingle = (value: unknown): value is string => isIntro(value) && value !== 'hook'
 /** Longest moment a "hook" intro plays, seconds (the app keeps it under 8) */
 const HOOK_LONGEST = 8.5
 
@@ -167,12 +166,20 @@ export interface Intro {
    * video changes; without it, the streamer did. The app writes it: the video's length counts it.
    */
   hook?: { item: string; start: number; end: number; auto?: true }
+  /** The "hook" intro: the look that frames its moment, by the name of a jingle (absent: the app's default one) */
+  look?: string
+}
+
+/** The intro a new video opens with when the channel prefers one (its kit): a jingle, or a hook with the look they like */
+export function preferredIntro(kit: { intro: string | null; intro_look?: string | null }): Intro | undefined {
+  if (!isIntro(kit.intro)) return undefined
+  return { style: kit.intro, ...(kit.intro === 'hook' && isJingle(kit.intro_look) ? { look: kit.intro_look } : {}) }
 }
 
 /** An intro as the app sends it, null when it isn't one this server can draw */
 export function parseIntro(raw: any): Intro | null {
-  const style = introStyle(raw?.style)
-  if (!raw || typeof raw !== 'object' || !style) return null
+  if (!raw || typeof raw !== 'object' || !isIntro(raw.style)) return null
+  const style: string = raw.style
   const title = typeof raw.title === 'string' ? raw.title.trim().slice(0, 80) : ''
   const hook = style === 'hook' ? parseHook(raw.hook) : null
   return {
@@ -182,6 +189,7 @@ export function parseIntro(raw: any): Intro | null {
     ...(raw.follow === false ? { follow: false } : {}),
     ...(raw.by === 'ai' ? { by: 'ai' as const } : {}),
     ...(hook ? { hook } : {}),
+    ...(style === 'hook' && isJingle(raw.look) ? { look: raw.look } : {}),
   }
 }
 

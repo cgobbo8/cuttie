@@ -1,20 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { backOut, between, defaultIntroSound, FORMER_INTROS, INTRO_IDS, INTRO_SOUND_IDS, introFade, introSeconds, introSound, introSpan, introVolume, isIntro, isIntroSound, NO_SOUND, titleLines } from "./intros";
+import { backOut, between, DEFAULT_HOOK_LOOK, defaultIntroSound, hookLook, INTRO_IDS, INTRO_SOUND_IDS, introFade, introSeconds, introSound, introSpan, introVolume, isIntro, isIntroSound, isJingle, JINGLE_IDS, NO_SOUND, titleLines } from "./intros";
 
 describe("the intros of a compilation", () => {
   it("knows its styles and how long each holds the screen, at any frame rate", () => {
-    expect(INTRO_IDS).toEqual(["hook", "slam", "bands", "glitch", "neon", "rush", "split", "arcade", "news", "shatter", "countdown"]);
-    // The sticker intro is gone: what kept it opens on another one
-    expect(isIntro("sticker")).toBe(false);
-    expect(FORMER_INTROS).toEqual({ sticker: "bands" });
-    // With "none", twelve choices: three rows of four in the picker
-    expect(INTRO_IDS.length + 1).toBe(12);
+    // Twelve jingles: three full rows of four in the picker
+    expect(JINGLE_IDS).toEqual(["slam", "bands", "glitch", "neon", "rush", "sticker", "split", "arcade", "news", "shatter", "countdown", "fuse"]);
+    // An intro is one of them, or the hook (which is no jingle)
+    expect(INTRO_IDS).toEqual(["hook", ...JINGLE_IDS]);
+    expect(isJingle("fuse") && isJingle("sticker") && !isJingle("hook") && !isJingle("wobble")).toBe(true);
     expect(isIntro("slam") && !isIntro("wobble") && !isIntro(undefined)).toBe(true);
     expect(introSpan("slam", 30)).toEqual({ hold: 48, out: 8 });
     // Twice the frames at 60 a second: the same time on screen
     expect(introSpan("slam", 60)).toEqual({ hold: 96, out: 16 });
     // Every jingle is short: the video starts within about two seconds
-    for (const id of INTRO_IDS.filter((id) => id !== "hook")) {
+    for (const id of JINGLE_IDS) {
       const { hold, out } = introSpan(id, 30);
       expect(hold).toBeGreaterThanOrEqual(40);
       expect(hold).toBeLessThanOrEqual(62);
@@ -37,6 +36,10 @@ describe("the intros of a compilation", () => {
     expect(defaultIntroSound("hook")).toBeNull();
     expect(introSound({ style: "hook" })).toBeNull();
     expect(introSound({ style: "hook", sound: "boom" })).toBeNull();
+    // What frames its moment: one of twelve looks, each named after a jingle; none said, or one nobody knows: the fuse
+    expect(hookLook({ look: "neon" })).toBe("neon");
+    expect([hookLook({}), hookLook(null), hookLook({ look: "wobble" }), hookLook({ look: "hook" })]).toEqual(["fuse", "fuse", "fuse", "fuse"]);
+    expect(DEFAULT_HOOK_LOOK).toBe("fuse");
   });
 
   it("adds its length to the video, and nothing when there is none", () => {
@@ -48,8 +51,8 @@ describe("the intros of a compilation", () => {
   });
 
   it("plays the sound of its style unless another is chosen, or none", () => {
-    // Each jingle has its own (the drums were the sticker intro's: still there to choose)
-    expect(INTRO_IDS.filter((id) => id !== "hook").map(defaultIntroSound)).toEqual(INTRO_SOUND_IDS.filter((id) => id !== "drum"));
+    // Each jingle has its own
+    expect(JINGLE_IDS.map(defaultIntroSound)).toEqual([...INTRO_SOUND_IDS]);
     expect(introSound({ style: "slam" })).toBe("boom");
     expect(introSound({ style: "slam", sound: "drum" })).toBe("drum");
     expect(introSound({ style: "slam", sound: NO_SOUND })).toBeNull();

@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronDown, Clapperboard, Loader2, Music2, Pause, Play, Plus, Trash2 } from "lucide-react";
 import { addMusic, deleteMusic, updateMusic, type BrandKit } from "../lib/api";
-import { isIntro } from "../lib/intro/intros";
+import { hookLook, isIntro } from "../lib/intro/intros";
 import { loadMusics, trackOf, useMusics } from "../lib/music/library";
 import { MUSIC_KINDS, type MusicTrack } from "../lib/music/mix";
 import IntroPicker, { IntroSketch, useIntroLoop, type IntroBrand } from "./compilation/IntroPicker";
@@ -10,10 +10,10 @@ import MusicPicker, { useListen } from "./compilation/MusicPicker";
 import { useToast } from "./Toast";
 
 interface Props {
-  kit: Pick<BrandKit, "musics" | "intro">;
+  kit: Pick<BrandKit, "musics" | "intro" | "intro_look">;
   /** What the preferred intro is drawn with: the channel's logo and colours */
   brand: IntroBrand;
-  onSave: (patch: { musics?: Record<string, string>; intro?: string | null }) => void;
+  onSave: (patch: { musics?: Record<string, string>; intro?: string | null; intro_look?: string | null }) => void;
 }
 
 const FIELD = "h-9 min-w-0 px-2.5 rounded-[10px] bg-black/30 border border-white/10 text-[13px] text-white outline-none focus:border-accent-line [color-scheme:dark]";
@@ -111,6 +111,8 @@ export default function SoundPrefs({ kit, brand, onSave }: Props) {
   // The picker that is open: a kind of video's favourite music, or the preferred intro
   const [open, setOpen] = useState<string | null>(null);
   const own = tracks.filter((track) => track.own);
+  // The look their hook is framed with, when the hook is the intro they prefer
+  const look = hookLook({ look: kit.intro_look ?? undefined });
   const reload = () => loadMusics().catch(() => {});
 
   const pick = (kind: string, track: string) => {
@@ -188,26 +190,27 @@ export default function SoundPrefs({ kit, brand, onSave }: Props) {
         <span className="relative flex-1 min-w-0">
           <button type="button" onClick={() => setOpen(open === "intro" ? null : "intro")} aria-haspopup="dialog" aria-expanded={open === "intro"} aria-label={t("brand.introPreferred")} className={`${PICK} w-full`}>
             <Clapperboard className={`w-3.5 h-3.5 flex-none ${isIntro(kit.intro) ? "text-accent" : "text-ink-3"}`} />
-            <span className={`flex-1 min-w-0 truncate text-left ${isIntro(kit.intro) ? "text-white" : "text-ink-2"}`}>{isIntro(kit.intro) ? t(`compilation.intro.style.${kit.intro}`) : t("brand.introNone")}</span>
+            <span className={`flex-1 min-w-0 truncate text-left ${isIntro(kit.intro) ? "text-white" : "text-ink-2"}`}>
+              {/* A hook is told with the look that frames it */}
+              {kit.intro === "hook" ? `${t("compilation.intro.style.hook")} · ${t(`compilation.intro.style.${look}`)}` : isIntro(kit.intro) ? t(`compilation.intro.style.${kit.intro}`) : t("brand.introNone")}
+            </span>
             <ChevronDown className="w-[15px] h-[15px] flex-none text-ink-3" />
           </button>
           {open === "intro" && (
             <IntroPicker
-              value={isIntro(kit.intro) ? { style: kit.intro } : null}
+              value={isIntro(kit.intro) ? { style: kit.intro, ...(kit.intro === "hook" ? { look } : {}) } : null}
               brand={brand}
               name={brand.name}
               heading={t("brand.introPreferred")}
               fields="style"
-              onChange={(next) => {
-                onSave({ intro: next?.style ?? null });
-                setOpen(null);
-              }}
+              // (it stays open: a kind is chosen, then its graphics)
+              onChange={(next) => onSave({ intro: next?.style ?? null, intro_look: next?.style === "hook" ? hookLook(next) : null })}
               onClose={() => setOpen(null)}
               className="right-0 top-full mt-2"
             />
           )}
         </span>
-        {isIntro(kit.intro) ? <IntroSketch id={kit.intro} frame={frame} brand={brand} title={brand.name} width={36} /> : <span className="flex-none w-9" />}
+        {isIntro(kit.intro) ? <IntroSketch id={kit.intro} look={look} frame={frame} brand={brand} title={brand.name} width={36} /> : <span className="flex-none w-9" />}
       </div>
 
       {/* Their own musics: added from a file, listened to by the AI, described in words they can change */}

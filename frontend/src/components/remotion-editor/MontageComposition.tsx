@@ -88,6 +88,7 @@ function Intro({ intro }: { intro: MontageIntro }) {
           // A hook's moment plays underneath, for as long as it lasts
           over={!!intro.hook}
           hold={intro.hook ? framesOf(intro.hook.duration, fps) : undefined}
+          look={intro.look}
           Img={Img}
         />
       </div>

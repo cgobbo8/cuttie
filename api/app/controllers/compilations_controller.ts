@@ -14,7 +14,9 @@ import {
   describeCompilations,
   dropUnusedPieces,
   isIntro,
+  isJingle,
   isTransition,
+  preferredIntro,
   isJobId,
   isPieceId,
   isTemplateKey,
@@ -101,8 +103,8 @@ export default class CompilationsController {
     if (!parsed) return ctx.response.badRequest({ error: 'invalid compilation' })
     if (parsed.sections.length === 0) parsed.sections = [{ id: newId(), title: '', query: '', items: [] }]
     // The intro the streamer prefers (their brand kit), unless this one comes with its own
-    const preferred = (await getBrandKit()).intro
-    if (!parsed.intro && preferred) parsed.intro = { style: preferred }
+    const preferred = preferredIntro(await getBrandKit())
+    if (!parsed.intro && preferred) parsed.intro = preferred
     const now = new Date().toISOString()
     const compilation: Compilation = { id: newId(), ...parsed, created_at: now, updated_at: now }
     job.compilations = [...existing, compilation]
@@ -352,7 +354,8 @@ export default class CompilationsController {
       .filter((c) => c.id !== deciding && c.intro?.by === 'ai' && c.sections.some((s) => s.items.length > 0))
       .sort((a, b) => Date.parse(b.updated_at) - Date.parse(a.updated_at))
       .slice(0, 6)
-      .map((c) => c.intro!.style)
+      // (what must not be repeated is the graphics: a hook's are its look)
+      .map((c) => (c.intro!.style === 'hook' ? (c.intro!.look ?? 'fuse') : c.intro!.style))
     try {
       const chosen = await chooseSound({
         video: {
@@ -368,6 +371,7 @@ export default class CompilationsController {
         musics,
         favourites: kit.musics,
         intro: kit.intro,
+        intro_look: kit.intro_look,
         asked: words(ctx.request.input('asked'), 800),
         language: ['fr', 'en', 'es'].includes(ctx.request.input('language')) ? ctx.request.input('language') : 'fr',
         recent_intros: recent,
@@ -376,6 +380,8 @@ export default class CompilationsController {
         kind: isMusicKind(chosen.kind) ? chosen.kind : null,
         music: musics.some((track) => track.key === chosen.music) ? chosen.music : null,
         intro: isIntro(chosen.intro) ? chosen.intro : null,
+        // A hook: the graphics that frame it
+        look: chosen.intro === 'hook' && isJingle(chosen.look) ? chosen.look : null,
         // The passage the video could open on: its place among `said`, from 1 (null: none named)
         teaser: Number.isInteger(chosen.teaser) && (chosen.teaser as number) >= 1 ? chosen.teaser : null,
         // How its passages follow each other ("cut": plainly; null: it did not say)

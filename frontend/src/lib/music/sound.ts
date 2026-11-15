@@ -3,7 +3,7 @@
  * montage plays them. Shared by the compilations and by the classic clips (Monter): the same
  * level curve, the same way of playing them in the page.
  */
-import { introSeconds, introSound, isIntro, type IntroChoice } from "../intro/intros";
+import { hookLook, introSeconds, introSound, isIntro, type IntroChoice } from "../intro/intros";
 import type { MontageIntro, MontageMusic, MontageProps, MontageSegment } from "../montage";
 import { trackOf } from "./library";
 import { musicCurve, musicUrl, passageLevel, PROGRAM_LUFS, speechShare, trackGain, type MusicChoice, type MusicKind, type MusicTrack } from "./mix";
@@ -57,7 +57,7 @@ export function montageMusic(segments: { duration: number }[], pieces: SoundPiec
  * The intro of a montage with all it draws (null: none, a style this app doesn't know, or a
  * "hook" without its moment). `hook`: the moment a "hook" intro plays, built like a piece.
  */
-export function montageIntro(choice: IntroChoice | null | undefined, drawn: Omit<MontageIntro, "style" | "sound" | "gain" | "title" | "hook"> & { title: string }, hook?: MontageSegment | null): MontageIntro | null {
+export function montageIntro(choice: IntroChoice | null | undefined, drawn: Omit<MontageIntro, "style" | "sound" | "gain" | "title" | "hook" | "look"> & { title: string }, hook?: MontageSegment | null): MontageIntro | null {
   if (!choice || !isIntro(choice.style) || (choice.style === "hook" && !hook)) return null;
   const sound = introSound(choice);
   // The follow button is the caller's to word (`drawn.follow`); an intro can do without it
@@ -68,7 +68,8 @@ export function montageIntro(choice: IntroChoice | null | undefined, drawn: Omit
     title: choice.title?.trim() || drawn.title,
     ...(follow && choice.follow !== false ? { follow } : {}),
     ...(sound ? { sound } : {}),
-    ...(choice.style === "hook" && hook ? { hook } : {}),
+    // (a hook: its moment, and the look that frames it)
+    ...(choice.style === "hook" && hook ? { hook, look: hookLook(choice) } : {}),
   };
 }
 

@@ -61,15 +61,18 @@ describe("the sound preferences of the brand kit", () => {
     expect(screen.getByRole("button", { name: "Intro préférée" }).textContent).toBe("Vitesse");
     fireEvent.click(screen.getByRole("button", { name: "Intro préférée" }));
     let intros = screen.getByRole("dialog", { name: "Intro préférée" });
-    expect(within(intros).getAllByRole("button")).toHaveLength(12);
+    // Nothing, a jingle or the hook, then twelve graphics
+    expect(within(intros).getAllByRole("button")).toHaveLength(3 + 12);
     expect(within(intros).queryByRole("textbox")).toBeNull();
-    // (a hook can be the preferred intro: a video opens on it once it has passages)
-    fireEvent.click(within(intros).getByRole("button", { name: "Hook" }));
-    expect(onSave).toHaveBeenLastCalledWith({ intro: "hook" });
-    fireEvent.click(screen.getByRole("button", { name: "Intro préférée" }));
+    fireEvent.click(within(intros).getByRole("button", { name: "Néon" }));
+    expect(onSave).toHaveBeenLastCalledWith({ intro: "neon", intro_look: null });
+    // The hook can be the preferred intro (a video opens on it once it has passages), framed by the look they like.
+    // The picker stays open: a kind is chosen, then its graphics
     intros = screen.getByRole("dialog", { name: "Intro préférée" });
+    fireEvent.click(within(intros).getByRole("button", { name: "Hook" }));
+    expect(onSave).toHaveBeenLastCalledWith({ intro: "hook", intro_look: "rush" });
     fireEvent.click(within(intros).getByRole("button", { name: "Aucune" }));
-    expect(onSave).toHaveBeenLastCalledWith({ intro: null });
+    expect(onSave).toHaveBeenLastCalledWith({ intro: null, intro_look: null });
   });
 
   it("lists the streamer's own musics, lets them correct what each is, remove one, and add another", async () => {

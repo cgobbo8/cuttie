@@ -401,6 +401,8 @@ export interface SoundChoice {
   teaser?: number | null
   /** How its passages follow each other: a ready-made transition, or "cut" */
   transition?: string | null
+  /** When the intro is the hook: the look that frames it, by the name of a jingle */
+  look?: string | null
   why: string
   cost: number
 }
@@ -412,6 +414,8 @@ export async function chooseSound(body: {
   /** The streamer's favourite track for a kind of video, and the intro they prefer */
   favourites: Record<string, string>
   intro: string | null
+  /** When that intro is the hook: the graphics they like it framed with */
+  intro_look?: string | null
   asked: string
   language: string
   /** The intros the AI gave the streamer's last videos, the newest first: the choice stays away from them */

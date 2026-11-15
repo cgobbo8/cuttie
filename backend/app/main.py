@@ -218,6 +218,8 @@ class SoundRequest(BaseModel):
     language: str = "fr"
     # The intros the AI gave their last videos, the newest first: the choice stays away from them
     recent_intros: list[str] = []
+    # When the intro they prefer is the hook: the graphics they like it framed with
+    intro_look: str | None = None
 
 
 class MusicRequest(BaseModel):
@@ -610,7 +612,7 @@ def video_sound(req: SoundRequest) -> dict:
 
     try:
         return looks.choose_sound(
-            req.video, [m.model_dump() for m in req.musics], req.favourites, req.intro, req.asked[:800], req.language, recent_intros=req.recent_intros[:12]
+            req.video, [m.model_dump() for m in req.musics], req.favourites, req.intro, req.asked[:800], req.language, recent_intros=req.recent_intros[:12], preferred_look=req.intro_look
         )
     except Exception as e:
         raise _ai_errors(e) from e

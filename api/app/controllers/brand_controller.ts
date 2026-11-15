@@ -2,7 +2,7 @@ import type { HttpContext } from '@adonisjs/core/http'
 import path from 'node:path'
 import Job from '#models/job'
 import { getBrandKit, parseCustomTemplates, parseFacecamRect, parseFavourites, saveBrandKit, TEMPLATE_BASES, type BrandKit } from '#services/brand_kit'
-import { isIntro } from '#services/compilations'
+import { isIntro, isJingle } from '#services/compilations'
 import { getClipDimensions } from '#services/edit_env_resolver'
 import { getPresignedUrl, headObject, listObjects } from '#services/storage'
 import { fetchChannel, fetchStoryboard, type TwitchChannel, type TwitchVod } from '#services/twitch'
@@ -143,6 +143,9 @@ export default class BrandController {
     if (body.intro !== undefined) {
       if (body.intro !== null && !isIntro(body.intro)) return response.badRequest({ error: 'Intro inconnue' })
       patch.intro = body.intro
+      // A hook is framed by a look (one of the jingles' names); any other intro has none
+      if (body.intro_look !== undefined && body.intro_look !== null && !isJingle(body.intro_look)) return response.badRequest({ error: 'Intro inconnue' })
+      patch.intro_look = body.intro === 'hook' ? (body.intro_look ?? null) : null
     }
     if (body.subtitles !== undefined) {
       const { style } = body.subtitles ?? {}

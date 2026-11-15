@@ -216,8 +216,11 @@ test.group('Compilations', (group) => {
     assert.deepEqual((await save({ style: 'neon', sound: 'none', follow: false })).intro, { style: 'neon', sound: 'none', follow: false })
     // The follow button is there unless said otherwise: saying it is there keeps nothing
     assert.deepEqual((await save({ style: 'neon', follow: true })).intro, { style: 'neon' })
-    // A sound nobody knows: the style's own will play. A style that is gone (the sticker intro): the one that stands for it
-    assert.deepEqual((await save({ style: 'sticker', sound: 'kazoo' })).intro, { style: 'bands' })
+    // A sound nobody knows: the style's own will play. A look is a hook's: a jingle keeps none
+    assert.deepEqual((await save({ style: 'sticker', sound: 'kazoo', look: 'neon' })).intro, { style: 'sticker' })
+    // The twelfth jingle, and its own sound
+    assert.deepEqual((await save({ style: 'fuse', sound: 'fizz' })).intro, { style: 'fuse', sound: 'fizz' })
+    await save({ style: 'sticker' })
     // The card says how long the video is with it: 4 s of passages and 1.8 s of intro
     const lives = ((await client.get('/api/compilations').loginAs(user)).body() as any).lives
     assert.equal(lives[0].compilations[0].length, 5.8)
@@ -240,6 +243,10 @@ test.group('Compilations', (group) => {
     assert.deepEqual(auto.intro, { style: 'hook', sound: 'boom', hook: { item: 'bbbbbbbbbb', start: 207, end: 212, auto: true } })
     assert.deepEqual(auto.sections[0].items.map((i: any) => i.opening), [undefined, true])
     assert.deepEqual((await save({ style: 'hook', hook: { item: 'bbbbbbbbbb', start: 203, end: 206.5 } })).intro, { style: 'hook', hook: { item: 'bbbbbbbbbb', start: 203, end: 206.5 } })
+    // The look that frames it: one of the jingles' names (the hook itself, or a name nobody knows, is no look)
+    assert.deepEqual((await save({ style: 'hook', look: 'neon' })).intro, { style: 'hook', look: 'neon' })
+    for (const look of ['hook', 'wobble', 7]) assert.deepEqual((await save({ style: 'hook', look })).intro, { style: 'hook' })
+    await save({ style: 'hook', hook: { item: 'bbbbbbbbbb', start: 203, end: 206.5 } })
     // The card counts it: 16 s of passages and the 3.5 s the hook plays first
     const length = async () => ((await client.get('/api/compilations').loginAs(user)).body() as any).lives[0].compilations[0].length
     assert.equal(await length(), 19.5)
@@ -641,6 +648,11 @@ test.group('Compilations', (group) => {
       ;(await client.post(url).loginAs(user).json({ pieces, overlays: [], intro: bad })).assertStatus(400)
     }
     ;(await client.post(url).loginAs(user).json({ pieces, overlays: [], intro: hook })).assertStatus(404)
+    // ...framed by a look this server draws: a jingle's name, and only a hook has one
+    ;(await client.post(url).loginAs(user).json({ pieces, overlays: [], intro: { ...hook, look: 'glitch' } })).assertStatus(404)
+    for (const bad of [{ ...hook, look: 'wobble' }, { ...hook, look: 'hook' }, { ...intro, look: 'glitch' }]) {
+      ;(await client.post(url).loginAs(user).json({ pieces, overlays: [], intro: bad })).assertStatus(400)
+    }
     // Its clip in a live that isn't the user's: as for any piece
     ;(await client.post(url).loginAs(user).json({ pieces, overlays: [], intro: { ...hook, hook: { ...hook.hook, job: '11111111-2222-3333-4444-555555555555' } } })).assertStatus(404)
 

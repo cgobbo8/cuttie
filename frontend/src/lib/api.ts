@@ -237,6 +237,8 @@ export interface BrandKit {
   musics: Record<string, string>;
   /** The preferred intro (null: none): new compilations open with it, the AI takes it when it gives a video an intro */
   intro: string | null;
+  /** When that intro is the hook: the look they like it framed with, by the name of a jingle (null: the app's default one) */
+  intro_look?: string | null;
 }
 
 export type BrandKitPatch = Partial<Omit<BrandKit, "colors" | "widget">> & {
@@ -1251,6 +1253,8 @@ export interface SoundChoice {
   teaser?: number | null;
   /** How its passages follow each other: a ready-made transition, or "cut" (null: it did not say) */
   transition?: string | null;
+  /** When the intro is the hook: the look that frames it, by the name of a jingle */
+  look?: string | null;
   why: string;
   cost: number;
 }
@@ -1604,7 +1608,7 @@ export interface Compilation {
   /** The ready-made transition between its passages (absent: plain cuts) */
   transition?: string;
   /** The jingle it opens with (absent: none): its style, its own title (else the video's name), its sound (else its style's; "none": silent) */
-  intro?: { style: string; title?: string; sound?: string; follow?: boolean; by?: "ai"; hook?: HookChoice };
+  intro?: { style: string; title?: string; sound?: string; follow?: boolean; by?: "ai"; hook?: HookChoice; look?: string };
   /** The music it plays in the background (absent: none): a track of the catalogue, and how present it is (1: as Cuttie sets it) */
   music?: { track: string; volume?: number };
   /** Described to the AI: what was first asked for, then each change asked and what the AI answered */

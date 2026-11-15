@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Check, Play, Sparkles, Volume2, VolumeX } from "lucide-react";
 import { hookSpan } from "../../lib/compilation";
 import IntroCard, { INTRO_W, type IntroColors } from "../../lib/intro/IntroCard";
-import { defaultIntroSound, HOOK_MAX, HOOK_MIN, INTRO_IDS, INTRO_SOUND_IDS, introSpan, isIntro, isIntroSound, NO_SOUND, type IntroChoice } from "../../lib/intro/intros";
+import { DEFAULT_HOOK_LOOK, defaultIntroSound, HOOK_MAX, HOOK_MIN, hookLook, INTRO_SOUND_IDS, introSpan, isIntro, isIntroSound, isJingle, JINGLE_IDS, NO_SOUND, type IntroChoice, type JingleId } from "../../lib/intro/intros";
 import { snapToWords } from "../../lib/montage";
 import { introSoundUrl } from "../../lib/music/sound";
 
@@ -42,8 +42,8 @@ export function useIntroLoop(): number {
   return frame;
 }
 
-/** An intro drawn small, as the video plays it, over a picture that stands for the video */
-export function IntroSketch({ id, frame, brand, title, width = 60, follow = null }: { id: string; frame: number; brand: IntroBrand; title: string; width?: number; follow?: [string, string] | null }) {
+/** An intro drawn small, as the video plays it, over a picture that stands for the video (`look`: the one that frames a hook) */
+export function IntroSketch({ id, look, frame, brand, title, width = 60, follow = null }: { id: string; look?: string | null; frame: number; brand: IntroBrand; title: string; width?: number; follow?: [string, string] | null }) {
   const span = isIntro(id) ? introSpan(id, FPS) : null;
   const hold = id === "hook" ? HOOK_SKETCH : (span?.hold ?? 0);
   return (
@@ -51,7 +51,7 @@ export function IntroSketch({ id, frame, brand, title, width = 60, follow = null
       <div className="sketch-picture sketch-after" />
       {isIntro(id) && span && frame < hold + span.out && (
         <div className="absolute left-0 top-0" style={{ width: INTRO_W, transform: `scale(${width / INTRO_W})`, transformOrigin: "0 0" }}>
-          <IntroCard id={id} frame={frame} fps={FPS} title={title} name={brand.name} logo={brand.logo} colors={brand.colors} font={brand.font} follow={follow} hold={id === "hook" ? HOOK_SKETCH : undefined} />
+          <IntroCard id={id} frame={frame} fps={FPS} title={title} name={brand.name} logo={brand.logo} colors={brand.colors} font={brand.font} follow={follow} hold={id === "hook" ? HOOK_SKETCH : undefined} look={look ?? undefined} />
         </div>
       )}
     </div>
@@ -166,7 +166,15 @@ interface Props {
   hook?: HookMenu;
 }
 
-/** The ready-made intros to choose from, each one playing in small with the channel's own logo and colours */
+/** What a video opens with: nothing, a jingle, or its hook */
+type Mode = "none" | "jingle" | "hook";
+
+/**
+ * What a video opens with, chosen in two steps. First the kind: nothing, a jingle (a ready-made
+ * opening over the whole screen), or the hook (the best moment of the video played first). Then
+ * its graphics: twelve jingles, or the twelve looks that can frame a hook, which have the names
+ * of the jingles. Each one plays in small with the channel's own logo and colours.
+ */
 export default function IntroPicker({ value, brand, name, onChange, onClose, heading, fields = "all", className = "", hook }: Props) {
   const { t, i18n } = useTranslation();
   const box = useRef<HTMLDivElement>(null);
@@ -188,6 +196,14 @@ export default function IntroPicker({ value, brand, name, onChange, onClose, hea
   const shown = title.trim() || name;
   const follow: [string, string] = [t("compilation.intro.followLabel"), t("compilation.intro.followDone")];
   const style = value && isIntro(value.style) ? value.style : null;
+  const mode: Mode = style === "hook" ? "hook" : style ? "jingle" : "none";
+  // The jingle chosen, or the look of the hook: the same twelve names
+  const graphic = style === "hook" ? hookLook(value) : isJingle(style) ? style : null;
+  // The one chosen last: what going from "none" to a kind, or from one kind to the other, starts from
+  const last = useRef<JingleId | null>(graphic);
+  if (graphic) last.current = graphic;
+  // A hook needs a video made of several passages: it is offered there, and as the channel's preferred intro
+  const modes: Mode[] = hook || fields === "style" ? ["none", "jingle", "hook"] : ["none", "jingle"];
   // Opened from a row near an edge of the window, it is pushed back inside (under the top bar, above the bottom)
   useLayoutEffect(() => {
     const el = box.current;
@@ -197,7 +213,7 @@ export default function IntroPicker({ value, brand, name, onChange, onClose, hea
     const [min, max] = [76, window.innerHeight - 12];
     const shift = top < min ? min - top : bottom > max ? Math.max(min - top, max - bottom) : 0;
     if (shift) el.style.transform = `translateY(${Math.round(shift)}px)`;
-  }, [style, fields, hook?.passages.length]);
+  }, [mode, fields, hook?.passages.length]);
   /** Heard as soon as it is chosen */
   const listen = (id: string) => {
     try {
@@ -209,11 +225,28 @@ export default function IntroPicker({ value, brand, name, onChange, onClose, hea
       // Nothing to play it with: the choice is made all the same
     }
   };
-  const pickStyle = (id: string | null) => {
-    if (!id) return onChange(null);
-    onChange({ ...(value ?? {}), style: id });
-    const sound = value?.sound === NO_SOUND ? null : isIntroSound(value?.sound) ? value.sound : isIntro(id) ? defaultIntroSound(id) : null;
+  /** A jingle: what the video had set on its intro stays (its title, its sound, the follow button), what was the hook's goes */
+  const pickJingle = (id: JingleId) => {
+    const { hook: _moment, look: _look, ...rest } = value ?? { style: id };
+    onChange({ ...rest, style: id });
+    const sound = rest.sound === NO_SOUND ? null : isIntroSound(rest.sound) ? rest.sound : defaultIntroSound(id);
     if (sound) listen(sound);
+  };
+  /** The hook, framed by this look: it plays no sound of its own */
+  const pickLook = (id: JingleId) => {
+    const { sound: _sound, ...rest } = value ?? { style: "hook" };
+    playing.current?.pause();
+    onChange({ ...rest, style: "hook", look: id });
+  };
+  const pickMode = (next: Mode) => {
+    if (next === mode) return;
+    if (next === "none") {
+      playing.current?.pause();
+      return onChange(null);
+    }
+    // The same graphics on the other side: a hook framed like the jingle it replaces, and the other way round
+    if (next === "jingle") pickJingle(last.current ?? JINGLE_IDS[0]);
+    else pickLook(last.current ?? DEFAULT_HOOK_LOOK);
   };
   const pickSound = (sound: string | null) => {
     if (!value) return;
@@ -230,29 +263,6 @@ export default function IntroPicker({ value, brand, name, onChange, onClose, hea
     const { title: _before, ...rest } = value;
     onChange(next ? { ...rest, title: next } : rest);
   };
-
-  const tile = (id: string | null, label: string) => {
-    const chosen = id === style;
-    return (
-      <button
-        key={id ?? "none"}
-        type="button"
-        aria-pressed={chosen}
-        onClick={() => pickStyle(id)}
-        className={`relative flex flex-col items-center gap-1.5 pt-2 pb-1.5 rounded-[10px] border transition-colors ${chosen ? "border-accent bg-accent-soft" : "border-transparent hover:bg-white/[0.07]"}`}
-      >
-        <IntroSketch id={id ?? ""} frame={frame} brand={brand} title={shown} follow={value?.follow === false ? null : follow} />
-        <span className={`text-[11.5px] leading-none ${chosen ? "text-white font-[550]" : "text-ink-2"}`}>{label}</span>
-        {chosen && (
-          <span className="absolute top-1 right-1 w-4 h-4 grid place-items-center rounded-full bg-accent text-ground">
-            <Check className="w-2.5 h-2.5" strokeWidth={3.2} />
-          </span>
-        )}
-      </button>
-    );
-  };
-  // The styles offered here: a hook needs a video made of several passages (a clip alone has none to tease)
-  const styles = INTRO_IDS.filter((id) => id !== "hook" || !!hook || fields === "style");
   const played = hook?.moment ? hook.passages.find((p) => p.id === hook.moment!.item) : undefined;
   /** The hook plays this passage (null: the app chooses), this part of it */
   const pickMoment = (passage: HookMenu["passages"][number] | null, span?: [number, number]) => {
@@ -261,6 +271,29 @@ export default function IntroPicker({ value, brand, name, onChange, onClose, hea
     if (!passage) return onChange(rest);
     const [start, end] = span ?? hookSpan(passage);
     onChange({ ...rest, hook: { item: passage.id, start, end } });
+  };
+
+  // The graphics shown: the looks of the hook when it is chosen, else the jingles (a click on one chooses a jingle)
+  const looks = mode === "hook";
+  const tile = (id: JingleId) => {
+    const chosen = id === graphic;
+    return (
+      <button
+        key={id}
+        type="button"
+        aria-pressed={chosen}
+        onClick={() => (looks ? pickLook(id) : pickJingle(id))}
+        className={`relative flex flex-col items-center gap-1.5 pt-2 pb-1.5 rounded-[10px] border transition-colors ${chosen ? "border-accent bg-accent-soft" : "border-transparent hover:bg-white/[0.07]"}`}
+      >
+        <IntroSketch id={looks ? "hook" : id} look={id} frame={frame} brand={brand} title={shown} follow={value?.follow === false ? null : follow} />
+        <span className={`text-[11.5px] leading-none ${chosen ? "text-white font-[550]" : "text-ink-2"}`}>{t(`compilation.intro.style.${id}`)}</span>
+        {chosen && (
+          <span className="absolute top-1 right-1 w-4 h-4 grid place-items-center rounded-full bg-accent text-ground">
+            <Check className="w-2.5 h-2.5" strokeWidth={3.2} />
+          </span>
+        )}
+      </button>
+    );
   };
   const chip = (key: string, label: string, chosen: boolean, onClick: () => void, icon = true) => (
     <button
@@ -282,19 +315,26 @@ export default function IntroPicker({ value, brand, name, onChange, onClose, hea
       aria-label={heading ?? t("compilation.intro.pick")}
       data-nodrag
       onClick={(e) => e.stopPropagation()}
-      // Three rows of four styles; what is set on the chosen one sits beside them, not under (the picker stays in the window)
+      // Three rows of four graphics; what is set on the chosen one sits beside them, not under (the picker stays in the window)
       className={`absolute z-40 max-w-[calc(100vw-24px)] p-3 rounded-[14px] bg-[#171a18]/[0.98] border border-white/[0.12] shadow-[0_24px_60px_-18px_rgba(0,0,0,0.9)] ${fields === "style" ? "w-[304px]" : "w-[556px]"} ${className}`}
     >
-      <p className="px-0.5 pb-2 text-[12px] font-[550] text-ink-2">{heading ?? t("compilation.intro.pick")}</p>
-      <div className="flex flex-wrap gap-x-4 gap-y-3">
-        <div className="grid grid-cols-4 gap-1 w-[280px] flex-none content-start">
-          {tile(null, t("compilation.intro.none"))}
-          {styles.map((id) => tile(id, t(`compilation.intro.style.${id}`)))}
+      <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5">
+        <p className="px-0.5 text-[12px] font-[550] text-ink-2">{heading ?? t("compilation.intro.pick")}</p>
+        {/* First what the video opens with; the graphics below are the ones of that kind */}
+        <div role="group" aria-label={t("compilation.intro.kind")} className="seg">
+          {modes.map((kind) => (
+            <button key={kind} type="button" aria-pressed={mode === kind} onClick={() => pickMode(kind)}>
+              {t(`compilation.intro.mode.${kind}`)}
+            </button>
+          ))}
         </div>
-        {!style && fields !== "style" && <p className="flex-1 min-w-[200px] px-0.5 pt-2 text-[12px] leading-relaxed text-ink-3">{t("compilation.intro.noneHint")}</p>}
+      </div>
+      <div className="flex flex-wrap gap-x-4 gap-y-3">
+        <div className={`grid grid-cols-4 gap-1 w-[280px] flex-none content-start transition-opacity ${mode === "none" ? "opacity-55" : ""}`}>{JINGLE_IDS.map(tile)}</div>
+        {mode === "none" && fields !== "style" && <p className="flex-1 min-w-[200px] px-0.5 pt-2 text-[12px] leading-relaxed text-ink-3">{t("compilation.intro.noneHint")}</p>}
         {style && fields !== "style" && (
           <div className="flex-1 min-w-[200px]">
-            {style === "hook" && <p className="px-0.5 pb-2.5 text-[12px] leading-relaxed text-ink-3">{t("compilation.intro.hook.hint")}</p>}
+            {mode === "hook" && <p className="px-0.5 pb-2.5 text-[12px] leading-relaxed text-ink-3">{t("compilation.intro.hook.hint")}</p>}
             <label className={fields === "all" ? "block" : "hidden"}>
               <span className="block px-0.5 pb-1 text-[11.5px] text-ink-3">{t("compilation.intro.title")}</span>
               <input
@@ -308,7 +348,7 @@ export default function IntroPicker({ value, brand, name, onChange, onClose, hea
               />
             </label>
             {/* The moment a hook plays: one of the video's passages, and the part of it that is kept */}
-            {style === "hook" && hook && (
+            {mode === "hook" && hook && (
               <div className="mt-3">
                 <div className="flex items-center justify-between px-0.5 pb-1.5">
                   <span className="text-[11.5px] text-ink-3">{t("compilation.intro.hook.label")}</span>

@@ -7,7 +7,7 @@ import db from '@adonisjs/lucid/services/db'
 import { introSoundFile, renderClip, renderMontage, type MontageIntro, type MontagePiece, type PlacedLayer } from '#services/remotion_renderer'
 import { uploadFile, getPresignedDownloadUrl, deleteObject, storagePath } from '#services/storage'
 import { clipDir } from '#services/data_paths'
-import { introFade, introHoldFrames, isIntro, isIntroSound, isTransition } from '#services/compilations'
+import { introFade, introHoldFrames, isIntro, isIntroSound, isJingle, isTransition } from '#services/compilations'
 import { enqueueRender } from '#services/render_queue'
 import { levelSound, type Music } from '#services/sound_level'
 import { findMusic, musicFile, parseCurve, trackGain, type MusicCurve } from '#services/musics'
@@ -118,6 +118,8 @@ function parseMontageIntro(raw: unknown): MontageIntro | null | undefined {
   // A "hook" plays a moment of the video first: a piece like the others, without which there is no such intro
   const hook = intro.style === 'hook' ? parsePieces([intro.hook])?.[0] : undefined
   if (intro.style === 'hook' && !hook) return null
+  // ...framed by a look this server can draw (none said: the default one)
+  if (intro.look !== undefined && !(intro.style === 'hook' && isJingle(intro.look))) return null
   return {
     style: intro.style,
     title: words(intro.title, 120),
@@ -128,6 +130,7 @@ function parseMontageIntro(raw: unknown): MontageIntro | null | undefined {
     ...(follow ? { follow: follow as [string, string] } : {}),
     ...(intro.sound ? { sound: intro.sound } : {}),
     ...(hook ? { hook: { clipFilename: hook.clipFilename, from: hook.from, duration: hook.duration, layers: hook.layers, ...(hook.jobId ? { jobId: hook.jobId } : {}) } } : {}),
+    ...(intro.look ? { look: intro.look } : {}),
   }
 }
 

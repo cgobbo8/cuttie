@@ -1686,11 +1686,13 @@
         "glitch": "Glitch",
         "neon": "Neón",
         "rush": "Velocidad",
+        "sticker": "Stickers",
         "split": "Duelo",
         "arcade": "Arcade",
         "news": "Última hora",
         "shatter": "Añicos",
-        "countdown": "Cuenta atrás"
+        "countdown": "Cuenta atrás",
+        "fuse": "Mecha"
       },
       "sounds": {
         "boom": "Impacto",
@@ -1703,13 +1705,14 @@
         "coin": "Moneda",
         "sting": "Sintonía",
         "glass": "Cristal roto",
-        "beep": "Pitidos"
+        "beep": "Pitidos",
+        "fizz": "Mecha y explosión"
       },
       "chosen": "Intro elegida por la IA: {{name}}",
       "followLabel": "Seguir",
       "followDone": "Siguiendo",
       "followToggle": "Botón «Seguir» del canal",
-      "noneHint": "Sin intro, el vídeo empieza directamente. Elige una para ajustar el sonido y el botón de seguir.",
+      "noneHint": "Sin intro, el vídeo empieza directamente. «Intro clásica»: un jingle con tu logo y el título. «Hook»: el mejor momento del vídeo se reproduce primero.",
       "hook": {
         "hint": "El mejor momento del vídeo se reproduce primero, bajo el título, y luego empieza el vídeo. Vuelve a salir en el lugar que ocupa.",
         "label": "El momento del hook",
@@ -1723,7 +1726,13 @@
         "until": "Fin del hook",
         "play": "Ver el hook"
       },
-      "value": "{{name}} · +{{seconds}} s"
+      "value": "{{name}} · +{{seconds}} s",
+      "kind": "Con qué empieza el vídeo",
+      "mode": {
+        "none": "Ninguna",
+        "jingle": "Intro clásica",
+        "hook": "Hook"
+      }
     },
     "music": {
       "label": "Música",

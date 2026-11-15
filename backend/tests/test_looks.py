@@ -199,7 +199,7 @@ def test_the_sound_of_a_video_is_chosen_from_what_it_is_and_what_the_streamer_li
     })
     chosen = looks.choose_sound(VIDEO, MUSICS, favourites={"skill": "phonk", "epic": "phonk", "chill": "kazoo"}, preferred_intro="rush", asked="une musique marrante", language="fr", client=model)
     # The best of the intros that fit (the preferred one is not among them: it is not forced), with why this one
-    assert chosen == {"kind": "funny", "music": "chiptune", "intro": "bands", "why": "Une vidéo drôle : Pixel Chiptune. L'intro Bandes pour le ton léger.", "teaser": None, "transition": None, "cost": 0.002}
+    assert chosen == {"kind": "funny", "music": "chiptune", "intro": "bands", "why": "Une vidéo drôle : Pixel Chiptune. L'intro Bandes pour le ton léger.", "teaser": None, "transition": None, "look": None, "cost": 0.002}
 
     call = model.seen[0]
     assert call["model"] == live_agent.SEARCH_MODEL
@@ -211,14 +211,17 @@ def test_the_sound_of_a_video_is_chosen_from_what_it_is_and_what_the_streamer_li
     # Every track with what it is for; the favourite is marked for its kind (a kind or a track nobody knows is not)
     assert "[phonk] Drift Phonk (for: skill, hype). Drift phonk, heavy bass. For kills and action. ★ The streamer's favourite for: skill." in shown
     assert "[lofi] Lofi Upbeat (for: chill). Upbeat lofi. For conversations.\n" in shown and "kazoo" not in shown and "epic" not in shown
-    # No music and no intro are answers too, and the intro the streamer prefers is said
-    assert "[none] No music." in shown and "[none] No intro." in shown
-    assert "The streamer's preferred intro is [rush]" in shown
-    for intro in looks.INTROS:
-        assert f"[{intro}]" in shown
+    # No music is an answer too. The video opens in one of three ways, each said: straight on, on a jingle, on its hook
+    assert "[none] No music." in shown
+    assert "[none] Straight on its first passage." in shown and "[jingle] A classic intro" in shown and "[hook] No jingle: the teaser of the video (see 4) plays first" in shown
+    assert "Choose the hook when the video leads up to something worth teasing" in shown and '"opening": "<none | jingle | hook>"' in shown
+    # ...then its graphics, the same twelve for a jingle or a hook; the ones the streamer prefers are said
+    assert "The streamer's preferred graphics are [rush]" in shown and "likes their videos to open on a hook" not in shown
+    for graphics in looks.INTROS:
+        assert f"[{graphics}]" in shown
     assert "in French" in shown
-    # It ranks the intros that fit: no intro is the one of a kind of video
-    assert "Give the 3 that fit this video best" in shown and "a kind of video has no intro of its own" in shown
+    # It ranks the graphics that fit: none belongs to a kind of video
+    assert "Give the 3 that fit this video best" in shown and "a kind of video has no graphics of its own" in shown
     # (when one intro alone was said to be "for funny videos", every funny video opened on it)
     light = ("funny", "humour", "jokes", "silly", "fails")
     assert sum(any(word in what for word in light) for what in looks.INTROS.values()) >= 5
@@ -272,17 +275,33 @@ def test_the_ai_does_not_open_every_video_the_same_way_and_never_leaves_what_fit
     assert looks.choose_sound(VIDEO, MUSICS, client=Eyes({"kind": "funny", "music": "none", "intro": "arcade", "why": "Arcade."}))["intro"] == "arcade"
 
 
-def test_the_ai_names_the_passage_a_video_could_open_on_and_knows_the_hook_intro():
+def test_the_ai_opens_a_video_on_a_jingle_or_on_its_hook_and_names_the_passage_to_tease():
     said = [f"phrase {n}" for n in range(1, 41)]
-    answer = {"kind": "funny", "music": "none", "why": "Une vidéo drôle.", "intros": [{"key": "hook", "why": "Hook : la chute donne envie de voir la suite."}], "teaser": 7}
+    graphics = [{"key": "neon", "why": "Néon : la chute donne envie de voir la suite."}, {"key": "glitch", "why": "Glitch."}]
+    answer = {"kind": "funny", "music": "none", "why": "Une vidéo drôle.", "opening": "hook", "graphics": graphics, "teaser": 7}
     model = Eyes(answer)
     chosen = looks.choose_sound({**VIDEO, "said": said, "lengths": [4.2, 16.24] + [5] * 38}, MUSICS, client=model)
-    # The hook is an intro like the others: it can be the one that fits best; the passage it would play is told by its number
-    assert (chosen["intro"], chosen["teaser"]) == ("hook", 7)
-    assert chosen["why"] == "Une vidéo drôle. Hook : la chute donne envie de voir la suite."
+    # The hook: the video opens on its teaser, framed by the graphics that fit best; the passage it plays is told by its number
+    assert (chosen["intro"], chosen["look"], chosen["teaser"]) == ("hook", "neon", 7)
+    assert chosen["why"] == "Une vidéo drôle. Néon : la chute donne envie de voir la suite."
+    # A jingle: the same graphics dress it, and there is no look to speak of
+    jingle = looks.choose_sound(VIDEO, MUSICS, client=Eyes({**answer, "opening": "jingle"}))
+    assert (jingle["intro"], jingle["look"]) == ("neon", None)
+    # None: no graphics either, whatever it ranked; said in its own words
+    none = looks.choose_sound(VIDEO, MUSICS, client=Eyes({**answer, "opening": "none", "no_intro": "Un seul moment."}))
+    assert (none["intro"], none["look"], none["why"]) == (None, None, "Une vidéo drôle. Un seul moment.")
+    # A hook with no graphics given: the hook all the same, framed by the app's default look
+    bare = looks.choose_sound(VIDEO, MUSICS, client=Eyes({**answer, "graphics": []}))
+    assert (bare["intro"], bare["look"]) == ("hook", None)
+    # An answer in the shape asked before (intros ranked, no kind of opening): a jingle
+    old = looks.choose_sound(VIDEO, MUSICS, client=Eyes({"kind": "funny", "music": "none", "intros": [{"key": "arcade", "why": "Arcade."}]}))
+    assert (old["intro"], old["look"]) == ("arcade", None)
+    # The graphics the AI gave the streamer's last videos are stayed away from, whether they dressed a jingle or framed a hook
+    varied = looks.choose_sound(VIDEO, MUSICS, client=Eyes(answer), recent_intros=["neon"])
+    assert (varied["intro"], varied["look"]) == ("hook", "glitch")
+
     shown = model.seen[0]["messages"][0]["content"]
-    # It was told what a hook is (no jingle: the teaser plays first) and how to name the teaser, among the passages it is shown
-    assert "[hook] « Hook ». Not a jingle: the teaser of the video (see 4) plays first" in shown
+    # How to name the teaser, among the passages it is shown
     assert "4. TEASER." in shown and "never passage 1" in shown and '"teaser": <number of the passage, or 0>' in shown
     # Thirty passages at most, numbered in the order they play
     assert "30. (5 s) « phrase 30 »" in shown and "phrase 31" not in shown
@@ -296,8 +315,16 @@ def test_the_ai_names_the_passage_a_video_could_open_on_and_knows_the_hook_intro
     assert chosen["transition"] is None
     for said_so, kept in (("pop", "pop"), ("cut", "cut"), ("wobble", None), (3, None)):
         assert looks.choose_sound(VIDEO, MUSICS, client=Eyes({**answer, "transition": said_so}))["transition"] == kept
-    # The intros it knows are the app's: the hook first, the sticker intro gone
-    assert list(looks.INTROS)[0] == "hook" and "sticker" not in looks.INTROS and len(looks.INTROS) == 11
+
+    # The streamer prefers their videos to open on a hook, framed by graphics of theirs: said both, and theirs taken when they fit
+    liked = Eyes(answer)
+    theirs = looks.choose_sound(VIDEO, MUSICS, client=liked, preferred_intro="hook", preferred_look="glitch", recent_intros=["glitch"])
+    told = liked.seen[0]["messages"][0]["content"]
+    assert "likes their videos to open on a hook" in told and "The streamer's preferred graphics are [glitch]" in told
+    assert (theirs["intro"], theirs["look"]) == ("hook", "glitch")
+    # The graphics it knows are the app's twelve: the sticker ones are back, the fuse is new; the hook is no graphics
+    assert list(looks.INTROS) == ["slam", "bands", "glitch", "neon", "rush", "sticker", "split", "arcade", "news", "shatter", "countdown", "fuse"]
+    assert "hook" not in looks.INTROS and all(set(names) == {"hook", *looks.INTROS} for names in looks.INTRO_NAMES.values())
 
 
 def test_no_music_and_no_intro_are_kept_as_such_and_a_wrong_answer_is_made_safe():
@@ -305,7 +332,7 @@ def test_no_music_and_no_intro_are_kept_as_such_and_a_wrong_answer_is_made_safe(
     assert (none["kind"], none["music"], none["intro"]) == ("chill", None, None)
     shown_nothing = Eyes({"kind": "epic", "music": "kazoo", "intro": "wobble"})
     wrong = looks.choose_sound({**VIDEO, "said": [], "parts": []}, MUSICS, client=shown_nothing)
-    assert wrong == {"kind": None, "music": None, "intro": None, "why": "", "teaser": None, "transition": None, "cost": 0.002}
+    assert wrong == {"kind": None, "music": None, "intro": None, "why": "", "teaser": None, "transition": None, "look": None, "cost": 0.002}
     told = shown_nothing.seen[0]["messages"][0]["content"]
     # Nothing said in it, no parts, nothing asked, no preferred intro: said so, not left blank
     assert "one part, no titles" in told and "(nothing: mostly the game)" in told and "nothing about the sound" in told and "preferred intro" not in told

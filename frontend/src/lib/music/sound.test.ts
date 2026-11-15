@@ -67,7 +67,9 @@ describe("the sound of a video beyond its clips' own", () => {
     expect(montageIntro({ style: "hook" }, drawn, null)).toBeNull();
     // With it: the intro carries the moment, and no sound of its own
     const opened = montageIntro({ style: "hook", title: "Le tigre", sound: "boom" }, drawn, moment);
-    expect(opened).toEqual({ ...drawn, style: "hook", title: "Le tigre", hook: moment });
+    expect(opened).toEqual({ ...drawn, style: "hook", title: "Le tigre", hook: moment, look: "fuse" });
+    // ...framed by the look chosen for it
+    expect(montageIntro({ style: "hook", look: "neon" }, drawn, moment)?.look).toBe("neon");
     expect(introOf({ intro: opened! })).toBe(4.2);
     // A jingle ignores a moment
     expect(montageIntro({ style: "slam" }, drawn, moment)).toEqual({ ...drawn, style: "slam", sound: "boom" });

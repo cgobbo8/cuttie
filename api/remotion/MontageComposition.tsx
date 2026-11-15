@@ -37,6 +37,8 @@ export interface MontageIntro {
   gain?: number;
   /** The "hook" intro: the moment of the video it plays first, built like a piece */
   hook?: MontageSegment;
+  /** The "hook" intro: the look that frames its moment, by the name of a jingle */
+  look?: string;
 }
 
 export interface MontageCompositionProps {
@@ -143,6 +145,7 @@ const Intro: React.FC<{ intro: MontageIntro }> = ({ intro }) => {
           // A hook's moment plays underneath, for as long as it lasts
           over={!!intro.hook}
           hold={intro.hook ? framesOf(intro.hook.duration, fps) : undefined}
+          look={intro.look}
           Img={Img}
         />
       </div>

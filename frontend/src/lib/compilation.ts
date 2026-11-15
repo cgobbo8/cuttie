@@ -614,7 +614,7 @@ export function soundBrief(c: Pick<Compilation, "name" | "sections">, most = 30)
  * `opening`: the passage the AI named as the one the video can open on (what a "hook" intro plays
  * unless the streamer chose another); none named: the one it had named before stays.
  */
-export function applySound<T extends Pick<Compilation, "music" | "intro" | "sections">>(c: T, choice: { music: string | null; intro: string | null; opening?: string | null }): T {
+export function applySound<T extends Pick<Compilation, "music" | "intro" | "sections">>(c: T, choice: { music: string | null; intro: string | null; opening?: string | null; look?: string | null }): T {
   const { music, intro, ...kept } = c;
   // Never the first passage: it would play twice in a row
   const named = choice.opening && allItems(c).findIndex((item) => item.id === choice.opening) > 0 ? choice.opening : null;
@@ -637,6 +637,8 @@ export function applySound<T extends Pick<Compilation, "music" | "intro" | "sect
             ...(intro?.title ? { title: intro.title } : {}),
             ...(intro?.style === choice.intro && intro.sound ? { sound: intro.sound } : {}),
             ...(intro?.follow === false ? { follow: false } : {}),
+            // A hook: the look it chose for it; without one, the look the video's hook already had
+            ...(choice.intro === "hook" && (choice.look || (intro?.style === "hook" && intro.look)) ? { look: choice.look || intro!.look } : {}),
             style: choice.intro,
             by: "ai",
           },

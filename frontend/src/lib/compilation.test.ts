@@ -475,6 +475,11 @@ describe("what the AI is doing", () => {
     const bare: { name: string; sections: CompilationSection[]; music?: { track: string }; intro?: { style: string } } = { name: "x", sections: [] };
     expect(applySound(bare, { music: "phonk", intro: "neon" })).toEqual({ name: "x", sections: [], music: { track: "phonk" }, intro: { style: "neon", by: "ai" } });
 
+    // A hook comes with the look that frames it; chosen again without one, it keeps the look it had
+    expect(applySound(set, { music: null, intro: "hook", look: "neon" }).intro).toEqual({ style: "hook", title: "Le calme", look: "neon", by: "ai" });
+    expect(applySound({ ...set, intro: { style: "hook", look: "glitch" } }, { music: null, intro: "hook" }).intro).toEqual({ style: "hook", look: "glitch", by: "ai" });
+    expect(applySound({ ...set, intro: { style: "hook", look: "glitch" } }, { music: null, intro: "slam", look: "neon" }).intro).toEqual({ style: "slam", by: "ai" });
+
     // The passage it named as the one the video can open on says so, and only that one
     const named = applySound({ ...video, sections: [{ ...video.sections[0], items: [piece("a", "x"), { ...piece("b", "y"), opening: true }] }, video.sections[1]] }, { music: null, intro: "hook", opening: "c" });
     expect(allItems(named).map((item) => [item.id, !!item.opening])).toEqual([["a", false], ["b", false], ["c", true]]);

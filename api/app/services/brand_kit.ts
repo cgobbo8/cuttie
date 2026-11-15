@@ -5,7 +5,7 @@
  */
 
 import Job from '#models/job'
-import { introStyle } from '#services/compilations'
+import { isIntro, isJingle } from '#services/compilations'
 import { findMusic, MUSIC_KINDS } from '#services/musics'
 import { readSettings, writeSettings } from '#services/user_settings'
 
@@ -268,6 +268,8 @@ export interface BrandKit {
   musics: Record<string, string>
   /** The intro they prefer (null: none): new compilations open with it, and the AI takes it when it gives a video an intro */
   intro: string | null
+  /** When that intro is the hook: the look they like it framed with, by the name of a jingle (null: the app's default one) */
+  intro_look: string | null
 }
 
 export const DEFAULT_BRAND_KIT: BrandKit = {
@@ -283,6 +285,7 @@ export const DEFAULT_BRAND_KIT: BrandKit = {
   default_template: null,
   musics: {},
   intro: null,
+  intro_look: null,
 }
 
 /** Merge stored data over the defaults, migrating the v1 shape ({ primary, secondary }) */
@@ -302,8 +305,8 @@ function normalize(stored: Record<string, any>): BrandKit {
     widget: { ...DEFAULT_BRAND_KIT.widget, ...(stored.widget ?? {}) },
     subtitles: { ...DEFAULT_BRAND_KIT.subtitles, ...(stored.subtitles ?? {}) },
     musics: parseFavourites(stored.musics),
-    // (a style that is gone: the one that stands for it now)
-    intro: introStyle(stored.intro),
+    intro: isIntro(stored.intro) ? stored.intro : null,
+    intro_look: stored.intro === 'hook' && isJingle(stored.intro_look) ? stored.intro_look : null,
   }
 }
 

@@ -318,13 +318,38 @@ def beep() -> np.ndarray:
     return room(track, 0.5, 0.16)
 
 
-SOUNDS = {"boom": boom, "swish": swish, "zap": zap, "shine": shine, "rush": rush, "drum": drum, "clash": clash, "coin": coin, "sting": sting, "glass": glass, "beep": beep}
+def fizz() -> np.ndarray:
+    """A fuse burns its way up to the logo, which blows up (0.87 s): a hiss that crackles and climbs, then a deep blast and what falls back."""
+    track = np.zeros(int(2.0 * SR))
+    n = int(0.87 * SR)
+    x = np.arange(n) / SR
+    # The hiss of the fuse, louder as it nears the logo, fluttering faster and faster
+    hiss = highpass(rng.standard_normal(n), 3500) * np.linspace(0.3, 1.0, n) ** 1.5
+    place(track, hiss * (0.55 + 0.45 * np.sin(2 * np.pi * (14 + 30 * x) * x) ** 2), 0.0, 0.3)
+    # Its crackle: sparks, a few at first, many at the end
+    sparks = (rng.random(n) > 0.9996 - 0.0012 * x / 0.87).astype(float)
+    crackle = signal.fftconvolve(sparks, np.exp(-t(0.012) * 500))[:n]
+    place(track, band(crackle * rng.standard_normal(n), 1500, 9000), 0.0, 0.55)
+    # The blast, and what falls back
+    place(track, thud(1.2, 120, 34, 3.0), 0.87, 1.0)
+    place(track, band(rng.standard_normal(int(0.7 * SR)), 120, 3000) * np.exp(-t(0.7) * 6), 0.87, 0.7)
+    place(track, highpass(rng.standard_normal(int(0.5 * SR)), 2500) * np.exp(-t(0.5) * 9), 0.9, 0.22)
+    follow(track, 1.800)
+    return room(track, 0.6, 0.2)
+
+
+# (in this order: each sound draws its noise after the ones before it, a new one goes last so the others stay as they are)
+SOUNDS = {"boom": boom, "swish": swish, "zap": zap, "shine": shine, "rush": rush, "drum": drum, "clash": clash, "coin": coin, "sting": sting, "glass": glass, "beep": beep, "fizz": fizz}
 
 
 def main() -> int:
     os.makedirs(OUT, exist_ok=True)
+    # `--only fizz,boom`: write these files alone (every sound is still made, in order: each one's noise depends on those before it)
+    only = next((arg.split("=", 1)[1].split(",") for arg in sys.argv[1:] if arg.startswith("--only=")), None)
     for name, make in SOUNDS.items():
         mono = make()
+        if only and name not in only:
+            continue
         # A little width: the right ear hears it a hair later
         delay = int(0.0004 * SR)
         stereo = np.stack([mono, np.concatenate([np.zeros(delay), mono[:-delay]])], axis=1)

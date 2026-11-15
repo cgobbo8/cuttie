@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import i18n from "i18next";
 import "../../lib/i18n";
@@ -10,19 +10,32 @@ beforeEach(() => i18n.changeLanguage("fr"));
 afterEach(cleanup);
 
 describe("the intro picker", () => {
-  it("offers no intro and the ten jingles, and says which is chosen", () => {
+  const jingles = ["Impact", "Bandes", "Glitch", "Néon", "Vitesse", "Stickers", "Duel", "Arcade", "Flash info", "Éclats", "Décompte", "Mèche"];
+  const kinds = () => within(screen.getByRole("group", { name: "Ce qui ouvre la vidéo" }));
+
+  it("chooses first what the video opens with, then its graphics among twelve", () => {
     const onChange = vi.fn();
-    render(<IntroPicker value={null} brand={brand} name="De calme à débordés" onChange={onChange} onClose={() => {}} />);
-    // (each one is drawn small with the channel's own name and title: the drawing is not what the button is called)
-    for (const name of ["Aucune", "Impact", "Bandes", "Glitch", "Néon", "Vitesse", "Duel", "Arcade", "Flash info", "Éclats", "Décompte"]) expect(screen.getByRole("button", { name })).toBeTruthy();
-    // No hook where there is no video made of passages to take its moment from (a clip alone)
-    expect(screen.queryByRole("button", { name: "Hook" })).toBeNull();
-    expect(screen.getAllByRole("button")).toHaveLength(11);
-    expect(screen.getByRole("button", { name: "Aucune" }).getAttribute("aria-pressed")).toBe("true");
+    const { rerender } = render(<IntroPicker value={null} brand={brand} name="De calme à débordés" onChange={onChange} onClose={() => {}} />);
+    // Nothing, or a jingle: no hook where there is no video made of passages to take its moment from (a clip alone)
+    expect(kinds().getAllByRole("button").map((button) => [button.textContent, button.getAttribute("aria-pressed")])).toEqual([
+      ["Aucune", "true"],
+      ["Intro classique", "false"],
+    ]);
+    // The twelve jingles, three full rows of four (each one is drawn small with the channel's own name and title: the drawing is not what the button is called)
+    for (const name of jingles) expect(screen.getByRole("button", { name })).toBeTruthy();
+    expect(screen.getAllByRole("button")).toHaveLength(2 + 12);
     // No intro: nothing to name or to hear yet
     expect(screen.queryByPlaceholderText("De calme à débordés")).toBeNull();
+    // A click on a jingle chooses it; "Intro classique" alone takes the first one
     fireEvent.click(screen.getByRole("button", { name: "Glitch" }));
-    expect(onChange).toHaveBeenCalledWith({ style: "glitch" });
+    expect(onChange).toHaveBeenLastCalledWith({ style: "glitch" });
+    fireEvent.click(kinds().getByRole("button", { name: "Intro classique" }));
+    expect(onChange).toHaveBeenLastCalledWith({ style: "slam" });
+    rerender(<IntroPicker value={{ style: "glitch" }} brand={brand} name="De calme à débordés" onChange={onChange} onClose={() => {}} />);
+    expect(kinds().getByRole("button", { name: "Intro classique" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "Glitch" }).getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(kinds().getByRole("button", { name: "Aucune" }));
+    expect(onChange).toHaveBeenLastCalledWith(null);
   });
 
   it("changes the style without losing the title and the sound, names the intro, changes or cuts its sound", () => {
@@ -55,12 +68,12 @@ describe("the intro picker", () => {
     fireEvent.click(follow);
     expect(onChange).toHaveBeenLastCalledWith({ style: "slam", title: "Le calme", sound: "drum", follow: false });
 
-    fireEvent.click(screen.getByRole("button", { name: "Aucune" }));
+    fireEvent.click(kinds().getByRole("button", { name: "Aucune" }));
     expect(onChange).toHaveBeenLastCalledWith(null);
     expect(introSoundUrl("boom")).toBe("/sounds/intro-boom.mp3");
   });
 
-  it("offers the hook where the video has passages, and lets its moment be chosen and trimmed", () => {
+  it("offers the hook where the video has passages, with twelve looks of its own, and lets its moment be chosen and trimmed", () => {
     const onChange = vi.fn();
     const onPlay = vi.fn();
     const passages = [
@@ -68,14 +81,24 @@ describe("the intro picker", () => {
       { id: "c", number: 3, text: "Il est en craquage", start: 300, end: 312 },
     ];
     const menu = (moment: HookMenu["moment"], named = false): HookMenu => ({ passages, moment, named, onPlay });
-    const { rerender } = render(<IntroPicker value={null} brand={brand} name="La garde de trop" onChange={onChange} onClose={() => {}} hook={menu(null)} />);
-    // The first of the styles: twelve choices with "none", three rows of four
-    expect(screen.getAllByRole("button")).toHaveLength(12);
-    fireEvent.click(screen.getByRole("button", { name: "Hook" }));
-    expect(onChange).toHaveBeenLastCalledWith({ style: "hook" });
+    const { rerender } = render(<IntroPicker value={{ style: "neon", title: "Le calme", sound: "drum" }} brand={brand} name="La garde de trop" onChange={onChange} onClose={() => {}} hook={menu(null)} />);
+    // Three kinds here; from a jingle to the hook, the graphics stay the same: the hook is framed like the jingle it replaces
+    expect(kinds().getAllByRole("button").map((button) => button.textContent)).toEqual(["Aucune", "Intro classique", "Hook"]);
+    fireEvent.click(kinds().getByRole("button", { name: "Hook" }));
+    // (its title stays; a hook plays no sound of its own)
+    expect(onChange).toHaveBeenLastCalledWith({ style: "hook", look: "neon", title: "Le calme" });
+
+    // The hook chosen: the same twelve names, now its looks; another one, or back to a jingle with the same graphics
+    rerender(<IntroPicker value={{ style: "hook", look: "neon" }} brand={brand} name="La garde de trop" onChange={onChange} onClose={() => {}} hook={menu({ item: "c", start: 307, end: 312, auto: true }, true)} />);
+    expect(kinds().getByRole("button", { name: "Hook" }).getAttribute("aria-pressed")).toBe("true");
+    for (const name of jingles) expect(screen.getByRole("button", { name })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Néon" }).getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(screen.getByRole("button", { name: "Arcade" }));
+    expect(onChange).toHaveBeenLastCalledWith({ style: "hook", look: "arcade" });
+    fireEvent.click(kinds().getByRole("button", { name: "Intro classique" }));
+    expect(onChange).toHaveBeenLastCalledWith({ style: "neon" });
 
     // Chosen: what it is, the passages it can play (never the first), the one the app took, no sound to set
-    rerender(<IntroPicker value={{ style: "hook" }} brand={brand} name="La garde de trop" onChange={onChange} onClose={() => {}} hook={menu({ item: "c", start: 307, end: 312, auto: true }, true)} />);
     expect(screen.getByText(/Le meilleur moment de la vidéo joue d'abord/)).toBeTruthy();
     const rows = screen.getAllByRole("radio");
     expect(rows.map((row) => row.textContent)).toEqual(["Automatique : celui que l'IA a nommé · passage 3", "2Regarde sous l'escalier4 s", "3Il est en craquage12 s"]);
@@ -87,12 +110,12 @@ describe("the intro picker", () => {
 
     // Another passage: all of a short one
     fireEvent.click(rows[1]);
-    expect(onChange).toHaveBeenLastCalledWith({ style: "hook", hook: { item: "b", start: 200, end: 204 } });
+    expect(onChange).toHaveBeenLastCalledWith({ style: "hook", look: "neon", hook: { item: "b", start: 200, end: 204 } });
     // Trimmed with its handles (here from the keyboard): the streamer's own cut of the passage it plays
     fireEvent.keyDown(screen.getByRole("slider", { name: "Début du hook" }), { key: "ArrowRight" });
-    expect(onChange).toHaveBeenLastCalledWith({ style: "hook", hook: { item: "c", start: 307.1, end: 312 } });
+    expect(onChange).toHaveBeenLastCalledWith({ style: "hook", look: "neon", hook: { item: "c", start: 307.1, end: 312 } });
     fireEvent.keyDown(screen.getByRole("slider", { name: "Fin du hook" }), { key: "ArrowLeft" });
-    expect(onChange).toHaveBeenLastCalledWith({ style: "hook", hook: { item: "c", start: 307, end: 311.9 } });
+    expect(onChange).toHaveBeenLastCalledWith({ style: "hook", look: "neon", hook: { item: "c", start: 307, end: 311.9 } });
     // Never under a second and a half
     rerender(<IntroPicker value={{ style: "hook", hook: { item: "b", start: 200, end: 201.5 } }} brand={brand} name="La garde de trop" onChange={onChange} onClose={() => {}} hook={menu({ item: "b", start: 200, end: 201.5, auto: false })} />);
     expect(screen.getAllByRole("radio").map((row) => row.getAttribute("aria-checked"))).toEqual(["false", "true", "false"]);

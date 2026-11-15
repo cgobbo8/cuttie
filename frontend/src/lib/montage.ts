@@ -244,6 +244,8 @@ export interface MontageIntro {
    * title written on it). It is not one of the video's pieces: the video starts once it has played.
    */
   hook?: MontageSegment;
+  /** The "hook" intro: the look that frames its moment, by the name of a jingle (absent: the fuse) */
+  look?: string;
 }
 
 /** The music a montage plays in the background, and its level over the video (see lib/music) */

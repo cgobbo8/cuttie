@@ -1691,19 +1691,19 @@
         "hype": "Best-of, energía"
       },
       "about": {
-        "phonk": "Phonk nervioso de bajos pesados. Para kills, acción y grandes jugadas.",
-        "phonk2": "Phonk lento, muy grave, amenazante. Para una racha de kills o una tensión que crece.",
-        "phonk3": "Phonk rápido y oscuro, con pausas. Para persecuciones y combates intensos.",
-        "hiphop": "Hip-hop enérgico y contundente. Para un best-of o momentos de bromas.",
-        "stream": "Tema de inicio de directo que va creciendo. Para el best-of de una noche.",
-        "vlog": "Música de vlog, ligera y alegre. Para momentos divertidos entre amigos.",
-        "synthwave": "Synthwave retro, ambiente arcade y neones. Para conducir, la noche, jugadas con estilo.",
-        "chiptune": "Chiptune rápido, como una consola antigua. Para fails y puro caos.",
-        "pixel": "Chiptune tranquilo y tierno. Para humor amable y momentos acogedores.",
-        "retro": "8-bit muy rápido, de dibujos animados. Para fails encadenados.",
-        "lofi": "Lofi animado pero relajado. Para conversaciones e historias contadas.",
-        "lofi2": "Lofi pausado y cálido. Para un vídeo donde se habla mucho.",
-        "chill": "Lo-fi apagado, muy de fondo. Para charlas serias y ambientes nocturnos."
+        "phonk": "Ritmo rápido, bajos sintéticos marcados. Para acción, kills y best-ofs.",
+        "phonk2": "Ritmo sostenido y bajos pesados. Para grandes momentos y compilaciones de acción.",
+        "phonk3": "Bajos saturados, ritmo rápido, ambiente intenso. Para highlights y juego tenso.",
+        "hiphop": "Hip-hop instrumental de tempo vivo, percusiones dinámicas. Para grandes jugadas y best-ofs.",
+        "stream": "Electrónica tranquila con sintetizadores aéreos. Para charlas y para los mejores momentos de una noche.",
+        "vlog": "Hip-hop tranquilo con scratches. Para charlas y momentos desenfadados.",
+        "synthwave": "Synthwave retro y dinámico. Para highlights, skill, o de fondo en una charla.",
+        "chiptune": "Chiptune rápido de sonidos retro. Para momentos divertidos y highlights de juego.",
+        "pixel": "Chiptune pegadizo de ritmo regular. Para juego relajado y secuencias de gameplay.",
+        "retro": "8-bit rápido y alegre. Para momentos divertidos y compilaciones.",
+        "lofi": "Lofi relajado, percusiones ligeras, sintetizadores aéreos. Para charlas.",
+        "lofi2": "Lofi pausado con sintetizadores ligeros. Para charlas y momentos tranquilos.",
+        "chill": "Lo-fi lento y suave, muy de fondo. Para charlas y juego tranquilo."
       }
     },
     "soundAi": {

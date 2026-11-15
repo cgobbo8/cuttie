@@ -1,5 +1,5 @@
 {
-  "note": "The musics a video can play in the background. `start`: where a track is in full swing (seconds), `lufs`: its loudness as recorded; both measured (scripts/make-musics.py). `about` is what the AI reads to choose one.",
+  "note": "The musics a video can play in the background. `start`: where a track is in full swing (seconds), `lufs`: its loudness as recorded; both measured (scripts/make-musics.py --measure). `kinds`, `genre` and `about` (what the AI reads to choose one) come from a model that listened to each track (scripts/make-musics.py --listen, 15/11/2026).",
   "kinds": [
     "funny",
     "skill",
@@ -23,7 +23,7 @@
       "seconds": 83.9,
       "start": 5.2,
       "lufs": -7.4,
-      "about": "Drift phonk, about 117 BPM: heavy bass, aggressive, driving. For kills, action, clutch plays, anything that shows skill."
+      "about": "Mood: energetic, aggressive. Energy: high. Suits: gaming highlights, fast-paced edits, action montages. Ruins: calm storytelling, slow-motion, or emotional content."
     },
     {
       "id": "phonk2",
@@ -33,13 +33,14 @@
       "file": "sub_clair-drift-phonk-607579.mp3",
       "genre": "phonk",
       "kinds": [
-        "skill"
+        "skill",
+        "hype"
       ],
       "bpm": 96,
       "seconds": 132.6,
       "start": 9.41,
       "lufs": -9.7,
-      "about": "Drift phonk, slower (about 96 BPM) and very bass-heavy: menacing, confident. For domination, kill streaks, a slow build of tension before action."
+      "about": "Mood: Energetic, confident, and driving. Energy: High. Suits: Gaming highlights, fast-paced action, and hype montages. Ruins: Calm storytelling, emotional scenes, or slow-paced tutorials."
     },
     {
       "id": "phonk3",
@@ -50,13 +51,13 @@
       "genre": "phonk",
       "kinds": [
         "skill",
-        "suspense"
+        "hype"
       ],
       "bpm": 136,
       "seconds": 134.6,
       "start": 14.0,
       "lufs": -14.0,
-      "about": "Drift phonk, fast (about 136 BPM), dark, with breaks between its heavy parts. For chases, intense fights, or a tense video that explodes now and then."
+      "about": "Mood: Energetic, aggressive, and fast-paced. Best for: Gaming highlights, action montages, and hype content. It would ruin: Relaxing vlogs, storytelling, or emotional moments."
     },
     {
       "id": "hiphop",
@@ -67,13 +68,13 @@
       "genre": "hip-hop",
       "kinds": [
         "hype",
-        "funny"
+        "skill"
       ],
       "bpm": 100,
       "seconds": 114.4,
       "start": 2.53,
       "lufs": -7.4,
-      "about": "Energetic hip-hop beat, punchy and confident. For best-ofs, highlights, banter, a video that should feel like a show."
+      "about": "This is an energetic, upbeat hip-hop track with a driving rhythm and modern synth elements. It is perfect for gaming highlights, hype reels, and fast-paced montages. It would ruin slow-paced, emotional, or serious storytelling content."
     },
     {
       "id": "stream",
@@ -83,14 +84,14 @@
       "file": "the_mountain-stream-starting-593068.mp3",
       "genre": "electronic",
       "kinds": [
-        "hype",
-        "chill"
+        "chill",
+        "hype"
       ],
       "bpm": 89,
       "seconds": 134.8,
       "start": 0.12,
       "lufs": -9.8,
-      "about": "A 'stream starting' theme, mid-tempo, that builds up. For best-ofs of an evening, recaps, a video that presents the channel."
+      "about": "Mood: chill and energetic. Suits: casual talk, highlights, and gaming streams. Avoid: intense horror or slow-paced emotional storytelling."
     },
     {
       "id": "vlog",
@@ -98,16 +99,16 @@
       "author": "kulakovka",
       "source": "pixabay.com, 298919",
       "file": "kulakovka-vlog-intro-298919.mp3",
-      "genre": "pop",
+      "genre": "hip-hop",
       "kinds": [
-        "funny",
-        "chill"
+        "chill",
+        "funny"
       ],
       "bpm": 89,
       "seconds": 114.1,
       "start": 0.05,
       "lufs": -7.7,
-      "about": "Upbeat, sunny vlog music. For light, good-humoured videos: funny moments between friends, wholesome or silly scenes."
+      "about": "This track features a laid-back hip-hop beat with scratching elements. It's perfect for chill storytelling, funny commentary, or casual vlogs. Avoid using it for high-stakes, serious, or intense action content, as the lighthearted vibe will clash with the mood."
     },
     {
       "id": "synthwave",
@@ -118,13 +119,14 @@
       "genre": "synthwave",
       "kinds": [
         "hype",
-        "skill"
+        "skill",
+        "chill"
       ],
       "bpm": 123,
       "seconds": 137.4,
       "start": 16.49,
       "lufs": -8.7,
-      "about": "Synthwave, about 123 BPM: retro arcade, neon, driving. For racing, night scenes, stylish plays, anything with an 80s feel."
+      "about": "Upbeat synthwave with a retro, electronic vibe. Perfect for high-energy highlights, gaming skill showcases, or as background music for commentary. Avoid using it for slow, sad, or overly serious content."
     },
     {
       "id": "chiptune",
@@ -134,13 +136,14 @@
       "file": "alex-morgan-video-game-pixel-chiptune-music-583271.mp3",
       "genre": "chiptune",
       "kinds": [
-        "funny"
+        "funny",
+        "hype"
       ],
       "bpm": 144,
       "seconds": 146.9,
       "start": 11.36,
       "lufs": -9.0,
-      "about": "Fast chiptune (about 144 BPM), like an old console game: playful, frantic. For fails, chaos, absurd or silly moments."
+      "about": "Upbeat, retro chiptune track with a fast tempo. Perfect for funny gaming moments or high-energy highlights. Avoid using it for serious, slow-paced, or emotional content."
     },
     {
       "id": "pixel",
@@ -150,14 +153,15 @@
       "file": "echoes_of_lumen-pixel-art-game-soundtrack-chiptune-588667.mp3",
       "genre": "chiptune",
       "kinds": [
-        "funny",
-        "chill"
+        "chill",
+        "hype",
+        "skill"
       ],
       "bpm": 112,
       "seconds": 112.3,
       "start": 0.05,
       "lufs": -9.0,
-      "about": "Chiptune at a walking pace (about 112 BPM): cute, light-hearted, a little nostalgic. For gentle humour and cosy game moments."
+      "about": "This upbeat chiptune track features retro synth sounds and a steady, energetic pace. It is perfect for gaming highlights, chill streams, or skill showcases. Its bright, digital texture would clash with serious, dark, or emotional content."
     },
     {
       "id": "retro",
@@ -167,13 +171,14 @@
       "file": "the_mountain-8-bit-retro-522443.mp3",
       "genre": "chiptune",
       "kinds": [
-        "funny"
+        "funny",
+        "hype"
       ],
       "bpm": 161,
       "seconds": 66.4,
       "start": 2.65,
       "lufs": -9.2,
-      "about": "Very fast 8-bit tune (about 161 BPM): cartoonish, hectic. For slapstick, fails in a row, a sped-up feeling."
+      "about": "Upbeat, retro chiptune track. High energy and playful mood. Best for funny moments, gaming highlights, and fast-paced edits. Avoid using for serious, sad, or slow-paced content."
     },
     {
       "id": "lofi",
@@ -183,13 +188,14 @@
       "file": "jonasblakewood-lofi-upbeat-lofi-upbeat-music-583358.mp3",
       "genre": "lofi",
       "kinds": [
-        "chill"
+        "chill",
+        "hype"
       ],
       "bpm": 108,
       "seconds": 136.5,
       "start": 6.62,
       "lufs": -7.8,
-      "about": "Upbeat lofi (about 108 BPM): relaxed but bright. For conversations, stories told on stream, calm role-play scenes."
+      "about": "Mood: relaxed, upbeat. Energy: moderate. Suits: chill talk, gaming highlights. Ruins: intense horror, serious news, or high-stakes competitive gameplay."
     },
     {
       "id": "lofi2",
@@ -199,13 +205,14 @@
       "file": "kulakovka-lofi-upbeat-611601.mp3",
       "genre": "lofi",
       "kinds": [
-        "chill"
+        "chill",
+        "funny"
       ],
       "bpm": 92,
       "seconds": 100.1,
       "start": 3.95,
       "lufs": -9.6,
-      "about": "Laid-back lofi (about 92 BPM): warm, unhurried. For long talks, chill moments, a video that is mostly people speaking."
+      "about": "A laid-back, upbeat lofi track with steady drums and bright synths. Ideal for chill commentary, gaming highlights, or vlogs. Its consistent energy makes it a safe background choice, though it might feel too casual for high-stakes, intense, or dark content."
     },
     {
       "id": "chill",
@@ -216,13 +223,13 @@
       "genre": "lofi",
       "kinds": [
         "chill",
-        "suspense"
+        "funny"
       ],
       "bpm": 72,
       "seconds": 106.0,
       "start": 0.05,
       "lufs": -15.1,
-      "about": "Muffled, mellow lo-fi with little treble: stays in the background. For serious or quiet discussions, late-night moods, low-key tension."
+      "about": "Mood: Chill, relaxed, and unobtrusive. Energy: Low. Best for: Background music for talking, storytelling, or casual gaming. Would ruin: High-energy highlights, intense action, or fast-paced montages."
     }
   ]
 }

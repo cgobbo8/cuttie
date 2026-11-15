@@ -202,6 +202,15 @@ class SoundRequest(BaseModel):
     language: str = "fr"
 
 
+class MusicRequest(BaseModel):
+    # The file as it was added (in <data dir>/musics), and where the track is kept (same folder, .mp3)
+    source: str
+    target: str
+    language: str = "fr"
+    # Its name as the streamer's file had it: a hint for the model that listens
+    hint: str = ""
+
+
 class TemplateUsageRequest(BaseModel):
     name: str = ""
     description: str
@@ -539,6 +548,28 @@ def clips_looks(job_id: str, req: LooksRequest) -> dict:
             language=req.language,
             usual=req.usual,
         )
+    except Exception as e:
+        raise _ai_errors(e) from e
+
+
+@app.post("/musics/describe", dependencies=[Depends(require_secret)])
+def describe_music(req: MusicRequest) -> dict:
+    """A track the streamer adds: kept as an MP3, measured, and listened to by the AI to say what it is for."""
+    from app.services import music_library, paths
+
+    folder = os.path.realpath(os.path.join(paths.DATA_DIR, "musics"))
+    source, target = os.path.realpath(req.source), os.path.realpath(req.target)
+    # Only files of the musics folder: nothing else on the machine is read or written
+    if os.path.dirname(source) != folder or os.path.dirname(target) != folder or not target.endswith(".mp3") or not os.path.isfile(source):
+        raise HTTPException(status_code=400, detail="not a file of the musics folder")
+    try:
+        music_library.to_mp3(source, target)
+    except Exception as e:
+        raise HTTPException(status_code=422, detail="this file is not a sound the app can read") from e
+    try:
+        return music_library.describe(target, req.language, hint=req.hint)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
     except Exception as e:
         raise _ai_errors(e) from e
 

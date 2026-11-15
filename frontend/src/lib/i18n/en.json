@@ -1691,19 +1691,19 @@
         "hype": "Best-of, energy"
       },
       "about": {
-        "phonk": "Nervous phonk with heavy bass. For kills, action, big plays.",
-        "phonk2": "Slower, very deep, menacing phonk. For a kill streak or tension that builds.",
-        "phonk3": "Fast, dark phonk with pauses. For chases and intense fights.",
-        "hiphop": "Energetic, punchy hip-hop. For a best-of or banter.",
-        "stream": "A stream-starting theme that builds up. For the best-of of an evening.",
-        "vlog": "Light, cheerful vlog music. For funny moments between friends.",
-        "synthwave": "Retro synthwave, arcade and neon. For driving, night scenes, stylish plays.",
-        "chiptune": "Fast chiptune, like an old console. For fails and utter nonsense.",
-        "pixel": "Calm, cute chiptune. For gentle humour and cosy moments.",
-        "retro": "Very fast 8-bit, cartoon-like. For fails in a row.",
-        "lofi": "Upbeat but relaxed lofi. For conversations and stories being told.",
-        "lofi2": "Laid-back, warm lofi. For a video where people talk a lot.",
-        "chill": "Muffled lo-fi that stays far back. For serious talks and late-night moods."
+        "phonk": "Fast beat, strong synth bass. For action, kills and best-ofs.",
+        "phonk2": "Steady drive and heavy bass. For big moments and action compilations.",
+        "phonk3": "Distorted bass, fast beat, intense mood. For highlights and tense gameplay.",
+        "hiphop": "Instrumental hip-hop at a brisk tempo, lively drums. For big plays and best-ofs.",
+        "stream": "Laid-back electronic with airy synths. For conversations as well as an evening's highlights.",
+        "vlog": "Easy-going hip-hop with scratches. For conversations and offbeat moments.",
+        "synthwave": "Lively retro synthwave. For highlights, skill, or under a conversation.",
+        "chiptune": "Fast chiptune with retro sounds. For funny moments and gaming highlights.",
+        "pixel": "Catchy chiptune with a steady beat. For relaxed play and gameplay sequences.",
+        "retro": "Fast, cheerful 8-bit. For funny moments and compilations.",
+        "lofi": "Relaxed lofi, light drums, airy synths. For conversations.",
+        "lofi2": "Laid-back lofi with light synths. For conversations and quiet moments.",
+        "chill": "Slow, soft lo-fi that stays far back. For conversations and calm play."
       }
     },
     "soundAi": {

@@ -3,6 +3,7 @@
 
     cd backend && uv run python ../scripts/make-musics.py ~/Downloads/cuttie-musics            # copy them in (128 kb/s)
     cd backend && uv run python ../scripts/make-musics.py ~/Downloads/cuttie-musics --measure  # and print what is measured
+    cd backend && uv run python ../scripts/make-musics.py --listen                             # what the AI hears in each (paid: about 0.002 $ a track)
 
 The folder holds the tracks as downloaded; frontend/src/lib/music/catalogue.json says which
 file is which track (and what each one is: its kinds, what it sounds like). `--measure`
@@ -46,13 +47,35 @@ def measure(path: str) -> dict:
     return {"seconds": round(len(y) / sr, 1), "bpm": round(float(np.atleast_1d(tempo)[0])), "start": round(start, 2), "lufs": lufs}
 
 
+def listen(tracks: list[dict]) -> int:
+    """What a model that hears says of each track already in the app: printed as JSON, to write the catalogue from."""
+    sys.path.insert(0, os.path.join(HERE, "..", "backend"))
+    from app.services import music_library
+
+    heard, cost = {}, 0.0
+    for track in tracks:
+        path = os.path.join(OUT, f"{track['id']}.mp3")
+        if not os.path.isfile(path):
+            print(f"missing: {track['id']}.mp3", file=sys.stderr)
+            continue
+        said = music_library.listen(path, track, "fr", hint=track["file"])
+        cost += said.pop("cost")
+        heard[track["id"]] = said
+        print(f"{track['id']:10s} {said['genre']:22s} {', '.join(said['kinds']):24s} {said['description']}", file=sys.stderr, flush=True)
+    print(json.dumps(heard, ensure_ascii=False, indent=1))
+    print(f"~{cost:.4f} $ for {len(heard)} tracks", file=sys.stderr)
+    return 0
+
+
 def main(argv: list[str]) -> int:
+    with open(CATALOGUE, encoding="utf-8") as f:
+        tracks = json.load(f)["tracks"]
+    if "--listen" in argv:
+        return listen(tracks)
     if len(argv) < 2:
         print(__doc__)
         return 2
     folder = os.path.expanduser(argv[1])
-    with open(CATALOGUE, encoding="utf-8") as f:
-        tracks = json.load(f)["tracks"]
     os.makedirs(OUT, exist_ok=True)
     for track in tracks:
         source = os.path.join(folder, track["file"])

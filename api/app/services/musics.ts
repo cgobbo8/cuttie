@@ -6,7 +6,7 @@
  * streamer was given or added), then next to the catalogue. One whose file is missing is
  * simply not offered.
  */
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { randomBytes } from 'node:crypto'
 import path from 'node:path'
 import { DATA_DIR } from '#services/data_paths'
@@ -43,17 +43,23 @@ const ID = /^[a-z0-9]{2,24}$/
 
 const usable = (t: any) => ID.test(t?.id ?? '') && Number.isFinite(t?.lufs) && Number.isFinite(t?.start)
 
-let catalogue: MusicTrack[] | null = null
+/** Read once, and again when the file changes (tracks added while the app runs, in development) */
+let catalogue: { at: number; tracks: MusicTrack[] } | null = null
 function shippedTracks(): MusicTrack[] {
-  if (!catalogue) {
+  const file = path.join(SHIPPED(), 'catalogue.json')
+  let at = 0
+  try {
+    at = statSync(file).mtimeMs
+  } catch {}
+  if (!catalogue || catalogue.at !== at) {
+    let tracks: MusicTrack[] = []
     try {
-      const read = JSON.parse(readFileSync(path.join(SHIPPED(), 'catalogue.json'), 'utf-8'))
-      catalogue = (Array.isArray(read?.tracks) ? read.tracks : []).filter(usable)
-    } catch {
-      catalogue = []
-    }
+      const read = JSON.parse(readFileSync(file, 'utf-8'))
+      tracks = (Array.isArray(read?.tracks) ? read.tracks : []).filter(usable)
+    } catch {}
+    catalogue = { at, tracks }
   }
-  return catalogue!
+  return catalogue.tracks
 }
 
 /** Most tracks a streamer can add */

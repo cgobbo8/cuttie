@@ -17,5 +17,12 @@ Pistes téléchargées sur Pixabay Music par Corentin (licence de contenu Pixaba
 | `lofi.mp3` | Lofi Upbeat | jonasblakewood | pixabay.com, 583358 (`jonasblakewood-lofi-upbeat-lofi-upbeat-music-583358.mp3`) |
 | `lofi2.mp3` | Lofi Upbeat II | kulakovka | pixabay.com, 611601 (`kulakovka-lofi-upbeat-611601.mp3`) |
 | `chill.mp3` | Chill Lo-Fi | zephiramusic | pixabay.com, 585361 (`zephiramusic-chill-lo-fi-585361.mp3`) |
+| `tension.mp3` | Suspense Tension | atlasaudio | pixabay.com, 510528 (`atlasaudio-suspense-tension-510528.mp3`) |
+| `tension2.mp3` | Suspense Tension II | atlasaudio | pixabay.com, 511877 (`atlasaudio-suspense-tension-511877.mp3`) |
+| `grave.mp3` | Grave Suspense | leberch | pixabay.com, 615218 (`leberch-grave-suspense-tension-615218.mp3`) |
+| `suspense.mp3` | Suspenseful | yevhenastafiev | pixabay.com, 629127 (`yevhenastafiev-suspenseful-suspenseful-music-629127.mp3`) |
+| `trap.mp3` | Trap Hype Beat | delosound | pixabay.com, 338133 (`delosound-trap-hype-beat-3-338133.mp3`) |
+| `sneaky.mp3` | Quirky Sneaky | hitslab | pixabay.com, 269132 (`hitslab-quirky-sneaky-memes-background-music-269132.mp3`) |
+| `quirky.mp3` | Funny Comedy Quirky | lnplusmusic | pixabay.com, 316889 (`lnplusmusic-funny-comedy-quirky-background-music-316889.mp3`) |
 
 Réencodées en 128 kb/s par `scripts/make-musics.py`. Ce que chaque piste est (types de vidéo, description, mesures) : `catalogue.json`.

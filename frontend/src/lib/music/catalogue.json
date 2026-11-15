@@ -230,6 +230,125 @@
       "start": 0.05,
       "lufs": -15.1,
       "about": "Mood: Chill, relaxed, and unobtrusive. Energy: Low. Best for: Background music for talking, storytelling, or casual gaming. Would ruin: High-energy highlights, intense action, or fast-paced montages."
+    },
+    {
+      "id": "tension",
+      "name": "Suspense Tension",
+      "author": "atlasaudio",
+      "source": "pixabay.com, 510528",
+      "file": "atlasaudio-suspense-tension-510528.mp3",
+      "genre": "ambient",
+      "kinds": [
+        "suspense",
+        "chill"
+      ],
+      "bpm": 108,
+      "seconds": 112.0,
+      "start": 5.99,
+      "lufs": -18.1,
+      "about": "Mood: Suspenseful, mysterious, and calm. Energy: Low. Best for: Building tension in gameplay or as background for storytelling. Avoid using for: High-energy highlights, fast-paced action, or comedic moments."
+    },
+    {
+      "id": "tension2",
+      "name": "Suspense Tension II",
+      "author": "atlasaudio",
+      "source": "pixabay.com, 511877",
+      "file": "atlasaudio-suspense-tension-511877.mp3",
+      "genre": "ambient",
+      "kinds": [
+        "suspense",
+        "chill"
+      ],
+      "bpm": 117,
+      "seconds": 102.0,
+      "start": 0.12,
+      "lufs": -15.1,
+      "about": "Mood: Tense, mysterious, and calm. Energy: Low. Best for: Suspenseful moments, storytelling, or background gameplay. Avoid using for: High-energy highlights, fast-paced action, or comedic content."
+    },
+    {
+      "id": "grave",
+      "name": "Grave Suspense",
+      "author": "leberch",
+      "source": "pixabay.com, 615218",
+      "file": "leberch-grave-suspense-tension-615218.mp3",
+      "genre": "ambient",
+      "kinds": [
+        "suspense",
+        "chill"
+      ],
+      "bpm": 92,
+      "seconds": 106.0,
+      "start": 1.98,
+      "lufs": -21.6,
+      "about": "Mood: Tense, mysterious, and atmospheric. Energy: Low and steady. Best for: Suspenseful moments, slow-build tension, or calm storytelling. Avoid: High-energy gaming highlights, fast-paced action, or comedic content."
+    },
+    {
+      "id": "suspense",
+      "name": "Suspenseful",
+      "author": "yevhenastafiev",
+      "source": "pixabay.com, 629127",
+      "file": "yevhenastafiev-suspenseful-suspenseful-music-629127.mp3",
+      "genre": "cinematic",
+      "kinds": [
+        "suspense",
+        "skill"
+      ],
+      "bpm": 152,
+      "seconds": 259.2,
+      "start": 1.65,
+      "lufs": -9.7,
+      "about": "Mood: Tense, mysterious. Energy: Moderate, driving. Best for: Suspenseful moments, high-stakes gameplay, or building anticipation. Avoid using for: Lighthearted, comedic, or overly casual content."
+    },
+    {
+      "id": "trap",
+      "name": "Trap Hype Beat",
+      "author": "delosound",
+      "source": "pixabay.com, 338133",
+      "file": "delosound-trap-hype-beat-3-338133.mp3",
+      "genre": "trap",
+      "kinds": [
+        "hype",
+        "skill"
+      ],
+      "bpm": 152,
+      "seconds": 128.0,
+      "start": 6.44,
+      "lufs": -7.9,
+      "about": "Mood: Energetic and aggressive. Energy: High. Suits: Gaming highlights, fast-paced montages, and hype reels. Ruins: Relaxing content, storytelling, or slow-paced tutorials."
+    },
+    {
+      "id": "sneaky",
+      "name": "Quirky Sneaky",
+      "author": "hitslab",
+      "source": "pixabay.com, 269132",
+      "file": "hitslab-quirky-sneaky-memes-background-music-269132.mp3",
+      "genre": "comedy",
+      "kinds": [
+        "funny",
+        "chill"
+      ],
+      "bpm": 129,
+      "seconds": 69.4,
+      "start": 6.97,
+      "lufs": -16.5,
+      "about": "This is a quirky, upbeat comedy track with a light, playful rhythm. It suits funny moments, fails, and casual commentary. It would ruin serious, high-stakes, or intense gameplay highlights."
+    },
+    {
+      "id": "quirky",
+      "name": "Funny Comedy Quirky",
+      "author": "lnplusmusic",
+      "source": "pixabay.com, 316889",
+      "file": "lnplusmusic-funny-comedy-quirky-background-music-316889.mp3",
+      "genre": "comedy",
+      "kinds": [
+        "funny",
+        "chill"
+      ],
+      "bpm": 117,
+      "seconds": 68.0,
+      "start": 3.56,
+      "lufs": -13.0,
+      "about": "Mood: playful, quirky, lighthearted. Energy: low to medium. Suits: funny moments, casual chatting, light gaming. Ruins: intense action, horror, serious storytelling, high-stakes competitive gameplay."
     }
   ]
 }

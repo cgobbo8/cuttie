@@ -3,7 +3,8 @@
 
     cd backend && uv run python ../scripts/make-musics.py ~/Downloads/cuttie-musics            # copy them in (128 kb/s)
     cd backend && uv run python ../scripts/make-musics.py ~/Downloads/cuttie-musics --measure  # and print what is measured
-    cd backend && uv run python ../scripts/make-musics.py --listen                             # what the AI hears in each (paid: about 0.002 $ a track)
+    cd backend && uv run python ../scripts/make-musics.py --listen                             # what the AI hears in each (paid: about 0.001 $ a track)
+    cd backend && uv run python ../scripts/make-musics.py --listen --only trap,sneaky          # the same for these tracks only
 
 The folder holds the tracks as downloaded; frontend/src/lib/music/catalogue.json says which
 file is which track (and what each one is: its kinds, what it sounds like). `--measure`
@@ -70,6 +71,10 @@ def listen(tracks: list[dict]) -> int:
 def main(argv: list[str]) -> int:
     with open(CATALOGUE, encoding="utf-8") as f:
         tracks = json.load(f)["tracks"]
+    if "--only" in argv:
+        wanted = set(argv[argv.index("--only") + 1].split(","))
+        tracks = [track for track in tracks if track["id"] in wanted]
+        argv = [arg for i, arg in enumerate(argv) if arg != "--only" and argv[i - 1] != "--only"]
     if "--listen" in argv:
         return listen(tracks)
     if len(argv) < 2:

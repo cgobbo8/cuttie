@@ -9,6 +9,7 @@ import {
   compilationLength,
   fitToTarget,
   itemsBetween,
+  openingSeconds,
   liveClock,
   moveItem,
   moveItems,
@@ -25,10 +26,10 @@ import {
 import { clock } from "../../lib/format";
 import { frameAt, tileStyle } from "../../lib/storyboard";
 import { useToast } from "../Toast";
-import { introSeconds, isIntro } from "../../lib/intro/intros";
+import { isIntro } from "../../lib/intro/intros";
 import { musicAbout, trackOf } from "../../lib/music/library";
 import type { MusicTrack } from "../../lib/music/mix";
-import IntroPicker, { type IntroBrand } from "./IntroPicker";
+import IntroPicker, { type HookMenu, type IntroBrand } from "./IntroPicker";
 import MusicPicker from "./MusicPicker";
 import TransitionPicker from "./TransitionPicker";
 
@@ -74,6 +75,8 @@ interface Props {
   editing?: boolean;
   /** What an intro is drawn with (the channel's logo and colours); without it the video's intro can't be chosen here */
   brand?: IntroBrand;
+  /** What a "hook" intro can open the video on (the passages, the one it plays): chosen and trimmed in the intro picker */
+  hook?: HookMenu;
   /** The background musics that can be played on this machine (none: the video's music can't be chosen here) */
   musics?: MusicTrack[];
   /** The streamer's favourite music for each kind of video, by kind */
@@ -194,6 +197,7 @@ export default function CompilationPanel({
   onEdit,
   editing = false,
   brand,
+  hook,
   musics = [],
   favourites,
   sounding = false,
@@ -289,7 +293,7 @@ export default function CompilationPanel({
   // The track the video plays, when it is one that can be played here
   const track = trackOf(musics, compilation.music?.track);
   // The intro is part of the video: it counts in its length
-  const opening = introSeconds(compilation.intro);
+  const opening = openingSeconds(compilation);
   const total = compilationLength(compilation) + opening;
   const count = allItems(compilation).length;
   // About half a tenth of a cent per passage looked at (measured): said before asking
@@ -610,6 +614,7 @@ export default function CompilationPanel({
                   }}
                   onClose={() => setMenu(null)}
                   className="right-0 bottom-full mb-2"
+                  hook={hook}
                 />
               )}
             </span>

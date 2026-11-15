@@ -7,7 +7,7 @@ import db from '@adonisjs/lucid/services/db'
 import { introSoundFile, renderClip, renderMontage, type MontageIntro, type MontagePiece, type PlacedLayer } from '#services/remotion_renderer'
 import { uploadFile, getPresignedDownloadUrl, deleteObject, storagePath } from '#services/storage'
 import { clipDir } from '#services/data_paths'
-import { introFade, introFrames, isIntro, isIntroSound, isTransition } from '#services/compilations'
+import { introFade, introHoldFrames, isIntro, isIntroSound, isTransition } from '#services/compilations'
 import { enqueueRender } from '#services/render_queue'
 import { levelSound, type Music } from '#services/sound_level'
 import { findMusic, musicFile, parseCurve, trackGain, type MusicCurve } from '#services/musics'
@@ -115,6 +115,9 @@ function parseMontageIntro(raw: unknown): MontageIntro | null | undefined {
   // The follow button's two labels, as the app words them
   const follow = Array.isArray(intro.follow) && intro.follow.length === 2 ? intro.follow.map((label: unknown) => words(label, 24)) : null
   if (intro.follow !== undefined && (!follow || !follow.every(Boolean))) return null
+  // A "hook" plays a moment of the video first: a piece like the others, without which there is no such intro
+  const hook = intro.style === 'hook' ? parsePieces([intro.hook])?.[0] : undefined
+  if (intro.style === 'hook' && !hook) return null
   return {
     style: intro.style,
     title: words(intro.title, 120),
@@ -124,6 +127,7 @@ function parseMontageIntro(raw: unknown): MontageIntro | null | undefined {
     font,
     ...(follow ? { follow: follow as [string, string] } : {}),
     ...(intro.sound ? { sound: intro.sound } : {}),
+    ...(hook ? { hook: { clipFilename: hook.clipFilename, from: hook.from, duration: hook.duration, layers: hook.layers, ...(hook.jobId ? { jobId: hook.jobId } : {}) } } : {}),
   }
 }
 
@@ -195,7 +199,9 @@ export default class RendersController {
       return response.badRequest({ error: 'pieces: [{ clip, from, duration, layers }] and overlays: [{ layer, z }] required' })
     }
     const intro = parseMontageIntro(body.intro)
-    if (intro === null) return response.badRequest({ error: 'intro: { style, title, name, logo, colors, font, sound? } with a style and a sound this app has' })
+    if (intro === null) return response.badRequest({ error: 'intro: { style, title, name, logo, colors, font, sound?, hook? } with a style and a sound this app has (a "hook": with its piece)' })
+    // What the video plays: its pieces, and the moment its hook opens on
+    const played = intro?.hook ? [...pieces, intro.hook] : pieces
     // A music under the whole video: a track of the catalogue whose file is here, and its level over the video
     let music: { track: string; curve: MusicCurve } | undefined
     if (body.music !== undefined && body.music !== null) {
@@ -206,12 +212,12 @@ export default class RendersController {
       music = { track: asked.track, curve }
     }
     // Pieces of other lives: the user's own only
-    const others = [...new Set(pieces.map((piece) => piece.jobId).filter((id): id is string => !!id && id !== jobId))]
+    const others = [...new Set(played.map((piece) => piece.jobId).filter((id): id is string => !!id && id !== jobId))]
     if (others.length > 0) {
       const owned = await db.from('jobs').where('user_id', user.id).whereIn('id', others).select('id')
       if (owned.length !== others.length) return response.notFound({ error: 'job not found' })
     }
-    const missing = pieces.find((piece) => !existsSync(path.join(clipDir(piece.jobId ?? jobId), piece.clipFilename)))
+    const missing = played.find((piece) => !existsSync(path.join(clipDir(piece.jobId ?? jobId), piece.clipFilename)))
     if (missing) return response.notFound({ error: 'clip not found', clip: missing.clipFilename })
 
     const key = typeof body.key === 'string' && body.key.endsWith('.mp4') ? path.basename(body.key) : pieces[0].clipFilename
@@ -473,8 +479,8 @@ async function runRender(opts: {
     // (the picture is copied): a few seconds per minute
     const fps = renderOptions?.fps ?? 30
     const cuts: number[] = []
-    // An intro holds the screen first: the first piece's sound starts there, out of nothing
-    let frames = montage?.intro ? introFrames(montage.intro.style, fps) : 0
+    // An intro holds the screen first: the first piece's sound starts there, out of nothing (after a hook: on a cut like the others)
+    let frames = introHoldFrames(montage?.intro, fps)
     if (frames > 0) cuts.push(frames / fps)
     for (const piece of (montage?.pieces ?? []).slice(0, -1)) {
       // As the renderer counts them: whole frames, one after the other

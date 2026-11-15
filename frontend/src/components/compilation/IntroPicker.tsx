@@ -1,8 +1,10 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { useTranslation } from "react-i18next";
-import { Check, Volume2, VolumeX } from "lucide-react";
+import { Check, Play, Sparkles, Volume2, VolumeX } from "lucide-react";
+import { hookSpan } from "../../lib/compilation";
 import IntroCard, { INTRO_W, type IntroColors } from "../../lib/intro/IntroCard";
-import { defaultIntroSound, INTRO_IDS, INTRO_SOUND_IDS, introSpan, isIntro, isIntroSound, NO_SOUND, type IntroChoice } from "../../lib/intro/intros";
+import { defaultIntroSound, HOOK_MAX, HOOK_MIN, INTRO_IDS, INTRO_SOUND_IDS, introSpan, isIntro, isIntroSound, NO_SOUND, type IntroChoice } from "../../lib/intro/intros";
+import { snapToWords } from "../../lib/montage";
 import { introSoundUrl } from "../../lib/music/sound";
 
 const FPS = 30;
@@ -10,6 +12,8 @@ const FPS = 30;
 const LOOP = 96;
 /** Where a sketch rests when nothing moves: everything has arrived */
 const STILL = 40;
+/** How long the sketch of a hook plays its moment (in a video: as long as the moment itself) */
+const HOOK_SKETCH = 64;
 
 export { introSoundUrl } from "../../lib/music/sound";
 
@@ -41,14 +45,102 @@ export function useIntroLoop(): number {
 /** An intro drawn small, as the video plays it, over a picture that stands for the video */
 export function IntroSketch({ id, frame, brand, title, width = 60, follow = null }: { id: string; frame: number; brand: IntroBrand; title: string; width?: number; follow?: [string, string] | null }) {
   const span = isIntro(id) ? introSpan(id, FPS) : null;
+  const hold = id === "hook" ? HOOK_SKETCH : (span?.hold ?? 0);
   return (
     <div aria-hidden className="relative overflow-hidden rounded-[7px] bg-black" style={{ width, aspectRatio: "9 / 16" }}>
       <div className="sketch-picture sketch-after" />
-      {isIntro(id) && span && frame < span.hold + span.out && (
+      {isIntro(id) && span && frame < hold + span.out && (
         <div className="absolute left-0 top-0" style={{ width: INTRO_W, transform: `scale(${width / INTRO_W})`, transformOrigin: "0 0" }}>
-          <IntroCard id={id} frame={frame} fps={FPS} title={title} name={brand.name} logo={brand.logo} colors={brand.colors} font={brand.font} follow={follow} />
+          <IntroCard id={id} frame={frame} fps={FPS} title={title} name={brand.name} logo={brand.logo} colors={brand.colors} font={brand.font} follow={follow} hold={id === "hook" ? HOOK_SKETCH : undefined} />
         </div>
       )}
+    </div>
+  );
+}
+
+/** What a "hook" intro can open the video on, and what it opens on now */
+export interface HookMenu {
+  /** The video's passages a hook can play (all but the first, which would play twice in a row): `number` is its place in the video, times are its live's seconds */
+  passages: { id: string; number: number; text: string; start: number; end: number }[];
+  /** What plays now (null: the video has no passage to give) */
+  moment: { item: string; start: number; end: number; auto: boolean } | null;
+  /** The moment the app chose is the one the AI named as the video's hook */
+  named?: boolean;
+  /** The words of that moment's passage (live seconds): its cut lands between them */
+  words?: { start: number; end: number }[];
+  /** Plays the video from its first frame, to see the hook */
+  onPlay?: () => void;
+}
+
+const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+const hundredth = (s: number) => Math.round(s * 100) / 100;
+
+/** The part of a passage a hook plays, set with two handles on the passage's own length (they land between words; Alt: freely) */
+function HookTrim({ passage, moment, words, onChange }: { passage: HookMenu["passages"][number]; moment: { start: number; end: number }; words?: { start: number; end: number }[]; onChange: (start: number, end: number) => void }) {
+  const { t, i18n } = useTranslation();
+  const bar = useRef<HTMLDivElement>(null);
+  const length = Math.max(0.01, passage.end - passage.start);
+  const share = (time: number) => `${clamp(((time - passage.start) / length) * 100, 0, 100)}%`;
+  const seconds = (s: number) => new Intl.NumberFormat(i18n.language, { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(s);
+  const set = (edge: "start" | "end", time: number, from = moment) => {
+    if (edge === "start") onChange(hundredth(clamp(time, Math.max(passage.start, from.end - HOOK_MAX), from.end - Math.min(HOOK_MIN, length))), from.end);
+    else onChange(from.start, hundredth(clamp(time, from.start + Math.min(HOOK_MIN, length), Math.min(passage.end, from.start + HOOK_MAX))));
+  };
+  const drag = (edge: "start" | "end" | "all") => (e: ReactPointerEvent) => {
+    if (e.button !== 0 || !bar.current) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const box = bar.current.getBoundingClientRect();
+    const from = { x: e.clientX, start: moment.start, end: moment.end };
+    const move = (ev: PointerEvent) => {
+      if (edge === "all") {
+        // The whole window slides along the passage, its length kept
+        const start = clamp(from.start + ((ev.clientX - from.x) / box.width) * length, passage.start, passage.end - (from.end - from.start));
+        return onChange(hundredth(start), hundredth(start + from.end - from.start));
+      }
+      const raw = passage.start + clamp((ev.clientX - box.left) / box.width, 0, 1) * length;
+      set(edge, !ev.altKey && words?.length ? snapToWords(raw, words as Parameters<typeof snapToWords>[1]) : raw, from);
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  };
+  const nudge = (edge: "start" | "end") => (e: ReactKeyboardEvent) => {
+    const step = e.key === "ArrowLeft" ? -0.1 : e.key === "ArrowRight" ? 0.1 : 0;
+    if (!step) return;
+    e.preventDefault();
+    set(edge, (edge === "start" ? moment.start : moment.end) + step);
+  };
+  const handle = (edge: "start" | "end") => (
+    <span
+      role="slider"
+      tabIndex={0}
+      aria-label={t(edge === "start" ? "compilation.intro.hook.from" : "compilation.intro.hook.until")}
+      aria-valuemin={0}
+      aria-valuemax={Math.round(length * 10) / 10}
+      aria-valuenow={Math.round(((edge === "start" ? moment.start : moment.end) - passage.start) * 10) / 10}
+      onPointerDown={drag(edge)}
+      onKeyDown={nudge(edge)}
+      className={`absolute top-1/2 -translate-y-1/2 w-3 h-7 rounded-[4px] bg-white shadow-[0_2px_8px_rgba(0,0,0,0.5)] cursor-ew-resize touch-none outline-none focus-visible:ring-2 focus-visible:ring-accent ${edge === "start" ? "-translate-x-full" : ""}`}
+      style={{ left: share(edge === "start" ? moment.start : moment.end) }}
+    />
+  );
+  return (
+    <div>
+      <div className="flex items-baseline justify-between px-0.5 pb-1.5">
+        <span className="text-[11.5px] text-ink-3">{t("compilation.intro.hook.trim")}</span>
+        <span className="text-[11.5px] text-ink-2 tabular-nums">{t("compilation.intro.hook.kept", { seconds: seconds(moment.end - moment.start), of: seconds(length) })}</span>
+      </div>
+      <div ref={bar} className="relative h-7 mx-3 rounded-[6px] bg-white/[0.08]">
+        {/* What is said, word by word: where the cut can land */}
+        {words?.map((word, i) => word.end > passage.start && word.start < passage.end && <span key={i} className="absolute top-2.5 bottom-2.5 rounded-full bg-white/20" style={{ left: share(word.start), right: `calc(100% - ${share(word.end)})` }} />)}
+        <span onPointerDown={drag("all")} className="absolute inset-y-0 rounded-[3px] bg-accent/45 border-y-2 border-accent cursor-grab active:cursor-grabbing touch-none" style={{ left: share(moment.start), right: `calc(100% - ${share(moment.end)})` }} />
+        {handle("start")}
+        {handle("end")}
+      </div>
     </div>
   );
 }
@@ -67,11 +159,16 @@ interface Props {
   fields?: "all" | "sound" | "style";
   /** Where it sits against what opened it */
   className?: string;
+  /**
+   * The "hook" intro (the best moment of the video played first): the passages it can play and
+   * the one it plays. Without it that intro isn't offered here, except as a preferred intro.
+   */
+  hook?: HookMenu;
 }
 
 /** The ready-made intros to choose from, each one playing in small with the channel's own logo and colours */
-export default function IntroPicker({ value, brand, name, onChange, onClose, heading, fields = "all", className = "" }: Props) {
-  const { t } = useTranslation();
+export default function IntroPicker({ value, brand, name, onChange, onClose, heading, fields = "all", className = "", hook }: Props) {
+  const { t, i18n } = useTranslation();
   const box = useRef<HTMLDivElement>(null);
   const frame = useIntroLoop();
   const [title, setTitle] = useState(value?.title ?? "");
@@ -100,7 +197,7 @@ export default function IntroPicker({ value, brand, name, onChange, onClose, hea
     const [min, max] = [76, window.innerHeight - 12];
     const shift = top < min ? min - top : bottom > max ? Math.max(min - top, max - bottom) : 0;
     if (shift) el.style.transform = `translateY(${Math.round(shift)}px)`;
-  }, [style, fields]);
+  }, [style, fields, hook?.passages.length]);
   /** Heard as soon as it is chosen */
   const listen = (id: string) => {
     try {
@@ -123,7 +220,7 @@ export default function IntroPicker({ value, brand, name, onChange, onClose, hea
     const { sound: _before, ...rest } = value;
     onChange(sound ? { ...rest, sound } : rest);
     if (sound && sound !== NO_SOUND) listen(sound);
-    else if (!sound && style) listen(defaultIntroSound(style));
+    else if (!sound && style && defaultIntroSound(style)) listen(defaultIntroSound(style)!);
     else playing.current?.pause();
   };
   const commitTitle = () => {
@@ -154,6 +251,17 @@ export default function IntroPicker({ value, brand, name, onChange, onClose, hea
       </button>
     );
   };
+  // The styles offered here: a hook needs a video made of several passages (a clip alone has none to tease)
+  const styles = INTRO_IDS.filter((id) => id !== "hook" || !!hook || fields === "style");
+  const played = hook?.moment ? hook.passages.find((p) => p.id === hook.moment!.item) : undefined;
+  /** The hook plays this passage (null: the app chooses), this part of it */
+  const pickMoment = (passage: HookMenu["passages"][number] | null, span?: [number, number]) => {
+    if (!value) return;
+    const { hook: _before, ...rest } = value;
+    if (!passage) return onChange(rest);
+    const [start, end] = span ?? hookSpan(passage);
+    onChange({ ...rest, hook: { item: passage.id, start, end } });
+  };
   const chip = (key: string, label: string, chosen: boolean, onClick: () => void, icon = true) => (
     <button
       key={key}
@@ -181,11 +289,12 @@ export default function IntroPicker({ value, brand, name, onChange, onClose, hea
       <div className="flex flex-wrap gap-x-4 gap-y-3">
         <div className="grid grid-cols-4 gap-1 w-[280px] flex-none content-start">
           {tile(null, t("compilation.intro.none"))}
-          {INTRO_IDS.map((id) => tile(id, t(`compilation.intro.style.${id}`)))}
+          {styles.map((id) => tile(id, t(`compilation.intro.style.${id}`)))}
         </div>
         {!style && fields !== "style" && <p className="flex-1 min-w-[200px] px-0.5 pt-2 text-[12px] leading-relaxed text-ink-3">{t("compilation.intro.noneHint")}</p>}
         {style && fields !== "style" && (
           <div className="flex-1 min-w-[200px]">
+            {style === "hook" && <p className="px-0.5 pb-2.5 text-[12px] leading-relaxed text-ink-3">{t("compilation.intro.hook.hint")}</p>}
             <label className={fields === "all" ? "block" : "hidden"}>
               <span className="block px-0.5 pb-1 text-[11.5px] text-ink-3">{t("compilation.intro.title")}</span>
               <input
@@ -198,6 +307,62 @@ export default function IntroPicker({ value, brand, name, onChange, onClose, hea
                 className="w-full h-8 px-2.5 rounded-[9px] bg-black/30 border border-white/10 text-[13px] text-white outline-none focus:border-accent-line placeholder:text-ink-4"
               />
             </label>
+            {/* The moment a hook plays: one of the video's passages, and the part of it that is kept */}
+            {style === "hook" && hook && (
+              <div className="mt-3">
+                <div className="flex items-center justify-between px-0.5 pb-1.5">
+                  <span className="text-[11.5px] text-ink-3">{t("compilation.intro.hook.label")}</span>
+                  {hook.onPlay && hook.moment && (
+                    <button type="button" onClick={hook.onPlay} className="inline-flex items-center gap-1 text-[11.5px] text-accent hover:text-white transition-colors">
+                      <Play className="w-3 h-3 fill-current" /> {t("compilation.intro.hook.play")}
+                    </button>
+                  )}
+                </div>
+                {hook.passages.length === 0 || !hook.moment ? (
+                  <p className="px-0.5 text-[12px] leading-relaxed text-[#f0c987]">{t("compilation.intro.hook.needs")}</p>
+                ) : (
+                  <>
+                    <div role="radiogroup" aria-label={t("compilation.intro.hook.label")} className="max-h-[138px] overflow-y-auto rounded-[9px] border border-white/10 bg-black/20">
+                      <button
+                        type="button"
+                        role="radio"
+                        aria-checked={hook.moment.auto}
+                        onClick={() => pickMoment(null)}
+                        className={`w-full flex items-center gap-2 px-2.5 h-8 text-left text-[12px] transition-colors ${hook.moment.auto ? "bg-accent-soft text-white" : "text-ink-2 hover:bg-white/[0.06]"}`}
+                      >
+                        <Sparkles className="w-3 h-3 flex-none text-accent" />
+                        <span className="flex-1 min-w-0 truncate">
+                          {t(hook.named ? "compilation.intro.hook.autoAi" : "compilation.intro.hook.auto")}
+                          {hook.moment.auto && played && <span className="text-ink-3"> · {t("compilation.intro.hook.passage", { number: played.number })}</span>}
+                        </span>
+                      </button>
+                      {hook.passages.map((passage) => {
+                        const chosen = !hook.moment!.auto && hook.moment!.item === passage.id;
+                        return (
+                          <button
+                            key={passage.id}
+                            type="button"
+                            role="radio"
+                            aria-checked={chosen}
+                            onClick={() => pickMoment(passage)}
+                            className={`w-full flex items-center gap-2 px-2.5 h-8 border-t border-white/[0.06] text-left text-[12px] transition-colors ${chosen ? "bg-accent-soft text-white" : "text-ink-2 hover:bg-white/[0.06]"}`}
+                          >
+                            <span className="w-4 flex-none text-right tabular-nums text-ink-3">{passage.number}</span>
+                            <span className="flex-1 min-w-0 truncate">{passage.text || t("compilation.intro.hook.passage", { number: passage.number })}</span>
+                            <span className="flex-none tabular-nums text-ink-3">{new Intl.NumberFormat(i18n.language, { maximumFractionDigits: 1 }).format(passage.end - passage.start)} s</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {played && (
+                      <div className="mt-3">
+                        <HookTrim passage={played} moment={hook.moment} words={hook.words} onChange={(start, end) => pickMoment(played, [start, end])} />
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
             <div className={`${fields === "all" ? "mt-3 " : "pt-1 "}flex items-center gap-3`}>
               <span className="flex-1 min-w-0 px-0.5 text-[12px] text-ink-2">{t("compilation.intro.followToggle")}</span>
               <button
@@ -214,12 +379,17 @@ export default function IntroPicker({ value, brand, name, onChange, onClose, hea
                 <span />
               </button>
             </div>
-            <p className="mt-3 px-0.5 pb-1.5 text-[11.5px] text-ink-3">{t("compilation.intro.sound")}</p>
-            <div className="flex flex-wrap gap-1.5">
-              {chip("style", t("compilation.intro.soundOfStyle", { name: t(`compilation.intro.sounds.${defaultIntroSound(style)}`) }), value?.sound === undefined || (!isIntroSound(value.sound) && value.sound !== NO_SOUND), () => pickSound(null))}
-              {INTRO_SOUND_IDS.filter((id) => id !== defaultIntroSound(style)).map((id) => chip(id, t(`compilation.intro.sounds.${id}`), value?.sound === id, () => pickSound(id)))}
-              {chip(NO_SOUND, t("compilation.intro.noSound"), value?.sound === NO_SOUND, () => pickSound(NO_SOUND), false)}
-            </div>
+            {/* A hook plays no sound of its own: its moment is heard */}
+            {defaultIntroSound(style) && (
+              <>
+                <p className="mt-3 px-0.5 pb-1.5 text-[11.5px] text-ink-3">{t("compilation.intro.sound")}</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {chip("style", t("compilation.intro.soundOfStyle", { name: t(`compilation.intro.sounds.${defaultIntroSound(style)}`) }), value?.sound === undefined || (!isIntroSound(value.sound) && value.sound !== NO_SOUND), () => pickSound(null))}
+                  {INTRO_SOUND_IDS.filter((id) => id !== defaultIntroSound(style)).map((id) => chip(id, t(`compilation.intro.sounds.${id}`), value?.sound === id, () => pickSound(id)))}
+                  {chip(NO_SOUND, t("compilation.intro.noSound"), value?.sound === NO_SOUND, () => pickSound(NO_SOUND), false)}
+                </div>
+              </>
+            )}
           </div>
         )}
       </div>

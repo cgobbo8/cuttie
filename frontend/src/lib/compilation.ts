@@ -7,6 +7,7 @@
 
 import type { TFunction } from "i18next";
 import type { Compilation, CompilationItem, CompilationSection, LiveHit, LiveSearchStep, VideoPlan } from "./api";
+import { HOOK_MAX, HOOK_MIN, HOOK_SECONDS, introSeconds, type HookChoice } from "./intro/intros";
 import { isTransition, type TransitionId } from "./transitions";
 
 /** Air kept around what is said when a result becomes an item, seconds */
@@ -63,6 +64,7 @@ export function itemFromHit(hit: LiveHit, liveDuration: number): CompilationItem
     ...(hit.spoken && hit.end > hit.start ? { fit: [hundredth(hit.start), hundredth(hit.end)] as [number, number] } : {}),
     ...(hit.sources.includes("ai") ? { score: hit.score } : {}),
     ...(hit.job ? { job: hit.job } : {}),
+    ...(hit.opening ? { opening: true } : {}),
   };
 }
 
@@ -341,6 +343,94 @@ export function fitToTarget<T extends Pick<Compilation, "sections">>(c: T, targe
   return fitted;
 }
 
+/* ── The "hook" intro: the moment of the video it plays first ── */
+
+/**
+ * The part of a passage a hook plays when nobody chose: all of one that is a hook's length, the
+ * end of a longer one (where the punchline is; nothing says so, the streamer can move it). Live seconds.
+ */
+export function hookSpan(item: Pick<CompilationItem, "start" | "end">): [number, number] {
+  return item.end - item.start <= HOOK_MAX ? [item.start, item.end] : [hundredth(item.end - HOOK_SECONDS), item.end];
+}
+
+/**
+ * The passage a video opens on when nobody chose: the one the AI named as its hook; else, among
+ * those short enough to be played whole (any, when none is), the best scored (of equals, the
+ * last: a payoff comes late), or the last one when nobody scored them. Never the first passage,
+ * which would play twice in a row; null when the video has no other.
+ */
+export function bestHook(items: CompilationItem[]): CompilationItem | null {
+  const later = items.slice(1);
+  if (later.length === 0) return null;
+  const named = later.find((item) => item.opening);
+  if (named) return named;
+  const short = later.filter((item) => item.end - item.start <= HOOK_MAX);
+  const among = short.length > 0 ? short : later;
+  const scored = among.filter((item) => item.score !== undefined);
+  if (scored.length === 0) return among[among.length - 1];
+  const best = Math.max(...scored.map((item) => item.score!));
+  return [...scored].reverse().find((item) => item.score === best)!;
+}
+
+/** The moment a "hook" intro plays: a passage of the video and the part of it that is shown (live seconds) */
+export interface HookMoment {
+  item: CompilationItem;
+  start: number;
+  end: number;
+  /** Nobody chose it: the app did, and chooses again when the video changes */
+  auto: boolean;
+}
+
+/**
+ * What a video with a "hook" intro opens on: the moment the streamer chose while it is still
+ * one of the video's passages (kept inside the passage as it is cut today), else the app's
+ * choice. Null: another intro, or a video with fewer than two passages.
+ */
+export function hookMoment(c: Pick<Compilation, "sections" | "intro">): HookMoment | null {
+  if (c.intro?.style !== "hook") return null;
+  const items = allItems(c);
+  const kept = c.intro.hook;
+  const chosen = kept && !kept.auto ? items.slice(1).find((item) => item.id === kept.item) : undefined;
+  if (chosen && kept) {
+    const most = Math.min(HOOK_MAX, chosen.end - chosen.start);
+    const least = Math.min(HOOK_MIN, most);
+    const length = Math.min(most, Math.max(least, kept.end - kept.start));
+    const start = Math.min(Math.max(kept.start, chosen.start), chosen.end - length);
+    return { item: chosen, start: hundredth(start), end: hundredth(start + length), auto: false };
+  }
+  const item = bestHook(items);
+  if (!item) return null;
+  const [start, end] = hookSpan(item);
+  return { item, start, end, auto: true };
+}
+
+/** The video with what its "hook" intro plays written on it (what the library counts its length with); itself when nothing changes */
+export function withHook<T extends Pick<Compilation, "sections" | "intro">>(c: T): T {
+  if (!c.intro) return c;
+  const moment = hookMoment(c);
+  const next: HookChoice | undefined = moment ? { item: moment.item.id, start: moment.start, end: moment.end, ...(moment.auto ? { auto: true } : {}) } : undefined;
+  const now = c.intro.hook;
+  if ((!now && !next) || (now && next && now.item === next.item && now.start === next.start && now.end === next.end && !!now.auto === !!next.auto)) return c;
+  const { hook: _before, ...rest } = c.intro;
+  return { ...c, intro: next ? { ...rest, hook: next } : rest };
+}
+
+/** Seconds the video's intro adds: its style's, or what its hook's moment lasts */
+export function openingSeconds(c: Pick<Compilation, "sections" | "intro">): number {
+  if (c.intro?.style !== "hook") return introSeconds(c.intro);
+  const moment = hookMoment(c);
+  return moment ? moment.end - moment.start : 0;
+}
+
+/**
+ * Where a hook cut out of a longer passage starts: on a word, never inside one. `words`: the
+ * clip's (clip seconds); `at`: where it would start; `floor`: where the passage itself starts.
+ */
+export function hookStart(words: { start: number; end: number }[], at: number, floor: number): number {
+  const next = words.find((word) => word.start >= at - 0.35);
+  return next ? Math.max(floor, next.start - 0.1) : at;
+}
+
 /**
  * The templates the AI chose, on the compilation: `main` becomes the video's
  * template, and only the passages shown otherwise keep a template of their own.
@@ -392,8 +482,10 @@ export function sectionsFromPlan(plan: VideoPlan, liveDuration: LiveLength): Com
 }
 
 /** The video as the AI is told about it when a change is asked: its parts and where their passages are in the live */
-export function planCurrent(c: Pick<Compilation, "sections">): { title: string; items: { start: number; end: number; job?: string }[] }[] {
-  return c.sections.filter((s) => s.items.length > 0).map((s) => ({ title: s.title, items: s.items.map(({ start, end, job }) => ({ start, end, ...(job ? { job } : {}) })) }));
+export function planCurrent(c: Pick<Compilation, "sections">): { title: string; items: { start: number; end: number; job?: string; opening?: boolean }[] }[] {
+  return c.sections
+    .filter((s) => s.items.length > 0)
+    .map((s) => ({ title: s.title, items: s.items.map(({ start, end, job, opening }) => ({ start, end, ...(job ? { job } : {}), ...(opening ? { opening: true } : {}) })) }));
 }
 
 /** How long a live is: one length for all, or by live when the compilation takes from several (`job`: absent for its own) */
@@ -423,6 +515,13 @@ export function revisedSections(
   // its words shares little with them. It is the same one as soon as they share a word's worth
   const same = (item: CompilationItem, hit: { start: number; end: number; job?: string }) =>
     sameMoment(item, hit) || (sameLive(item, hit) && Math.min(item.end, hit.end) - Math.max(item.start, hit.start) >= SAME_LINE);
+  // The moment the video can open on is the one the AI names now; when it names none, the one it had named stays
+  const names = plan.sections.some((s) => s.hits.some((hit) => hit.opening));
+  const opens = (item: CompilationItem, hit: { opening?: boolean }): CompilationItem => {
+    if (!names || !!item.opening === !!hit.opening) return item;
+    const { opening: _before, ...rest } = item;
+    return hit.opening ? { ...rest, opening: true } : rest;
+  };
   for (const planned of plan.sections) {
     const items: CompilationItem[] = [];
     for (const hit of planned.hits) {
@@ -431,9 +530,9 @@ export function revisedSections(
         kept.add(known.id);
         if (hit.recut) {
           const { start, end, text, fit } = itemFromHit(hit, lengthOf(liveDuration, hit.job));
-          items.push({ ...known, start, end, text, fit });
+          items.push(opens({ ...known, start, end, text, fit }, hit));
           recut.push(known.id);
-        } else items.push(known);
+        } else items.push(opens(known, hit));
         // A passage given back in two (a dead line taken out of its middle): its second half is new
       } else if ((hit.recut || !before.some((item) => same(item, hit))) && !items.some((item) => same(item, hit))) {
         const item = itemFromHit(hit, lengthOf(liveDuration, hit.job));
@@ -489,17 +588,21 @@ export function stepText(t: TFunction, step: LiveSearchStep | null): string {
 }
 
 /** What the AI is told of a video to choose its music and its intro: its title, its parts, how long, and what is said in some of its passages */
-export function soundBrief(c: Pick<Compilation, "name" | "sections">, most = 14): { title: string; parts: string[]; seconds: number; passages: number; said: string[] } {
-  const items = allItems(c);
-  // A few passages spread over the whole video, not only its beginning
+export function soundBrief(c: Pick<Compilation, "name" | "sections">, most = 30): { title: string; parts: string[]; seconds: number; passages: number; said: string[]; lengths: number[]; ids: string[] } {
+  // Those where something is said, in the video's order; of a long video, some spread over the whole of it
+  const items = allItems(c).filter((item) => item.text.trim());
   const step = Math.max(1, items.length / most);
   const picked = Array.from({ length: Math.min(most, items.length) }, (_, i) => items[Math.floor(i * step)]);
   return {
     title: c.name.trim(),
     parts: c.sections.filter((s) => s.items.length > 0 && s.title.trim()).map((s) => s.title.trim()),
     seconds: Math.round(compilationLength(c)),
-    passages: items.length,
-    said: picked.map((item) => item.text.trim()).filter(Boolean),
+    passages: allItems(c).length,
+    said: picked.map((item) => item.text.trim()),
+    // How long each of them lasts, seconds: a hook plays a short passage whole, only the end of a long one
+    lengths: picked.map((item) => Math.round((item.end - item.start) * 10) / 10),
+    // Which passage each line is: the AI names the one the video could open on by its place in `said`
+    ids: picked.map((item) => item.id),
   };
 }
 
@@ -508,9 +611,23 @@ export function soundBrief(c: Pick<Compilation, "name" | "sections">, most = 14)
  * chose none. What the streamer had set on them stays (the music's presence, the intro's own
  * title and sound) when the track or the style doesn't change. The intro says the AI chose it (`by`):
  * its next choices stay away from the intros it gave the last videos, not from those picked by hand.
+ * `opening`: the passage the AI named as the one the video can open on (what a "hook" intro plays
+ * unless the streamer chose another); none named: the one it had named before stays.
  */
-export function applySound<T extends Pick<Compilation, "music" | "intro">>(c: T, choice: { music: string | null; intro: string | null }): T {
-  const { music, intro, ...rest } = c;
+export function applySound<T extends Pick<Compilation, "music" | "intro" | "sections">>(c: T, choice: { music: string | null; intro: string | null; opening?: string | null }): T {
+  const { music, intro, ...kept } = c;
+  // Never the first passage: it would play twice in a row
+  const named = choice.opening && allItems(c).findIndex((item) => item.id === choice.opening) > 0 ? choice.opening : null;
+  const rest = named
+    ? mapSections(kept as unknown as T, (s) => ({
+        ...s,
+        items: s.items.map((item) => {
+          if (!!item.opening === (item.id === named)) return item;
+          const { opening: _before, ...plain } = item;
+          return item.id === named ? { ...plain, opening: true } : plain;
+        }),
+      }))
+    : kept;
   return {
     ...rest,
     ...(choice.music ? { music: { ...(music?.volume !== undefined ? { volume: music.volume } : {}), track: choice.music } } : {}),

@@ -63,8 +63,9 @@ describe("the sound preferences of the brand kit", () => {
     let intros = screen.getByRole("dialog", { name: "Intro préférée" });
     expect(within(intros).getAllByRole("button")).toHaveLength(12);
     expect(within(intros).queryByRole("textbox")).toBeNull();
-    fireEvent.click(within(intros).getByRole("button", { name: "Stickers" }));
-    expect(onSave).toHaveBeenLastCalledWith({ intro: "sticker" });
+    // (a hook can be the preferred intro: a video opens on it once it has passages)
+    fireEvent.click(within(intros).getByRole("button", { name: "Hook" }));
+    expect(onSave).toHaveBeenLastCalledWith({ intro: "hook" });
     fireEvent.click(screen.getByRole("button", { name: "Intro préférée" }));
     intros = screen.getByRole("dialog", { name: "Intro préférée" });
     fireEvent.click(within(intros).getByRole("button", { name: "Aucune" }));

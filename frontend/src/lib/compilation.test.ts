@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { TFunction } from "i18next";
-import type { CompilationItem, CompilationSection, LiveHit } from "./api";
+import type { CompilationItem, CompilationSection, LiveHit, VideoPlan } from "./api";
 import {
   PLAIN_CUT,
   itemsBetween,
@@ -16,6 +16,12 @@ import {
   allItems,
   applyLooks,
   applySound,
+  bestHook,
+  hookMoment,
+  hookSpan,
+  hookStart,
+  openingSeconds,
+  withHook,
   soundBrief,
   applyTight,
   clearLooks,
@@ -447,22 +453,159 @@ describe("what the AI is doing", () => {
       ],
     };
     // Its title, the parts that have a title and passages, its length, what is said (nothing for a passage without words)
-    expect(soundBrief(video)).toEqual({ title: "De calme à débordés", parts: ["C'est bien calme"], seconds: 12, passages: 3, said: ["Y'a personne", "On va être submergés"] });
+    // (each line says which passage it is: the AI names the one the video could open on by its place among them)
+    expect(soundBrief(video)).toEqual({ title: "De calme à débordés", parts: ["C'est bien calme"], seconds: 12, passages: 3, said: ["Y'a personne", "On va être submergés"], lengths: [4, 4], ids: ["a", "c"] });
     // A long video: a few passages from all over it, not only its beginning
     const long = { name: "Long", sections: [{ id: "one", title: "", query: "", items: Array.from({ length: 40 }, (_, n) => piece(`p${n}`, `phrase ${n}`)) }] };
     const told = soundBrief(long, 4);
     expect(told.said).toEqual(["phrase 0", "phrase 10", "phrase 20", "phrase 30"]);
+    expect(told.ids).toEqual(["p0", "p10", "p20", "p30"]);
     expect(told.passages).toBe(40);
+    // Unless asked otherwise, up to thirty passages
+    expect(soundBrief(long).said).toHaveLength(30);
 
     // The music and the intro it chose; what the streamer had set on them stays when the track or the style is the same
-    const set = { name: "x", music: { track: "lofi", volume: 1.6 }, intro: { style: "slam", title: "Le calme", sound: "none" } };
+    const set = { name: "x", sections: [], music: { track: "lofi", volume: 1.6 }, intro: { style: "slam", title: "Le calme", sound: "none" } };
     // ...and the intro says the AI chose it (its next choices stay away from the ones it gave, not from those picked by hand)
-    expect(applySound(set, { music: "phonk", intro: "slam" })).toEqual({ name: "x", music: { track: "phonk", volume: 1.6 }, intro: { style: "slam", title: "Le calme", sound: "none", by: "ai" } });
+    expect(applySound(set, { music: "phonk", intro: "slam" })).toEqual({ name: "x", sections: [], music: { track: "phonk", volume: 1.6 }, intro: { style: "slam", title: "Le calme", sound: "none", by: "ai" } });
     // Another style: its own sound, the title stays
     expect(applySound(set, { music: "phonk", intro: "rush" }).intro).toEqual({ style: "rush", title: "Le calme", by: "ai" });
     // It chose none: they are gone
-    expect(applySound(set, { music: null, intro: null })).toEqual({ name: "x" });
-    const bare: { name: string; music?: { track: string }; intro?: { style: string } } = { name: "x" };
-    expect(applySound(bare, { music: "phonk", intro: "neon" })).toEqual({ name: "x", music: { track: "phonk" }, intro: { style: "neon", by: "ai" } });
+    expect(applySound(set, { music: null, intro: null })).toEqual({ name: "x", sections: [] });
+    const bare: { name: string; sections: CompilationSection[]; music?: { track: string }; intro?: { style: string } } = { name: "x", sections: [] };
+    expect(applySound(bare, { music: "phonk", intro: "neon" })).toEqual({ name: "x", sections: [], music: { track: "phonk" }, intro: { style: "neon", by: "ai" } });
+
+    // The passage it named as the one the video can open on says so, and only that one
+    const named = applySound({ ...video, sections: [{ ...video.sections[0], items: [piece("a", "x"), { ...piece("b", "y"), opening: true }] }, video.sections[1]] }, { music: null, intro: "hook", opening: "c" });
+    expect(allItems(named).map((item) => [item.id, !!item.opening])).toEqual([["a", false], ["b", false], ["c", true]]);
+    // It named none, one that is gone, or the first passage (which would play twice in a row): what it had named stays
+    const before = { ...video, sections: [{ ...video.sections[0], items: [piece("a", "x"), { ...piece("b", "y"), opening: true }] }] };
+    for (const opening of [null, undefined, "zzz", "a"]) expect(allItems(applySound(before, { music: null, intro: null, opening })).map((item) => !!item.opening)).toEqual([false, true]);
+  });
+});
+
+describe("the moment a hook intro plays", () => {
+  const piece = (id: string, start: number, end: number, more: Partial<CompilationItem> = {}): CompilationItem => ({ id, start, end, text: id, why: "", sources: ["ai"], ...more });
+  const video = (items: CompilationItem[], intro: { style: string; hook?: { item: string; start: number; end: number; auto?: boolean } } = { style: "hook" }) => ({
+    sections: [
+      { id: "one", title: "", query: "", items: items.slice(0, 2) },
+      { id: "two", title: "", query: "", items: items.slice(2) },
+    ],
+    intro,
+  });
+
+  it("takes all of a passage that is a hook's length, and the end of a longer one", () => {
+    expect(hookSpan({ start: 100, end: 104 })).toEqual([100, 104]);
+    // (cutting the start off a passage of 6.7 s took the punchline out of the first video it was tried on)
+    expect(hookSpan({ start: 100, end: 108 })).toEqual([100, 108]);
+    // Longer than a hook: its last five seconds
+    expect(hookSpan({ start: 100, end: 112 })).toEqual([107, 112]);
+  });
+
+  it("chooses the passage the AI named, else the best one, else the last, never the first", () => {
+    const a = piece("a", 0, 4, { score: 0.99 });
+    const b = piece("b", 10, 14, { score: 0.7 });
+    const c = piece("c", 20, 24, { score: 0.9 });
+    const d = piece("d", 30, 34, { score: 0.9 });
+    // The best scored but the first; of equals, the last (a payoff comes late)
+    expect(bestHook([a, b, c, d])?.id).toBe("d");
+    // The one the AI named as the video's hook wins over the scores
+    expect(bestHook([a, { ...b, opening: true }, c, d])?.id).toBe("b");
+    // ...unless it is the first passage: it would play twice in a row
+    expect(bestHook([{ ...a, opening: true }, b, c])?.id).toBe("c");
+    // Nobody scored them (picked by hand): the last one
+    expect(bestHook([piece("x", 0, 3), piece("y", 5, 8), piece("z", 9, 12)])?.id).toBe("z");
+    // One that can be played whole comes before a longer one, however well scored; all long: the best of them
+    expect(bestHook([a, piece("long", 10, 22, { score: 0.95 }), c])?.id).toBe("c");
+    expect(bestHook([piece("x", 0, 3), piece("y", 5, 8), piece("long", 9, 30)])?.id).toBe("y");
+    expect(bestHook([a, piece("l1", 10, 22, { score: 0.6 }), piece("l2", 30, 45, { score: 0.8 })])?.id).toBe("l2");
+    // One passage, or none: nothing to open on
+    expect(bestHook([a])).toBeNull();
+    expect(bestHook([])).toBeNull();
+  });
+
+  it("opens the video on the app's choice until the streamer chooses, inside the passage as it is cut today", () => {
+    const items = [piece("a", 0, 4), piece("b", 10, 22, { score: 0.9 }), piece("c", 30, 34, { score: 0.5 })];
+    // Nobody chose: the best passage that can be played whole; when all are long, the last five seconds of the best
+    expect(hookMoment(video(items))).toEqual({ item: items[2], start: 30, end: 34, auto: true });
+    expect(hookMoment(video(items.slice(0, 2)))).toEqual({ item: items[1], start: 17, end: 22, auto: true });
+    // Another intro, or a video of one passage: no moment
+    expect(hookMoment(video(items, { style: "slam" }))).toBeNull();
+    expect(hookMoment(video([items[0]]))).toBeNull();
+    expect(hookMoment({ sections: [] })).toBeNull();
+    // The streamer chose a passage and what is kept of it
+    expect(hookMoment(video(items, { style: "hook", hook: { item: "c", start: 31, end: 33.5 } }))).toEqual({ item: items[2], start: 31, end: 33.5, auto: false });
+    // The passage was cut since: the moment stays inside it, as long as it was when it can
+    expect(hookMoment(video([items[0], items[1], piece("c", 32, 34)], { style: "hook", hook: { item: "c", start: 31, end: 33.5 } }))).toMatchObject({ start: 32, end: 34, auto: false });
+    // Never longer than a hook, never shorter than one (a passage shorter still is taken whole)
+    expect(hookMoment(video(items, { style: "hook", hook: { item: "b", start: 10, end: 22 } }))).toMatchObject({ start: 10, end: 18 });
+    expect(hookMoment(video(items, { style: "hook", hook: { item: "b", start: 12, end: 12.2 } }))).toMatchObject({ start: 12, end: 13.5 });
+    expect(hookMoment(video([items[0], piece("s", 50, 51)], { style: "hook", hook: { item: "s", start: 50.2, end: 50.4 } }))).toMatchObject({ start: 50, end: 51 });
+    // The passage is gone, or became the first one: the app chooses again
+    expect(hookMoment(video(items, { style: "hook", hook: { item: "zzz", start: 1, end: 3 } }))).toMatchObject({ item: items[2], auto: true });
+    expect(hookMoment(video(items, { style: "hook", hook: { item: "a", start: 1, end: 3 } }))).toMatchObject({ item: items[2], auto: true });
+    // What the app wrote the last time is not a choice: it chooses again
+    expect(hookMoment(video(items, { style: "hook", hook: { item: "b", start: 17, end: 22, auto: true } }))).toMatchObject({ item: items[2], auto: true });
+  });
+
+  it("writes on the video what its hook plays, and counts it in its length", () => {
+    const items = [piece("a", 0, 4), piece("b", 10, 22, { score: 0.9 }), piece("c", 30, 34, { score: 0.5 })];
+    const written = withHook(video(items));
+    expect(written.intro).toEqual({ style: "hook", hook: { item: "c", start: 30, end: 34, auto: true } });
+    // Nothing to change: the very same video
+    expect(withHook(written)).toBe(written);
+    const chosen = video(items, { style: "hook", hook: { item: "c", start: 31, end: 33.5 } });
+    expect(withHook(chosen)).toBe(chosen);
+    // Another intro keeps no moment; a video without an intro is left alone
+    expect(withHook(video(items, { style: "slam", hook: { item: "c", start: 31, end: 33.5 } })).intro).toEqual({ style: "slam" });
+    const plain = { sections: [] };
+    expect(withHook(plain)).toBe(plain);
+    // A hook with nothing to play (one passage): no moment written
+    expect(withHook(video([items[0]], { style: "hook", hook: { item: "b", start: 17, end: 22, auto: true } })).intro).toEqual({ style: "hook" });
+
+    // Its length in the video: the moment's, a jingle's, nothing
+    expect(openingSeconds(video(items))).toBe(4);
+    expect(openingSeconds(chosen)).toBe(2.5);
+    expect(openingSeconds(video(items, { style: "slam" }))).toBe(1.6);
+    expect(openingSeconds(video([items[0]]))).toBe(0);
+    expect(openingSeconds({ sections: [] })).toBe(0);
+  });
+
+  it("starts on a word when it is cut out of a longer passage", () => {
+    const words = [
+      { start: 10, end: 10.4 },
+      { start: 12.1, end: 12.6 },
+      { start: 12.7, end: 13 },
+    ];
+    // It would start at 12.3, inside a word: just before that word instead
+    expect(hookStart(words, 12.3, 9)).toBeCloseTo(12);
+    // In a silence: before the next word
+    expect(hookStart(words, 11, 9)).toBeCloseTo(12);
+    // Never before the passage itself
+    expect(hookStart(words, 10.1, 9.95)).toBeCloseTo(9.95);
+    // No word after it (a sound, a clip never transcribed): where it was
+    expect(hookStart(words, 20, 9)).toBe(20);
+    expect(hookStart([], 12.3, 9)).toBe(12.3);
+  });
+
+  it("keeps what the AI named as the video's hook when a plan becomes passages, and follows it when the video is changed", () => {
+    const hit = (start: number, end: number, more: Partial<LiveHit> = {}): LiveHit => ({ start, end, sources: ["ai"], text: `t${start}`, before: "", after: "", chat: [], why: "", score: 0.8, ...more });
+    expect(itemFromHit(hit(100, 104, { opening: true }), 0).opening).toBe(true);
+    expect("opening" in itemFromHit(hit(100, 104), 0)).toBe(false);
+
+    // The video as it is, told to the AI with a change: the passage it can open on says so
+    const now = { sections: [{ id: "one", title: "A", query: "", items: [piece("a", 100, 104), piece("b", 200, 204, { opening: true }), piece("c", 300, 304)] }] };
+    expect(planCurrent(now)[0].items).toEqual([{ start: 100, end: 104 }, { start: 200, end: 204, opening: true }, { start: 300, end: 304 }]);
+
+    // The AI gives the video back and names another moment: the mark moves
+    const moved = revisedSections(now, { title: "", sections: [{ title: "A", hits: [hit(100, 104), hit(200, 204), hit(300, 304, { opening: true })] }], note: "" } as VideoPlan, 0);
+    expect(moved.sections[0].items.map((item) => !!item.opening)).toEqual([false, false, true]);
+    expect(moved.sections[0].items.map((item) => item.id)).toEqual(["a", "b", "c"]);
+    // It names none: the one it had named stays
+    const kept = revisedSections(now, { title: "", sections: [{ title: "A", hits: [hit(100, 104), hit(200, 204), hit(300, 304)] }], note: "" } as VideoPlan, 0);
+    expect(kept.sections[0].items.map((item) => !!item.opening)).toEqual([false, true, false]);
+    // A passage it adds and names
+    const added = revisedSections(now, { title: "", sections: [{ title: "A", hits: [hit(100, 104), hit(200, 204), hit(300, 304), hit(400, 404, { opening: true })] }], note: "" } as VideoPlan, 0);
+    expect(added.sections[0].items.map((item) => !!item.opening)).toEqual([false, false, false, true]);
   });
 });

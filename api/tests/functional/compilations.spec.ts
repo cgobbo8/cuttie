@@ -216,8 +216,8 @@ test.group('Compilations', (group) => {
     assert.deepEqual((await save({ style: 'neon', sound: 'none', follow: false })).intro, { style: 'neon', sound: 'none', follow: false })
     // The follow button is there unless said otherwise: saying it is there keeps nothing
     assert.deepEqual((await save({ style: 'neon', follow: true })).intro, { style: 'neon' })
-    // A sound nobody knows: the style's own will play
-    assert.deepEqual((await save({ style: 'sticker', sound: 'kazoo' })).intro, { style: 'sticker' })
+    // A sound nobody knows: the style's own will play. A style that is gone (the sticker intro): the one that stands for it
+    assert.deepEqual((await save({ style: 'sticker', sound: 'kazoo' })).intro, { style: 'bands' })
     // The card says how long the video is with it: 4 s of passages and 1.8 s of intro
     const lives = ((await client.get('/api/compilations').loginAs(user)).body() as any).lives
     assert.equal(lives[0].compilations[0].length, 5.8)
@@ -225,6 +225,37 @@ test.group('Compilations', (group) => {
     assert.notProperty(await save({ style: 'wobble' }), 'intro')
     await save({ style: 'slam' })
     assert.notProperty(await save(undefined), 'intro')
+  })
+
+  test('keeps the moment a hook intro plays, counts it in the length, and gives a copy its own', async ({ client, assert }) => {
+    const { user, job } = await setup()
+    const url = `/api/jobs/${job.id}/compilations`
+    const { compilation } = (await client.post(url).loginAs(user).json({ name: 'Calme' })).body() as any
+    // (the second passage is the one the AI named as the video's hook: kept with it)
+    const sections = [{ id: compilation.sections[0].id, title: '', query: '', items: [item('aaaaaaaaaa', 100, 104), { ...item('bbbbbbbbbb', 200, 212), opening: true, colour: 'red' }] }]
+    const save = async (intro: unknown) => ((await client.put(`${url}/${compilation.id}`).loginAs(user).json({ ...compilation, sections, intro })).body() as any).compilation
+
+    // The moment: a passage of the video and the part of it that plays, chosen by the app (`auto`) or by the streamer
+    const auto = await save({ style: 'hook', sound: 'boom', hook: { item: 'bbbbbbbbbb', start: 207.004, end: 212, auto: true, colour: 'red' } })
+    assert.deepEqual(auto.intro, { style: 'hook', sound: 'boom', hook: { item: 'bbbbbbbbbb', start: 207, end: 212, auto: true } })
+    assert.deepEqual(auto.sections[0].items.map((i: any) => i.opening), [undefined, true])
+    assert.deepEqual((await save({ style: 'hook', hook: { item: 'bbbbbbbbbb', start: 203, end: 206.5 } })).intro, { style: 'hook', hook: { item: 'bbbbbbbbbb', start: 203, end: 206.5 } })
+    // The card counts it: 16 s of passages and the 3.5 s the hook plays first
+    const length = async () => ((await client.get('/api/compilations').loginAs(user)).body() as any).lives[0].compilations[0].length
+    assert.equal(await length(), 19.5)
+    // A moment that is not one (a passage the video does not have, no length, far too long): the intro stays, without it, and adds nothing yet
+    for (const hook of [{ item: 'zzzzzzzzzz', start: 203, end: 206 }, { item: 'bbbbbbbbbb', start: 206, end: 203 }, { item: 'bbbbbbbbbb', start: 200, end: 212 }, 'bbbbbbbbbb']) {
+      assert.deepEqual((await save({ style: 'hook', hook })).intro, { style: 'hook' })
+    }
+    assert.equal(await length(), 16)
+    // Only a hook has a moment
+    assert.deepEqual((await save({ style: 'slam', hook: { item: 'bbbbbbbbbb', start: 203, end: 206 } })).intro, { style: 'slam' })
+
+    // A copy has passages of its own: its hook plays its own
+    await save({ style: 'hook', hook: { item: 'bbbbbbbbbb', start: 203, end: 206.5 } })
+    const copy = ((await client.post(`${url}/${compilation.id}/duplicate`).loginAs(user)).body() as any).compilation
+    assert.notEqual(copy.sections[0].items[1].id, 'bbbbbbbbbb')
+    assert.deepEqual(copy.intro, { style: 'hook', hook: { item: copy.sections[0].items[1].id, start: 203, end: 206.5 } })
   })
 
   test('keeps the music a video plays, and offers the tracks whose file is on this machine', async ({ client, assert }) => {
@@ -604,6 +635,14 @@ test.group('Compilations', (group) => {
     // A well-formed one gets as far as the clips, with or without the follow button's two labels
     ;(await client.post(url).loginAs(user).json({ pieces, overlays: [], intro })).assertStatus(404)
     ;(await client.post(url).loginAs(user).json({ pieces, overlays: [], intro: { ...intro, follow: ['Suivre', 'Suivi'] } })).assertStatus(404)
+    // A hook plays a moment of the video first: without that piece, or with one that isn't a piece, it is no intro
+    const hook = { ...intro, style: 'hook', sound: undefined, hook: { clip: 'piece_hookhookab.mp4', from: 4, duration: 4.2, layers: [{ layer, z: 0 }] } }
+    for (const bad of [{ ...hook, hook: undefined }, { ...hook, hook: { ...hook.hook, duration: 0 } }, { ...hook, hook: { ...hook.hook, clip: 'notes.txt' } }, { ...hook, hook: { ...hook.hook, job: 'elsewhere' } }]) {
+      ;(await client.post(url).loginAs(user).json({ pieces, overlays: [], intro: bad })).assertStatus(400)
+    }
+    ;(await client.post(url).loginAs(user).json({ pieces, overlays: [], intro: hook })).assertStatus(404)
+    // Its clip in a live that isn't the user's: as for any piece
+    ;(await client.post(url).loginAs(user).json({ pieces, overlays: [], intro: { ...hook, hook: { ...hook.hook, job: '11111111-2222-3333-4444-555555555555' } } })).assertStatus(404)
 
     // A music: a track of the catalogue, with a level curve that is one
     const curve = { start: 0.7, ramps: [[1.5, 0.5, 0.09], [4, 1, 0]] }
@@ -613,6 +652,10 @@ test.group('Compilations', (group) => {
 
     // With its clip there, the export is queued under what it stands for
     writeFileSync(path.join(dir, 'a.mp4'), '')
+    // ...but not while the moment its hook plays has no clip
+    const noMoment = await client.post(url).loginAs(user).json({ pieces, overlays: [], intro: hook })
+    noMoment.assertStatus(404)
+    assert.deepEqual(noMoment.body(), { error: 'clip not found', clip: 'piece_hookhookab.mp4' })
     const queued = await client.post(url).loginAs(user).json({ key: 'comp_abcdef1234.mp4', name: 'Ma compilation', pieces, overlays: [] })
     queued.assertStatus(201)
     const shown = await client.get(`/api/renders/${(queued.body() as any).render_id}`).loginAs(user)

@@ -264,12 +264,12 @@ SOUND_KINDS = {
 # several things it fits, and several fit the same video: when "Stickers" alone said "for funny videos", every
 # video of a streamer whose lives are funny opened on it (5 out of 5 in the logs of an evening of tries).
 INTROS = {
+    "hook": "Not a jingle: the teaser of the video (see 4) plays first, under its title, framed by the channel's colours, then a flash and the video starts from its beginning. Nothing to wait through: it grips from the first frame. Fits a video that leads up to something worth teasing: a story with a payoff, a claim that turns out wrong, a reaction people will want explained. Not for a series of like moments where none stands out, nor when no passage would make a teaser.",
     "slam": "The logo falls on the screen, which shakes, with a deep hit. Heavy and blunt. Fits action, big moments, a punchline that lands, a fail that hurts.",
     "bands": "Three slanted bands in the channel's colours sweep across the screen. Lively and clean. Fits nearly any light video: funny moments, best-ofs, a themed compilation.",
     "glitch": "The screen misbehaves, the title splits in two colours. Nervous, a little dark. Fits chaos, bugs, fails, things going wrong, absurd or dark humour.",
     "neon": "A ring of light draws itself around the logo. Calm and stylish. Fits night moods, calm talk, stories, anything serious or tense.",
     "rush": "Manga speed lines, the title slams down askew. Fast and loud. Fits skill, chases, fast action, hype, a funny video that goes at full speed.",
-    "sticker": "The logo and the title slapped on like stickers on a wall of dots. Playful and bouncy. Fits jokes, silly moments, light-hearted videos.",
     "split": "Two halves slam together, then pull apart on the video. Fits duels, fights, arguments, two people or two sides, a before and an after.",
     "arcade": "An old CRT screen switches on, the logo comes block by block, the title blinks like 'insert coin', the tube goes out. Retro and fun. Fits gaming moments, fails, silly or nostalgic videos.",
     "news": "A TV news ident with a FLASH banner and the title in a lower third. Deadpan. Fits a story told with humour, drama, a running joke presented as an event, 'you won't believe what happened'.",
@@ -279,12 +279,14 @@ INTROS = {
 # What the app calls each intro, in each language it speaks (frontend/src/lib/i18n, compilation.intro.style): the AI
 # names an intro to the streamer as their screen does, not "Breaking news" to someone who reads "Flash info"
 INTRO_NAMES = {
-    "en": {"slam": "Impact", "bands": "Bands", "glitch": "Glitch", "neon": "Neon", "rush": "Speed", "sticker": "Stickers", "split": "Versus", "arcade": "Arcade", "news": "Breaking news", "shatter": "Shatter", "countdown": "Countdown"},
-    "fr": {"slam": "Impact", "bands": "Bandes", "glitch": "Glitch", "neon": "Néon", "rush": "Vitesse", "sticker": "Stickers", "split": "Duel", "arcade": "Arcade", "news": "Flash info", "shatter": "Éclats", "countdown": "Décompte"},
-    "es": {"slam": "Impacto", "bands": "Bandas", "glitch": "Glitch", "neon": "Neón", "rush": "Velocidad", "sticker": "Stickers", "split": "Duelo", "arcade": "Arcade", "news": "Última hora", "shatter": "Añicos", "countdown": "Cuenta atrás"},
+    "en": {"hook": "Hook", "slam": "Impact", "bands": "Bands", "glitch": "Glitch", "neon": "Neon", "rush": "Speed", "split": "Versus", "arcade": "Arcade", "news": "Breaking news", "shatter": "Shatter", "countdown": "Countdown"},
+    "fr": {"hook": "Hook", "slam": "Impact", "bands": "Bandes", "glitch": "Glitch", "neon": "Néon", "rush": "Vitesse", "split": "Duel", "arcade": "Arcade", "news": "Flash info", "shatter": "Éclats", "countdown": "Décompte"},
+    "es": {"hook": "Hook", "slam": "Impacto", "bands": "Bandas", "glitch": "Glitch", "neon": "Neón", "rush": "Velocidad", "split": "Duelo", "arcade": "Arcade", "news": "Última hora", "shatter": "Añicos", "countdown": "Cuenta atrás"},
 }
 # How many intros the model ranks for a video, and how many of the streamer's last videos its choice stays away from
 FITTING_INTROS, RECENT_INTROS = 3, 3
+# How many passages of a video the model is told about (it names the one the video could open on among them)
+MAX_SAID = 30
 
 
 def pick_intro(fits: list[str], preferred: str | None = None, recent: list[str] | None = None) -> str | None:
@@ -306,9 +308,11 @@ def choose_sound(
     video: dict, musics: list[dict], favourites: dict | None = None, preferred_intro: str | None = None, asked: str = "", language: str = "fr", client=None,
     recent_intros: list[str] | None = None,
 ) -> dict:
-    """What a video sounds like, decided from what it is: {"kind", "music": key or None, "intro": key or None, "why", "cost"}.
+    """What a video sounds like, decided from what it is: {"kind", "music": key or None, "intro": key or None, "why",
+    "teaser": the passage the video could open on (its number among `said`, from 1) or None, "cost"}.
 
-    `video`: {"title", "parts": [titles], "seconds", "passages": how many, "said": [what is said in some of them]};
+    `video`: {"title", "parts": [titles], "seconds", "passages": how many, "said": [what is said in some of them, in the video's order],
+    "lengths": [how long each of those lasts, seconds]};
     `musics`: {"key", "name", "kinds", "about"} (the tracks that can be played); `favourites`: the streamer's
     favourite track for a kind of video ({kind: key}); `preferred_intro`: the intro they prefer; `asked`: what
     they asked for the video, in their words; `recent_intros`: the intros the AI gave their last videos, the
@@ -336,7 +340,10 @@ def choose_sound(
         for m in musics
     )
     parts = [str(p).strip()[:80] for p in (video.get("parts") or []) if str(p).strip()][:12]
-    said = [" ".join(str(line).split())[:160] for line in (video.get("said") or []) if str(line).strip()][:16]
+    said = [" ".join(str(line).split())[:160] for line in (video.get("said") or []) if str(line).strip()][:MAX_SAID]
+    # How long each of them lasts, when the app says so for every one of them
+    lengths = video.get("lengths") if isinstance(video.get("lengths"), list) and len(video.get("lengths")) >= len(said) else []
+    lasts = [f"({float(lengths[n]):.0f} s) " if lengths and isinstance(lengths[n], (int, float)) and lengths[n] > 0 else "" for n in range(len(said))]
     seconds = float(video.get("seconds") or 0)
     prompt = f"""A streamer makes a short vertical video (TikTok, Shorts, Reels) from passages of their Twitch live streams. Decide what it sounds like: its background music, and whether it opens with an intro.
 
@@ -344,8 +351,8 @@ THE VIDEO
 Title: « {str(video.get("title") or "").strip()[:120] or "(none)"} »
 Parts: {", ".join(f"« {p} »" for p in parts) if parts else "one part, no titles"}
 Length: {seconds:.0f} s in {int(video.get("passages") or 0)} passages.
-What is said in some of them:
-{chr(10).join(f"- « {line} »" for line in said) if said else "- (nothing: mostly the game)"}
+What is said in some of them, in the order they play:
+{chr(10).join(f"{n}. {lasts[n - 1]}« {line} »" for n, line in enumerate(said, 1)) if said else "- (nothing: mostly the game)"}
 What the streamer asked for this video: {f"« {asked.strip()[:800]} »" if asked.strip() else "nothing about the sound"}
 
 1. KIND. What kind of video is it? One of:
@@ -356,13 +363,15 @@ What the streamer asked for this video: {f"« {asked.strip()[:800]} »" if asked
 [none] No music.
 Take the streamer's favourite for the kind of the video when they have one (★). Otherwise the track that best fits what the video shows. A video that is all talk can have one too (a calm one). Give "none" only when a music would hurt (a serious or sad moment), when no track fits at all, or when the streamer asked for none. If the streamer asked for a music or a mood, follow that first.
 
-3. INTRO. A jingle of about two seconds before the first passage: the channel's logo, its colours, the video's title. On these platforms many viewers leave within the first second, so an intro must earn its place: give some when the video is a compilation with a title worth reading (a best-of, a themed video, several parts) and lasts 30 s or more. Give none for a single moment or a very short video. If the streamer asked for an intro, or for none, follow that first; when they named or described one, give that one alone. The intros (several fit the same video: a kind of video has no intro of its own):
+3. INTRO. What the video opens with before its first passage: a jingle of about two seconds (the channel's logo, its colours, the video's title), or its teaser. On these platforms many viewers leave within the first second, so an intro must earn its place: give some when the video is a compilation with a title worth reading (a best-of, a themed video, several parts) and lasts 30 s or more. Give none for a single moment or a very short video. If the streamer asked for an intro, or for none, follow that first; when they named or described one, give that one alone. The intros (several fit the same video: a kind of video has no intro of its own):
 {chr(10).join(f"[{key}] « {named[key]} ». {what}" for key, what in INTROS.items())}
 [none] No intro.
 Give the {FITTING_INTROS} that fit this video best, the best first: judge on what happens in it and how it feels (its title, its parts, what is said), not on its kind alone. Fewer when fewer fit; an empty list for no intro. Which of them the video opens with is then decided by what the streamer's last videos opened with, so that they don't all start the same way.
 {f"The streamer's preferred intro is [{preferred_intro}]: put it among those you give whenever it can fit this video." if preferred_intro else ""}
 
-Answer with JSON only: {{"kind": "<kind>", "music": "<track key or none>", "why": "<one sentence in {spoken}, for the streamer: the kind of video you saw and why this music (or none); call the track by its name>", "intros": [{{"key": "<intro key>", "why": "<one short sentence in {spoken}, for the streamer: why this intro for this video, called by the name given between « »>"}}], "no_intro": "<only when you give no intro: one short sentence in {spoken} saying why>"}}"""
+4. TEASER. Whatever the intro, name the passage the video could open on as a teaser: a few seconds played before everything else to make people stay, after which the video starts from its beginning and that passage plays again at its place. Take, among the numbered passages above, the strongest instant that also tells what the video is about (the reaction to the story it tells, the line that sums up the running joke, the claim about to turn out wrong): understood on its own, never passage 1. A passage of 8 seconds or less plays whole as a teaser; of a longer one only the last five seconds play: prefer a short passage whose words say it all (3 to 8 seconds). Give 0 when none of them would do.
+
+Answer with JSON only: {{"kind": "<kind>", "music": "<track key or none>", "teaser": <number of the passage, or 0>, "why": "<one sentence in {spoken}, for the streamer: the kind of video you saw and why this music (or none); call the track by its name>", "intros": [{{"key": "<intro key>", "why": "<one short sentence in {spoken}, for the streamer: why this intro for this video, called by the name given between « »>"}}], "no_intro": "<only when you give no intro: one short sentence in {spoken} saying why>"}}"""
     try:
         response = client.chat.completions.create(
             model=SEARCH_MODEL,
@@ -392,9 +401,12 @@ Answer with JSON only: {{"kind": "<kind>", "music": "<track key or none>", "why"
     fits = fits[:FITTING_INTROS]
     intro = pick_intro(fits, preferred_intro, [key for key in (recent_intros or []) if key in INTROS])
     why = " ".join(part for part in (" ".join(str(data.get("why") or "").split()), reasons.get(intro, "") if intro else " ".join(str(data.get("no_intro") or "").split())) if part)
+    # The passage the video could open on: one of those it was shown, never the first
+    teaser = data.get("teaser")
+    teaser = teaser if isinstance(teaser, int) and not isinstance(teaser, bool) and 2 <= teaser <= len(said) else None
     cost = _cost(response)
-    logger.info(f"Sound of « {str(video.get('title') or '')[:40]} »: {kind}, music {music}, intro {intro} among {fits or 'none'} (~{cost:.4f} $)")
-    return {"kind": kind, "music": music, "intro": intro, "why": why[:500], "cost": round(cost, 4)}
+    logger.info(f"Sound of « {str(video.get('title') or '')[:40]} »: {kind}, music {music}, intro {intro} among {fits or 'none'}, teaser {teaser or 'none'} (~{cost:.4f} $)")
+    return {"kind": kind, "music": music, "intro": intro, "why": why[:500], "teaser": teaser, "cost": round(cost, 4)}
 
 
 def write_usage(name: str, description: str, language: str = "fr") -> dict:

@@ -11,6 +11,9 @@ import {
   isOverlayLayer,
   joinTouching,
   montageFrames,
+  introHold,
+  playsIntro,
+  renderIntro,
   moveEdge,
   nextStart,
   normalizeRanges,
@@ -201,6 +204,18 @@ describe("montage for Remotion", () => {
     // An intro holds the screen first: the video is that much longer (one this app doesn't know adds nothing)
     expect(montageFrames([{ duration: 4 }], 30, { style: "slam" })).toBe(48 + 120);
     expect(montageFrames([{ duration: 4 }], 30, { style: "wobble" })).toBe(120);
+    // A hook holds the screen for as long as its moment; without one it is no intro at all
+    expect(montageFrames([{ duration: 4 }], 30, { style: "hook", hook: { duration: 4.2 } })).toBe(126 + 120);
+    expect(montageFrames([{ duration: 4 }], 30, { style: "hook" })).toBe(120);
+    expect(introHold({ style: "hook", hook: { duration: 4.2 } }, 60)).toBe(252);
+    expect(playsIntro({ style: "hook" })).toBe(false);
+    expect(playsIntro({ style: "slam" }) && playsIntro({ style: "hook", hook: { duration: 3 } })).toBe(true);
+    // To the renderer, the moment of a hook names its clip (and its live when it isn't the export's own)
+    const drawn = { title: "T", name: "F", logo: null, colors: { accent: "#111111", highlight: "#222222", dark: "#000000", light: "#ffffff" }, font: "Anton" };
+    const moment = { from: 12, duration: 4.2, layers: [] };
+    expect(renderIntro({ ...drawn, style: "hook", hook: moment }, "piece_abc.mp4", "live-2")).toEqual({ ...drawn, style: "hook", hook: { ...moment, clip: "piece_abc.mp4", job: "live-2" } });
+    expect(renderIntro({ ...drawn, style: "hook", hook: moment }, "piece_abc.mp4").hook).toEqual({ ...moment, clip: "piece_abc.mp4" });
+    expect(renderIntro({ ...drawn, style: "slam", sound: "boom" })).toEqual({ ...drawn, style: "slam", sound: "boom" });
   });
 
   it("gives each piece the template's layers on the clip's clock, and lays the hook and widgets once over the whole", () => {

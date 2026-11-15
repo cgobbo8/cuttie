@@ -65,7 +65,7 @@ PLAN_MAX_COST = float(os.getenv("CUTTIE_PLAN_MAX_COST", "0.12"))
 # How hard the searching model thinks between two tools (as on the benchmark: it reads, it doesn't ponder)
 REASONING = {"effort": "low"}
 # Changes when the instructions do: answers kept on disk under the old ones are asked again
-ANSWERS_VERSION = "6"
+ANSWERS_VERSION = "7"
 MAX_STEPS = 28
 PLAN_STEPS = 36
 # A planned video that comes to less than this share of the length asked is sent back once
@@ -131,6 +131,18 @@ _MOMENT = {
     "required": ["start", "end", "quote", "why", "score"],
 }
 
+# A moment of a planned video: one of them is the one the video can open on
+_PLAN_MOMENT = {
+    **_MOMENT,
+    "properties": {
+        **_MOMENT["properties"],
+        "opens": {
+            "type": "boolean",
+            "description": "true on ONE moment of the whole video, never its first: the teaser, the 3 to 6 seconds the video could open on before it starts (see « The teaser »). Left out on every other moment.",
+        },
+    },
+}
+
 ANSWER_SPEC = {
     "name": "answer",
     "description": "Give the moments that really match the request, once you have checked them. Ends the search.",
@@ -157,7 +169,7 @@ PLAN_SPEC = {
                     "type": "object",
                     "properties": {
                         "title": {"type": "string", "description": "2 to 5 words shown on screen when the part begins, in the stream's language: a hook (a question, a promise, the line people will quote), not a label"},
-                        "moments": {"type": "array", "items": _MOMENT},
+                        "moments": {"type": "array", "items": _PLAN_MOMENT},
                     },
                     "required": ["title", "moments"],
                 },
@@ -219,6 +231,7 @@ _STORY = """The video is a short: most viewers decide in its first two seconds w
 - The hook. The first moment of the video is what makes someone stay: give that place to a moment that needs no explanation and promises the rest (the claim that is about to turn out wrong, the loudest reaction, the strangest line), and keep it short. In a series of like moments, open on a strong one.
 - The way through. Each moment must be understood by someone who never saw the stream, on its own or thanks to the moment just before it in the video: leave out one that needs explaining, and one that only says again what the one before said. Prefer several short moments to one long one.
 - The ending. The last moment of the video is its payoff: the punchline, the biggest reaction, how the story ends. In a series, keep the strongest for the end. Never end on a setup, on a line that trails off or on someone saying goodbye.
+- The teaser. The streamer can have the video open on a teaser: a few seconds of it played before everything else, under its title, then the video starts from its beginning and that moment plays again at its place. Mark with `opens` the one moment that would do it best: the strongest instant of the video that also tells what the video is about (the reaction to the story it tells, the line that sums up the running joke, the claim about to turn out wrong), so that someone who sees it alone wants to know what leads to it. It is 3 to 6 seconds, understood without what comes before, and never the first moment of the video. When it is the end of a longer moment, give those last lines as a moment of their own, right after the lines that lead to them.
 - What is written on screen. Each part's title shows while its first moment plays, and `hook` shows over the first seconds of the video: write them as hooks, not as labels. A question, a promise or the line people will quote (« C'est calme, hein ? » rather than « Les moments calmes »), in a few words, true to what happens."""
 
 PLAN_SYSTEM = (
@@ -331,6 +344,7 @@ The streamer already has this video and asks for a change. You are given what th
 - Where a new moment goes: where they say; else in the part it belongs to, in the order of the live.
 - Asked for tighter or faster cuts: give each moment again with only the lines that carry it (leave out the lines that lead in or trail off; a dead line in the middle: give the moment as two). A line is the finest you can cut: a moment that is already one line stays. In the note, say how many moments you tightened, and never say you tightened what you gave back unchanged.
 - The length asked for at first no longer binds: what they ask now wins (asked to add, the video gets longer).
+- The moment marked `opens` in the video you are given is the one it can open on: keep it marked, unless what they ask now is about how the video opens or takes that moment out (then mark the one that does it best).
 - In the note, answer them in one or two sentences: what you added, moved or took out, and what you looked for and didn't find."""
 
 

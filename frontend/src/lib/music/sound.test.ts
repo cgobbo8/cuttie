@@ -49,7 +49,7 @@ describe("the sound of a video beyond its clips' own", () => {
   it("draws an intro with the video's title unless it has its own, and its style's sound unless another or none", () => {
     expect(montageIntro({ style: "slam" }, drawn)).toEqual({ ...drawn, style: "slam", sound: "boom" });
     expect(montageIntro({ style: "slam", title: " Le tigre ", sound: "none" }, drawn)).toEqual({ ...drawn, style: "slam", title: "Le tigre" });
-    expect(montageIntro({ style: "sticker", sound: "clash" }, drawn)?.sound).toBe("clash");
+    expect(montageIntro({ style: "bands", sound: "clash" }, drawn)?.sound).toBe("clash");
     // The channel's follow button, worded by the caller: there unless this intro does without it
     const worded = { ...drawn, follow: ["Suivre", "Suivi"] as [string, string] };
     expect(montageIntro({ style: "slam" }, worded)?.follow).toEqual(["Suivre", "Suivi"]);
@@ -58,6 +58,28 @@ describe("the sound of a video beyond its clips' own", () => {
     expect(montageIntro({ style: "wobble" }, drawn)).toBeNull();
     expect(introOf({ intro: { ...drawn, style: "slam" } })).toBe(1.6);
     expect(introOf({})).toBe(0);
+  });
+
+  it("opens on a hook only when it has its moment, as long as that moment, with the music under it as under a passage", () => {
+    const moment = { from: 12, duration: 4.2, layers: [] };
+    // No moment to play (a video of one passage): no intro
+    expect(montageIntro({ style: "hook" }, drawn)).toBeNull();
+    expect(montageIntro({ style: "hook" }, drawn, null)).toBeNull();
+    // With it: the intro carries the moment, and no sound of its own
+    const opened = montageIntro({ style: "hook", title: "Le tigre", sound: "boom" }, drawn, moment);
+    expect(opened).toEqual({ ...drawn, style: "hook", title: "Le tigre", hook: moment });
+    expect(introOf({ intro: opened! })).toBe(4.2);
+    // A jingle ignores a moment
+    expect(montageIntro({ style: "slam" }, drawn, moment)).toEqual({ ...drawn, style: "slam", sound: "boom" });
+
+    // The music: not up front as during a jingle, but under the moment as under any passage, then under the video
+    const talk = { words: [{ start: 0, end: 4 }, { start: 4.2, end: 9 }], start: 0, end: 10 };
+    const game = { words: [], start: 20, end: 26 };
+    const music = montageMusic([{ duration: 10 }, { duration: 6 }], [talk, game], { track: "phonk" }, 4.2, { seconds: 4.2, piece: game });
+    expect(gainAt(music.curve, 0)).toBe(0);
+    expect(gainAt(music.curve, 2.5)).toBe(MUSIC_LEVELS.action);
+    expect(gainAt(music.curve, 4.2 + 5)).toBe(MUSIC_LEVELS.talk);
+    expect(gainAt(music.curve, 4.2 + 13)).toBe(MUSIC_LEVELS.action);
   });
 
   it("gives the page's player files to play, brought down to the level of the clips as they are", () => {

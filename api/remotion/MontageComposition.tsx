@@ -35,6 +35,8 @@ export interface MontageIntro {
   /** Never set by the renderer: the export mixes the sound in once the video's own is levelled */
   sound?: string;
   gain?: number;
+  /** The "hook" intro: the moment of the video it plays first, built like a piece */
+  hook?: MontageSegment;
 }
 
 export interface MontageCompositionProps {
@@ -49,6 +51,10 @@ export interface MontageCompositionProps {
 }
 
 export const framesOf = (seconds: number, fps: number) => Math.max(1, Math.round(seconds * fps));
+
+/** An intro the montage can play: one of the app's, and a hook has its moment */
+const playsIntro = (intro: MontageIntro | null | undefined): intro is MontageIntro & { style: Parameters<typeof introSpan>[0] } =>
+  !!intro && isIntro(intro.style) && (intro.style !== "hook" || !!intro.hook);
 
 /** The game and the webcam play the same clip: only one of them is heard (the blurred background has no sound) */
 function audibleLayerId(layers: Layer[]): string | undefined {
@@ -112,7 +118,21 @@ const Intro: React.FC<{ intro: MontageIntro }> = ({ intro }) => {
   return (
     <AbsoluteFill style={{ zIndex: 100000, pointerEvents: "none" }}>
       <div style={{ transform: `scale(${width / INTRO_W})`, transformOrigin: "0 0" }}>
-        <IntroCard id={intro.style} frame={frame} fps={fps} title={intro.title} name={intro.name} logo={intro.logo} colors={intro.colors} font={intro.font} follow={intro.follow} Img={Img} />
+        <IntroCard
+          id={intro.style}
+          frame={frame}
+          fps={fps}
+          title={intro.title}
+          name={intro.name}
+          logo={intro.logo}
+          colors={intro.colors}
+          font={intro.font}
+          follow={intro.follow}
+          // A hook's moment plays underneath, for as long as it lasts
+          over={!!intro.hook}
+          hold={intro.hook ? framesOf(intro.hook.duration, fps) : undefined}
+          Img={Img}
+        />
       </div>
     </AbsoluteFill>
   );
@@ -127,16 +147,14 @@ const Intro: React.FC<{ intro: MontageIntro }> = ({ intro }) => {
  */
 export const MontageComposition: React.FC<MontageCompositionProps> = ({ segments, overlays, intro, music }) => {
   const { fps } = useVideoConfig();
-  const opening = intro && isIntro(intro.style) ? introSpan(intro.style, fps) : null;
+  const opening = playsIntro(intro) ? introSpan(intro.style, fps, intro.hook?.duration) : null;
   return (
     <AbsoluteFill style={{ background: "black", width: 1080, height: 1920 }}>
       <style>{"*, *::before, *::after { box-sizing: border-box; }"}</style>
       <Series>
         {/* Nothing of the video plays while the intro holds the screen (a sequence of a series can't be empty) */}
         {opening && (
-          <Series.Sequence durationInFrames={opening.hold}>
-            <AbsoluteFill />
-          </Series.Sequence>
+          <Series.Sequence durationInFrames={opening.hold}>{intro?.hook ? <Layers segment={intro.hook} /> : <AbsoluteFill />}</Series.Sequence>
         )}
         {segments.map((segment, i) => (
           <Series.Sequence key={i} durationInFrames={framesOf(segment.duration, fps)}>

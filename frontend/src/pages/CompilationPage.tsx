@@ -49,9 +49,12 @@ import {
   clearLooks,
   compilationLength,
   fitToTarget,
+  hookMoment,
+  hookStart,
   itemFor,
   itemFromHit,
   looksCount,
+  openingSeconds,
   removeItem,
   sectionStarts,
   transitionsOf,
@@ -60,17 +63,18 @@ import {
   sectionsFromPlan,
   tightened,
   updateItem,
+  withHook,
 } from "../lib/compilation";
 import { liveWhen, plainDate } from "../lib/compilationLibrary";
 import { clock, splitVodTitle } from "../lib/format";
-import { buildMontage, framesOf, introHold, montageFrames, renderPieces, type MontageCut, type MontageProps } from "../lib/montage";
+import { buildMontage, framesOf, introHold, montageFrames, playsIntro, renderIntro, renderPieces, type MontageCut, type MontageProps, type MontageSegment } from "../lib/montage";
 import { evenFrames, tileStyle } from "../lib/storyboard";
 import { isTransition, transitionSpan } from "../lib/transitions";
-import { introSeconds, isIntro } from "../lib/intro/intros";
+import { introSpan, isIntro } from "../lib/intro/intros";
 import { trackOf, useMusics } from "../lib/music/library";
-import { introOf, montageIntro, montageMusic, playable } from "../lib/music/sound";
+import { introOf, montageIntro, montageMusic, playable, type SoundPiece } from "../lib/music/sound";
 import { fontFamily } from "../lib/fonts";
-import type { IntroBrand } from "../components/compilation/IntroPicker";
+import type { HookMenu, IntroBrand } from "../components/compilation/IntroPicker";
 import { clipTemplateContext } from "../lib/templateContext";
 import { templateGuides } from "../lib/templateGuide";
 import { buildAny, customTemplates, defaultTemplateKey, findCustom, hookOf, isBuiltIn, type TemplateKey } from "../lib/templateKeys";
@@ -322,8 +326,10 @@ export default function CompilationPage() {
   const saveTimers = useRef(new Map<string, number>());
   const latest = useRef(new Map<string, Compilation>());
   const change = useCallback(
-    (next: Compilation) => {
+    (changed: Compilation) => {
       if (!jobId) return;
+      // (a "hook" intro: the moment it plays is written on the video, the library counts its length with it)
+      const next = withHook(changed);
       setCompilations((prev) => prev?.map((c) => (c.id === next.id ? next : c)) ?? prev);
       latest.current.set(next.id, next);
       window.clearTimeout(saveTimers.current.get(next.id));
@@ -604,7 +610,12 @@ export default function CompilationPage() {
 
   /** What Remotion plays for these items (all with their clip and its data), null when something is missing */
   const build = useCallback(
-    (source: Compilation, states: Record<string, Piece>, known: Record<string, EditEnvironment>, all: Compilation = source): { montage: MontageProps; files: string[]; jobs: (string | undefined)[]; ids: string[] } | null => {
+    (
+      source: Compilation,
+      states: Record<string, Piece>,
+      known: Record<string, EditEnvironment>,
+      all: Compilation = source,
+    ): { montage: MontageProps; files: string[]; jobs: (string | undefined)[]; ids: string[]; opener?: { file: string; job?: string } } | null => {
       if (!kit || !jobId) return null;
       const items = allItems(source);
       // How each passage comes in (`all`: the whole video, when only what is ready of it is built)
@@ -665,25 +676,53 @@ export default function CompilationPage() {
                 })
             : [],
       );
-      // The jingle the video opens with: the channel's logo and colours, its title written as the video's titles are
+      // A "hook" intro plays a moment of the video first: built like a piece, in that passage's own template, the
+      // video's title written on it as the template writes its hook (where it puts it: never on the face)
+      const moment = hookMoment(all);
+      const hookAt = moment ? items.findIndex((item) => item.id === moment.item.id) : -1;
+      let opener: { segment: MontageSegment; file: string; job?: string; sound: SoundPiece } | null = null;
+      const hookPiece = moment ? states[moment.item.id] : undefined;
+      if (moment && hookAt >= 0 && covers(hookPiece, moment.item)) {
+        const piece = hookPiece;
+        const { ctx, start: floor } = cuts[hookAt];
+        const raw = moment.start - piece.file_start;
+        // Cut out of a longer passage by the app: it starts on a word, not inside one
+        const start = moment.auto && raw > floor + 0.05 ? hookStart(ctx.words, raw, floor) : raw;
+        const end = moment.end - piece.file_start;
+        const [segment] = buildMontage([{ ctx, start, end }], (c) => buildAny(keys[hookAt], c, customs), FPS).segments;
+        const top = Math.max(0, ...segment.layers.map((p) => p.z)) + 1;
+        // (there on the very first picture, the video's cover, and until the cut to the video: no entrance, no exit of its own)
+        const written = titleCard(ctx, hookOf(keys[hookAt], ctx, customs), all.intro?.title?.trim() || all.name, 0, segment.from + segment.duration + 1, "hook");
+        opener = {
+          segment: { ...segment, layers: [...segment.layers, ...written.map((layer, i) => ({ layer, z: top + i }))] },
+          file: piece.file,
+          ...(piece.job !== jobId ? { job: piece.job } : {}),
+          sound: { words: ctx.words, start, end, said: !!moment.item.text.trim() },
+        };
+      }
+      // What the video opens with: a jingle (the channel's logo and colours, its title written as the video's titles are), or its hook
       const first = cuts[0].ctx;
-      const intro = montageIntro(all.intro, {
-        title: all.name,
-        name: first.displayName ?? first.login ?? "",
-        logo: first.avatarUrl,
-        colors: first.colors,
-        font: fontFamily(hookOf(templateKey, first, customs).font),
-        follow: [t("compilation.intro.followLabel"), t("compilation.intro.followDone")],
-      });
+      const intro = montageIntro(
+        all.intro,
+        {
+          title: all.name,
+          name: first.displayName ?? first.login ?? "",
+          logo: first.avatarUrl,
+          colors: first.colors,
+          font: fontFamily(hookOf(templateKey, first, customs).font),
+          follow: [t("compilation.intro.followLabel"), t("compilation.intro.followDone")],
+        },
+        opener?.segment,
+      );
       if (intro) montage.intro = intro;
       // The music under the video: lower where people talk, more present where the game plays alone
       const track = trackOf(musics, all.music?.track);
       if (track && all.music) {
         // A clip that was never transcribed has no words: what is said in it counts as talk, not as silence
         const pieces = cuts.map((cut, i) => ({ words: cut.ctx.words, start: cut.start, end: cut.end, said: !!items[i].text.trim() }));
-        montage.music = montageMusic(montage.segments, pieces, all.music, introOf(montage));
+        montage.music = montageMusic(montage.segments, pieces, all.music, introOf(montage), intro?.hook && opener ? { seconds: intro.hook.duration, piece: opener.sound } : undefined);
       }
-      return { montage, files, jobs, ids: items.map((item) => item.id) };
+      return { montage, files, jobs, ids: items.map((item) => item.id), ...(intro?.hook && opener ? { opener: { file: opener.file, job: opener.job } } : {}) };
     },
     [channel, customs, job, jobId, kit, musics, t, templateKey],
   );
@@ -758,11 +797,12 @@ export default function CompilationPage() {
       if (!jobId || allItems(source).length === 0) return;
       setSounding(true);
       try {
-        const choice = await chooseSound(jobId, { ...soundBrief(source), asked, language: i18n.language.slice(0, 2), compilation: source.id });
+        const { ids, ...brief } = soundBrief(source);
+        const choice = await chooseSound(jobId, { ...brief, asked, language: i18n.language.slice(0, 2), compilation: source.id });
         // What the streamer changed while the AI was thinking stays
         const current = compilationsRef.current?.find((c) => c.id === source.id) ?? source;
-        // A track whose file isn't on this machine can't be played: left out
-        const next = applySound(current, { music: trackOf(musics, choice.music) ? choice.music : null, intro: choice.intro });
+        // A track whose file isn't on this machine can't be played: left out. The passage it would open the video on is told by its place among those it was sent
+        const next = applySound(current, { music: trackOf(musics, choice.music) ? choice.music : null, intro: choice.intro, opening: choice.teaser ? ids[choice.teaser - 1] : null });
         change(next);
         setSoundNote({ id: source.id, note: choice.why });
         toast.success(
@@ -800,14 +840,38 @@ export default function CompilationPage() {
     return build(ready, pieces, envs, compilation);
   }, [build, compilation, envs, pieces]);
 
+  // What a "hook" intro can open the video on, for the intro picker: every passage but the first, the one it plays, its words
+  const hookMenu = useMemo<HookMenu | undefined>(() => {
+    if (!compilation) return undefined;
+    const moment = hookMoment(compilation);
+    const piece = moment ? pieces[moment.item.id] : undefined;
+    const env = piece ? envs[pieceVersion(piece)] : undefined;
+    const origin = piece?.file_start;
+    return {
+      passages: allItems(compilation)
+        .slice(1)
+        .map((item, i) => ({ id: item.id, number: i + 2, text: item.text, start: item.start, end: item.end })),
+      moment: moment ? { item: moment.item.id, start: moment.start, end: moment.end, auto: moment.auto } : null,
+      named: !!moment?.auto && !!moment.item.opening,
+      // (the clip's words, on the live's clock as the passage's own times are)
+      words: env && origin != null ? env.words.map((word) => ({ start: word.start + origin, end: word.end + origin })) : undefined,
+      onPlay: () => {
+        playerRef.current?.seekTo(0);
+        playerRef.current?.play();
+      },
+    };
+  }, [compilation, envs, pieces]);
+
   // Where each passage plays in the whole video, frames; `clear`: its first frame once the transition it comes in with is over
   const marks = useMemo(() => {
-    // The first passage starts once the intro has held the screen
-    let at = introHold(preview?.montage.intro, FPS);
+    // The first passage starts once the intro has held the screen, and is clear of it once the intro has left
+    const intro = preview?.montage.intro;
+    const leaving = playsIntro(intro) ? introSpan(intro.style, FPS, intro.hook?.duration).out : 0;
+    let at = introHold(intro, FPS);
     return (preview?.montage.segments ?? []).map((segment, i) => {
       const from = at;
       at += framesOf(segment.duration, FPS);
-      const coming = isTransition(segment.transition) ? transitionSpan(segment.transition, FPS).after : 0;
+      const coming = Math.max(isTransition(segment.transition) ? transitionSpan(segment.transition, FPS).after : 0, i === 0 ? leaving : 0);
       return { id: preview!.ids[i], from, to: at, clear: Math.min(at - 1, from + coming) };
     });
   }, [preview]);
@@ -876,7 +940,7 @@ export default function CompilationPage() {
       await saveCompilation(jobId, compilation);
       await startMontageRender(
         jobId,
-        { key: `comp_${compilation.id}.mp4`, name: compilation.name, pieces: renderPieces(built.montage, built.files, built.jobs), overlays: built.montage.overlays, ...(built.montage.intro ? { intro: built.montage.intro } : {}), ...(built.montage.music ? { music: built.montage.music } : {}) },
+        { key: `comp_${compilation.id}.mp4`, name: compilation.name, pieces: renderPieces(built.montage, built.files, built.jobs), overlays: built.montage.overlays, ...(built.montage.intro ? { intro: renderIntro(built.montage.intro, built.opener?.file, built.opener?.job) } : {}), ...(built.montage.music ? { music: built.montage.music } : {}) },
         { width: 1080, height: 1920, fps: FPS },
       );
       navigate(`/${jobId}/export`);
@@ -1163,7 +1227,7 @@ export default function CompilationPage() {
               </div>
               {preview && (
                 <p className="-mt-1 text-[12px] text-ink-3">
-                  {readyItems.length < items.length ? t("compilation.partial", { ready: readyItems.length, total: items.length }) : `${clock(compilationLength(compilation) + introSeconds(compilation.intro))} · ${t("compilation.moments", { count: items.length })}`}
+                  {readyItems.length < items.length ? t("compilation.partial", { ready: readyItems.length, total: items.length }) : `${clock(compilationLength(compilation) + openingSeconds(compilation))} · ${t("compilation.moments", { count: items.length })}`}
                 </p>
               )}
             </>
@@ -1244,6 +1308,7 @@ export default function CompilationPage() {
           onEdit={openEditor}
           editing={editing}
           brand={brand}
+          hook={hookMenu}
           musics={musics}
           favourites={kit?.musics}
           cutting={cutting}

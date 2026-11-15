@@ -1,3 +1,4 @@
+import type { HookChoice } from "./intro/intros";
 import type { MusicTrack } from "./music/mix";
 import type { AnalysisEta } from "./format";
 import type { CustomTemplate } from "./templates";
@@ -1246,6 +1247,8 @@ export interface SoundChoice {
   kind: string | null;
   music: string | null;
   intro: string | null;
+  /** The passage the video could open on as a teaser: its place among the passages the AI was told (`said`), from 1 */
+  teaser?: number | null;
   why: string;
   cost: number;
 }
@@ -1254,7 +1257,7 @@ export interface SoundChoice {
 export async function chooseSound(
   jobId: string,
   // `compilation`: the video being decided (its own intro doesn't count among those the streamer's last videos open with)
-  body: { title: string; parts: string[]; seconds: number; passages: number; said: string[]; asked?: string; language?: string; compilation?: string },
+  body: { title: string; parts: string[]; seconds: number; passages: number; said: string[]; lengths?: number[]; asked?: string; language?: string; compilation?: string },
 ): Promise<SoundChoice> {
   return liveJson(await postJson(`${BASE}/jobs/${jobId}/sound`, body));
 }
@@ -1364,6 +1367,8 @@ export interface LiveHit {
   recut?: boolean;
   /** The live it is in, when several are worked on at once and it isn't the compilation's own */
   job?: string;
+  /** A planned video: the moment the AI would open it on, as a teaser of what is coming */
+  opening?: boolean;
 }
 
 export interface LiveSearchResult {
@@ -1494,6 +1499,8 @@ export interface CompilationItem extends Partial<PieceState> {
   job?: string;
   /** How it comes in when that isn't as the rest of the video does: a ready-made transition (see transitions.ts), or "cut" (none) */
   transition?: string;
+  /** The AI named it as the moment the video can open on (what a "hook" intro plays first unless the streamer chose another) */
+  opening?: boolean;
 }
 
 /** A template as the AI is told about it (see templateGuide.ts) */
@@ -1561,7 +1568,7 @@ export interface Compilation {
   /** The ready-made transition between its passages (absent: plain cuts) */
   transition?: string;
   /** The jingle it opens with (absent: none): its style, its own title (else the video's name), its sound (else its style's; "none": silent) */
-  intro?: { style: string; title?: string; sound?: string; follow?: boolean; by?: "ai" };
+  intro?: { style: string; title?: string; sound?: string; follow?: boolean; by?: "ai"; hook?: HookChoice };
   /** The music it plays in the background (absent: none): a track of the catalogue, and how present it is (1: as Cuttie sets it) */
   music?: { track: string; volume?: number };
   /** Described to the AI: what was first asked for, then each change asked and what the AI answered */

@@ -180,6 +180,7 @@ export default class CompilationsController {
     const name = typeof ctx.request.input('name') === 'string' && ctx.request.input('name').trim() ? ctx.request.input('name').trim().slice(0, 80) : source.name
     // A copy is the streamer's own video, whoever proposed the one it is made from
     const { suggestion: _proposed, ...own } = structuredClone(source)
+    const renamed = new Map<string, string>()
     const copy: Compilation = {
       ...own,
       id: newId(),
@@ -191,11 +192,14 @@ export default class CompilationsController {
         id: newId(),
         items: s.items.map((item) => {
           const id = newId()
+          renamed.set(item.id, id)
           copyPiece(itemJob(job.id, item), item.id, id)
           return { ...item, id }
         }),
       })),
     }
+    // The moment its "hook" intro plays is one of its own passages
+    if (copy.intro?.hook) copy.intro.hook.item = renamed.get(copy.intro.hook.item) ?? copy.intro.hook.item
     job.compilations = [...existing, copy]
     await job.save()
     return ctx.response.created({ compilation: describeCompilations(job.id, [copy])[0] })
@@ -355,7 +359,10 @@ export default class CompilationsController {
           parts: lines(ctx.request.input('parts'), 12, 80),
           seconds: Math.max(0, Math.min(7200, Number(ctx.request.input('seconds')) || 0)),
           passages: Math.max(0, Math.min(500, Math.round(Number(ctx.request.input('passages')) || 0))),
-          said: lines(ctx.request.input('said'), 16, 200),
+          // (in the video's order: the AI names the one the video could open on by its place in this list)
+          said: lines(ctx.request.input('said'), 30, 200),
+          // How long each of them lasts, seconds (a hook plays a short passage whole, only the end of a long one)
+          lengths: (Array.isArray(ctx.request.input('lengths')) ? ctx.request.input('lengths') : []).slice(0, 30).map((length: unknown) => Math.max(0, Math.min(120, Number(length) || 0))),
         },
         musics,
         favourites: kit.musics,
@@ -368,6 +375,8 @@ export default class CompilationsController {
         kind: isMusicKind(chosen.kind) ? chosen.kind : null,
         music: musics.some((track) => track.key === chosen.music) ? chosen.music : null,
         intro: isIntro(chosen.intro) ? chosen.intro : null,
+        // The passage the video could open on: its place among `said`, from 1 (null: none named)
+        teaser: Number.isInteger(chosen.teaser) && (chosen.teaser as number) >= 1 ? chosen.teaser : null,
         why: words(chosen.why, 500),
         cost: Number(chosen.cost) || 0,
       }
@@ -486,11 +495,12 @@ export default class CompilationsController {
     if (request) {
       const current: PlanChange['current'] = []
       for (const part of Array.isArray(ctx.request.input('current')) ? ctx.request.input('current').slice(0, 12) : []) {
-        const items: { start: number; end: number; job?: string }[] = []
+        const items: PlanChange['current'][number]['items'] = []
         for (const item of Array.isArray(part?.items) ? part.items.slice(0, 80) : []) {
           const start = Number(item?.start)
           const end = Number(item?.end)
-          if (Number.isFinite(start) && Number.isFinite(end) && start >= 0 && end > start) items.push({ start, end, ...(isJobId(item?.job) && item.job !== job.id ? { job: item.job } : {}) })
+          if (Number.isFinite(start) && Number.isFinite(end) && start >= 0 && end > start)
+            items.push({ start, end, ...(isJobId(item?.job) && item.job !== job.id ? { job: item.job } : {}), ...(item?.opening === true ? { opening: true } : {}) })
         }
         current.push({ title: String(part?.title ?? '').slice(0, 60), items })
       }

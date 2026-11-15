@@ -492,8 +492,8 @@ def test_the_ai_plans_a_video_with_tools(monkeypatch, tmp_path):
         "sections": [
             {"title": "C'est calme", "moments": [calm]},
             {"title": "Rien trouvé", "moments": []},
-            # The same shots given twice: kept once
-            {"title": "Ça pète", "moments": [SHOTS, {**SHOTS, "start": "0:01:57", "end": "0:01:57", "why": "Encore"}]},
+            # The same shots given twice: kept once. They are what the video could open on, as a teaser
+            {"title": "Ça pète", "moments": [{**SHOTS, "opens": True}, {**SHOTS, "start": "0:01:57", "end": "0:01:57", "why": "Encore"}]},
         ],
         "note": "Rien pour la partie du milieu.",
         "look": "  ma caméra en haut,\n le jeu en dessous ",
@@ -512,6 +512,8 @@ def test_the_ai_plans_a_video_with_tools(monkeypatch, tmp_path):
     # ...and what it wrote for the first seconds of the video too
     assert planned["hook"] == "C'est calme, hein ?"
     assert [(s["title"], len(s["hits"])) for s in planned["sections"]] == [("C'est calme", 1), ("Ça pète", 1)]
+    # The moment it marked as the one the video can open on says so, and only that one
+    assert [[h.get("opening", False) for h in s["hits"]] for s in planned["sections"]] == [[False], [True]]
     assert planned["sections"][1]["hits"][0]["why"] == "Fusillade" and planned["cost"] == 0.003 and planned["cached"] is False
     # Planning has a model of its own (sorting moments between parts takes more than finding them), with more to spend
     assert [call["model"] for call in model.seen] == [live_agent.PLAN_MODEL] * 3 and live_agent.PLAN_MODEL != live_agent.SEARCH_MODEL
@@ -523,6 +525,10 @@ def test_the_ai_plans_a_video_with_tools(monkeypatch, tmp_path):
     # It was told what makes a short: a hook to open on, an ending, titles that are hooks
     told = first["messages"][0]["content"]
     assert "The hook." in told and "The ending." in told and "write them as hooks, not as labels" in told
+    # ...and to mark the moment the video could open on before it starts (a plan's moments alone can be marked so)
+    assert "The teaser." in told and "Mark with `opens` the one moment" in told and "never the first moment of the video" in told
+    plan_spec = first["tools"][-1]["function"]["parameters"]["properties"]["sections"]["items"]["properties"]["moments"]["items"]["properties"]
+    assert plan_spec["opens"]["type"] == "boolean" and "opens" not in live_agent.ANSWER_SPEC["parameters"]["properties"]["moments"]["items"]["properties"]
     assert "10. Finish by calling `plan`" in told and "{" not in told
     names = [f["function"]["name"] for f in first["tools"]]
     assert names[-1] == "plan" and "answer" not in names
@@ -565,7 +571,7 @@ def test_the_streamer_comes_back_to_a_planned_video(monkeypatch, tmp_path):
         [("plan", {"title": "", "sections": [{"title": "C'est calme", "moments": [calm]}, {"title": "Ça pète", "moments": [SHOTS, angry]}], "note": "J'ai ajouté le moment où il craque."})],
     ])
     # The video as it is now: the streamer moved the first cut by hand (101-102.5 s, inside the line said "from 100 to 103 s")
-    current = [{"title": "C'est calme", "items": [{"start": 101.0, "end": 102.5}]}, {"title": "Ça pète", "items": [{"start": 117.0, "end": 119.0}, {"start": 450.0, "end": 455.0}]}]
+    current = [{"title": "C'est calme", "items": [{"start": 101.0, "end": 102.5}]}, {"title": "Ça pète", "items": [{"start": 117.0, "end": 119.0, "opening": True}, {"start": 450.0, "end": 455.0}]}]
     changed = ls.revise_video("job", "d'abord le calme, puis ça pète", current, ["mets un titre"], "ajoute le moment où il craque à la fin", 600.0)
     assert changed["note"] == "J'ai ajouté le moment où il craque." and changed["cost"] == 0.002 and changed["cached"] is False
     assert [(s["title"], [(h["start"], h["end"]) for h in s["hits"]]) for s in changed["sections"]] == [
@@ -578,6 +584,10 @@ def test_the_streamer_comes_back_to_a_planned_video(monkeypatch, tmp_path):
     assert "asks for a change" in told[0]["content"] and model.seen[0]["model"] == live_agent.PLAN_MODEL
     assert "« d'abord le calme, puis ça pète »" in told[1]["content"] and "« ajoute le moment où il craque à la fin »" in told[1]["content"] and '"mets un titre"' in told[1]["content"]
     assert '{"start": "0:01:40.0", "end": "0:01:40.0", "said": "Bon là franchement c\'est calme."}' in told[1]["content"]
+    # The passage the video can open on is told as such, and the AI is told to keep it so unless asked about the opening
+    assert '"said": "Attention ça tire !", "opens": true}' in told[1]["content"] and "The moment marked `opens`" in told[0]["content"]
+    # It marked none in what it gave back: no hit says so (the app then keeps the one it had)
+    assert not any(h.get("opening") for s in changed["sections"] for h in s["hits"])
     # A passage cut on its words starts late in its first line (the line's time holds silence): that line is still part of it
     assert ls.as_lines(_tools(monkeypatch).transcript, 118.4, 121.0) == {"start": "0:01:57.0", "end": "0:01:59.5", "said": "Attention ça tire ! À couvert, à couvert !"}
     # A passage where nobody speaks keeps its own times
@@ -587,6 +597,12 @@ def test_the_streamer_comes_back_to_a_planned_video(monkeypatch, tmp_path):
     wide = [{"title": "C'est calme", "items": [{"start": 101.0, "end": 102.5}]}, {"title": "Ça pète", "items": [{"start": 117.0, "end": 121.5}]}]
     tighter = ls.revise_video("job", "x", wide, [], "des cuts plus agressifs", 600.0)
     assert [[h["recut"] for h in s["hits"]] for s in tighter["sections"]] == [[False], [True]]
+    # It marks another moment as the one to open on: that one says so. The first moment of the video never does (it would play twice in a row)
+    model.steps = [[("plan", {"sections": [{"title": "C'est calme", "moments": [calm]}, {"title": "Ça pète", "moments": [SHOTS, {**angry, "opens": True}]}], "note": "Elle s'ouvre sur le craquage."})]]
+    reopened = ls.revise_video("job", "x", current, [], "ouvre sur le moment où il craque", 600.0)
+    assert [[h.get("opening", False) for h in s["hits"]] for s in reopened["sections"]] == [[False], [False, True]]
+    model.steps = [[("plan", {"sections": [{"title": "C'est calme", "moments": [{**calm, "opens": True}]}, {"title": "Ça pète", "moments": [SHOTS]}], "note": "."})]]
+    assert not any(h.get("opening") for s in ls.revise_video("job", "x", current, [], "ouvre sur le calme", 600.0)["sections"] for h in s["hits"])
     # Asked again: asked again (the video it starts from is never the same twice)
     model.steps = [[("plan", {"sections": [], "note": "Rien."})]]
     assert ls.revise_video("job", "x", current, [], "ajoute le moment où il craque à la fin", 600.0)["sections"] == []

@@ -195,18 +195,18 @@ VIDEO = {"title": "De calme à débordés", "parts": ["C'est bien calme", "Les p
 def test_the_sound_of_a_video_is_chosen_from_what_it_is_and_what_the_streamer_likes():
     model = Eyes({
         "kind": "funny", "music": "chiptune", "why": "Une vidéo drôle : Pixel Chiptune.",
-        "intros": [{"key": "sticker", "why": "L'intro Stickers pour le ton léger."}, {"key": "news", "why": "Flash info pour l'histoire."}, {"key": "wobble", "why": "?"}, "arcade"],
+        "intros": [{"key": "bands", "why": "L'intro Bandes pour le ton léger."}, {"key": "news", "why": "Flash info pour l'histoire."}, {"key": "wobble", "why": "?"}, "arcade"],
     })
     chosen = looks.choose_sound(VIDEO, MUSICS, favourites={"skill": "phonk", "epic": "phonk", "chill": "kazoo"}, preferred_intro="rush", asked="une musique marrante", language="fr", client=model)
     # The best of the intros that fit (the preferred one is not among them: it is not forced), with why this one
-    assert chosen == {"kind": "funny", "music": "chiptune", "intro": "sticker", "why": "Une vidéo drôle : Pixel Chiptune. L'intro Stickers pour le ton léger.", "cost": 0.002}
+    assert chosen == {"kind": "funny", "music": "chiptune", "intro": "bands", "why": "Une vidéo drôle : Pixel Chiptune. L'intro Bandes pour le ton léger.", "teaser": None, "cost": 0.002}
 
     call = model.seen[0]
     assert call["model"] == live_agent.SEARCH_MODEL
     shown = call["messages"][0]["content"]
     # What the video is: its title, its parts, how long, what is said
     assert "« De calme à débordés »" in shown and "« C'est bien calme », « Les patients débarquent »" in shown
-    assert "72 s in 14 passages" in shown and "- « On va être submergés »" in shown
+    assert "72 s in 14 passages" in shown and "1. « Y'a des gens à soigner de son côté »\n2. « On va être submergés »" in shown
     assert "« une musique marrante »" in shown
     # Every track with what it is for; the favourite is marked for its kind (a kind or a track nobody knows is not)
     assert "[phonk] Drift Phonk (for: skill, hype). Drift phonk, heavy bass. For kills and action. ★ The streamer's favourite for: skill." in shown
@@ -243,33 +243,56 @@ def test_the_ai_names_the_intros_as_the_app_does():
 
 
 def test_the_ai_does_not_open_every_video_the_same_way_and_never_leaves_what_fits():
-    fits = ["sticker", "news", "arcade"]
+    fits = ["bands", "news", "arcade"]
     pick = looks.pick_intro
-    assert pick(fits) == "sticker"
-    # The AI gave Stickers to the last video: the next best one that fits
-    assert pick(fits, recent=["sticker"]) == "news"
-    assert pick(fits, recent=["news", "sticker"]) == "arcade"
+    assert pick(fits) == "bands"
+    # The AI gave Bandes to the last video: the next best one that fits
+    assert pick(fits, recent=["bands"]) == "news"
+    assert pick(fits, recent=["news", "bands"]) == "arcade"
     # All of them given lately: the one given the longest ago
-    assert pick(fits, recent=["arcade", "news", "sticker"]) == "sticker"
+    assert pick(fits, recent=["arcade", "news", "bands"]) == "bands"
     # Only the last three videos count
-    assert pick(fits, recent=["glitch", "slam", "rush", "sticker"]) == "sticker"
+    assert pick(fits, recent=["glitch", "slam", "rush", "bands"]) == "bands"
     # The intro the streamer prefers is taken whenever it fits, however often it was; it is not forced when it doesn't
     assert pick(fits, preferred="news", recent=["news", "news", "news"]) == "news"
-    assert pick(fits, preferred="rush", recent=["sticker"]) == "news"
+    assert pick(fits, preferred="rush", recent=["bands"]) == "news"
     # One fits: that one, however often; none fits: no intro, whatever the streamer prefers
     assert pick(["split"], recent=["split", "split"]) == "split"
     assert pick([], preferred="rush") is None
 
-    answer = {"kind": "funny", "music": "none", "why": "Une vidéo drôle, sans musique.", "intros": [{"key": "sticker", "why": "Stickers, léger."}, {"key": "news", "why": "Flash info : c'est une histoire."}]}
+    answer = {"kind": "funny", "music": "none", "why": "Une vidéo drôle, sans musique.", "intros": [{"key": "bands", "why": "Bandes, léger."}, {"key": "news", "why": "Flash info : c'est une histoire."}]}
     # What the AI gave the last videos comes with the request (an intro nobody knows is ignored)
-    varied = looks.choose_sound(VIDEO, MUSICS, client=Eyes(answer), recent_intros=["sticker", "wobble"])
+    varied = looks.choose_sound(VIDEO, MUSICS, client=Eyes(answer), recent_intros=["bands", "wobble"])
     assert varied["intro"] == "news" and varied["why"] == "Une vidéo drôle, sans musique. Flash info : c'est une histoire."
-    assert looks.choose_sound(VIDEO, MUSICS, client=Eyes(answer))["intro"] == "sticker"
+    assert looks.choose_sound(VIDEO, MUSICS, client=Eyes(answer))["intro"] == "bands"
     # No intro: said why
-    none = looks.choose_sound(VIDEO, MUSICS, client=Eyes({"kind": "funny", "music": "none", "why": "Un seul moment.", "intros": [], "no_intro": "Trop court pour une intro."}), recent_intros=["sticker"])
+    none = looks.choose_sound(VIDEO, MUSICS, client=Eyes({"kind": "funny", "music": "none", "why": "Un seul moment.", "intros": [], "no_intro": "Trop court pour une intro."}), recent_intros=["bands"])
     assert none["intro"] is None and none["why"] == "Un seul moment. Trop court pour une intro."
     # An answer in the shape asked before (one intro) is still read
     assert looks.choose_sound(VIDEO, MUSICS, client=Eyes({"kind": "funny", "music": "none", "intro": "arcade", "why": "Arcade."}))["intro"] == "arcade"
+
+
+def test_the_ai_names_the_passage_a_video_could_open_on_and_knows_the_hook_intro():
+    said = [f"phrase {n}" for n in range(1, 41)]
+    answer = {"kind": "funny", "music": "none", "why": "Une vidéo drôle.", "intros": [{"key": "hook", "why": "Hook : la chute donne envie de voir la suite."}], "teaser": 7}
+    model = Eyes(answer)
+    chosen = looks.choose_sound({**VIDEO, "said": said, "lengths": [4.2, 16.24] + [5] * 38}, MUSICS, client=model)
+    # The hook is an intro like the others: it can be the one that fits best; the passage it would play is told by its number
+    assert (chosen["intro"], chosen["teaser"]) == ("hook", 7)
+    assert chosen["why"] == "Une vidéo drôle. Hook : la chute donne envie de voir la suite."
+    shown = model.seen[0]["messages"][0]["content"]
+    # It was told what a hook is (no jingle: the teaser plays first) and how to name the teaser, among the passages it is shown
+    assert "[hook] « Hook ». Not a jingle: the teaser of the video (see 4) plays first" in shown
+    assert "4. TEASER." in shown and "never passage 1" in shown and '"teaser": <number of the passage, or 0>' in shown
+    # Thirty passages at most, numbered in the order they play
+    assert "30. (5 s) « phrase 30 »" in shown and "phrase 31" not in shown
+    # ...each with how long it lasts: a short one plays whole, a long one only its end
+    assert "1. (4 s) « phrase 1 »\n2. (16 s) « phrase 2 »" in shown and "prefer a short passage whose words say it all" in shown
+    # A number that names no passage it was shown, the first passage, or no number: none named
+    for wrong in (0, 1, 31, -2, "7", 7.0, True, None):
+        assert looks.choose_sound({**VIDEO, "said": said}, MUSICS, client=Eyes({**answer, "teaser": wrong}))["teaser"] is None, wrong
+    # The intros it knows are the app's: the hook first, the sticker intro gone
+    assert list(looks.INTROS)[0] == "hook" and "sticker" not in looks.INTROS and len(looks.INTROS) == 11
 
 
 def test_no_music_and_no_intro_are_kept_as_such_and_a_wrong_answer_is_made_safe():
@@ -277,7 +300,7 @@ def test_no_music_and_no_intro_are_kept_as_such_and_a_wrong_answer_is_made_safe(
     assert (none["kind"], none["music"], none["intro"]) == ("chill", None, None)
     shown_nothing = Eyes({"kind": "epic", "music": "kazoo", "intro": "wobble"})
     wrong = looks.choose_sound({**VIDEO, "said": [], "parts": []}, MUSICS, client=shown_nothing)
-    assert wrong == {"kind": None, "music": None, "intro": None, "why": "", "cost": 0.002}
+    assert wrong == {"kind": None, "music": None, "intro": None, "why": "", "teaser": None, "cost": 0.002}
     told = shown_nothing.seen[0]["messages"][0]["content"]
     # Nothing said in it, no parts, nothing asked, no preferred intro: said so, not left blank
     assert "one part, no titles" in told and "(nothing: mostly the game)" in told and "nothing about the sound" in told and "preferred intro" not in told

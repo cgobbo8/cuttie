@@ -10,7 +10,7 @@
  */
 
 import type { ChatMessage, Layer, SubtitleWord } from "./editorTypes";
-import { introSpan, isIntro } from "./intro/intros";
+import { introSpan, isIntro, type IntroId } from "./intro/intros";
 import type { MusicCurve } from "./music/curve";
 import type { TemplateContext } from "./templates";
 
@@ -239,6 +239,11 @@ export interface MontageIntro {
   sound?: string;
   /** In the page only: what brings the sound to the level of the clips as they play there */
   gain?: number;
+  /**
+   * The "hook" intro: the moment of the video it plays first, built like a piece (its clip's layers, with the
+   * title written on it). It is not one of the video's pieces: the video starts once it has played.
+   */
+  hook?: MontageSegment;
 }
 
 /** The music a montage plays in the background, and its level over the video (see lib/music) */
@@ -292,11 +297,16 @@ const chatIn = (chat: ChatMessage[] | undefined, start: number, end: number) => 
 
 export const framesOf = (seconds: number, fps: number) => Math.max(1, Math.round(seconds * fps));
 
-/** Frames the intro holds the screen before the first piece (0: no intro) */
-export const introHold = (intro: { style: string } | null | undefined, fps: number): number => (intro && isIntro(intro.style) ? introSpan(intro.style, fps).hold : 0);
+/** An intro the montage can play: one of the app's, and a hook has its moment */
+export const playsIntro = (intro: { style: string; hook?: { duration: number } } | null | undefined): intro is { style: IntroId; hook?: { duration: number } } =>
+  !!intro && isIntro(intro.style) && (intro.style !== "hook" || !!intro.hook);
+
+/** Frames the intro holds the screen before the first piece (0: no intro): its style's, or as long as a hook's moment */
+export const introHold = (intro: { style: string; hook?: { duration: number } } | null | undefined, fps: number): number =>
+  playsIntro(intro) ? introSpan(intro.style, fps, intro.hook?.duration).hold : 0;
 
 /** Frames of the whole montage, its intro included */
-export function montageFrames(segments: { duration: number }[], fps: number, intro?: { style: string } | null): number {
+export function montageFrames(segments: { duration: number }[], fps: number, intro?: { style: string; hook?: { duration: number } } | null): number {
   return introHold(intro, fps) + segments.reduce((sum, s) => sum + framesOf(s.duration, fps), 0);
 }
 
@@ -339,6 +349,12 @@ export function buildMontage(
   const overlays = first ? place(build({ ...first.ctx, startAt: 0, endAt: total, words: [], chat: [] }, -1)).filter((p) => isOverlayLayer(p.layer)) : [];
   const top = Math.max(0, ...overlays.map((p) => p.z), ...segments.flatMap((s) => s.layers.map((p) => p.z))) + 1;
   return { segments, overlays: [...overlays, ...extra(total).map((layer, i) => ({ layer, z: top + i }))] };
+}
+
+/** A montage's intro as the renderer takes it: the moment of a "hook" names its clip (`job`: the live it is in when it isn't the export's own) */
+export function renderIntro(intro: MontageIntro, clip?: string, job?: string): Omit<MontageIntro, "hook"> & { hook?: MontageSegment & { clip: string; job?: string } } {
+  const { hook, ...rest } = intro;
+  return hook && clip ? { ...rest, hook: { ...hook, clip, ...(job ? { job } : {}) } } : rest;
 }
 
 /** The montage as the renderer takes it: `clips[i]` is the clip piece `i` plays, `jobs[i]` the live it is in when it isn't the export's own */

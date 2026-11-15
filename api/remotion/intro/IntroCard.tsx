@@ -22,6 +22,9 @@ export interface IntroCardProps {
   font: string;
   /** The channel's follow button, shown next to its name and pressed before the video starts: what it says before and after (none: no button) */
   follow?: [string, string] | null;
+  /** The "hook" intro: its moment plays underneath (a video), so only what frames it is drawn; and the frames it holds the screen for (as long as that moment) */
+  over?: boolean;
+  hold?: number;
   /** What draws the logo: Remotion's <Img> in a video (frames wait for it), a plain <img> elsewhere */
   Img?: ComponentType<{ src: string; style?: CSSProperties }>;
 }
@@ -45,7 +48,7 @@ function inkOn(color: string): string {
   return light > 0.58 ? "#0b0b0c" : "#ffffff";
 }
 
-interface Drawn extends Required<Omit<IntroCardProps, "id" | "frame" | "fps" | "Img" | "follow">> {
+interface Drawn extends Required<Omit<IntroCardProps, "id" | "frame" | "fps" | "Img" | "follow" | "hold">> {
   follow: [string, string] | null;
   /** Frames at 30 a second, whatever the video's own rate */
   f: number;
@@ -262,53 +265,71 @@ function Rush(d: Drawn) {
   );
 }
 
-/** A star with as many points, to burst behind a logo */
-const STAR = `polygon(${Array.from({ length: 32 }, (_, i) => {
-  const radius = i % 2 ? 37 : 50;
-  const angle = (i / 32) * 2 * Math.PI;
-  return `${(50 + radius * Math.cos(angle)).toFixed(1)}% ${(50 + radius * Math.sin(angle)).toFixed(1)}%`;
-}).join(", ")})`;
+/** What stands for the video where nothing plays under a hook (the picker's sketch): a dark picture, light sliding across it */
+function Footage({ d }: { d: Drawn }) {
+  return (
+    <>
+      <div style={{ ...FILL, background: d.colors.dark }} />
+      <div style={{ ...FILL, background: `radial-gradient(circle at 50% 46%, ${d.colors.accent}, transparent 64%)`, opacity: 0.4 }} />
+      <div style={{ position: "absolute", inset: -300, background: "repeating-linear-gradient(115deg, rgba(255,255,255,0.07) 0 70px, transparent 70px 190px)", transform: `translateX(${(d.f * 5) % 190}px)` }} />
+    </>
+  );
+}
 
-/** Stickers slapped on a wall of dots: the logo first, then each line of the title, each a little crooked; they fly off to show the video */
-function Sticker(d: Drawn) {
-  const slap = backOut(between(d.f, 4, 15), 2.6);
-  const fly = easeIn(d.leave);
-  const tilt = [-4, 3, -2, 4];
+/**
+ * The best moment of the video plays first, under its title, and the intro only frames it: two slanted bands
+ * of the channel's colours clap shut on the top and the bottom of the picture (where the apps put their own
+ * buttons, so nothing of the moment is hidden), the logo and the name ride the top one, and a white flash cuts
+ * to the start of the video. In a video the moment and its title play underneath (`over`); alone, as in the
+ * picker, it draws what stands for them.
+ */
+function Hook(d: Drawn) {
+  const shut = backOut(between(d.f, 0, 12), 1.5);
+  const away = easeIn(d.leave);
+  // A flash that peaks on the cut to the video. None on the first frames: the first picture of the video is its cover
+  const flash = d.f < d.hold ? between(d.f, d.hold - 3, d.hold) : 1 - easeOut(d.leave);
+  const band: CSSProperties = { position: "absolute", left: -110, width: INTRO_W + 220 };
   return (
     <div style={FILL}>
-      <div style={{ ...FILL, background: d.colors.accent, opacity: 1 - fly }} />
+      {!d.over && (
+        <>
+          <Footage d={d} />
+          <div style={{ ...SAFE, opacity: 1 - d.leave }}>
+            {d.lines.map((text, i) => (
+              <div
+                key={i}
+                style={{
+                  fontFamily: d.font,
+                  fontSize: Math.round(d.size * 0.8),
+                  lineHeight: 1,
+                  whiteSpace: "nowrap",
+                  color: inkOn(d.colors.highlight),
+                  background: d.colors.highlight,
+                  padding: "18px 38px 12px",
+                  marginTop: i ? -6 : 0,
+                  boxShadow: `10px 12px 0 ${INK}`,
+                  transform: `rotate(${i % 2 ? 2 : -4}deg) scale(${backOut(between(d.f, 5 + i * 4, 16 + i * 4), 2.2)})`,
+                }}
+              >
+                {text}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
       <div
-        style={{ ...FILL, backgroundImage: `radial-gradient(${d.colors.highlight} 21%, transparent 23%)`, backgroundSize: "58px 58px", backgroundPosition: `${d.f * 1.4}px ${d.f * 1.4}px`, opacity: 0.6 * (1 - fly) }}
-      />
-      <div style={SAFE}>
-        <div style={{ position: "relative", marginBottom: 76, opacity: between(d.f, 4, 6), transform: `translate(${fly * -900}px, ${fly * -800}px) rotate(${-7 - fly * 40}deg) scale(${1.7 - 0.7 * slap})` }}>
-          <div style={{ position: "absolute", inset: -96, background: d.colors.highlight, clipPath: STAR, transform: `rotate(${d.f * 1.6}deg)` }} />
-          {d.logoBox(310, { position: "relative", boxShadow: `0 0 0 16px #ffffff, 14px 18px 0 16px ${INK}` })}
-        </div>
-        {d.lines.map((text, i) => {
-          const side = i % 2 ? 1 : -1;
-          return (
-            <div
-              key={i}
-              style={{
-                fontFamily: d.font,
-                fontSize: Math.round(d.size * 0.84),
-                lineHeight: 1,
-                whiteSpace: "nowrap",
-                color: INK,
-                background: "#ffffff",
-                padding: "16px 36px 10px",
-                marginTop: i ? -8 : 0,
-                boxShadow: `10px 12px 0 ${INK}`,
-                transform: `translate(${fly * side * 1150}px, ${fly * (180 + i * 130)}px) rotate(${tilt[i % 4] + fly * side * 30}deg) scale(${backOut(between(d.f, 12 + i * 5, 23 + i * 5), 2.4)})`,
-              }}
-            >
-              {text}
-            </div>
-          );
-        })}
-        <Signature d={d} color="#ffffff" tone="white" tag={{ padding: "12px 30px 10px", background: INK }} style={{ marginTop: 48, transform: `translateY(${fly * 1000}px) rotate(2deg) scale(${backOut(between(d.f, 30, 41))})` }} />
+        style={{ ...band, top: -150, height: 340, background: d.colors.accent, boxShadow: `0 16px 0 ${INK}`, overflow: "hidden", display: "flex", alignItems: "flex-end", gap: 26, padding: "0 0 26px 158px", transform: `translateY(${(shut - 1) * 380 - away * 420}px) rotate(-3deg)` }}
+      >
+        {/* Not a flat slab: hatched, and the hatching drifts */}
+        <div style={{ position: "absolute", inset: "0 -200px", background: "repeating-linear-gradient(118deg, rgba(0,0,0,0.13) 0 16px, transparent 16px 44px)", transform: `translateX(${(d.f * 1.5) % 44}px)` }} />
+        {d.logoBox(112, { position: "relative", boxShadow: `0 0 0 8px ${INK}` })}
+        <Signature d={d} color={inkOn(d.colors.accent)} tone="ink" style={{ position: "relative" }} />
       </div>
+      {/* The bottom one is a strip of warning tape running across */}
+      <div style={{ ...band, bottom: -150, height: 322, background: d.colors.highlight, boxShadow: `0 -16px 0 ${INK}`, overflow: "hidden", transform: `translateY(${(1 - shut) * 380 + away * 420}px) rotate(-3deg)` }}>
+        <div style={{ position: "absolute", inset: "0 -260px", background: `repeating-linear-gradient(118deg, ${INK} 0 50px, transparent 50px 130px)`, opacity: 0.2, transform: `translateX(${-((d.f * 4) % 130)}px)` }} />
+      </div>
+      <div style={{ ...FILL, background: "#ffffff", opacity: flash }} />
     </div>
   );
 }
@@ -576,15 +597,18 @@ function Countdown(d: Drawn) {
   );
 }
 
-const DRAW: Record<IntroId, (d: Drawn) => ReactNode> = { slam: Slam, bands: Bands, glitch: Glitch, neon: Neon, rush: Rush, sticker: Sticker, split: Split, arcade: Arcade, news: News, shatter: Shatter, countdown: Countdown };
+const DRAW: Record<IntroId, (d: Drawn) => ReactNode> = { hook: Hook, slam: Slam, bands: Bands, glitch: Glitch, neon: Neon, rush: Rush, split: Split, arcade: Arcade, news: News, shatter: Shatter, countdown: Countdown };
 
 /**
  * One frame of an intro, in a 1080 x 1920 box. It takes its frame as a number
  * (no clock of its own): the video gives it Remotion's, the picker its own loop.
  */
-export default function IntroCard({ id, frame, fps, title, name, logo, colors, font, follow = null, Img = Plain }: IntroCardProps) {
+export default function IntroCard({ id, frame, fps, title, name, logo, colors, font, follow = null, over = false, hold: held, Img = Plain }: IntroCardProps) {
   const f = (frame * 30) / fps;
-  const { hold, out } = introSpan(id, 30);
+  const span = introSpan(id, 30);
+  // (a hook holds the screen for as long as its moment lasts: its caller says how long)
+  const hold = held ? (held * 30) / fps : span.hold;
+  const out = span.out;
   const { lines, size } = titleLines(title || name, font);
   const logoBox = (box: number, style: CSSProperties = {}, square = false) => (
     <div
@@ -606,7 +630,7 @@ export default function IntroCard({ id, frame, fps, title, name, logo, colors, f
   );
   return (
     <div style={{ position: "relative", width: INTRO_W, height: INTRO_H, overflow: "hidden" }}>
-      {DRAW[id]({ f, hold, leave: between(f, hold, hold + out), lines, size, title, name, logo, colors, font, follow, logoBox })}
+      {DRAW[id]({ f, hold, leave: between(f, hold, hold + out), lines, size, title, name, logo, colors, font, follow, over, logoBox })}
     </div>
   );
 }

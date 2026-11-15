@@ -4,7 +4,7 @@
  * level curve, the same way of playing them in the page.
  */
 import { introSeconds, introSound, isIntro, type IntroChoice } from "../intro/intros";
-import type { MontageIntro, MontageMusic, MontageProps } from "../montage";
+import type { MontageIntro, MontageMusic, MontageProps, MontageSegment } from "../montage";
 import { trackOf } from "./library";
 import { musicCurve, musicUrl, passageLevel, PROGRAM_LUFS, speechShare, trackGain, type MusicChoice, type MusicKind, type MusicTrack } from "./mix";
 
@@ -43,23 +43,37 @@ export interface SoundPiece {
 /**
  * The music of a montage: its track and its level over the video, lower where people talk,
  * more present where the game plays alone. `intro`: seconds the intro holds the screen (0: none).
+ * `hook`: the moment a "hook" intro plays first, and how long: a passage like the others, the
+ * music sits under it as under them (not up front, as during a jingle).
  */
-export function montageMusic(segments: { duration: number }[], pieces: SoundPiece[], choice: MusicChoice, intro = 0): MontageMusic {
-  const levels = pieces.map((piece) => passageLevel(speechShare(piece.words, piece.start, piece.end), piece.words.length === 0 && !!piece.said));
-  return { track: choice.track, curve: musicCurve(segments.map((segment, i) => ({ seconds: segment.duration, level: levels[i] ?? levels[0] ?? 0 })), intro, choice.volume ?? 1) };
+export function montageMusic(segments: { duration: number }[], pieces: SoundPiece[], choice: MusicChoice, intro = 0, hook?: { seconds: number; piece: SoundPiece }): MontageMusic {
+  const level = (piece: SoundPiece) => passageLevel(speechShare(piece.words, piece.start, piece.end), piece.words.length === 0 && !!piece.said);
+  const levels = pieces.map(level);
+  const passages = segments.map((segment, i) => ({ seconds: segment.duration, level: levels[i] ?? levels[0] ?? 0 }));
+  return { track: choice.track, curve: musicCurve(hook ? [{ seconds: hook.seconds, level: level(hook.piece) }, ...passages] : passages, hook ? 0 : intro, choice.volume ?? 1) };
 }
 
-/** The intro of a montage with all it draws (null: none, or a style this app doesn't know) */
-export function montageIntro(choice: IntroChoice | null | undefined, drawn: Omit<MontageIntro, "style" | "sound" | "gain" | "title"> & { title: string }): MontageIntro | null {
-  if (!choice || !isIntro(choice.style)) return null;
+/**
+ * The intro of a montage with all it draws (null: none, a style this app doesn't know, or a
+ * "hook" without its moment). `hook`: the moment a "hook" intro plays, built like a piece.
+ */
+export function montageIntro(choice: IntroChoice | null | undefined, drawn: Omit<MontageIntro, "style" | "sound" | "gain" | "title" | "hook"> & { title: string }, hook?: MontageSegment | null): MontageIntro | null {
+  if (!choice || !isIntro(choice.style) || (choice.style === "hook" && !hook)) return null;
   const sound = introSound(choice);
   // The follow button is the caller's to word (`drawn.follow`); an intro can do without it
   const { follow, ...rest } = drawn;
-  return { ...rest, style: choice.style, title: choice.title?.trim() || drawn.title, ...(follow && choice.follow !== false ? { follow } : {}), ...(sound ? { sound } : {}) };
+  return {
+    ...rest,
+    style: choice.style,
+    title: choice.title?.trim() || drawn.title,
+    ...(follow && choice.follow !== false ? { follow } : {}),
+    ...(sound ? { sound } : {}),
+    ...(choice.style === "hook" && hook ? { hook } : {}),
+  };
 }
 
-/** Seconds a montage's intro holds the screen */
-export const introOf = (montage: Pick<MontageProps, "intro">): number => (montage.intro ? introSeconds({ style: montage.intro.style }) : 0);
+/** Seconds a montage's intro holds the screen (a hook: as long as its moment) */
+export const introOf = (montage: Pick<MontageProps, "intro">): number => (montage.intro ? (montage.intro.hook?.duration ?? introSeconds({ style: montage.intro.style })) : 0);
 
 /**
  * A montage as the page's player takes it: the intro's sound and the music become files it

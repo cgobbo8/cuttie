@@ -281,8 +281,8 @@ export interface VideoPlan {
 /** A change asked on a video the AI planned: what is asked now, the video as it is (live seconds), what was asked before */
 export interface PlanChange {
   request: string
-  /** The video as it is: an item of another live says so (`job`) */
-  current: { title: string; items: { start: number; end: number; job?: string }[] }[]
+  /** The video as it is: an item of another live says so (`job`), the one the video can open on too (`opening`) */
+  current: { title: string; items: { start: number; end: number; job?: string; opening?: boolean }[] }[]
   asks: string[]
 }
 
@@ -397,13 +397,15 @@ export interface SoundChoice {
   kind: string | null
   music: string | null
   intro: string | null
+  /** The passage the video could open on as a teaser: its place among the passages it was told (`said`), from 1 */
+  teaser?: number | null
   why: string
   cost: number
 }
 
 /** The background music and the intro of a video, chosen by the AI from what the video is and what the streamer likes */
 export async function chooseSound(body: {
-  video: { title: string; parts: string[]; seconds: number; passages: number; said: string[] }
+  video: { title: string; parts: string[]; seconds: number; passages: number; said: string[]; lengths?: number[] }
   musics: { key: string; name: string; kinds: string[]; about: string }[]
   /** The streamer's favourite track for a kind of video, and the intro they prefer */
   favourites: Record<string, string>

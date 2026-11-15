@@ -13,7 +13,7 @@ import type { Layer } from '../../remotion/editorTypes.js'
 import { getPresignedUrl, uploadFile } from '#services/storage'
 import { BACKGROUND_SIZE, ensureBackground } from '#services/clip_variants'
 import { CLIPS_DIR } from '#services/data_paths'
-import { introFrames, isIntroSound } from '#services/compilations'
+import { introHoldFrames, isIntroSound } from '#services/compilations'
 
 // Cached bundle — auto-invalidates when remotion/ source files change
 let bundleUrl: string | null = null
@@ -387,6 +387,8 @@ export interface MontageIntro {
   follow?: [string, string]
   /** Its sound (api/public/sounds/intro-<sound>.mp3): mixed in after the render, never played by the renderer */
   sound?: string
+  /** The "hook" intro: the moment of the video it plays first, a piece of its own (its clip, its layers with the title on them) */
+  hook?: MontagePiece
 }
 
 /** Where an intro's sound is on this machine (null: not one that ships with the app) */
@@ -428,24 +430,21 @@ export async function renderMontage(opts: MontageRenderOptions): Promise<{ sizeM
     return layers.map((layer, i) => ({ layer, z: placed[i].z }))
   }
 
-  const segments: { from: number; duration: number; layers: PlacedLayer[]; transition?: string }[] = []
-  for (const piece of opts.pieces) {
+  /** A piece as the composition plays it: inside its clip's file, whatever was asked, its layers with their files */
+  const segmentOf = async (piece: MontagePiece) => {
     const probe = readProbe(piece.jobId ?? jobId, piece.clipFilename)
-    // Inside the clip's file, whatever was asked
     const from = Math.max(0, Math.min(piece.from, Math.max(0, probe.durationSeconds - 1 / fps)))
     const duration = Math.max(1 / fps, Math.min(piece.duration, probe.durationSeconds - from))
-    segments.push({
-      from,
-      duration,
-      layers: await place(piece.layers, piece.clipFilename, probe, piece.jobId ?? jobId),
-      ...(piece.transition ? { transition: piece.transition } : {}),
-    })
+    return { from, duration, layers: await place(piece.layers, piece.clipFilename, probe, piece.jobId ?? jobId) }
   }
+  const segments: { from: number; duration: number; layers: PlacedLayer[]; transition?: string }[] = []
+  for (const piece of opts.pieces) segments.push({ ...(await segmentOf(piece)), ...(piece.transition ? { transition: piece.transition } : {}) })
   const first = opts.pieces[0]
   const overlays = await place(opts.overlays, first.clipFilename, readProbe(first.jobId ?? jobId, first.clipFilename), first.jobId ?? jobId)
-  // The intro holds the screen first; its sound is not the renderer's business
-  const { sound: _mixedLater, ...intro } = opts.intro ?? ({} as Partial<MontageIntro>)
-  const hold = opts.intro ? introFrames(opts.intro.style, fps) : 0
+  // The intro holds the screen first; its sound is not the renderer's business. A hook plays a moment of the video meanwhile
+  const { sound: _mixedLater, hook: opener, ...drawn } = opts.intro ?? ({} as Partial<MontageIntro>)
+  const intro = { ...drawn, ...(opener ? { hook: await segmentOf(opener) } : {}) }
+  const hold = opts.intro ? introHoldFrames({ style: opts.intro.style, hook: intro.hook }, fps) : 0
   const durationInFrames = hold + segments.reduce((sum, s) => sum + Math.max(1, Math.round(s.duration * fps)), 0)
   const inputProps = { segments, overlays, ...(hold > 0 ? { intro } : {}) }
 

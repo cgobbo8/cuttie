@@ -1,7 +1,7 @@
 import { AbsoluteFill, Audio, Freeze, Img, Sequence, Series, useCurrentFrame, useVideoConfig } from "remotion";
 import IntroCard, { INTRO_W } from "../../lib/intro/IntroCard";
 import { introFade, introSpan, introVolume, isIntro } from "../../lib/intro/intros";
-import { framesOf, type MontageIntro, type MontageProps, type MontageSegment } from "../../lib/montage";
+import { framesOf, playsIntro, type MontageIntro, type MontageProps, type MontageSegment } from "../../lib/montage";
 import { gainAt } from "../../lib/music/curve";
 import { isTransition, lookStyle, transitionAt } from "../../lib/transitions";
 import { audibleLayerId, LayerBox } from "./CuttieComposition";
@@ -63,7 +63,21 @@ function Intro({ intro }: { intro: MontageIntro }) {
   return (
     <AbsoluteFill style={{ zIndex: 100000, pointerEvents: "none" }}>
       <div style={{ transform: `scale(${width / INTRO_W})`, transformOrigin: "0 0" }}>
-        <IntroCard id={intro.style} frame={frame} fps={fps} title={intro.title} name={intro.name} logo={intro.logo} colors={intro.colors} font={intro.font} follow={intro.follow} Img={Img} />
+        <IntroCard
+          id={intro.style}
+          frame={frame}
+          fps={fps}
+          title={intro.title}
+          name={intro.name}
+          logo={intro.logo}
+          colors={intro.colors}
+          font={intro.font}
+          follow={intro.follow}
+          // A hook's moment plays underneath, for as long as it lasts
+          over={!!intro.hook}
+          hold={intro.hook ? framesOf(intro.hook.duration, fps) : undefined}
+          Img={Img}
+        />
       </div>
     </AbsoluteFill>
   );
@@ -75,19 +89,18 @@ function Intro({ intro }: { intro: MontageIntro }) {
  * clip's, so its videos, subtitles and chat need nothing special. The hook
  * line and the widgets sit above, on the montage's own clock. An intro holds
  * the screen first: pieces and overlays start after it, and it leaves over the
- * first frames of the first piece.
+ * first frames of the first piece. A "hook" intro plays a moment of the video
+ * meanwhile, as a piece of its own.
  */
 export default function MontageComposition({ segments, overlays, intro, music }: MontageProps) {
   const { fps } = useVideoConfig();
-  const opening = intro && isIntro(intro.style) ? introSpan(intro.style, fps) : null;
+  const opening = playsIntro(intro) ? introSpan(intro.style, fps, intro.hook?.duration) : null;
   return (
     <AbsoluteFill style={{ background: "#000" }}>
       <Series>
-        {/* Nothing of the video plays while the intro holds the screen (a sequence of a series can't be empty) */}
+        {/* Nothing of the video plays while the intro holds the screen (a sequence of a series can't be empty), but the moment of a hook */}
         {opening && (
-          <Series.Sequence durationInFrames={opening.hold}>
-            <AbsoluteFill />
-          </Series.Sequence>
+          <Series.Sequence durationInFrames={opening.hold}>{intro?.hook ? <Layers segment={intro.hook} /> : <AbsoluteFill />}</Series.Sequence>
         )}
         {segments.map((segment, i) => (
           // Mounted a second early: the next piece's videos are already at the right frame at the cut

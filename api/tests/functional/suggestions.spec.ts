@@ -40,7 +40,7 @@ test.group('Compilations proposed by the AI', (group) => {
         if (req.url?.endsWith('/ideas')) res.end(JSON.stringify({ ideas, note: 'Un running gag et une histoire.', cost: 0.006, cached: false }))
         else if (req.url?.endsWith('/plan')) res.end(JSON.stringify({ title: 'Calme', sections: [], note: '' }))
         else if (req.url?.endsWith('/search')) res.end(JSON.stringify({ hits: [], total: 0, transcript: true, cached: false, cost: 0.002 }))
-        else if (req.url?.endsWith('/sound')) res.end(JSON.stringify({ kind: 'funny', music: null, intro: 'news', why: 'Flash info.', cost: 0.0004 }))
+        else if (req.url?.endsWith('/sound')) res.end(JSON.stringify({ kind: 'funny', music: null, intro: 'news', why: 'Flash info.', teaser: 3, cost: 0.0004 }))
         else res.writeHead(404).end('{}')
       })
     })
@@ -225,7 +225,7 @@ test.group('Compilations proposed by the AI', (group) => {
       updated_at: at,
     })
     job.compilations = [
-      video('aiolder111', { style: 'sticker', by: 'ai' }, '2026-11-10T10:00:00.000Z'),
+      video('aiolder111', { style: 'neon', by: 'ai' }, '2026-11-10T10:00:00.000Z'),
       // Picked by the streamer, however often: their taste, nothing to stay away from
       video('byhand1111', { style: 'slam' }, '2026-11-14T10:00:00.000Z'),
       video('byhand2222', { style: 'slam' }, '2026-11-15T09:00:00.000Z'),
@@ -240,10 +240,18 @@ test.group('Compilations proposed by the AI', (group) => {
     other.compilations = [video('otherlive1', { style: 'bands', by: 'ai' }, '2026-11-12T10:00:00.000Z')] as any
     await other.save()
 
-    const chosen = await client.post(`/api/jobs/${job.id}/sound`).loginAs(user).json({ title: 'Calme', parts: [], seconds: 60, passages: 8, said: [], compilation: 'deciding11' })
+    const said = Array.from({ length: 34 }, (_, n) => `  phrase ${n + 1}  `)
+    const chosen = await client.post(`/api/jobs/${job.id}/sound`).loginAs(user).json({ title: 'Calme', parts: [], seconds: 60, passages: 8, said, lengths: [4.2, 'long', 900, ...Array.from({ length: 31 }, () => 5)], compilation: 'deciding11' })
     chosen.assertStatus(200)
     assert.equal((chosen.body() as any).intro, 'news')
-    assert.deepEqual(asked[0].body.recent_intros, ['arcade', 'bands', 'sticker'])
+    // The passages the AI is told, in the video's order (thirty at most): it names the one the video could open on by its place among them
+    assert.deepEqual(asked[0].body.video.said.slice(0, 2), ['phrase 1', 'phrase 2'])
+    assert.lengthOf(asked[0].body.video.said, 30)
+    // ...and how long each one lasts
+    assert.deepEqual(asked[0].body.video.lengths.slice(0, 4), [4.2, 0, 120, 5])
+    assert.lengthOf(asked[0].body.video.lengths, 30)
+    assert.equal((chosen.body() as any).teaser, 3)
+    assert.deepEqual(asked[0].body.recent_intros, ['arcade', 'bands', 'neon'])
 
     // Saved by the app, an intro keeps who chose it; picked again by hand, it no longer says the AI did
     const url = `/api/jobs/${job.id}/compilations/deciding11`

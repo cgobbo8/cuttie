@@ -9,8 +9,13 @@
  * started; it then leaves over the first `out` frames of the first passage,
  * which is already playing underneath (nothing of the video is covered for
  * long, and its sound starts on time).
+ *
+ * "hook" is the odd one: no jingle, the best few seconds of the video play
+ * first (a moment of the video, shown again at its place later), framed by
+ * the channel's colours, then the video starts. It holds the screen for as
+ * long as that moment lasts.
  */
-export const INTRO_IDS = ["slam", "bands", "glitch", "neon", "rush", "sticker", "split", "arcade", "news", "shatter", "countdown"] as const;
+export const INTRO_IDS = ["hook", "slam", "bands", "glitch", "neon", "rush", "split", "arcade", "news", "shatter", "countdown"] as const;
 export type IntroId = (typeof INTRO_IDS)[number];
 export const isIntro = (value: unknown): value is IntroId => typeof value === "string" && (INTRO_IDS as readonly string[]).includes(value);
 
@@ -21,14 +26,18 @@ export const isIntroSound = (value: unknown): value is IntroSoundId => typeof va
 /** `intro.sound` when the intro is silent */
 export const NO_SOUND = "none";
 
-/** Frames at 30 fps, and the sound each intro plays unless another is chosen */
-const SPANS: Record<IntroId, { hold: number; out: number; sound: IntroSoundId }> = {
+/** A style that is gone, and the one that stands for it where it was kept (a video, the channel's preferred intro) */
+export const FORMER_INTROS: Record<string, IntroId> = { sticker: "bands" };
+
+/** Frames at 30 fps, and the sound each intro plays unless another is chosen (the hook has none: its moment is heard) */
+const SPANS: Record<IntroId, { hold: number; out: number; sound: IntroSoundId | null }> = {
+  // (as long as its moment in a video: these 5 seconds are what the picker's sketch plays)
+  hook: { hold: 150, out: 8, sound: null },
   slam: { hold: 48, out: 8, sound: "boom" },
   bands: { hold: 54, out: 12, sound: "swish" },
   glitch: { hold: 45, out: 6, sound: "zap" },
   neon: { hold: 60, out: 10, sound: "shine" },
   rush: { hold: 46, out: 7, sound: "rush" },
-  sticker: { hold: 54, out: 10, sound: "drum" },
   split: { hold: 50, out: 12, sound: "clash" },
   arcade: { hold: 56, out: 8, sound: "coin" },
   news: { hold: 54, out: 10, sound: "sting" },
@@ -43,25 +52,50 @@ export interface IntroChoice {
   sound?: string;
   /** False: without the channel's follow button (it is there unless said otherwise) */
   follow?: boolean;
+  /** The "hook" intro: the moment of the video it plays first */
+  hook?: HookChoice;
 }
 
-/** How long an intro holds the screen and how long it takes to leave, in frames */
-export function introSpan(id: IntroId, fps: number): { hold: number; out: number } {
+/**
+ * The moment a "hook" intro plays: a passage of the video and the part of it that is shown
+ * (seconds of that passage's live). `auto`: the app chose it (the moment the AI named as the
+ * video's hook, else the best one) and chooses again when the video changes; without it, the
+ * streamer did.
+ */
+export interface HookChoice {
+  item: string;
+  start: number;
+  end: number;
+  auto?: boolean;
+}
+
+/** A hook is a few seconds: shorter says nothing, longer is the video itself */
+export const HOOK_MIN = 1.5;
+export const HOOK_MAX = 8;
+/** What a hook lasts when the app cuts it out of a longer moment */
+export const HOOK_SECONDS = 5;
+
+/** How long an intro holds the screen and how long it takes to leave, in frames (`seconds`: what a hook's moment lasts) */
+export function introSpan(id: IntroId, fps: number, seconds?: number): { hold: number; out: number } {
   const frames = (at30: number) => Math.max(1, Math.round((at30 * fps) / 30));
-  return { hold: frames(SPANS[id].hold), out: frames(SPANS[id].out) };
+  return { hold: id === "hook" && seconds ? Math.max(1, Math.round(seconds * fps)) : frames(SPANS[id].hold), out: frames(SPANS[id].out) };
 }
 
-/** Seconds an intro adds to the video (0: no intro, or one this app doesn't know) */
-export const introSeconds = (intro: IntroChoice | null | undefined): number => (intro && isIntro(intro.style) ? SPANS[intro.style].hold / 30 : 0);
+/** Seconds an intro adds to the video (0: no intro, one this app doesn't know, or a hook without its moment) */
+export function introSeconds(intro: IntroChoice | null | undefined): number {
+  if (!intro || !isIntro(intro.style)) return 0;
+  if (intro.style === "hook") return intro.hook ? Math.max(0, intro.hook.end - intro.hook.start) : 0;
+  return SPANS[intro.style].hold / 30;
+}
 
 /** The sound an intro plays, null when it is silent */
 export function introSound(intro: IntroChoice | null | undefined): IntroSoundId | null {
-  if (!intro || !isIntro(intro.style) || intro.sound === NO_SOUND) return null;
+  if (!intro || !isIntro(intro.style) || intro.sound === NO_SOUND || !SPANS[intro.style].sound) return null;
   return isIntroSound(intro.sound) ? intro.sound : SPANS[intro.style].sound;
 }
 
-/** The sound of a style when none is chosen */
-export const defaultIntroSound = (id: IntroId): IntroSoundId => SPANS[id].sound;
+/** The sound of a style when none is chosen (null: a style that plays none) */
+export const defaultIntroSound = (id: IntroId): IntroSoundId | null => SPANS[id].sound;
 
 /**
  * When an intro's sound fades out: from the frame the video starts (`from`), over `frames`

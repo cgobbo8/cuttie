@@ -970,6 +970,9 @@ def revise_video(
     def told(item: dict) -> dict:
         n = number.get(str(item.get("job") or job_id), 1)
         lines = as_lines(lives[n - 1][1], float(item["start"]), float(item["end"]))
+        # (the moment the video can open on says so, as the AI would say it)
+        if item.get("opening") is True:
+            lines = {**lines, "opens": True}
         return {"live": n, **lines} if others else lines
 
     video = [{"title": str(part.get("title") or ""), "moments": [told(i) for i in part.get("items") or []]} for part in current]
@@ -1003,6 +1006,26 @@ def _sections(raw_sections, transcript: VodTranscript, duration: float, by_lines
     sections = []
     taken: list[tuple[float, float]] = []
     parse = parse_line_moments if by_lines else parse_moments
+
+    def named(found: list[dict]) -> list[dict]:
+        """The sections with the moment the AI marked as the one the video can open on (`opens`) said on its hit
+        ("opening"): one at most, never the video's first moment (it would play twice in a row)."""
+        marked = next((m for raw in raw_sections if isinstance(raw, dict) for m in (raw.get("moments") if isinstance(raw.get("moments"), list) else []) if isinstance(m, dict) and m.get("opens") is True), None) if isinstance(raw_sections, list) else None
+        if not marked:
+            return found
+        try:
+            n = int(marked.get("live") or 1)
+        except (TypeError, ValueError):
+            n = 1
+        job, theirs, length = lives[n - 1] if lives and 1 <= n <= len(lives) else (None, transcript, duration)
+        spot = parse([marked], theirs, length, limit=1, longest=MAX_PLANNED)
+        hits = [hit for section in found for hit in section["hits"]]
+        for hit in hits[1:] if spot else []:
+            if hit.get("job") == job and min(hit["end"], spot[0].end) - max(hit["start"], spot[0].start) > 0.5 * min(hit["end"] - hit["start"], spot[0].end - spot[0].start):
+                hit["opening"] = True
+                break
+        return found
+
     if lives:
         used: list[tuple[str, float, float]] = []
         for raw in raw_sections if isinstance(raw_sections, list) else []:
@@ -1024,7 +1047,7 @@ def _sections(raw_sections, transcript: VodTranscript, duration: float, by_lines
                     hits.append({**_complete([hit], theirs)[0], "job": live})
             if hits:
                 sections.append({"title": str(raw.get("title") or "")[:60], "hits": hits[:60]})
-        return sections
+        return named(sections)
     for raw in raw_sections if isinstance(raw_sections, list) else []:
         if not isinstance(raw, dict):
             continue
@@ -1036,7 +1059,7 @@ def _sections(raw_sections, transcript: VodTranscript, duration: float, by_lines
             hits.append(hit)
         if hits:
             sections.append({"title": str(raw.get("title") or "")[:60], "hits": _complete(hits, transcript)})
-    return sections
+    return named(sections)
 
 
 # ── The AI reads the whole live once (development command only) ──────────────

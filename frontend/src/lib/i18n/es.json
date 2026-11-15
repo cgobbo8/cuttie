@@ -1679,12 +1679,12 @@
       "soundOfStyle": "{{name}} (el del estilo)",
       "noSound": "Sin sonido",
       "style": {
+        "hook": "Hook",
         "slam": "Impacto",
         "bands": "Bandas",
         "glitch": "Glitch",
         "neon": "Neón",
         "rush": "Velocidad",
-        "sticker": "Stickers",
         "split": "Duelo",
         "arcade": "Arcade",
         "news": "Última hora",
@@ -1708,7 +1708,20 @@
       "followLabel": "Seguir",
       "followDone": "Siguiendo",
       "followToggle": "Botón «Seguir» del canal",
-      "noneHint": "Sin intro, el vídeo empieza directamente. Elige una para ajustar el sonido y el botón de seguir."
+      "noneHint": "Sin intro, el vídeo empieza directamente. Elige una para ajustar el sonido y el botón de seguir.",
+      "hook": {
+        "hint": "El mejor momento del vídeo se reproduce primero, bajo el título, y luego empieza el vídeo. Vuelve a salir en el lugar que ocupa.",
+        "label": "El momento del hook",
+        "auto": "Automático: el mejor pasaje",
+        "autoAi": "Automático: el que nombró la IA",
+        "passage": "pasaje {{number}}",
+        "needs": "El vídeo necesita al menos dos pasajes: el hook repite uno de ellos, nunca el primero.",
+        "trim": "Lo que se conserva",
+        "kept": "{{seconds}} s de {{of}}",
+        "from": "Inicio del hook",
+        "until": "Fin del hook",
+        "play": "Ver el hook"
+      }
     },
     "music": {
       "label": "Música",

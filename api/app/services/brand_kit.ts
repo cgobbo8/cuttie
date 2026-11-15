@@ -5,7 +5,7 @@
  */
 
 import Job from '#models/job'
-import { isIntro } from '#services/compilations'
+import { introStyle } from '#services/compilations'
 import { findMusic, MUSIC_KINDS } from '#services/musics'
 import { readSettings, writeSettings } from '#services/user_settings'
 
@@ -302,7 +302,8 @@ function normalize(stored: Record<string, any>): BrandKit {
     widget: { ...DEFAULT_BRAND_KIT.widget, ...(stored.widget ?? {}) },
     subtitles: { ...DEFAULT_BRAND_KIT.subtitles, ...(stored.subtitles ?? {}) },
     musics: parseFavourites(stored.musics),
-    intro: isIntro(stored.intro) ? stored.intro : null,
+    // (a style that is gone: the one that stands for it now)
+    intro: introStyle(stored.intro),
   }
 }
 

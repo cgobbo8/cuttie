@@ -1679,12 +1679,12 @@
       "soundOfStyle": "{{name}} (the style's own)",
       "noSound": "No sound",
       "style": {
+        "hook": "Hook",
         "slam": "Impact",
         "bands": "Bands",
         "glitch": "Glitch",
         "neon": "Neon",
         "rush": "Speed",
-        "sticker": "Stickers",
         "split": "Versus",
         "arcade": "Arcade",
         "news": "Breaking news",
@@ -1708,7 +1708,20 @@
       "followLabel": "Follow",
       "followDone": "Following",
       "followToggle": "The channel's “Follow” button",
-      "noneHint": "Without an intro, the video starts straight away. Pick one to set its sound and the follow button."
+      "noneHint": "Without an intro, the video starts straight away. Pick one to set its sound and the follow button.",
+      "hook": {
+        "hint": "The best moment of the video plays first, under its title, then the video starts. It plays again at its place.",
+        "label": "The hook's moment",
+        "auto": "Automatic: the best passage",
+        "autoAi": "Automatic: the one the AI named",
+        "passage": "passage {{number}}",
+        "needs": "The video needs at least two passages: the hook plays one of them again, never the first.",
+        "trim": "What is kept of it",
+        "kept": "{{seconds}} s of {{of}}",
+        "from": "Start of the hook",
+        "until": "End of the hook",
+        "play": "See the hook"
+      }
     },
     "music": {
       "label": "Music",

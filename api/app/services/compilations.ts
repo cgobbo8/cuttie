@@ -39,6 +39,8 @@ export interface CompilationItem {
   job?: string
   /** How it comes in when that isn't as the rest of the video does: a ready-made transition, or "cut" (none) */
   transition?: string
+  /** The AI named it as the moment the video can open on, as a teaser of what is coming */
+  opening?: boolean
 }
 
 export interface CompilationSection {
@@ -129,15 +131,23 @@ export const isTransition = (value: unknown): value is string => typeof value ==
 /**
  * The ready-made intros (drawn by api/remotion/intro): how long each holds the screen before the
  * video starts, then how long it takes to leave over the first piece, in frames at 30 a second.
- * And the sound effects one can play (api/public/sounds/intro-<id>.mp3).
+ * And the sound effects one can play (api/public/sounds/intro-<id>.mp3). "hook" is the odd one:
+ * no jingle, a moment of the video plays first, and it holds the screen for as long as that
+ * moment lasts (its number here is only what the picker's sketch plays).
  */
 export const INTROS: Record<string, [number, number]> = {
-  slam: [48, 8], bands: [54, 12], glitch: [45, 6], neon: [60, 10], rush: [46, 7], sticker: [54, 10], split: [50, 12],
+  hook: [150, 8], slam: [48, 8], bands: [54, 12], glitch: [45, 6], neon: [60, 10], rush: [46, 7], split: [50, 12],
   arcade: [56, 8], news: [54, 10], shatter: [50, 12], countdown: [60, 8],
 }
 export const INTRO_SOUNDS = ['boom', 'swish', 'zap', 'shine', 'rush', 'drum', 'clash', 'coin', 'sting', 'glass', 'beep']
 export const isIntro = (value: unknown): value is string => typeof value === 'string' && Object.hasOwn(INTROS, value)
 export const isIntroSound = (value: unknown): value is string => typeof value === 'string' && INTRO_SOUNDS.includes(value)
+/** A style that is gone, and the one that stands for it where it was kept (a video, the channel's preferred intro) */
+const FORMER_INTROS: Record<string, string> = { sticker: 'bands' }
+/** The intro a stored style stands for today, null when it is none */
+export const introStyle = (value: unknown): string | null => (isIntro(value) ? value : typeof value === 'string' && Object.hasOwn(FORMER_INTROS, value) ? FORMER_INTROS[value] : null)
+/** Longest moment a "hook" intro plays, seconds (the app keeps it under 8) */
+const HOOK_LONGEST = 8.5
 
 /** The intro a compilation keeps: its style, its own title (else the video's name), its sound (else its style's; "none": silent) */
 export interface Intro {
@@ -151,19 +161,36 @@ export interface Intro {
    * choices stay away from the intros it gave the last videos, never from those the streamer picked.
    */
   by?: 'ai'
+  /**
+   * The "hook" intro: the moment of the video it plays first, a passage and the part of it that is
+   * shown (seconds of that passage's live). `auto`: the app chose it and chooses again when the
+   * video changes; without it, the streamer did. The app writes it: the video's length counts it.
+   */
+  hook?: { item: string; start: number; end: number; auto?: true }
 }
 
 /** An intro as the app sends it, null when it isn't one this server can draw */
 export function parseIntro(raw: any): Intro | null {
-  if (!raw || typeof raw !== 'object' || !isIntro(raw.style)) return null
+  const style = introStyle(raw?.style)
+  if (!raw || typeof raw !== 'object' || !style) return null
   const title = typeof raw.title === 'string' ? raw.title.trim().slice(0, 80) : ''
+  const hook = style === 'hook' ? parseHook(raw.hook) : null
   return {
-    style: raw.style,
+    style,
     ...(title ? { title } : {}),
     ...(isIntroSound(raw.sound) || raw.sound === 'none' ? { sound: raw.sound } : {}),
     ...(raw.follow === false ? { follow: false } : {}),
     ...(raw.by === 'ai' ? { by: 'ai' as const } : {}),
+    ...(hook ? { hook } : {}),
   }
+}
+
+/** The moment of a "hook" intro as the app sends it, null when it isn't one */
+function parseHook(raw: any): Intro['hook'] | null {
+  const start = Number(raw?.start)
+  const end = Number(raw?.end)
+  if (!isPieceId(raw?.item) || !Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end <= start || end - start > HOOK_LONGEST) return null
+  return { item: raw.item, start: hundredth(start), end: hundredth(end), ...(raw.auto === true ? { auto: true as const } : {}) }
 }
 
 /** A compilation's music as the app sends it, null when it isn't a track of the catalogue */
@@ -181,8 +208,22 @@ export function introFade(style: unknown): { at: number; for: number } | null {
   return isIntro(style) ? { at: INTROS[style][0] / 30, for: (INTROS[style][1] + 24) / 30 } : null
 }
 
-/** Seconds an intro adds to the video */
-export const introSeconds = (intro: Intro | undefined | null): number => (intro && isIntro(intro.style) ? INTROS[intro.style][0] / 30 : 0)
+/** Seconds an intro adds to the video (a hook: what its moment lasts, nothing while it has none) */
+export function introSeconds(intro: Intro | undefined | null): number {
+  if (!intro || !isIntro(intro.style)) return 0
+  if (intro.style === 'hook') return intro.hook ? Math.max(0, intro.hook.end - intro.hook.start) : 0
+  return INTROS[intro.style][0] / 30
+}
+
+/**
+ * Frames a montage's intro holds the screen before the first piece, at the video's own rate: its
+ * style's, or as long as the moment a hook plays (0: no intro, or a hook without its moment).
+ */
+export function introHoldFrames(intro: { style: string; hook?: { duration: number } } | undefined | null, fps: number): number {
+  if (!intro) return 0
+  if (intro.style === 'hook') return intro.hook ? Math.max(1, Math.round(intro.hook.duration * fps)) : 0
+  return introFrames(intro.style, fps)
+}
 
 const JOB_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 export const isJobId = (value: unknown): value is string => typeof value === 'string' && JOB_ID.test(value)
@@ -218,6 +259,8 @@ function parseItem(raw: any, liveDuration: number, others?: Map<string, number>)
     ...(job ? { job } : {}),
     // "cut": a plain cut where the rest of the video has a transition
     ...(isTransition(raw.transition) || raw.transition === 'cut' ? { transition: raw.transition } : {}),
+    // The AI named it as the moment the video can open on (what a "hook" intro plays unless the streamer chose another)
+    ...(raw.opening === true ? { opening: true } : {}),
   }
 }
 
@@ -253,6 +296,9 @@ export function parseCompilation(raw: any, liveDuration: number, others?: Map<st
     sections.push({ id: section.id, title: text(section.title, 60), query: text(section.query, 300), items })
   }
   const target = Number(raw.target)
+  // A hook plays one of the video's own passages: the moment of one that is gone is forgotten
+  const intro = parseIntro(raw.intro)
+  if (intro?.hook && !sections.some((s) => s.items.some((item) => item.id === intro.hook!.item))) delete intro.hook
   return {
     name: text(raw.name, 80) || 'Compilation',
     sections,
@@ -261,7 +307,7 @@ export function parseCompilation(raw: any, liveDuration: number, others?: Map<st
     hook: text(raw.hook, 120),
     target: Number.isFinite(target) && target >= 5 && target <= 1800 ? Math.round(target) : null,
     ...(isTransition(raw.transition) ? { transition: raw.transition } : {}),
-    ...(parseIntro(raw.intro) ? { intro: parseIntro(raw.intro)! } : {}),
+    ...(intro ? { intro } : {}),
     ...(parseMusic(raw.music) ? { music: parseMusic(raw.music)! } : {}),
     ...(lives.length > 0 ? { lives } : {}),
     ...(text(raw.brief, MAX_BRIEF) ? { brief: text(raw.brief, MAX_BRIEF) } : {}),

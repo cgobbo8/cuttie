@@ -101,6 +101,11 @@ router
         router.put('/musics/:id', [() => import('#controllers/musics_controller'), 'update'])
         router.delete('/musics/:id', [() => import('#controllers/musics_controller'), 'destroy'])
         router.get('/jobs/:id/loudness', [() => import('#controllers/musics_controller'), 'level'])
+        // What the streamer writes for the AI about themselves and their streams
+        router.get('/notes', [() => import('#controllers/notes_controller'), 'index'])
+        router.post('/notes', [() => import('#controllers/notes_controller'), 'store'])
+        router.put('/notes/:id', [() => import('#controllers/notes_controller'), 'update'])
+        router.delete('/notes/:id', [() => import('#controllers/notes_controller'), 'destroy'])
 
         // Searching the live, compilations (videos made of pieces of the live)
         router.get('/jobs/:id/search/info', [() => import('#controllers/compilations_controller'), 'searchInfo'])

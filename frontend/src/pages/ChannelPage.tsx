@@ -9,6 +9,7 @@ import { useLatestMoments } from "../lib/useLatestMoment";
 import { useToast } from "../components/Toast";
 import TemplatePreview, { useDefaultTemplate } from "../components/TemplatePreview";
 import TemplateSketch from "../components/montage/TemplateSketch";
+import AiNotes from "../components/AiNotes";
 import SoundPrefs from "../components/SoundPrefs";
 import { fontFamily } from "../lib/fonts";
 import type { TemplateContext } from "../lib/templates";
@@ -367,6 +368,11 @@ export default function ChannelPage() {
                 brand={{ name: channel?.display_name ?? channel?.login ?? kit.twitch_login ?? "", logo: channel?.avatar_url ?? null, colors: kit.colors, font: fontFamily("luckiest") }}
                 onSave={(patch) => save(patch)}
               />
+            </Card>
+
+            {/* What the AI should know about them: notes it reads before every analysis, search and video */}
+            <Card title={t("notes.title")} hint={t("notes.hint")}>
+              <AiNotes />
             </Card>
           </div>
         </div>

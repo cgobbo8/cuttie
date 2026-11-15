@@ -23,6 +23,7 @@ import unicodedata
 from bisect import bisect_left
 from dataclasses import asdict, dataclass, field
 
+from app.services import notes
 from app.services import llm_text, paths
 from app.services.presort import chat_highlights, hms, parse_hms
 from app.services.vod_transcript import VodTranscript, load_cached
@@ -682,7 +683,9 @@ def answered_by() -> list[str]:
     what the new one finds (it happened: three versions answered from the first one's disk). Outside the
     installed app there is no version: a development run keeps its answers until ANSWERS_VERSION changes."""
     version = os.getenv("CUTTIE_APP_VERSION", "").strip()
-    return [f"app {version}"] if version else []
+    # ...and what the streamer had written for the AI then: a note added or changed since, and the AI is asked again
+    written = notes.signature()
+    return [*([f"app {version}"] if version else []), *([f"notes {written}"] if written else [])]
 
 
 def _cached(path: str) -> dict | None:

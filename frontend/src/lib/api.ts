@@ -1264,6 +1264,40 @@ export async function chooseSound(
   return liveJson(await postJson(`${BASE}/jobs/${jobId}/sound`, body));
 }
 
+/**
+ * A note the streamer wrote for the AI (Ma chaîne): what it should know about them, the people around them and
+ * their games. The AI reads the notes whenever it analyses a live, searches it or builds a video.
+ */
+export interface AiNote {
+  id: string;
+  title: string;
+  /** The games it is about, as Twitch names them (none: it is given for every live) */
+  games: string[];
+  body: string;
+  updated_at: string;
+}
+
+type AiNoteFields = Pick<AiNote, "title" | "games" | "body">;
+
+/** Every note, and how much can be written (how many notes, how long each) */
+export async function listNotes(): Promise<{ notes: AiNote[]; max: number; max_chars: number }> {
+  return jsonOrThrow(await fetch(`${BASE}/notes`), "Failed to load the notes");
+}
+
+export async function createNote(fields: AiNoteFields): Promise<AiNote> {
+  const res = await fetch(`${BASE}/notes`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(fields) });
+  return (await jsonOrThrow<{ note: AiNote }>(res, "Failed to save the note")).note;
+}
+
+export async function saveNote(id: string, fields: AiNoteFields): Promise<AiNote> {
+  const res = await fetch(`${BASE}/notes/${encodeURIComponent(id)}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(fields) });
+  return (await jsonOrThrow<{ note: AiNote }>(res, "Failed to save the note")).note;
+}
+
+export async function deleteNote(id: string): Promise<void> {
+  await jsonOrThrow(await fetch(`${BASE}/notes/${encodeURIComponent(id)}`, { method: "DELETE" }), "Failed to remove the note");
+}
+
 /** The background musics that can be played on this machine: those that ship (whose file is there), then the streamer's own */
 export async function listMusics(): Promise<MusicTrack[]> {
   const json = await jsonOrThrow<{ musics: (MusicTrack & { available: boolean })[] }>(await fetch(`${BASE}/musics`), "Failed to load the musics");

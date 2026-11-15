@@ -131,6 +131,13 @@ class LiveTools:
         # What comes back in the live, once counted (see tool_recurring)
         self._recurring: tuple[list[dict], int] | None = None
 
+    def games(self) -> list[str | None]:
+        """The game this live is on (what tells which of the streamer's notes are about it)."""
+        from app.services.db import get_job
+
+        job = get_job(self.job_id)
+        return [job.vod_game if job else None]
+
     def specs(self) -> list[dict]:
         """The tools this live can answer (no sound tools when it was never listened to)."""
         return [s for s in SPECS if self.sounds or s["name"] not in ("find_sounds", "loud_moments")]
@@ -346,6 +353,10 @@ class ManyLives:
 
     def __init__(self, lives: list[LiveTools]) -> None:
         self.lives = lives
+
+    def games(self) -> list[str | None]:
+        """The games these lives are on."""
+        return [game for tools in self.lives for game in tools.games()]
 
     def of(self, live) -> tuple[int, LiveTools] | None:
         """The live a model named, with its number (None when it named none of them)."""

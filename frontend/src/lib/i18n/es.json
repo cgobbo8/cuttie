@@ -1890,5 +1890,51 @@
     "nothingNew": "La IA no tiene nada nuevo que proponer para este directo",
     "proposed_one": "{{count}} idea de compilación propuesta",
     "proposed_other": "{{count}} ideas de compilación propuestas"
+  },
+  "notes": {
+    "title": "Lo que la IA sabe de ti",
+    "hint": "Notas que lee antes de analizar un directo, buscar en él o montar un vídeo: quién es quién, los nombres que escribe mal, las palabras de tu juego.",
+    "new": "Nueva nota",
+    "import": "Importar un archivo",
+    "imported_one": "{{count}} nota importada",
+    "imported_other": "{{count}} notas importadas",
+    "importFailed_one": "{{count}} archivo no se pudo leer.",
+    "importFailed_other": "{{count}} archivos no se pudieron leer.",
+    "always": "Todos los directos",
+    "chars_one": "{{formatted}} carácter",
+    "chars_other": "{{formatted}} caracteres",
+    "empty": "Nada por ahora. Parte de uno de estos modelos, o escribe la tuya.",
+    "full": "{{max}} notas como máximo: elimina una para añadir otra.",
+    "saved": "Nota guardada: la IA la leerá desde la próxima pregunta.",
+    "deleted": "Nota eliminada",
+    "saveFailed": "No se pudo guardar la nota.",
+    "deleteTitle": "¿Eliminar esta nota?",
+    "deleteMessage": "La IA ya no leerá «{{title}}», y el texto se perderá.",
+    "editor": {
+      "new": "Nueva nota",
+      "edit": "Editar la nota",
+      "title": "Título",
+      "titlePlaceholder": "Quién soy, GTA V RP, mis bromas recurrentes…",
+      "for": "Sirve para",
+      "forGames": "Algunos juegos",
+      "gamePlaceholder": "Otro juego, como lo escribe Twitch",
+      "body": "Lo que la IA debe saber",
+      "bodyPlaceholder": "Escribe como hablas, en listas cortas.\n- Maurice: mi personaje, sanitario del hospital.\n- La transcripción escribe «Titeau»: es Tito.\n- A mi chat le encanta cuando me quejo de los pacientes.",
+      "count": "{{count}} / {{max}}"
+    },
+    "starter": {
+      "who": {
+        "title": "Quién soy",
+        "body": "## Yo\n- \n\n## Lo que les gusta a mis espectadores\n- \n\n## Lo que nunca vale un clip\n- "
+      },
+      "game": {
+        "title": "{{game}}: lo que hay que saber",
+        "body": "## Los personajes, y quién los interpreta\n- \n\n## Los lugares, los oficios, el vocabulario\n- \n\n## Las bromas que vuelven\n- "
+      },
+      "names": {
+        "title": "Nombres que la IA escribe mal",
+        "body": "La transcripción escribe «…»: es «…».\n- "
+      }
+    }
   }
 }

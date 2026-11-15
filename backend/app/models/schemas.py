@@ -95,6 +95,8 @@ class VodContext(BaseModel):
     recurring_themes: list[str] = []
     language: str = ""
     mood_arc: str = ""
+    # What matters for this live in the notes the streamer wrote for the AI (who is who, names as they are spelled, the game's words)
+    glossary: list[str] = []
 
 
 class JobResponse(BaseModel):

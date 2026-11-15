@@ -26,6 +26,7 @@ import tempfile
 import time
 from dataclasses import dataclass, field
 
+from app.services import notes
 from app.services import live_search, paths
 from app.services.live_tools import LiveTools, ManyLives
 from app.services.presort import hms, parse_hms
@@ -521,6 +522,8 @@ class Searcher:
         # ...and its image, in a small rendition
         self._video_urls: dict[int, str | None] = {}
         self.run = AgentRun(model=model)
+        # The streamer's notes for these lives, once read
+        self._known: str | None = None
 
     def specs(self, final: dict = ANSWER_SPEC, more: list[dict] | None = None) -> list[dict]:
         """The tools of this work: the live's, `more` (tools of one kind of work only), the ears and the eyes
@@ -538,7 +541,12 @@ class Searcher:
         return [*specs, _for_lives(final, self.many) if self.many else final]
 
     def _system(self, system: str) -> str:
-        return system + MANY.format(count=self.many) if self.many else system
+        """What the model is told before anything: its work, then what the streamer wrote for the AI about
+        themselves and the games of these lives (see notes.py), when they wrote some."""
+        if self._known is None:
+            # (which game a live is on is only looked up when there are notes to choose from)
+            self._known = notes.block(*self.tools.games()) if notes.load() else ""
+        return (system + MANY.format(count=self.many) if self.many else system) + self._known
 
     def _create(self, **kwargs):
         """One call to a model. A dropped connection is tried again; a provider that refuses for good

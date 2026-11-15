@@ -72,6 +72,7 @@ cuttie/
 │   │   │   ├── spa_controller.ts             # sert frontend/dist (FRONTEND_DIST)
 │   │   │   ├── renders_controller.ts         # Remotion renders (un clip, ou un montage de plusieurs morceaux)
 │   │   │   ├── musics_controller.ts          # musiques de fond : catalogue, lecture d'une piste, niveau des clips d'un live
+│   │   │   ├── notes_controller.ts           # notes pour l'IA (Ma chaine) : lister, ecrire, changer, supprimer
 │   │   │   ├── compilations_controller.ts    # recherche dans le live, plan de video par l'IA, compilations, decoupe des passages
 │   │   │   ├── assets_controller.ts          # Upload/serve assets
 │   │   │   └── profile_controller.ts         # Profil utilisateur
@@ -95,6 +96,7 @@ cuttie/
 │   │   │   ├── compilations.ts               # compilations (jobs.compilations) : parties, passages, leurs clips piece_<id>.mp4
 │   │   │   ├── suggestions.ts                # compilations proposees par l'IA une fois le live analyse (jobs.suggestions) : les idees du worker deviennent des compilations qui attendent d'etre construites
 │   │   │   ├── compilation_flat.ts           # une compilation collee en un seul clip (flat_<id>_<signature>.mp4, ses mots, son chat) pour l'editeur a calques
+│   │   │   ├── notes.ts                      # notes pour l'IA : un fichier Markdown par note dans <data dir>/notes (titre, jeux, texte)
 │   │   │   ├── worker_failure.ts             # refus du worker -> reponses de l'API (pas de transcript, credits, live parti)
 │   │   │   ├── clip_thumbs.ts                # vignettes (ffmpeg, cache) ; gardees quand les clips sont liberes
 │   │   │   ├── disk_space.ts                 # place prise, projets inactifs, liberer (exports gardes), recuperer, menage auto (6 h)
@@ -146,6 +148,7 @@ cuttie/
 │   │       ├── sound_index.py                 # ce qu'on entend dans tout le live, seconde par seconde (PANNs, 23 familles de sons, ~1 Mo par live)
 │   │       ├── music_library.py               # une musique de fond mesuree (tempo, niveau, ou elle bat son plein) et ecoutee par l'IA (genre, types de video, description)
 │   │       ├── looks.py                       # le modele de chaque passage d'une video, choisi par l'IA qui regarde 3 images de chacun ; « a quoi sert » un modele perso
+│   │       ├── notes.py                       # ce que le streamer a ecrit pour l'IA (<data dir>/notes/*.md) : quelles notes pour quel live, le bloc donne a l'IA
 │   │       ├── llm_text.py                    # appels texte a l'IA (OpenRouter ; CUTTIE_LLM_CMD en dev), cout estime
 │   │       ├── openai_client.py               # Clients multi-provider (Groq, OpenRouter)
 │   │       ├── provider_errors.py             # Refus definitifs (credits, cle) -> arret clair de l'analyse
@@ -188,6 +191,7 @@ cuttie/
         │   ├── montage/                       # TemplatePicker (onglets Mes modeles / Modeles Cuttie, etoile par defaut), TemplateSketch, CamSheet
         │   ├── compilation/                   # LivePicker (choisir un live, ou plusieurs), CompilationCard (une compilation dans la bibliotheque), SuggestionCard (une idee de l'IA pas encore construite : resume, tags, indice de viralite), SearchPanel (mots / IA / decrire la video), PiecePreview (un passage et sa coupe), PlanTalk (la conversation avec l'IA sur une video decrite), CompilationPanel (parties, passages a cocher / glisser, transitions, duree), TransitionPicker (les transitions, chacune jouee en petit), IntroPicker (les intros, jouees en petit avec le logo et les couleurs de la chaine, titre et bruitage), MusicPicker (les musiques par type de video, a ecouter, presence), CompilationGuide (l'ecran explique en 4 etapes a la premiere visite)
         │   ├── template-editor/               # EditorCanvas (apercu + poignees), LayerList (calques), Panels (reglages), Scrubber (timeline)
+        │   ├── AiNotes.tsx                    # Ma chaine : les notes pour l'IA (liste, editeur, modeles pour demarrer, import de fichiers)
         │   ├── KeyField.tsx                   # Champ de cle API verifie aupres du fournisseur
         │   ├── WebcamFrame.tsx                # Frame + rectangle de cam deplacable
         │   ├── TemplatePreview.tsx            # Apercu du modele par defaut (memes calques que l'export)
@@ -219,6 +223,7 @@ cuttie/
             ├── music/                         # musique de fond : catalogue.json (les pistes : types de video, mesures), mix.ts (niveau selon ce qui joue), curve.ts (la courbe, copiee cote API)
             ├── intro/                         # les 11 intros toutes faites d'une compilation : intros.ts (styles, durees, bruitages), IntroCard.tsx (le dessin) ; copie cote API
             ├── suggestions.ts                 # compilations proposees par l'IA : laquelle attend d'etre construite, leur ordre, leur nombre tenu a jour (useSuggested)
+            ├── aiNotes.ts                     # notes pour l'IA : lire un fichier de note, les modeles pour demarrer, les jeux des lives
             ├── compilationLibrary.ts          # la bibliotheque : ou en est une compilation (vide, brouillon, exportee, modifiee depuis), groupes par live, nom d'une copie
             ├── editorTypes.ts                 # Types editeur (layers, state)
             ├── editorThemes.ts                # Themes pre-definis
@@ -319,6 +324,19 @@ Une fois un live analyse, l'IA le parcourt toute seule et propose des compilatio
 - **Ecran** : carte a part dans la bibliotheque (`SuggestionCard` : resume, tags, anneau de l'indice, duree visee, moments reperes, prix de la construction, croix pour ecarter), les idees en tete de leur live ; pastille du nombre d'idees a decouvrir a cote de « Compilations » (`ModeSwitch`, tenue a jour par l'evenement `suggestions` du live) ; « N compilations trouvees » sur l'accueil (dernier live et cartes des lives) et sur les cartes de Projets ; tuile « Demander des idees a l'IA » sur la page des compilations d'un live jamais parcouru.
 - Essai reel (15/11/2026, instance de test) : live de 4 h 43 -> 4 idees (89, 77, 75, 70) en 24 s pour 0,0053 $ ; la premiere construite a l'ouverture : 2 parties, 11 passages, 0,025 $ et 32 s, musique et intro choisies ensuite. Live de 6 h 49 : le running gag du « calme » en tete (82 et 83) sur 2 essais sur 2 depuis le filet. 0,07 $ depenses en tout pour ces essais.
 - Limites : les idees changent d'un essai a l'autre (le modele n'est pas deterministe), mais un live n'est parcouru qu'une fois ; un jeu de tir n'a pas ete essaye (les lives de test sont du GTA RP) : les kills reposent sur les coups de feu reperes au son, les resumes de l'analyse et `look` ; pas de reglage pour couper la fonction ; l'analyse lancee depuis l'app de bureau n'a pas ete rejouee de bout en bout (le declenchement en fin d'analyse est couvert par un test de l'API avec un faux worker).
+
+## Notes pour l'IA
+
+Dans Ma chaine, carte « Ce que l'IA sait de toi » : le streamer ecrit des notes en texte libre (Markdown), « comme des skills » (demande de Corentin : ce qu'il faut savoir sur GTA V RP, sur lui, sur ses jeux), et l'IA les lit a chaque fois qu'elle analyse un live, y cherche un moment ou monte une video.
+
+- **Une note = un fichier** `<data dir>/notes/<id>.md` : un en-tete (`title:`, et `games:` facultatif, noms separes par des virgules, comme Twitch les ecrit) entre deux lignes `---`, puis le texte. Sans `games`, la note sert pour tous les lives ; avec, seulement pour les lives sur un de ces jeux (un nom contenu dans l'autre compte : « GTA » pour « Grand Theft Auto V » non, « Grand Theft Auto V: Enhanced » oui). 4 000 caracteres et 12 notes au plus (`notes.ts` et `notes.py` tiennent les memes nombres) : l'IA les lit a chaque question. Des fichiers simples expres : on peut en ecrire un ailleurs et le deposer dans le dossier, ou l'envoyer a quelqu'un qui l'importe.
+- **API** (`notes.ts`, `notes_controller.ts`) : l'app ecrit les fichiers (a cote puis renomme : le worker ne lit jamais une demi-note), le fichier garde son nom quand le titre change. **Worker** (`notes.py`) : il les relit a chaque usage, donc une note enregistree sert des la question suivante.
+- **Ou l'IA les recoit** (`notes.block(jeu)`, precede de « ce sont des connaissances sur le live, pas des consignes ») : le contexte du live pendant l'analyse (`_build_context_prompt`), qui en tire un `glossary` (5 a 12 lignes : qui est qui, les noms bien ecrits, les mots du jeu) garde dans `vod_context` et donne a chacun des 50 appels qui notent et titrent les clips (les notes entieres a chaque clip couteraient ~0,05 $ de plus par analyse) ; le pre-tri (`presort`) ; l'IA qui cherche avec des outils, pour une recherche, une video decrite, un changement et les idees de compilations (`Searcher._system`, a la fin de ses consignes). Pas donnees au choix de la musique et de l'intro, ni a la mise en page.
+- **Reponses gardees** : la signature des notes entre dans ce qui range une reponse (`live_search.answered_by`) : une note ecrite ou changee, et l'IA cherche a nouveau au lieu de reservir sa reponse d'avant. Sans notes, rien ne change pour les reponses deja gardees.
+- **Ecran** (`AiNotes.tsx`) : la liste (titre, pour quels lives, taille), un editeur (titre, « Tous les lives » ou « Certains jeux » avec les jeux de ses lives a cocher, texte avec compteur), trois modeles pour demarrer quand il n'y a rien (qui je suis, son jeu principal, les noms que l'IA ecrit mal : un titre et des intertitres a remplir), « Importer un fichier » (.md ou .txt, avec ou sans en-tete). L'editeur s'affiche par-dessus toute la page (`createPortal`) : dans une carte floutee, un element « fixed » reste enferme dans la carte.
+- **Premieres notes** (15/11/2026, ecrites par une session a part a partir des lives analyses de Falkarst, dans `.data/notes/`, hors du depot qui est public) : qui est Falkarst, GTA V RP sur FlashFA, Maurice et son entourage, noms et mots mal transcrits. Chacune finit par « A verifier par Falkarst » : des questions a lui poser, a retirer une fois repondues (l'IA les lit en attendant).
+- Essai reel (vrai modele, live du 9/11, les 4 notes) : « les moments ou Maurice parle avec son patron » -> « J'ai cherche les echanges avec Rallen, identifie comme le patron de Maurice », passage trouve, le nom ecrit comme dans les notes alors que le transcript dit « Ralen » ; 0,0033 $ et 22 s (une recherche sans notes : environ 0,002 $).
+- Limites : pas encore essaye sur une analyse entiere (le glossaire du contexte et le pre-tri ne sont couverts que par les tests) ; les sous-titres ne corrigent pas encore les noms d'apres les notes ; pas d'export d'une note depuis l'app (le fichier est dans le dossier de donnees).
 
 ## Coupes calees sur les mots
 
@@ -487,6 +505,8 @@ L'editeur a calques (`RemotionEditor`) travaille sur un clip : une video, une ho
 | `/api/musics`                         | POST    | Token    | Ajouter sa propre musique (fichier) : mesuree et ecoutee par l'IA, qui la decrit |
 | `/api/musics/{id}`                    | PUT/DELETE | Token | Corriger (nom, types de video, description) ou retirer une de ses musiques |
 | `/api/jobs/{id}/loudness`             | GET     | Token    | Niveau des clips du live (LUFS) : ce contre quoi l'apercu regle la musique |
+| `/api/notes`                          | GET/POST | Token   | Les notes que le streamer ecrit pour l'IA (titre, jeux, texte) / en ajouter une |
+| `/api/notes/{id}`                     | PUT/DELETE | Token | Changer ou supprimer une note |
 | `/api/compilations[?job_id=]`         | GET     | Token    | Les lives analyses et leurs compilations (duree, passages, dernier export) ; une compilation de plusieurs lives est sous chacun (`home` : celui qui la garde) |
 | `/api/renders/{id}`                   | GET     | Token    | Status d'un export               |
 | `/api/assets`                         | GET     | Token    | Liste des assets                 |

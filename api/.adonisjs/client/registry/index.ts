@@ -348,6 +348,30 @@ const routes = {
     tokens: [{"old":"/api/jobs/:id/loudness","type":0,"val":"api","end":""},{"old":"/api/jobs/:id/loudness","type":0,"val":"jobs","end":""},{"old":"/api/jobs/:id/loudness","type":1,"val":"id","end":""},{"old":"/api/jobs/:id/loudness","type":0,"val":"loudness","end":""}],
     types: placeholder as Registry['musics.level']['types'],
   },
+  'notes.index': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/notes',
+    tokens: [{"old":"/api/notes","type":0,"val":"api","end":""},{"old":"/api/notes","type":0,"val":"notes","end":""}],
+    types: placeholder as Registry['notes.index']['types'],
+  },
+  'notes.store': {
+    methods: ["POST"],
+    pattern: '/api/notes',
+    tokens: [{"old":"/api/notes","type":0,"val":"api","end":""},{"old":"/api/notes","type":0,"val":"notes","end":""}],
+    types: placeholder as Registry['notes.store']['types'],
+  },
+  'notes.update': {
+    methods: ["PUT"],
+    pattern: '/api/notes/:id',
+    tokens: [{"old":"/api/notes/:id","type":0,"val":"api","end":""},{"old":"/api/notes/:id","type":0,"val":"notes","end":""},{"old":"/api/notes/:id","type":1,"val":"id","end":""}],
+    types: placeholder as Registry['notes.update']['types'],
+  },
+  'notes.destroy': {
+    methods: ["DELETE"],
+    pattern: '/api/notes/:id',
+    tokens: [{"old":"/api/notes/:id","type":0,"val":"api","end":""},{"old":"/api/notes/:id","type":0,"val":"notes","end":""},{"old":"/api/notes/:id","type":1,"val":"id","end":""}],
+    types: placeholder as Registry['notes.destroy']['types'],
+  },
   'compilations.search_info': {
     methods: ["GET","HEAD"],
     pattern: '/api/jobs/:id/search/info',

@@ -21,6 +21,7 @@ export const controllers = {
   Jobs: () => import('#controllers/jobs_controller'),
   Musics: () => import('#controllers/musics_controller'),
   NewAccount: () => import('#controllers/new_account_controller'),
+  Notes: () => import('#controllers/notes_controller'),
   Profile: () => import('#controllers/profile_controller'),
   Renders: () => import('#controllers/renders_controller'),
   Spa: () => import('#controllers/spa_controller'),

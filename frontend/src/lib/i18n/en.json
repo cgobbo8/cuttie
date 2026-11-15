@@ -1890,5 +1890,51 @@
     "nothingNew": "The AI has nothing new to propose for this live",
     "proposed_one": "{{count}} compilation idea proposed",
     "proposed_other": "{{count}} compilation ideas proposed"
+  },
+  "notes": {
+    "title": "What the AI knows about you",
+    "hint": "Notes it reads before analysing a live, searching it or building a video: who is who, the names it gets wrong, the words of your game.",
+    "new": "New note",
+    "import": "Import a file",
+    "imported_one": "{{count}} note imported",
+    "imported_other": "{{count}} notes imported",
+    "importFailed_one": "{{count}} file could not be read.",
+    "importFailed_other": "{{count}} files could not be read.",
+    "always": "Every live",
+    "chars_one": "{{formatted}} character",
+    "chars_other": "{{formatted}} characters",
+    "empty": "Nothing yet. Start from one of these, or write your own.",
+    "full": "{{max}} notes at most: remove one to add another.",
+    "saved": "Note saved: the AI reads it from its next question on.",
+    "deleted": "Note removed",
+    "saveFailed": "The note could not be saved.",
+    "deleteTitle": "Remove this note?",
+    "deleteMessage": "The AI will no longer read “{{title}}”, and its text will be lost.",
+    "editor": {
+      "new": "New note",
+      "edit": "Edit the note",
+      "title": "Title",
+      "titlePlaceholder": "Who I am, GTA V RP, my running gags…",
+      "for": "It is used for",
+      "forGames": "Some games",
+      "gamePlaceholder": "Another game, as Twitch writes it",
+      "body": "What the AI should know",
+      "bodyPlaceholder": "Write as you talk, in short lists.\n- Maurice: my character, a medic at the hospital.\n- The transcript writes “Titeau”: it is Tito.\n- My chat loves it when I complain about patients.",
+      "count": "{{count}} / {{max}}"
+    },
+    "starter": {
+      "who": {
+        "title": "Who I am",
+        "body": "## Me\n- \n\n## What my viewers like\n- \n\n## What is never worth a clip\n- "
+      },
+      "game": {
+        "title": "{{game}}: what to know",
+        "body": "## The characters, and who plays them\n- \n\n## The places, the jobs, the vocabulary\n- \n\n## The jokes that come back\n- "
+      },
+      "names": {
+        "title": "Names the AI gets wrong",
+        "body": "The transcript writes “…”: it is “…”.\n- "
+      }
+    }
   }
 }

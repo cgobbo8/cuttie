@@ -1890,5 +1890,51 @@
     "nothingNew": "L'IA n'a rien de nouveau à proposer pour ce live",
     "proposed_one": "{{count}} idée de compilation proposée",
     "proposed_other": "{{count}} idées de compilation proposées"
+  },
+  "notes": {
+    "title": "Ce que l'IA sait de toi",
+    "hint": "Des notes qu'elle lit avant d'analyser un live, d'y chercher un moment ou de monter une vidéo : qui est qui, les noms qu'elle écorche, les mots de ton jeu.",
+    "new": "Nouvelle note",
+    "import": "Importer un fichier",
+    "imported_one": "{{count}} note importée",
+    "imported_other": "{{count}} notes importées",
+    "importFailed_one": "{{count}} fichier n'a pas pu être lu.",
+    "importFailed_other": "{{count}} fichiers n'ont pas pu être lus.",
+    "always": "Tous les lives",
+    "chars_one": "{{formatted}} caractère",
+    "chars_other": "{{formatted}} caractères",
+    "empty": "Rien pour l'instant. Pars d'un de ces modèles, ou écris la tienne.",
+    "full": "{{max}} notes au plus : supprimes-en une pour en ajouter.",
+    "saved": "Note enregistrée : l'IA la lira dès sa prochaine question.",
+    "deleted": "Note supprimée",
+    "saveFailed": "La note n'a pas pu être enregistrée.",
+    "deleteTitle": "Supprimer cette note ?",
+    "deleteMessage": "L'IA ne lira plus « {{title}} », et son texte sera perdu.",
+    "editor": {
+      "new": "Nouvelle note",
+      "edit": "Modifier la note",
+      "title": "Titre",
+      "titlePlaceholder": "Qui je suis, GTA V RP, mes running gags…",
+      "for": "Elle sert pour",
+      "forGames": "Certains jeux",
+      "gamePlaceholder": "Autre jeu, comme Twitch l'écrit",
+      "body": "Ce que l'IA doit savoir",
+      "bodyPlaceholder": "Écris comme tu parles, en listes courtes.\n- Maurice : mon personnage, soignant à l'hôpital.\n- Le transcript écrit « Titeau » : c'est Tito.\n- Mon chat adore quand je râle sur les patients.",
+      "count": "{{count}} / {{max}}"
+    },
+    "starter": {
+      "who": {
+        "title": "Qui je suis",
+        "body": "## Moi\n- \n\n## Ce que mes viewers aiment\n- \n\n## Ce qui ne vaut jamais un clip\n- "
+      },
+      "game": {
+        "title": "{{game}} : ce qu'il faut savoir",
+        "body": "## Les personnages, et qui les joue\n- \n\n## Les lieux, les métiers, le vocabulaire\n- \n\n## Les blagues qui reviennent\n- "
+      },
+      "names": {
+        "title": "Les noms que l'IA écrit mal",
+        "body": "Le transcript écrit « … » : c'est « … ».\n- "
+      }
+    }
   }
 }

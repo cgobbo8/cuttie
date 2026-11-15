@@ -35,6 +35,17 @@ def no_paid_calls(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def no_real_notes(monkeypatch, tmp_path):
+    """The notes the developer wrote for the AI (<repo>/.data/notes) are not the tests': they would be put in
+    every prompt a test looks at. A test that wants notes writes them in the folder this returns."""
+    from app.services import notes
+
+    folder = tmp_path / "notes-for-the-ai"
+    monkeypatch.setattr(notes, "directory", lambda: str(folder))
+    return folder
+
+
+@pytest.fixture(autouse=True)
 def no_real_database(monkeypatch):
     from app.services import db
 

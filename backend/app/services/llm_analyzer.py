@@ -25,6 +25,7 @@ from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from app.models.schemas import HotPoint, KeyMoment, LlmAnalysis, SignalBreakdown, VodContext
+from app.services import notes
 from app.services import timeline
 from app.services.clipper import CLIP_HALF_DURATION, DETECTED_POST_PEAK, DETECTED_PRE_PEAK
 from app.services.db import add_notice, save_hot_points, update_job
@@ -457,6 +458,10 @@ Someone says "clip" at about {clip_keyword_at:.0f}s. Set "clip_request" to true 
             ctx_lines.append(f"\n**Recurring themes:** {', '.join(vod_context.recurring_themes)}")
         if vod_context.mood_arc:
             ctx_lines.append(f"**Mood arc:** {vod_context.mood_arc}")
+        if vod_context.glossary:
+            # What the streamer wrote about their world, as far as this live goes (see notes.py)
+            ctx_lines.append("\n**From the streamer's own notes (facts to rely on; spell names as written here):**")
+            ctx_lines.extend(f"- {line}" for line in vod_context.glossary)
         ctx_lines.append("\nUse this context to understand WHERE this clip falls in the overall stream narrative. Clips that are part of an escalating arc or reference earlier events are MORE viral.")
         vod_context_section = "\n".join(ctx_lines)
 
@@ -788,6 +793,8 @@ def _build_context_prompt(
             )
 
     all_segments = "\n\n".join(segments_text)
+    # What the streamer wrote for the AI about themselves and this game (empty: nothing)
+    known = notes.block(vod_game)
 
     return f"""You are analyzing a full Twitch VOD to understand its narrative arc and identify the most interesting moments.
 
@@ -795,7 +802,7 @@ def _build_context_prompt(
 **Streamer:** {streamer}
 **Game:** {vod_game}
 **Date:** {stream_date}
-**Duration:** {duration_h}h{duration_m:02d}
+**Duration:** {duration_h}h{duration_m:02d}{known}
 
 Below are {len(transcripts)} audio transcriptions from highlighted moments throughout the stream, in chronological order. Each segment is ~30-60 seconds of audio transcribed by Whisper (may contain errors, especially on proper nouns and gaming jargon).
 
@@ -813,6 +820,7 @@ Build a comprehensive understanding of this stream:
 - **recurring_themes**: running jokes, repeated references, ongoing situations
 - **language**: primary language of the stream (fr, en, es, etc.)
 - **mood_arc**: one-line description of the emotional journey (e.g. "Chill → Hype → Tilt → Rage → Reset")
+- **glossary**: only when the streamer's notes are given above: what in them matters to understand THIS stream, in 5 to 12 short lines that will be handed to whoever writes each clip's title (who the people heard here are, how their names are really spelled when the transcript gets them wrong, what the words of the game or of the community that come up here mean). An empty list when there are no notes.
 
 ### 2. Content Scoring
 For EACH segment, rate how interesting/viral the CONTENT sounds based purely on the transcript:
@@ -837,7 +845,8 @@ Return a single JSON object:
     "protagonists": [{{"name": "...", "role": "..."}}],
     "recurring_themes": ["..."],
     "language": "fr",
-    "mood_arc": "..."
+    "mood_arc": "...",
+    "glossary": ["..."]
   }},
   "segment_scores": [
     {{"index": 0, "content_score": 0.3}},
@@ -909,6 +918,7 @@ def gather_vod_context(
         recurring_themes=raw_ctx.get("recurring_themes", []),
         language=raw_ctx.get("language", ""),
         mood_arc=raw_ctx.get("mood_arc", ""),
+        glossary=[" ".join(str(line).split())[:240] for line in (raw_ctx.get("glossary") if isinstance(raw_ctx.get("glossary"), list) else []) if str(line).strip()][:14],
     )
 
     # Parse content scores

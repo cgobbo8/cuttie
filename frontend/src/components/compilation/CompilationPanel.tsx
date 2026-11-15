@@ -542,7 +542,7 @@ export default function CompilationPanel({
           <select
             value={compilation.template ?? ""}
             onChange={(e) => onChange({ ...compilation, template: e.target.value || null })}
-            className="flex-1 min-w-0 h-9 px-2.5 rounded-[10px] bg-black/30 border border-white/10 text-[13px] text-white outline-none focus:border-accent-line [color-scheme:dark]"
+            className="select-arrow flex-1 min-w-0 h-9 px-2.5 rounded-[10px] bg-black/30 border border-white/10 text-[13px] text-white outline-none focus:border-accent-line [color-scheme:dark]"
           >
             <option value="">{t("compilation.defaultTemplate")}</option>
             {templates.map((tpl) => (

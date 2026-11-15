@@ -144,7 +144,7 @@ export default function SoundPrefs({ kit, brand, onSave }: Props) {
           return (
             <div key={kind} className="flex items-center gap-2.5">
               <span className="flex-[0_0_132px] text-[13px] text-ink-2">{label}</span>
-              <select value={chosen?.id ?? ""} onChange={(e) => pick(kind, e.target.value)} aria-label={t("brand.musicFor", { kind: label })} className={`${FIELD} flex-1`}>
+              <select value={chosen?.id ?? ""} onChange={(e) => pick(kind, e.target.value)} aria-label={t("brand.musicFor", { kind: label })} className={`select-arrow ${FIELD} flex-1`}>
                 <option value="">{t("brand.musicAny")}</option>
                 {fitting.map((track) => (
                   <option key={track.id} value={track.id}>
@@ -173,7 +173,7 @@ export default function SoundPrefs({ kit, brand, onSave }: Props) {
       )}
       <div className="mt-1.5 pt-3.5 border-t border-white/[0.08] flex items-center gap-2.5">
         <span className="flex-[0_0_132px] text-[13px] text-ink-2">{t("brand.introPreferred")}</span>
-        <select value={kit.intro ?? ""} onChange={(e) => onSave({ intro: e.target.value || null })} aria-label={t("brand.introPreferred")} className={`${FIELD} flex-1`}>
+        <select value={kit.intro ?? ""} onChange={(e) => onSave({ intro: e.target.value || null })} aria-label={t("brand.introPreferred")} className={`select-arrow ${FIELD} flex-1`}>
           <option value="">{t("brand.introNone")}</option>
           {INTRO_IDS.map((id) => (
             <option key={id} value={id}>

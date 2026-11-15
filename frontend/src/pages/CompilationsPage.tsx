@@ -167,7 +167,7 @@ export default function CompilationsPage() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {!jobId && withSome.length > 1 && (
-            <select value={filter} onChange={(e) => setFilter(e.target.value)} aria-label={t("compilations.filter")} className="h-9 max-w-[260px] px-3 rounded-[10px] bg-black/30 border border-white/10 text-[13px] text-white outline-none focus:border-accent-line">
+            <select value={filter} onChange={(e) => setFilter(e.target.value)} aria-label={t("compilations.filter")} className="select-arrow h-9 max-w-[260px] px-3 rounded-[10px] bg-black/30 border border-white/10 text-[13px] text-white outline-none focus:border-accent-line">
               <option value="">{t("compilations.allLives")}</option>
               {withSome.map((live) => (
                 <option key={live.job_id} value={live.job_id}>

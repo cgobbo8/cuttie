@@ -231,7 +231,7 @@ export default function PiecePreview({ jobId, item, piece, cutting, words, onCha
           <select
             value={template && templates.some((tpl) => tpl.key === template) ? template : ""}
             onChange={(e) => onTemplate(e.target.value || null)}
-            className="flex-1 min-w-0 h-9 px-2.5 rounded-[10px] bg-black/30 border border-white/10 text-[13px] text-white outline-none focus:border-accent-line [color-scheme:dark]"
+            className="select-arrow flex-1 min-w-0 h-9 px-2.5 rounded-[10px] bg-black/30 border border-white/10 text-[13px] text-white outline-none focus:border-accent-line [color-scheme:dark]"
           >
             <option value="">{t("compilation.sameAsVideo", { name: videoTemplate ?? "" })}</option>
             {templates.map((tpl) => (

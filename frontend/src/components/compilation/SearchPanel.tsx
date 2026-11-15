@@ -233,7 +233,7 @@ export default function SearchPanel({ jobId, storyboards, lives, info, previewed
               value={searched}
               onChange={(e) => setWhere(e.target.value)}
               aria-label={t("compilation.lives.searchIn")}
-              className="w-full h-9 mb-2 px-2.5 rounded-[10px] bg-black/30 border border-white/10 text-[13px] text-white outline-none focus:border-accent-line"
+              className="select-arrow w-full h-9 mb-2 px-2.5 rounded-[10px] bg-black/30 border border-white/10 text-[13px] text-white outline-none focus:border-accent-line"
             >
               {lives.map((live) => (
                 <option key={live.job} value={live.job}>

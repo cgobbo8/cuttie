@@ -204,167 +204,171 @@ export default function ChannelPage() {
       </section>
 
       <section className="mt-[22px] flex flex-wrap gap-[18px] items-start">
-        <div className="flex-[1_1_640px] min-w-0 grid gap-4 items-start grid-cols-[repeat(auto-fill,minmax(400px,1fr))]">
-          {/* Colors */}
-          <Card
-            title={t("brand.colors")}
-            hint={t("brand.colorsHint")}
-            action={
-              <button
-                onClick={async () => {
-                  setRedetecting(true);
-                  try {
-                    await redetectColors();
-                    toast.success(t("brand.colorsDetected"));
-                  } catch (err) {
-                    toast.error(err instanceof Error ? err.message : t("brand.saveError"));
-                  } finally {
-                    setRedetecting(false);
-                  }
-                }}
-                disabled={redetecting || !channel}
-                className="btn btn-glass btn-sm"
-              >
-                {redetecting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                {t("brand.redetect")}
-              </button>
-            }
-          >
-            <div className="mt-4 grid grid-cols-2 gap-2.5">
-              {COLOR_ROLES.map((role) => (
-                <ColorRow key={role} role={role} value={kit.colors[role]} onPick={(hex) => save({ colors: { [role]: hex } })} />
-              ))}
-            </div>
-          </Card>
-
-          {/* Widget */}
-          <Card
-            title={t("brand.widget")}
-            hint={t("brand.widgetHint")}
-            action={
-              <button
-                role="switch"
-                aria-checked={kit.widget.enabled}
-                aria-label={t("brand.widget")}
-                onClick={() => save({ widget: { enabled: !kit.widget.enabled } })}
-                className="switch"
-              >
-                <span />
-              </button>
-            }
-          >
-            <div className="relative mt-4 h-[104px] rounded-[12px] overflow-hidden grid place-items-center bg-white/[0.04]">
-              {frame(480) && <img src={frame(480)!} alt="" className="absolute inset-0 w-full h-full object-cover blur-[14px] brightness-[0.6] scale-110" />}
-              <div
-                className={`relative flex items-center gap-2.5 h-12 pl-1.5 pr-[18px] rounded-full bg-white shadow-[0_12px_28px_-8px_rgba(0,0,0,0.6)] transition-opacity ${kit.widget.enabled ? "" : "opacity-40"}`}
-              >
-                <span className="w-9 h-9 rounded-full overflow-hidden" style={{ background: kit.colors.light }}>
-                  {channel?.avatar_url && <img src={channel.avatar_url} alt="" className="w-full h-full object-cover" />}
-                </span>
-                <span className="text-[17px] font-medium text-[#60707c]">
-                  twitch.tv/<span className="font-extrabold" style={{ color: kit.colors.dark }}>{channel?.login ?? kit.twitch_login}</span>
-                </span>
+        {/* Two columns of cards, each stacking its own: a tall card leaves no hole next to it */}
+        <div className="flex-[1_1_640px] min-w-0 grid gap-4 items-start grid-cols-[repeat(auto-fit,minmax(400px,1fr))]">
+          <div className="min-w-0 flex flex-col gap-4">
+            {/* Colors */}
+            <Card
+              title={t("brand.colors")}
+              hint={t("brand.colorsHint")}
+              action={
+                <button
+                  onClick={async () => {
+                    setRedetecting(true);
+                    try {
+                      await redetectColors();
+                      toast.success(t("brand.colorsDetected"));
+                    } catch (err) {
+                      toast.error(err instanceof Error ? err.message : t("brand.saveError"));
+                    } finally {
+                      setRedetecting(false);
+                    }
+                  }}
+                  disabled={redetecting || !channel}
+                  className="btn btn-glass btn-sm"
+                >
+                  {redetecting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  {t("brand.redetect")}
+                </button>
+              }
+            >
+              <div className="mt-4 grid grid-cols-2 gap-2.5">
+                {COLOR_ROLES.map((role) => (
+                  <ColorRow key={role} role={role} value={kit.colors[role]} onPick={(hex) => save({ colors: { [role]: hex } })} />
+                ))}
               </div>
-            </div>
-            <div className="mt-3.5 flex flex-wrap items-center justify-between gap-2.5">
-              <span className="text-[13px] text-ink-2">{t("brand.widgetShow")}</span>
-              <div role="group" aria-label={t("brand.widgetShow")} className="seg">
-                {TIMINGS.map((timing) => (
-                  <button
-                    key={timing}
-                    aria-pressed={kit.widget.timing === timing}
-                    disabled={!kit.widget.enabled}
-                    onClick={() => save({ widget: { timing } })}
-                  >
-                    {t(`brand.timing.${timing}`)}
+            </Card>
+
+            {/* Subtitles */}
+            <Card title={t("brand.subtitles")} hint={t("brand.subtitlesHint")}>
+              <div className="relative mt-4 h-[118px] rounded-[12px] overflow-hidden grid place-items-center text-center bg-white/[0.04] [container-type:inline-size]">
+                {frame(480) && <img src={frame(480)!} alt="" className="absolute inset-0 w-full h-full object-cover brightness-[0.7]" />}
+                {kit.subtitles.style === "minimal" ? (
+                  <span className="relative px-3 py-1.5 rounded-[8px] bg-black/55 text-[17px] font-bold text-white">
+                    {subtitle.lines.map((l) => l.join(" ")).join(" ")}
+                  </span>
+                ) : (
+                  <div className="relative clip-text text-white" style={{ fontSize: "6.4cqw" }}>
+                    {subtitle.lines.map((line, li) => (
+                      <div key={li}>
+                        {line.map((word, wi) => (
+                          <span
+                            key={wi}
+                            style={
+                              kit.subtitles.style === "karaoke" && subtitle.highlight[0] === li && subtitle.highlight[1] === wi
+                                ? { color: kit.colors.highlight }
+                                : undefined
+                            }
+                          >
+                            {wi > 0 ? " " : ""}
+                            {word}
+                          </span>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div role="group" aria-label={t("brand.subtitles")} className="seg mt-3.5">
+                {SUB_STYLES.map((style) => (
+                  <button key={style} aria-pressed={kit.subtitles.style === style} onClick={() => save({ subtitles: { style } })}>
+                    {t(`brand.subStyle.${style}`)}
                   </button>
                 ))}
               </div>
-            </div>
-          </Card>
+            </Card>
 
-          {/* Subtitles */}
-          <Card title={t("brand.subtitles")} hint={t("brand.subtitlesHint")}>
-            <div className="relative mt-4 h-[118px] rounded-[12px] overflow-hidden grid place-items-center text-center bg-white/[0.04] [container-type:inline-size]">
-              {frame(480) && <img src={frame(480)!} alt="" className="absolute inset-0 w-full h-full object-cover brightness-[0.7]" />}
-              {kit.subtitles.style === "minimal" ? (
-                <span className="relative px-3 py-1.5 rounded-[8px] bg-black/55 text-[17px] font-bold text-white">
-                  {subtitle.lines.map((l) => l.join(" ")).join(" ")}
-                </span>
+            {/* The streamer's own templates */}
+            <Card
+              title={t("brand.myTemplates")}
+              hint={t("brand.myTemplatesHint")}
+              action={
+                <Link to="/modeles/nouveau?back=/chaine" className="btn btn-glass btn-sm">
+                  <Plus className="w-3.5 h-3.5" /> {t("brand.createTemplate")}
+                </Link>
+              }
+            >
+              {customs.length === 0 ? (
+                <p className="mt-3 text-[13px] leading-relaxed text-ink-3">{t("brand.noTemplates")}</p>
               ) : (
-                <div className="relative clip-text text-white" style={{ fontSize: "6.4cqw" }}>
-                  {subtitle.lines.map((line, li) => (
-                    <div key={li}>
-                      {line.map((word, wi) => (
-                        <span
-                          key={wi}
-                          style={
-                            kit.subtitles.style === "karaoke" && subtitle.highlight[0] === li && subtitle.highlight[1] === wi
-                              ? { color: kit.colors.highlight }
-                              : undefined
-                          }
-                        >
-                          {wi > 0 ? " " : ""}
-                          {word}
-                        </span>
-                      ))}
-                    </div>
+                <div className="mt-4 flex gap-3 overflow-x-auto pb-1">
+                  {customs.map((tpl) => (
+                    <Link
+                      key={tpl.id}
+                      to={`/modeles/${tpl.id}?back=/chaine`}
+                      className="flex-none w-[84px] flex flex-col items-center gap-1.5 group/tpl"
+                    >
+                      <TemplateSketch
+                        layers={sketchContext ? buildFromSpec(tpl, sketchContext) : []}
+                        frameUrl={frame(480)}
+                        width={72}
+                        sample={[]}
+                        at={1.5}
+                        className="rounded-[10px] border border-white/10 transition-transform group-hover/tpl:-translate-y-0.5"
+                      />
+                      <span className="w-full text-center text-[12px] font-[550] text-white truncate">{tpl.name}</span>
+                    </Link>
                   ))}
                 </div>
               )}
-            </div>
-            <div role="group" aria-label={t("brand.subtitles")} className="seg mt-3.5">
-              {SUB_STYLES.map((style) => (
-                <button key={style} aria-pressed={kit.subtitles.style === style} onClick={() => save({ subtitles: { style } })}>
-                  {t(`brand.subStyle.${style}`)}
+            </Card>
+          </div>
+          <div className="min-w-0 flex flex-col gap-4">
+            {/* Widget */}
+            <Card
+              title={t("brand.widget")}
+              hint={t("brand.widgetHint")}
+              action={
+                <button
+                  role="switch"
+                  aria-checked={kit.widget.enabled}
+                  aria-label={t("brand.widget")}
+                  onClick={() => save({ widget: { enabled: !kit.widget.enabled } })}
+                  className="switch"
+                >
+                  <span />
                 </button>
-              ))}
-            </div>
-          </Card>
-
-          {/* Their favourite background music for each kind of video, and the intro they prefer */}
-          <Card title={t("brand.soundTitle")} hint={t("brand.soundHint")}>
-            <SoundPrefs
-              kit={kit}
-              brand={{ name: channel?.display_name ?? channel?.login ?? kit.twitch_login ?? "", logo: channel?.avatar_url ?? null, colors: kit.colors, font: fontFamily("luckiest") }}
-              onSave={(patch) => save(patch)}
-            />
-          </Card>
-
-          {/* The streamer's own templates */}
-          <Card
-            title={t("brand.myTemplates")}
-            hint={t("brand.myTemplatesHint")}
-            action={
-              <Link to="/modeles/nouveau?back=/chaine" className="btn btn-glass btn-sm">
-                <Plus className="w-3.5 h-3.5" /> {t("brand.createTemplate")}
-              </Link>
-            }
-          >
-            {customs.length === 0 ? (
-              <p className="mt-3 text-[13px] leading-relaxed text-ink-3">{t("brand.noTemplates")}</p>
-            ) : (
-              <div className="mt-4 flex gap-3 overflow-x-auto pb-1">
-                {customs.map((tpl) => (
-                  <Link
-                    key={tpl.id}
-                    to={`/modeles/${tpl.id}?back=/chaine`}
-                    className="flex-none w-[84px] flex flex-col items-center gap-1.5 group/tpl"
-                  >
-                    <TemplateSketch
-                      layers={sketchContext ? buildFromSpec(tpl, sketchContext) : []}
-                      frameUrl={frame(480)}
-                      width={72}
-                      sample={[]}
-                      at={1.5}
-                      className="rounded-[10px] border border-white/10 transition-transform group-hover/tpl:-translate-y-0.5"
-                    />
-                    <span className="w-full text-center text-[12px] font-[550] text-white truncate">{tpl.name}</span>
-                  </Link>
-                ))}
+              }
+            >
+              <div className="relative mt-4 h-[104px] rounded-[12px] overflow-hidden grid place-items-center bg-white/[0.04]">
+                {frame(480) && <img src={frame(480)!} alt="" className="absolute inset-0 w-full h-full object-cover blur-[14px] brightness-[0.6] scale-110" />}
+                <div
+                  className={`relative flex items-center gap-2.5 h-12 pl-1.5 pr-[18px] rounded-full bg-white shadow-[0_12px_28px_-8px_rgba(0,0,0,0.6)] transition-opacity ${kit.widget.enabled ? "" : "opacity-40"}`}
+                >
+                  <span className="w-9 h-9 rounded-full overflow-hidden" style={{ background: kit.colors.light }}>
+                    {channel?.avatar_url && <img src={channel.avatar_url} alt="" className="w-full h-full object-cover" />}
+                  </span>
+                  <span className="text-[17px] font-medium text-[#60707c]">
+                    twitch.tv/<span className="font-extrabold" style={{ color: kit.colors.dark }}>{channel?.login ?? kit.twitch_login}</span>
+                  </span>
+                </div>
               </div>
-            )}
-          </Card>
+              <div className="mt-3.5 flex flex-wrap items-center justify-between gap-2.5">
+                <span className="text-[13px] text-ink-2">{t("brand.widgetShow")}</span>
+                <div role="group" aria-label={t("brand.widgetShow")} className="seg">
+                  {TIMINGS.map((timing) => (
+                    <button
+                      key={timing}
+                      aria-pressed={kit.widget.timing === timing}
+                      disabled={!kit.widget.enabled}
+                      onClick={() => save({ widget: { timing } })}
+                    >
+                      {t(`brand.timing.${timing}`)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </Card>
+
+            {/* Their favourite background music for each kind of video, and the intro they prefer */}
+            <Card title={t("brand.soundTitle")} hint={t("brand.soundHint")}>
+              <SoundPrefs
+                kit={kit}
+                brand={{ name: channel?.display_name ?? channel?.login ?? kit.twitch_login ?? "", logo: channel?.avatar_url ?? null, colors: kit.colors, font: fontFamily("luckiest") }}
+                onSave={(patch) => save(patch)}
+              />
+            </Card>
+          </div>
         </div>
 
         {/* Live preview of the brand kit */}

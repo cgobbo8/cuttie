@@ -1689,6 +1689,9 @@
     "analysing": "Analyse en cours · {{percent}} % · reste {{left}}",
     "analysed": "« {{name}} » est analysé : tu peux le choisir.",
     "showMore_one": "Voir {{count}} autre live",
-    "showMore_other": "Voir les {{count}} autres lives"
+    "showMore_other": "Voir les {{count}} autres lives",
+    "madeFrom": "Faite avec",
+    "deleteEverywhere_one": "Elle est faite avec {{count}} lives : elle disparaîtra de chacun.",
+    "deleteEverywhere_other": "Elle est faite avec {{count}} lives : elle disparaîtra de chacun."
   }
 }

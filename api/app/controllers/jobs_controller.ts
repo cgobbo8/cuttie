@@ -1,4 +1,4 @@
-import { deletePiece, withoutLive } from '#services/compilations'
+import { deletePiece, movedTo, withoutLive } from '#services/compilations'
 import type { HttpContext } from '@adonisjs/core/http'
 import { randomUUID } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
@@ -389,18 +389,40 @@ export default class JobsController {
     await db.from('renders').where('job_id', job.id).delete()
 
     // Compilations kept with other lives lose the passages they took from this one...
-    const others = await Job.query().where('user_id', user.id).whereNot('id', job.id).whereNotNull('compilations')
+    // (only the lives that keep compilations, and those this one's compilations take from)
+    const named = [...new Set((job.compilations ?? []).flatMap((c) => c.lives ?? []))]
+    const others = await Job.query()
+      .where('user_id', user.id)
+      .whereNot('id', job.id)
+      .where((q) => {
+        q.whereNotNull('compilations')
+        if (named.length > 0) q.orWhereIn('id', named)
+      })
+    const changed = new Set<Job>()
     for (const other of others) {
-      const left = withoutLive(other.compilations ?? [], job.id)
+      if (!other.compilations) continue
+      const left = withoutLive(other.compilations, job.id)
       if (left !== other.compilations) {
         other.compilations = left
-        await other.save()
+        changed.add(other)
       }
     }
-    // ...and the clips its own compilations cut in other lives go with it
-    for (const item of (job.compilations ?? []).flatMap((c) => c.sections.flatMap((s) => s.items))) {
-      if (item.job) deletePiece(item.job, item.id)
+    // ...and its own compilations that also take from other lives stay, with the newest of those
+    // and without what they took here. The rest go with it, and so do the clips they cut elsewhere
+    const when = (live: Job) => Date.parse(live.streamDate ?? '') || live.createdAt?.toMillis() || 0
+    for (const c of job.compilations ?? []) {
+      const [home] = others.filter((other) => other.status === 'DONE' && c.lives?.includes(other.id)).sort((a, b) => when(b) - when(a))
+      const moved = home ? movedTo(c, home.id) : null
+      if (home && moved) {
+        home.compilations = [...(home.compilations ?? []), moved]
+        changed.add(home)
+        continue
+      }
+      for (const item of c.sections.flatMap((s) => s.items)) {
+        if (item.job) deletePiece(item.job, item.id)
+      }
     }
+    for (const other of changed) await other.save()
 
     // Delete stored files (clips + sidecars, renders)
     for (const prefix of [`clips/${job.id}`, `renders/${job.id}`]) {

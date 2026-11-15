@@ -1554,7 +1554,9 @@ export interface CompilationSummary {
   /** A passage's clip that stands for it (null: none is cut yet), and the live that clip is in */
   cover: string | null;
   cover_job: string | null;
-  /** Every live it takes passages from, its own first */
+  /** The live it is kept with: where it opens, is saved, exported */
+  home: string;
+  /** Every live it takes passages from, that one first: the library lists it with each of them */
   lives: string[];
   created_at: string;
   updated_at: string;

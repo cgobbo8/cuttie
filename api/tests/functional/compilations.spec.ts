@@ -315,12 +315,17 @@ test.group('Compilations', (group) => {
     assert.deepEqual(items.map((i: any) => [i.id, i.job ?? null, i.end]), [['ownownowna', null, 103], ['theirstheb', second.id, 45], ['theirsoldc', second.id, 1800]])
     assert.deepEqual(items.map((i: any) => i.ready), [true, true, false])
 
-    // The library says which lives it is made from
+    // The library says which lives it is made from, and lists it with each of them
     const lives = ((await client.get('/api/compilations').loginAs(user)).body() as any).lives
     const card = lives.find((l: any) => l.job_id === job.id).compilations[0]
     assert.deepEqual(card.lives, [job.id, second.id])
-    assert.deepInclude(card, { cover: 'piece_ownownowna.mp4', cover_job: job.id })
-    assert.deepEqual(lives.find((l: any) => l.job_id === second.id).compilations, [])
+    assert.deepInclude(card, { cover: 'piece_ownownowna.mp4', cover_job: job.id, home: job.id })
+    assert.deepEqual(lives.find((l: any) => l.job_id === second.id).compilations, [card])
+    // Asked for the second live alone: it is there too, and still says where it is kept
+    const alone = ((await client.get(`/api/compilations?job_id=${second.id}`).loginAs(user)).body() as any).lives
+    assert.deepEqual(alone.map((l: any) => [l.job_id, l.compilations.map((c: any) => [c.id, c.home])]), [[second.id, [[compilation.id, job.id]]]])
+    // Somebody else's live it named was never one of its lives
+    assert.deepEqual((await client.get('/api/compilations').loginAs(stranger)).body().lives.map((l: any) => l.compilations), [[]])
 
     // The second live's own compilations being saved leave alone the clips this one cut there
     const hourAgo = new Date(Date.now() - 2 * 3600_000)
@@ -358,6 +363,47 @@ test.group('Compilations', (group) => {
     const after = ((await client.get(url).loginAs(user)).body() as any).compilations[0]
     assert.isUndefined(after.lives)
     assert.deepEqual(after.sections[0].items.map((i: any) => i.id), ['ownownowna'])
+  })
+
+  test('the project a compilation is kept with deleted: it stays with another of its lives, with what it took there', async ({ client, assert }) => {
+    const { user, job, dir } = await setup()
+    const older = await Job.create({ id: randomUUID(), url: 'https://twitch.tv/videos/456', status: 'DONE', userId: user.id, vodDurationSeconds: 1800, streamDate: '2026-10-11T18:00:00Z' })
+    const newer = await Job.create({ id: randomUUID(), url: 'https://twitch.tv/videos/457', status: 'DONE', userId: user.id, vodDurationSeconds: 1800, streamDate: '2026-11-09T18:00:00Z' })
+    const [old, recent] = [clipDir(older.id), clipDir(newer.id)]
+    cleanup.push(old, recent)
+    for (const folder of [old, recent]) mkdirSync(folder, { recursive: true })
+    piece(dir, 'ownownowna', 99, 105)
+    piece(old, 'oldoldolda', 40, 50)
+    piece(recent, 'newnewnewa', 40, 50)
+    const url = `/api/jobs/${job.id}/compilations`
+    const part = (id: string, title: string, items: unknown[]) => ({ id, title, query: '', items })
+
+    // Made from three lives; one that took nothing from the other live yet; one of this live alone
+    const shared = (
+      await client.post(url).loginAs(user).json({
+        name: 'Trois lives',
+        brief: 'les moments calmes',
+        lives: [older.id, newer.id],
+        sections: [part('sssssssss1', 'Un', [item('ownownowna', 100, 103), item('oldoldolda', 42, 45, { job: older.id })]), part('sssssssss2', 'Deux', [item('newnewnewa', 42, 45, { job: newer.id })])],
+      })
+    ).body() as any
+    await client.post(url).loginAs(user).json({ name: 'Rien ailleurs', lives: [older.id], sections: [part('sssssssss3', '', [item('ownownownb', 200, 203)])] })
+    await client.post(url).loginAs(user).json({ name: 'La mienne', sections: [part('sssssssss4', '', [item('ownownownc', 300, 303)])] })
+
+    ;(await client.delete(`/api/jobs/${job.id}`).loginAs(user)).assertStatus(200)
+
+    // Kept with the newest of its other lives: that live's passage is now its own, the older live's still says where it is from
+    const kept = ((await client.get(`/api/jobs/${newer.id}/compilations`).loginAs(user)).body() as any).compilations
+    assert.lengthOf(kept, 1)
+    assert.deepInclude(kept[0], { id: shared.compilation.id, name: 'Trois lives', brief: 'les moments calmes' })
+    assert.deepEqual(kept[0].lives, [older.id])
+    assert.deepEqual(kept[0].sections.map((s: any) => [s.title, s.items.map((i: any) => [i.id, i.job ?? null, i.ready])]), [['Un', [['oldoldolda', older.id, true]]], ['Deux', [['newnewnewa', null, true]]]])
+    assert.isTrue(existsSync(path.join(old, 'piece_oldoldolda.mp4')))
+    // The others had nothing left: gone with the project
+    assert.deepEqual(((await client.get(`/api/jobs/${older.id}/compilations`).loginAs(user)).body() as any).compilations, [])
+    // The library lists it with the two lives it has left
+    const lives = ((await client.get('/api/compilations').loginAs(user)).body() as any).lives
+    assert.deepEqual(lives.map((l: any) => l.compilations.map((c: any) => [c.name, c.home])), [[['Trois lives', newer.id]], [['Trois lives', newer.id]]])
   })
 
   test('clips already there need no worker; the others say the engine is away', async ({ client, assert }) => {

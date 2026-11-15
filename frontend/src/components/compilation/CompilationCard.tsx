@@ -5,10 +5,14 @@ import { Check, Copy, Layers, Loader2, Pencil, Sparkles, Trash2 } from "lucide-r
 import { clipThumbUrl, type CompilationSummary } from "../../lib/api";
 import { compilationStatus, plainDate } from "../../lib/compilationLibrary";
 import { clock } from "../../lib/format";
+import { Tooltip } from "../ui/Tooltip";
 
 interface Props {
+  /** The live it is kept with (where it opens), whichever live's group the card is in */
   jobId: string;
   compilation: CompilationSummary;
+  /** Made from several lives: each of them in a few words (date, title) */
+  madeFrom?: string[];
   /** Its live's picture, while none of its passages is cut */
   fallback: string | null;
   /** Something is being done to it (copied, renamed, deleted) */
@@ -19,7 +23,7 @@ interface Props {
 }
 
 /** A compilation in the library: what it is, where it stands, and what can be done with it */
-export default function CompilationCard({ jobId, compilation: c, fallback, busy = false, onDuplicate, onRename, onDelete }: Props) {
+export default function CompilationCard({ jobId, compilation: c, madeFrom = [], fallback, busy = false, onDuplicate, onRename, onDelete }: Props) {
   const { t, i18n } = useTranslation();
   const [naming, setNaming] = useState(false);
   const [name, setName] = useState(c.name);
@@ -86,7 +90,24 @@ export default function CompilationCard({ jobId, compilation: c, fallback, busy 
         )}
         <p className="text-[12.5px] text-ink-2 flex items-center gap-1.5 min-w-0">
           {c.described && <Sparkles className="w-3.5 h-3.5 text-accent flex-none" aria-label={t("compilations.described")} />}
-          {c.lives.length > 1 && <span className="chip chip-accent h-[20px] px-1.5 text-[11px] flex-none">{t("compilations.fromLives", { count: c.lives.length })}</span>}
+          {c.lives.length > 1 && (
+            <Tooltip
+              content={
+                <>
+                  <span className="block text-white">{t("compilations.madeFrom")}</span>
+                  {madeFrom.map((line, i) => (
+                    <span key={i} className="block mt-0.5">
+                      {line}
+                    </span>
+                  ))}
+                </>
+              }
+            >
+              <span tabIndex={0} className="chip chip-accent h-[20px] px-1.5 text-[11px] flex-none cursor-default">
+                {t("compilations.fromLives", { count: c.lives.length })}
+              </span>
+            </Tooltip>
+          )}
           <span className="truncate">
             {c.passages === 0 ? t("compilations.noPassage") : [t("compilations.passages", { count: c.passages }), c.parts > 1 ? t("compilations.parts", { count: c.parts }) : null].filter(Boolean).join(" · ")}
           </span>

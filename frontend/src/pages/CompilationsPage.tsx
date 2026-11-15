@@ -13,7 +13,7 @@ import {
   type LiveCompilations,
 } from "../lib/api";
 import { useChannel } from "../lib/ChannelContext";
-import { copyName, libraryGroups, liveWhen, plainDate } from "../lib/compilationLibrary";
+import { copyName, libraryCount, libraryGroups, liveWhen, namesKeptWith, plainDate } from "../lib/compilationLibrary";
 import { hoursMinutes, splitVodTitle } from "../lib/format";
 import CompilationCard from "../components/compilation/CompilationCard";
 import LivePicker from "../components/compilation/LivePicker";
@@ -26,6 +26,8 @@ import { useToast } from "../components/Toast";
  * see which are exported, start a new one from any analysed live.
  * /:jobId/compilations — the same for one live, the other side of its project
  * (clips on one side, compilations on the other).
+ * A compilation made from several lives is with each of them: the same card, the
+ * same compilation (`home`: the live it is kept with, where every action on it goes).
  */
 export default function CompilationsPage() {
   const { t, i18n } = useTranslation();
@@ -37,11 +39,11 @@ export default function CompilationsPage() {
   const [filter, setFilter] = useState("");
   const [picking, setPicking] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
-  const [toDelete, setToDelete] = useState<{ jobId: string; c: CompilationSummary } | null>(null);
+  const [toDelete, setToDelete] = useState<CompilationSummary | null>(null);
 
-  const load = useCallback(() => listAllCompilations(jobId).then(setLives), [jobId]);
+  // Every live, even for one live's page: its cards name the other lives they are made from
+  const load = useCallback(() => listAllCompilations().then(setLives), []);
   useEffect(() => {
-    setLives(null);
     load().catch((err) => {
       toast.error(err instanceof Error ? err.message : t("common.error"));
       setLives([]);
@@ -59,7 +61,15 @@ export default function CompilationsPage() {
 
   const groups = useMemo(() => libraryGroups(lives ?? [], jobId ?? (filter || null)), [lives, jobId, filter]);
   const withSome = useMemo(() => libraryGroups(lives ?? []), [lives]);
-  const total = withSome.reduce((sum, live) => sum + live.compilations.length, 0);
+  const total = libraryCount(lives ?? []);
+  /** "9 nov. · Le titre du live", for each live a compilation is made from */
+  const madeFrom = (c: CompilationSummary) =>
+    c.lives.flatMap((id) => {
+      const live = (lives ?? []).find((other) => other.job_id === id);
+      if (!live) return [];
+      const when = liveWhen(live);
+      return [[when ? plainDate(when, i18n.language) : null, liveTitle(live)].filter(Boolean).join(" · ")];
+    });
   const own = jobId ? (lives ?? []).find((live) => live.job_id === jobId) : null;
 
   const startIn = (id: string) => navigate(`/${id}/compilation?new=1`);
@@ -80,25 +90,25 @@ export default function CompilationsPage() {
       setBusy(null);
     }
   };
-  const duplicate = (live: LiveCompilations, c: CompilationSummary) =>
+  const duplicate = (c: CompilationSummary) =>
     run(c.id, async () => {
-      await duplicateCompilation(live.job_id, c.id, copyName(c.name, live.compilations.map((other) => other.name), t("compilations.copyWord")));
+      await duplicateCompilation(c.home, c.id, copyName(c.name, namesKeptWith(lives ?? [], c.home), t("compilations.copyWord")));
       toast.success(t("compilations.duplicated"));
     });
-  const rename = (live: LiveCompilations, c: CompilationSummary, name: string) =>
+  const rename = (c: CompilationSummary, name: string) =>
     run(c.id, async () => {
       // The whole compilation is saved under its new name
-      const full = (await listCompilations(live.job_id)).find((other) => other.id === c.id);
+      const full = (await listCompilations(c.home)).find((other) => other.id === c.id);
       if (!full) throw new Error(t("common.error"));
-      await saveCompilation(live.job_id, { ...full, name });
+      await saveCompilation(c.home, { ...full, name });
       toast.success(t("compilations.renamed"));
     });
   const confirmDelete = () => {
     const gone = toDelete;
     setToDelete(null);
     if (gone)
-      run(gone.c.id, async () => {
-        await deleteCompilation(gone.jobId, gone.c.id);
+      run(gone.id, async () => {
+        await deleteCompilation(gone.home, gone.id);
         toast.success(t("compilation.deleted"));
       });
   };
@@ -115,14 +125,15 @@ export default function CompilationsPage() {
   const cards = (live: LiveCompilations) =>
     live.compilations.map((c) => (
       <CompilationCard
-        key={c.id}
-        jobId={live.job_id}
+        key={`${c.home}/${c.id}`}
+        jobId={c.home}
         compilation={c}
+        madeFrom={madeFrom(c)}
         fallback={liveCover(live)}
         busy={busy === c.id}
-        onDuplicate={() => duplicate(live, c)}
-        onRename={(name) => rename(live, c, name)}
-        onDelete={() => setToDelete({ jobId: live.job_id, c })}
+        onDuplicate={() => duplicate(c)}
+        onRename={(name) => rename(c, name)}
+        onDelete={() => setToDelete(c)}
       />
     ));
   /** The way in: describe a video, the AI builds it */
@@ -230,7 +241,13 @@ export default function CompilationsPage() {
       <ConfirmModal
         open={!!toDelete}
         title={t("compilation.deleteTitle")}
-        message={toDelete?.c.exported_at ? t("compilations.deleteExported", { name: toDelete.c.name }) : t("compilations.deleteMessage", { name: toDelete?.c.name ?? "" })}
+        message={[
+          toDelete?.exported_at ? t("compilations.deleteExported", { name: toDelete.name }) : t("compilations.deleteMessage", { name: toDelete?.name ?? "" }),
+          // The same compilation is listed with each of its lives: it goes from all of them
+          toDelete && toDelete.lives.length > 1 ? t("compilations.deleteEverywhere", { count: toDelete.lives.length }) : null,
+        ]
+          .filter(Boolean)
+          .join(" ")}
         onConfirm={confirmDelete}
         onCancel={() => setToDelete(null)}
       />

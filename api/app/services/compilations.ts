@@ -251,8 +251,10 @@ export function summarizeCompilation(jobId: string, c: Compilation) {
     parts: c.sections.filter((s) => s.items.length > 0).length,
     described: !!c.brief,
     cover: cover ? pieceFile(cover.id) : null,
-    // The live that clip is in, and every live it takes passages from (its own first)
+    // The live that clip is in, the live it is kept with (where it opens, is saved, exported),
+    // and every live it takes passages from (that one first)
     cover_job: cover ? itemJob(jobId, cover) : null,
+    home: jobId,
     lives: [jobId, ...(c.lives ?? [])],
     created_at: c.created_at,
     updated_at: c.updated_at,
@@ -275,6 +277,30 @@ export function withoutLive(compilations: Compilation[], jobId: string): Compila
       ...(left.length > 0 ? { lives: left } : {}),
     }
   })
+}
+
+/**
+ * A compilation whose own live is going away (its project deleted), handed to another of its
+ * lives: what it took from the live that goes is dropped, the passages of the one that takes
+ * it become its own (their clips are already in that live's folder). Null when nothing of it
+ * would be left: it then goes with the project.
+ */
+export function movedTo(c: Compilation, to: string): Compilation | null {
+  if (!c.lives?.includes(to)) return null
+  const { lives, ...rest } = c
+  const sections = c.sections.map((s) => ({
+    ...s,
+    items: s.items
+      .filter((item) => item.job)
+      .map((item) => {
+        if (item.job !== to) return item
+        const { job: _its, ...own } = item
+        return own
+      }),
+  }))
+  if (!sections.some((s) => s.items.length > 0)) return null
+  const left = lives.filter((id) => id !== to)
+  return { ...rest, sections, ...(left.length > 0 ? { lives: left } : {}) }
 }
 
 /** Every file of a piece: its clip, sidecars, frames and backdrop */

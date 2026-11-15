@@ -16,12 +16,26 @@ export function compilationStatus(c: Pick<CompilationSummary, "passages" | "expo
 /** When a live was streamed (else when it was analysed) */
 export const liveWhen = (live: Pick<LiveCompilations, "stream_date" | "created_at">): string | null => live.stream_date ?? live.created_at;
 
-/** The lives that have compilations, newest live first, each with its newest compilation first; `jobId`: that live only */
+/**
+ * The lives that have compilations, newest live first, each with its newest compilation first;
+ * `jobId`: that live only. A compilation made from several lives is in each of their groups.
+ */
 export function libraryGroups(lives: LiveCompilations[], jobId: string | null = null): LiveCompilations[] {
   return lives
     .filter((live) => live.compilations.length > 0 && (!jobId || live.job_id === jobId))
     .map((live) => ({ ...live, compilations: [...live.compilations].sort((a, b) => Date.parse(b.updated_at) - Date.parse(a.updated_at)) }))
     .sort((a, b) => Date.parse(liveWhen(b) ?? "") - Date.parse(liveWhen(a) ?? ""));
+}
+
+/** How many compilations there are: one made from several lives is listed with each, and counts once */
+export function libraryCount(lives: LiveCompilations[]): number {
+  return new Set(lives.flatMap((live) => live.compilations.map((c) => `${c.home}/${c.id}`))).size;
+}
+
+/** The names of the compilations kept with a live (a copy is kept where its original is) */
+export function namesKeptWith(lives: LiveCompilations[], home: string): string[] {
+  const names = new Map(lives.flatMap((live) => live.compilations.filter((c) => c.home === home).map((c) => [c.id, c.name] as const)));
+  return [...names.values()];
 }
 
 /** "Calme (copie)", then "Calme (copie 2)": a name no compilation of the live has yet */

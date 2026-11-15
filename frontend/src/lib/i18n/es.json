@@ -1689,6 +1689,9 @@
     "analysing": "Analizando · {{percent}} % · quedan {{left}}",
     "analysed": "«{{name}}» está analizado: ya puedes elegirlo.",
     "showMore_one": "Ver {{count}} directo más",
-    "showMore_other": "Ver los otros {{count}} directos"
+    "showMore_other": "Ver los otros {{count}} directos",
+    "madeFrom": "Hecha con",
+    "deleteEverywhere_one": "Está hecha con {{count}} directos: desaparecerá de cada uno.",
+    "deleteEverywhere_other": "Está hecha con {{count}} directos: desaparecerá de cada uno."
   }
 }

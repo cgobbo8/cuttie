@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { CompilationSummary, LiveCompilations, TwitchVod } from "./api";
-import { compilationStatus, copyName, libraryGroups, vodsToAnalyse } from "./compilationLibrary";
+import { compilationStatus, copyName, libraryCount, libraryGroups, namesKeptWith, vodsToAnalyse } from "./compilationLibrary";
 import { aboutCost } from "./format";
 
 const card = (id: string, more: Partial<CompilationSummary> = {}): CompilationSummary => ({
-  id, name: id, length: 60, passages: 8, parts: 2, described: false, cover: null, cover_job: null, lives: ["live"],
+  id, name: id, length: 60, passages: 8, parts: 2, described: false, cover: null, cover_job: null, home: "live", lives: ["live"],
   created_at: "2026-11-10T10:00:00.000Z", updated_at: "2026-11-10T10:00:00.000Z", exported_at: null, render_id: null, ...more,
 });
 const live = (job_id: string, stream_date: string | null, compilations: CompilationSummary[]): LiveCompilations => ({
@@ -31,6 +31,22 @@ describe("the library of compilations", () => {
     expect(libraryGroups(lives).map((l) => [l.job_id, l.compilations.map((c) => c.id)])).toEqual([["new", ["b", "a"]], ["old", ["x"]], ["undated", ["u"]]]);
     expect(libraryGroups(lives, "old").map((l) => l.job_id)).toEqual(["old"]);
     expect(libraryGroups(lives, "none")).toEqual([]);
+  });
+
+  it("has a compilation made from several lives with each of them, and counts it once", () => {
+    // Kept with the newer live, made from both: the API lists the same card with each
+    const both = card("both", { home: "new", lives: ["new", "old"], updated_at: "2026-11-12T10:00:00.000Z" });
+    const lives = [
+      live("old", "2026-10-11T20:00:00Z", [card("x", { home: "old", lives: ["old"] }), both]),
+      live("new", "2026-11-09T20:00:00Z", [both, card("a", { home: "new", lives: ["new"] })]),
+    ];
+    expect(libraryGroups(lives).map((l) => [l.job_id, l.compilations.map((c) => c.id)])).toEqual([["new", ["both", "a"]], ["old", ["both", "x"]]]);
+    // The older live alone: it is still there, and still says where it opens
+    expect(libraryGroups(lives, "old")[0].compilations.map((c) => [c.id, c.home])).toEqual([["both", "new"], ["x", "old"]]);
+    expect(libraryCount(lives)).toBe(3);
+    // A copy is kept where its original is: its name is checked against that live's own
+    expect(namesKeptWith(lives, "new")).toEqual(["both", "a"]);
+    expect(namesKeptWith(lives, "old")).toEqual(["x"]);
   });
 
   it("lists the lives of the channel that are still to analyse, and says what it costs", () => {

@@ -1689,6 +1689,9 @@
     "analysing": "Being analysed · {{percent}}% · {{left}} left",
     "analysed": "“{{name}}” is analysed: you can pick it.",
     "showMore_one": "See {{count}} more live",
-    "showMore_other": "See the {{count}} other lives"
+    "showMore_other": "See the {{count}} other lives",
+    "madeFrom": "Made from",
+    "deleteEverywhere_one": "It is made from {{count}} lives: it will be gone from each of them.",
+    "deleteEverywhere_other": "It is made from {{count}} lives: it will be gone from each of them."
   }
 }

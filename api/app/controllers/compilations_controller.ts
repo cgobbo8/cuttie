@@ -116,15 +116,15 @@ export default class CompilationsController {
 
   /**
    * GET /api/compilations[?job_id=] — the user's analysed lives, newest first, each with its
-   * compilations as cards show them (length, passages, exported or not). A live with none is
-   * listed too: a compilation can be started from it.
+   * compilations as cards show them (length, passages, exported or not). A compilation made
+   * from several lives is listed with each of them (`home`: the one it is kept with). A live
+   * with none is listed too: a compilation can be started from it.
    */
   async library({ auth, request }: HttpContext) {
     const user = auth.getUserOrFail()
     const only = request.input('job_id')
-    const query = Job.query().where('user_id', user.id).where('status', 'DONE').orderBy('created_at', 'desc')
-    if (typeof only === 'string' && only) query.where('id', only)
-    const jobs = await query
+    // Every live even when one is asked for: its compilations may be kept with another
+    const jobs = await Job.query().where('user_id', user.id).where('status', 'DONE').orderBy('created_at', 'desc')
     // The last finished export of each compilation: its key is comp_<id>.mp4, or the clip it was
     // joined into when it was exported from the layer editor (flat_<id>_<signature>.mp4)
     const exported = new Map<string, { id: string; at: string }>()
@@ -141,23 +141,31 @@ export default class CompilationsController {
         if (of) exported.set(`${row.job_id}/${of}`, { id: row.id, at: row.updated_at })
       }
     }
+    // The same card under each live it takes from: the one that keeps it first, then the others
+    const cards = new Map<string, (ReturnType<typeof summarizeCompilation> & { exported_at: string | null; render_id: string | null })[]>(jobs.map((job) => [job.id, []]))
+    for (const job of jobs) {
+      for (const c of job.compilations ?? []) {
+        const done = exported.get(`${job.id}/${c.id}`)
+        const card = { ...summarizeCompilation(job.id, c), exported_at: done?.at ?? null, render_id: done?.id ?? null }
+        for (const live of new Set(card.lives)) cards.get(live)?.push(card)
+      }
+    }
     return {
-      lives: jobs.map((job) => ({
-        job_id: job.id,
-        title: job.customTitle || job.vodTitle || null,
-        streamer: job.streamer ?? null,
-        game: job.vodGame ?? null,
-        duration: job.vodDurationSeconds ?? null,
-        stream_date: job.streamDate ?? null,
-        created_at: job.createdAt?.toISO() ?? null,
-        vod_id: job.url?.match(/videos\/(\d+)/)?.[1] ?? null,
-        cover_clip: (job.hotPoints ?? []).find((hp: any) => hp.clip_filename)?.clip_filename ?? null,
-        clips_freed: !!job.clipsFreedAt,
-        compilations: (job.compilations ?? []).map((c) => {
-          const done = exported.get(`${job.id}/${c.id}`)
-          return { ...summarizeCompilation(job.id, c), exported_at: done?.at ?? null, render_id: done?.id ?? null }
-        }),
-      })),
+      lives: jobs
+        .filter((job) => typeof only !== 'string' || !only || job.id === only)
+        .map((job) => ({
+          job_id: job.id,
+          title: job.customTitle || job.vodTitle || null,
+          streamer: job.streamer ?? null,
+          game: job.vodGame ?? null,
+          duration: job.vodDurationSeconds ?? null,
+          stream_date: job.streamDate ?? null,
+          created_at: job.createdAt?.toISO() ?? null,
+          vod_id: job.url?.match(/videos\/(\d+)/)?.[1] ?? null,
+          cover_clip: (job.hotPoints ?? []).find((hp: any) => hp.clip_filename)?.clip_filename ?? null,
+          clips_freed: !!job.clipsFreedAt,
+          compilations: cards.get(job.id) ?? [],
+        })),
     }
   }
 

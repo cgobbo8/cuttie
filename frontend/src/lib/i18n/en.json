@@ -736,8 +736,8 @@
     "previewTemplate": "{{name}} template",
     "previewNeedsAnalysis": "The preview will use a frame from your first analysis.",
     "camEveryLive": "Your webcam is checked again on every stream. If it moves, you can adjust it in Edit.",
-    "myTemplates": "My templates",
-    "myTemplatesHint": "Your own layouts, ready in Edit.",
+    "myTemplates": "Templates",
+    "myTemplatesHint": "The one your new videos start with, and the layouts of your own.",
     "noTemplates": "No custom template yet. Start from one of Cuttie's layouts and adjust it.",
     "createTemplate": "Create a template",
     "soundTitle": "Music and intro",
@@ -761,7 +761,8 @@
     "musicName": "Name of the music",
     "musicKinds": "Kinds of video it suits",
     "musicDescription": "What this music is (the AI reads it to choose)",
-    "musicDescriptionHint": "What it sounds like, for which videos. The AI reads this to choose."
+    "musicDescriptionHint": "What it sounds like, for which videos. The AI reads this to choose.",
+    "defaultTemplate": "Default template"
   },
   "project": {
     "steps": "Project steps",

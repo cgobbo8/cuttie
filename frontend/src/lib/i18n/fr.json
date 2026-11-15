@@ -736,8 +736,8 @@
     "previewTemplate": "Modèle {{name}}",
     "previewNeedsAnalysis": "L'aperçu utilisera une image de ta première analyse.",
     "camEveryLive": "Ta webcam est revérifiée à chaque live. Si elle bouge, tu peux l'ajuster dans Monter.",
-    "myTemplates": "Mes modèles",
-    "myTemplatesHint": "Tes mises en page à toi, prêtes dans Monter.",
+    "myTemplates": "Modèles",
+    "myTemplatesHint": "Celui de tes nouvelles vidéos, et tes mises en page à toi.",
     "noTemplates": "Pas encore de modèle perso. Pars d'une des mises en page de Cuttie et ajuste-la.",
     "createTemplate": "Créer un modèle",
     "soundTitle": "Musique et intro",
@@ -761,7 +761,8 @@
     "musicName": "Nom de la musique",
     "musicKinds": "Types de vidéo auxquels elle va",
     "musicDescription": "Ce qu'est cette musique (l'IA le lit pour choisir)",
-    "musicDescriptionHint": "À quoi elle ressemble, pour quelles vidéos. L'IA lit ce texte pour choisir."
+    "musicDescriptionHint": "À quoi elle ressemble, pour quelles vidéos. L'IA lit ce texte pour choisir.",
+    "defaultTemplate": "Modèle par défaut"
   },
   "project": {
     "steps": "Étapes du projet",

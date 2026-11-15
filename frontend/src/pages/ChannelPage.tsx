@@ -1,7 +1,7 @@
 import { useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Link } from "react-router";
 import { useTranslation } from "react-i18next";
-import { Loader2, Plus, RefreshCw } from "lucide-react";
+import { ChevronRight, Loader2, Plus, RefreshCw, Star } from "lucide-react";
 import { brandFrameUrl, clipThumbUrl, type BrandColors, type SubtitleStyle, type WidgetTiming } from "../lib/api";
 import { useBackdrop } from "../lib/BackdropContext";
 import { useChannel } from "../lib/ChannelContext";
@@ -13,7 +13,9 @@ import AiNotes from "../components/AiNotes";
 import SoundPrefs from "../components/SoundPrefs";
 import { fontFamily } from "../lib/fonts";
 import type { TemplateContext } from "../lib/templates";
-import { customTemplates } from "../lib/templateKeys";
+import { customTemplates, defaultTemplateKey } from "../lib/templateKeys";
+import { TEMPLATE_IDS } from "../lib/templates";
+import TemplateMenu from "../components/TemplateMenu";
 import { buildFromSpec } from "../lib/templateSpec";
 import { sampleSubtitle } from "../lib/format";
 
@@ -132,6 +134,10 @@ export default function ChannelPage() {
   const defaultTemplate = useDefaultTemplate(kit);
   const brandCam = kit?.facecam && typeof kit.facecam === "object" ? kit.facecam : null;
   const customs = customTemplates(kit);
+  // The template new videos start with: one of theirs or one of Cuttie's, chosen here (no project to open for that)
+  const [pickingDefault, setPickingDefault] = useState(false);
+  const everyTemplate = [...customs.map((tpl) => ({ key: tpl.id, name: tpl.name })), ...TEMPLATE_IDS.map((id) => ({ key: id as string, name: t(`montage.template.${id}.name`) }))];
+  const defaultKey = defaultTemplateKey(kit, customs);
   const sketchContext: TemplateContext | null = kit
     ? {
         src: "",
@@ -289,6 +295,35 @@ export default function ChannelPage() {
                 </Link>
               }
             >
+              {/* The template every new clip and compilation starts with */}
+              <div className="relative mt-4">
+                <button
+                  type="button"
+                  onClick={() => setPickingDefault(!pickingDefault)}
+                  aria-haspopup="dialog"
+                  aria-expanded={pickingDefault}
+                  aria-label={`${t("brand.defaultTemplate")} : ${everyTemplate.find((tpl) => tpl.key === defaultKey)?.name ?? defaultKey}`}
+                  className="group w-full h-11 pl-3 pr-2.5 flex items-center gap-2.5 rounded-[12px] border border-white/[0.09] bg-black/25 text-left hover:bg-white/[0.045] transition-colors"
+                >
+                  <Star className="w-4 h-4 flex-none text-accent" />
+                  <span className="flex-none text-[13.5px] font-[550] text-white">{t("brand.defaultTemplate")}</span>
+                  <span className="flex-1 min-w-0 truncate text-right text-[13px] text-ink-2">{everyTemplate.find((tpl) => tpl.key === defaultKey)?.name ?? defaultKey}</span>
+                  <ChevronRight className="w-3.5 h-3.5 flex-none text-ink-4 transition-colors group-hover:text-ink-2" />
+                </button>
+                {pickingDefault && (
+                  <TemplateMenu
+                    value={defaultKey}
+                    templates={everyTemplate}
+                    label={t("brand.defaultTemplate")}
+                    onPick={(key) => {
+                      setPickingDefault(false);
+                      if (key && key !== defaultKey) save({ default_template: key }, t("montage.defaultSaved"));
+                    }}
+                    onClose={() => setPickingDefault(false)}
+                    className="left-0 right-0 top-full mt-2 w-auto"
+                  />
+                )}
+              </div>
               {customs.length === 0 ? (
                 <p className="mt-3 text-[13px] leading-relaxed text-ink-3">{t("brand.noTemplates")}</p>
               ) : (

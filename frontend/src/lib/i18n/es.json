@@ -736,8 +736,8 @@
     "previewTemplate": "Plantilla {{name}}",
     "previewNeedsAnalysis": "La vista previa usará una imagen de tu primer análisis.",
     "camEveryLive": "Tu webcam se vuelve a comprobar en cada directo. Si se mueve, puedes ajustarla en Montar.",
-    "myTemplates": "Mis plantillas",
-    "myTemplatesHint": "Tus propios diseños, listos en Montar.",
+    "myTemplates": "Modelos",
+    "myTemplatesHint": "El de tus nuevos vídeos, y tus propios diseños.",
     "noTemplates": "Todavía no hay plantillas propias. Parte de uno de los diseños de Cuttie y ajústalo.",
     "createTemplate": "Crear una plantilla",
     "soundTitle": "Música e intro",
@@ -761,7 +761,8 @@
     "musicName": "Nombre de la música",
     "musicKinds": "Tipos de vídeo a los que va",
     "musicDescription": "Qué es esta música (la IA lo lee para elegir)",
-    "musicDescriptionHint": "A qué suena, para qué vídeos. La IA lee este texto para elegir."
+    "musicDescriptionHint": "A qué suena, para qué vídeos. La IA lee este texto para elegir.",
+    "defaultTemplate": "Modelo por defecto"
   },
   "project": {
     "steps": "Pasos del proyecto",

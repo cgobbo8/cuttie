@@ -1628,9 +1628,35 @@
     "openEditor": "Ouvrir dans l'éditeur",
     "editorPreparing": "Préparation de la vidéo…",
     "editorHint": "Dans l'éditeur, la vidéo est un seul clip : tout s'y retouche calque par calque.",
-    "editorLoses": "Il n'a qu'une mise en page pour toute la vidéo : les transitions et les modèles propres à certains passages n'y sont pas repris.",
+    "editorLoses": "Il n'a qu'une mise en page pour toute la vidéo : l'intro, les transitions et les modèles propres à certains passages n'y sont pas repris.",
     "editorFailed": "La vidéo n'a pas pu être préparée pour l'éditeur.",
-    "editorKept": "Tu retrouves ce que tu avais fait dans l'éditeur."
+    "editorKept": "Tu retrouves ce que tu avais fait dans l'éditeur.",
+    "intro": {
+      "label": "Intro",
+      "hint": "Un jingle avec ton logo et le titre, avant le premier passage",
+      "on": "{{name}} · {{seconds}} s de plus",
+      "none": "Aucune",
+      "pick": "Intro de la vidéo",
+      "title": "Titre de l'intro",
+      "sound": "Son",
+      "soundOfStyle": "{{name}} (celui du style)",
+      "noSound": "Sans son",
+      "style": {
+        "slam": "Impact",
+        "bands": "Bandes",
+        "glitch": "Glitch",
+        "neon": "Néon",
+        "card": "Carton"
+      },
+      "sounds": {
+        "boom": "Impact",
+        "swish": "Souffle",
+        "zap": "Parasites",
+        "shine": "Éclat",
+        "drum": "Tambours"
+      },
+      "chosen": "Intro choisie par l'IA : {{name}}"
+    }
   },
   "compilations": {
     "title": "Compilations",

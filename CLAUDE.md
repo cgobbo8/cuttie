@@ -182,7 +182,7 @@ cuttie/
         │   ├── welcome/                       # Etapes du premier lancement + mur de lives
         │   ├── project/                       # AnalysisView, MomentPlayer/List/Details, VodTimeline, Stepper, RenderCard, ModeSwitch (Clips | Compilations)
         │   ├── montage/                       # TemplatePicker (onglets Mes modeles / Modeles Cuttie, etoile par defaut), TemplateSketch, CamSheet
-        │   ├── compilation/                   # LivePicker (choisir un live, ou plusieurs), CompilationCard (une compilation dans la bibliotheque), SearchPanel (mots / IA / decrire la video), PiecePreview (un passage et sa coupe), PlanTalk (la conversation avec l'IA sur une video decrite), CompilationPanel (parties, passages a cocher / glisser, transitions, duree), TransitionPicker (les transitions, chacune jouee en petit), CompilationGuide (l'ecran explique en 4 etapes a la premiere visite)
+        │   ├── compilation/                   # LivePicker (choisir un live, ou plusieurs), CompilationCard (une compilation dans la bibliotheque), SearchPanel (mots / IA / decrire la video), PiecePreview (un passage et sa coupe), PlanTalk (la conversation avec l'IA sur une video decrite), CompilationPanel (parties, passages a cocher / glisser, transitions, duree), TransitionPicker (les transitions, chacune jouee en petit), IntroPicker (les intros, jouees en petit avec le logo et les couleurs de la chaine, titre et bruitage), CompilationGuide (l'ecran explique en 4 etapes a la premiere visite)
         │   ├── template-editor/               # EditorCanvas (apercu + poignees), LayerList (calques), Panels (reglages), Scrubber (timeline)
         │   ├── KeyField.tsx                   # Champ de cle API verifie aupres du fournisseur
         │   ├── WebcamFrame.tsx                # Frame + rectangle de cam deplacable
@@ -212,6 +212,7 @@ cuttie/
             ├── montage.ts                     # morceaux d'un clip (couper, garder, enlever les silences, caler sur les mots) -> ce que Remotion joue
             ├── compilation.ts                 # compilations : resultats -> passages, parties, ordre (un passage ou plusieurs a la fois), transitions, ajuster a une duree
             ├── transitions.ts                 # les 7 transitions toutes faites entre deux morceaux d'un montage (copie cote API)
+            ├── intro/                         # les 5 intros toutes faites d'une compilation : intros.ts (styles, durees, bruitages), IntroCard.tsx (le dessin) ; copie cote API
             ├── compilationLibrary.ts          # la bibliotheque : ou en est une compilation (vide, brouillon, exportee, modifiee depuis), groupes par live, nom d'une copie
             ├── editorTypes.ts                 # Types editeur (layers, state)
             ├── editorThemes.ts                # Themes pre-definis
@@ -352,6 +353,18 @@ Dans une compilation, chaque passage peut avoir son propre modele (`item.templat
 - **Dans le montage** : chaque morceau est enveloppe d'une boite sans existence (`display: contents`) qui ne devient une vraie boite que pendant la transition ; le reste du temps ses calques s'empilent parmi les widgets comme avant. L'accroche, les widgets et les titres de parties ne bougent pas.
 - Verifie sur un vrai export (14 passages de deux lives, une transition differente a chaque coupe, images sorties autour de chaque coupe) : 71,9 s avec comme sans transitions.
 - Pas fait : son de transition (pas de banque de sons libre embarquee), transitions pour un clip coupe en morceaux dans Choisir, l'IA ne les choisit pas.
+
+## Intro
+
+Une compilation peut s'ouvrir sur une intro : un jingle de 1,5 a 2 s avec le logo de la chaine, ses couleurs et le titre de la video, avant le premier passage. Facultative (`compilation.intro` absent : aucune).
+
+- **5 styles tout faits** (`frontend/src/lib/intro/`, copie dans `api/remotion/intro` par `scripts/sync-remotion.mjs`) : Impact (le logo tombe, l'ecran tremble), Bandes (trois bandes aux couleurs de la chaine), Glitch, Neon (un anneau se dessine), Carton (carton de titre qui se leve). `IntroCard` dessine une image d'une intro dans une boite de 1080 x 1920 a partir d'un numero d'image (aucune horloge a lui) : la video lui donne celle de Remotion, le selecteur sa propre boucle, donc l'apercu, l'export et les petits dessins sont le meme code.
+- **Dans le montage** : l'intro tient l'ecran `hold` images pendant lesquelles la video n'a pas commence (une sequence vide en tete de la serie ; les calques de l'horloge de la video, accroche, widgets, titres de parties, sont decales d'autant), puis s'en va en `out` images par-dessus le debut du premier passage, deja en lecture dessous. La video est donc plus longue de `hold` (1,5 a 2 s), compte dans la duree affichee, dans « Ajuster a 1 min 30 » et dans la duree de la carte.
+- **Donnees** : `compilation.intro = { style, title?, sound? }` : son propre titre (sinon le nom de la video), son propre bruitage (sinon celui du style ; `"none"` : muette). `MontageProps.intro` porte tout ce qu'elle dessine (titre, nom, logo, couleurs, police des titres du modele). L'API refuse un style ou un son qu'elle ne connait pas (`compilations.INTROS` / `INTRO_SOUNDS`, tenus egaux a `intros.ts` par un test).
+- **Bruitages** : 5 sons fabriques par `scripts/make-intro-sounds.py` (ondes, bruit, filtres : aucun enregistrement de qui que ce soit, donc embarquables et sans droits), chacun cale sur son intro (le coup de « Impact » tombe quand le logo atterrit). `frontend/public/sounds/intro-<id>.mp3`, copies dans `api/public/sounds`.
+- **Son a l'export** : le moteur de rendu ne joue pas le bruitage. Il est mixe apres la mise a niveau du son de la video (`sound_level.levelArgs`, `jingle`) : il a ainsi toujours le meme niveau par rapport a la voix, que le live soit fort ou faible. Il s'eteint quand la video commence (`introFade`). Dans l'apercu il est joue par le lecteur, a un volume fixe.
+- Verifie sur un vrai export (compilation de 14 passages, intro Impact) : 73,4 s au lieu de 71,8, -14,0 LUFS, bruitage dans la premiere seconde, intro qui s'efface sur le premier passage.
+- Pas repris dans l'editeur a calques (comme les transitions). Les sons n'ont pas ete ecoutes par une oreille humaine avant livraison : mesures seulement (niveau, forme).
 
 ## Une compilation dans l'editeur a calques
 

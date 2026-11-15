@@ -1628,9 +1628,35 @@
     "openEditor": "Abrir en el editor",
     "editorPreparing": "Preparando el vídeo…",
     "editorHint": "En el editor, el vídeo es un solo clip: todo se retoca capa por capa.",
-    "editorLoses": "Solo tiene un diseño para todo el vídeo: las transiciones y las plantillas propias de algunos trozos no se conservan.",
+    "editorLoses": "Solo tiene un diseño para todo el vídeo: la intro, las transiciones y las plantillas propias de algunos trozos no se conservan.",
     "editorFailed": "No se pudo preparar el vídeo para el editor.",
-    "editorKept": "Recuperas lo que habías hecho en el editor."
+    "editorKept": "Recuperas lo que habías hecho en el editor.",
+    "intro": {
+      "label": "Intro",
+      "hint": "Un jingle con tu logo y el título, antes del primer trozo",
+      "on": "{{name}} · {{seconds}} s más",
+      "none": "Ninguna",
+      "pick": "Intro del vídeo",
+      "title": "Título de la intro",
+      "sound": "Sonido",
+      "soundOfStyle": "{{name}} (el del estilo)",
+      "noSound": "Sin sonido",
+      "style": {
+        "slam": "Impacto",
+        "bands": "Bandas",
+        "glitch": "Glitch",
+        "neon": "Neón",
+        "card": "Cartel"
+      },
+      "sounds": {
+        "boom": "Impacto",
+        "swish": "Soplo",
+        "zap": "Interferencias",
+        "shine": "Destello",
+        "drum": "Tambores"
+      },
+      "chosen": "Intro elegida por la IA: {{name}}"
+    }
   },
   "compilations": {
     "title": "Compilaciones",

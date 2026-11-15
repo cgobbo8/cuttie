@@ -139,6 +139,59 @@ test.group('Sound of the exports', () => {
     }
   }).skip(!hasFfmpeg(), 'ffmpeg is not installed')
 
+  test('an intro\'s sound is mixed in once the video is levelled, and fades as the video starts', ({ assert }) => {
+    const measured = parseLoudness(PRINTED)!
+    const args = levelArgs('in.mp4', 'out.mp4', measured, [1.6], { file: 'boom.mp3', gain: 1, fade: { at: 1.6, for: 1.0667 } })
+    assert.deepEqual(args.slice(0, 7), ['-v', 'error', '-y', '-i', 'in.mp4', '-i', 'boom.mp3'])
+    const graph = args[args.indexOf('-filter_complex') + 1]
+    // The video's own sound: its cuts smoothed and its loudness set, before anything is added to it
+    assert.match(graph, /^\[0:a:0\]asetnsamples[^;]+loudnorm=[^;]+,aresample=48000\[video\];/)
+    assert.include(graph, '[1:a:0]aresample=48000,atrim=0:2.667,afade=t=out:st=1.600:d=1.067,volume=1.000[jingle];')
+    // Nothing turned down to make room, never over the peak allowed
+    assert.include(graph, '[video][jingle]amix=inputs=2:duration=first:dropout_transition=0:normalize=0,alimiter=limit=0.841:level=false[out]')
+    assert.deepEqual(args.slice(args.indexOf('-map'), args.indexOf('-map') + 6), ['-map', '0:v:0', '-map', '[out]', '-c:v', 'copy'])
+    assert.notInclude(args, '-af')
+    // A video already at the level: the sound is added all the same
+    assert.match(levelArgs('in.mp4', 'out.mp4', null, [], { file: 'boom.mp3', gain: 0.8 })[8], /^\[0:a:0\]aresample=48000\[video\];\[1:a:0\]aresample=48000,volume=0\.800\[jingle\]/)
+  })
+
+  test('the sound of an intro is heard at the start of the export, not after', async ({ assert }) => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'cuttie-jingle-'))
+    const file = path.join(dir, 'montage.mp4')
+    const jingle = path.join(dir, 'jingle.mp3')
+    try {
+      // A video silent for its first 2 s (the intro holds the screen), then a quiet voice-like tone
+      execFileSync('ffmpeg', [
+        '-v', 'error', '-y',
+        '-f', 'lavfi', '-i', 'testsrc=size=180x320:rate=30:duration=6',
+        '-f', 'lavfi', '-i', "aevalsrc='if(lt(t,2),0,0.05*sin(2*PI*220*t))':s=48000:d=6",
+        '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '192k', '-shortest', file,
+      ])
+      execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', "aevalsrc='0.5*sin(2*PI*880*t)':s=48000:d=4", jingle])
+      const loudest = (from: number, length: number) => {
+        const raw = execFileSync('ffmpeg', ['-v', 'error', '-ss', String(from), '-t', String(length), '-i', file, '-vn', '-ac', '1', '-ar', '48000', '-f', 's16le', '-'], { maxBuffer: 1 << 26 })
+        let peak = 0
+        for (let i = 0; i + 1 < raw.length; i += 2) peak = Math.max(peak, Math.abs(raw.readInt16LE(i)))
+        return peak / 32768
+      }
+      assert.isBelow(loudest(0.5, 1), 0.01)
+
+      const done = await levelSound(file, [2], { file: jingle, gain: 1, fade: { at: 2, for: 1 } })
+      assert.isNotNull(done)
+      // The jingle fills the silence of the intro...
+      assert.isAbove(loudest(0.5, 1), 0.2)
+      // ...and is gone a second after the video starts: only the tone, brought up, is left
+      const after = loudest(3.5, 1)
+      assert.isAbove(after, 0.05)
+      assert.isBelow(after, loudest(0.5, 1))
+      // The picture was not touched: still 6 s
+      const length = Number(execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', file]).toString())
+      assert.closeTo(length, 6, 0.1)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  }).skip(!hasFfmpeg(), 'ffmpeg is not installed')
+
   test('a file that is not a video is left as it is', async ({ assert }) => {
     assert.isNull(await levelSound(path.join(tmpdir(), 'cuttie-no-such-export.mp4')))
   })

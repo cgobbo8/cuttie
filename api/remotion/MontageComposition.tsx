@@ -1,7 +1,9 @@
 import React from "react";
-import { AbsoluteFill, Freeze, Sequence, Series, useCurrentFrame, useVideoConfig } from "remotion";
+import { AbsoluteFill, Audio, Freeze, Img, Sequence, Series, useCurrentFrame, useVideoConfig } from "remotion";
 import type { Layer } from "./editorTypes";
 import { ResolvedLayer } from "./CuttieComposition";
+import IntroCard, { INTRO_W } from "./intro/IntroCard";
+import { introFade, introSpan, introVolume, isIntro } from "./intro/intros";
 import { isTransition, lookStyle, transitionAt } from "./transitions";
 
 /** A layer and where it stacks among all the template's layers (0 = bottom) */
@@ -19,10 +21,24 @@ export interface MontageSegment {
   transition?: string;
 }
 
+/** The intro a montage opens with, with all it draws (see ./intro) */
+export interface MontageIntro {
+  style: string;
+  title: string;
+  name: string;
+  logo: string | null;
+  colors: { accent: string; highlight: string; dark: string; light: string };
+  font: string;
+  /** Never set by the renderer: the export mixes the sound in once the video's own is levelled */
+  sound?: string;
+}
+
 export interface MontageCompositionProps {
   segments: MontageSegment[];
   /** Layers on the montage's own clock (hook line, widgets, section titles) */
   overlays: PlacedLayer[];
+  /** A jingle before the first piece: the pieces and the overlays start once it has held the screen */
+  intro?: MontageIntro;
   [key: string]: unknown;
 }
 
@@ -79,24 +95,67 @@ const Piece: React.FC<{ segment: MontageSegment; before?: MontageSegment; next?:
   );
 };
 
+/** How loud an intro's sound would play here (the renderer never gets one: see MontageIntro.sound) */
+const INTRO_VOLUME = 0.5;
+
+/** The intro, above everything: drawn in its own 1080-wide box, brought to the video's size */
+const Intro: React.FC<{ intro: MontageIntro }> = ({ intro }) => {
+  const frame = useCurrentFrame();
+  const { fps, width } = useVideoConfig();
+  if (!isIntro(intro.style)) return null;
+  return (
+    <AbsoluteFill style={{ zIndex: 100000, pointerEvents: "none" }}>
+      <div style={{ transform: `scale(${width / INTRO_W})`, transformOrigin: "0 0" }}>
+        <IntroCard id={intro.style} frame={frame} fps={fps} title={intro.title} name={intro.name} logo={intro.logo} colors={intro.colors} font={intro.font} Img={Img} />
+      </div>
+    </AbsoluteFill>
+  );
+};
+
 /**
  * Several pieces one after the other (mirrors the frontend's MontageComposition).
  * Each piece plays its clip from where it was cut: inside it, the clock is the
  * clip's. The hook line and the widgets sit above, on the montage's own clock.
+ * An intro holds the screen first: pieces and overlays start after it, and it
+ * leaves over the first frames of the first piece.
  */
-export const MontageComposition: React.FC<MontageCompositionProps> = ({ segments, overlays }) => {
+export const MontageComposition: React.FC<MontageCompositionProps> = ({ segments, overlays, intro }) => {
   const { fps } = useVideoConfig();
+  const opening = intro && isIntro(intro.style) ? introSpan(intro.style, fps) : null;
   return (
     <AbsoluteFill style={{ background: "black", width: 1080, height: 1920 }}>
       <style>{"*, *::before, *::after { box-sizing: border-box; }"}</style>
       <Series>
+        {/* Nothing of the video plays while the intro holds the screen (a sequence of a series can't be empty) */}
+        {opening && (
+          <Series.Sequence durationInFrames={opening.hold}>
+            <AbsoluteFill />
+          </Series.Sequence>
+        )}
         {segments.map((segment, i) => (
           <Series.Sequence key={i} durationInFrames={framesOf(segment.duration, fps)}>
             <Piece segment={segment} before={segments[i - 1]} next={segments[i + 1]} />
           </Series.Sequence>
         ))}
       </Series>
-      {overlays.map(({ layer, z }) => (layer.visible ? <ResolvedLayer key={layer.id} layer={layer} z={z + 1} /> : null))}
+      {overlays.map(({ layer, z }) =>
+        layer.visible ? (
+          <Sequence key={layer.id} from={opening?.hold ?? 0} layout="none">
+            <ResolvedLayer layer={layer} z={z + 1} />
+          </Sequence>
+        ) : null
+      )}
+      {opening && intro && (
+        <Sequence durationInFrames={opening.hold + opening.out} layout="none">
+          <Intro intro={intro} />
+        </Sequence>
+      )}
+      {opening && intro?.sound && isIntro(intro.style) && (
+        // It fades out as the video starts: a sound longer than its intro doesn't play on over the first words
+        <Sequence durationInFrames={opening.hold + introFade(intro.style, fps).frames} layout="none">
+          <Audio src={intro.sound} volume={(f) => INTRO_VOLUME * introVolume(f, intro.style as Parameters<typeof introVolume>[1], fps)} />
+        </Sequence>
+      )}
     </AbsoluteFill>
   );
 };

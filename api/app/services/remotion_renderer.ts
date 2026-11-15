@@ -13,6 +13,7 @@ import type { Layer } from '../../remotion/editorTypes.js'
 import { getPresignedUrl, uploadFile } from '#services/storage'
 import { BACKGROUND_SIZE, ensureBackground } from '#services/clip_variants'
 import { CLIPS_DIR } from '#services/data_paths'
+import { introFrames, isIntroSound } from '#services/compilations'
 
 // Cached bundle — auto-invalidates when remotion/ source files change
 let bundleUrl: string | null = null
@@ -374,9 +375,30 @@ export interface MontagePiece {
   transition?: string
 }
 
+/** The intro a montage opens with, with all it draws (api/remotion/intro) */
+export interface MontageIntro {
+  style: string
+  title: string
+  name: string
+  logo: string | null
+  colors: { accent: string; highlight: string; dark: string; light: string }
+  font: string
+  /** Its sound (api/public/sounds/intro-<sound>.mp3): mixed in after the render, never played by the renderer */
+  sound?: string
+}
+
+/** Where an intro's sound is on this machine (null: not one that ships with the app) */
+export function introSoundFile(sound: string | undefined): string | null {
+  if (!sound || !isIntroSound(sound)) return null
+  const file = path.resolve('./public/sounds', `intro-${sound}.mp3`)
+  return existsSync(file) ? file : null
+}
+
 export interface MontageRenderOptions {
   renderId: string
   jobId: string
+  /** A jingle before the first piece (the video is that much longer) */
+  intro?: MontageIntro
   /** Pieces played one after the other */
   pieces: MontagePiece[]
   /** Layers on the montage's own clock (hook line, widgets, section titles) */
@@ -419,8 +441,11 @@ export async function renderMontage(opts: MontageRenderOptions): Promise<{ sizeM
   }
   const first = opts.pieces[0]
   const overlays = await place(opts.overlays, first.clipFilename, readProbe(first.jobId ?? jobId, first.clipFilename), first.jobId ?? jobId)
-  const durationInFrames = segments.reduce((sum, s) => sum + Math.max(1, Math.round(s.duration * fps)), 0)
-  const inputProps = { segments, overlays }
+  // The intro holds the screen first; its sound is not the renderer's business
+  const { sound: _mixedLater, ...intro } = opts.intro ?? ({} as Partial<MontageIntro>)
+  const hold = opts.intro ? introFrames(opts.intro.style, fps) : 0
+  const durationInFrames = hold + segments.reduce((sum, s) => sum + Math.max(1, Math.round(s.duration * fps)), 0)
+  const inputProps = { segments, overlays, ...(hold > 0 ? { intro } : {}) }
 
   const [serveUrl, browser] = await Promise.all([getBundle(), ensureBrowser()])
   const composition = await selectComposition({ serveUrl, id: 'CuttieMontage', inputProps, puppeteerInstance: browser })

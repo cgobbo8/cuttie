@@ -59,9 +59,12 @@ import {
 } from "../lib/compilation";
 import { liveWhen, plainDate } from "../lib/compilationLibrary";
 import { clock, splitVodTitle } from "../lib/format";
-import { buildMontage, framesOf, montageFrames, renderPieces, type MontageCut, type MontageProps } from "../lib/montage";
+import { buildMontage, framesOf, introHold, montageFrames, renderPieces, type MontageCut, type MontageProps } from "../lib/montage";
 import { evenFrames, tileStyle } from "../lib/storyboard";
 import { isTransition, transitionSpan } from "../lib/transitions";
+import { introSeconds, introSound, isIntro } from "../lib/intro/intros";
+import { fontFamily } from "../lib/fonts";
+import { introSoundUrl, type IntroBrand } from "../components/compilation/IntroPicker";
 import { clipTemplateContext } from "../lib/templateContext";
 import { templateGuides } from "../lib/templateGuide";
 import { buildAny, customTemplates, defaultTemplateKey, findCustom, hookOf, isBuiltIn, type TemplateKey } from "../lib/templateKeys";
@@ -613,9 +616,37 @@ export default function CompilationPage() {
                 })
             : [],
       );
+      // The jingle the video opens with: the channel's logo and colours, its title written as the video's titles are
+      if (isIntro(all.intro?.style)) {
+        const first = cuts[0].ctx;
+        const sound = introSound(all.intro);
+        montage.intro = {
+          style: all.intro.style,
+          title: all.intro.title?.trim() || all.name,
+          name: first.displayName ?? first.login ?? "",
+          logo: first.avatarUrl,
+          colors: first.colors,
+          font: fontFamily(hookOf(templateKey, first, customs).font),
+          ...(sound ? { sound } : {}),
+        };
+      }
       return { montage, files, jobs, ids: items.map((item) => item.id) };
     },
     [channel, customs, job, jobId, kit, templateKey],
+  );
+
+  // What the intro picker draws its sketches with
+  const brand = useMemo<IntroBrand | undefined>(
+    () =>
+      kit
+        ? {
+            name: channel?.display_name ?? channel?.login ?? kit.twitch_login ?? "",
+            logo: channel?.avatar_url ?? null,
+            colors: kit.colors,
+            font: fontFamily(hookOf(templateKey, { facecam: null, subtitleStyle: kit.subtitles.style } as Parameters<typeof hookOf>[1], customs).font),
+          }
+        : undefined,
+    [channel, customs, kit, templateKey],
   );
 
   /* ── The look of each passage ───────────────────────────── */
@@ -683,7 +714,8 @@ export default function CompilationPage() {
 
   // Where each passage plays in the whole video, frames; `clear`: its first frame once the transition it comes in with is over
   const marks = useMemo(() => {
-    let at = 0;
+    // The first passage starts once the intro has held the screen
+    let at = introHold(preview?.montage.intro, FPS);
     return (preview?.montage.segments ?? []).map((segment, i) => {
       const from = at;
       at += framesOf(segment.duration, FPS);
@@ -693,6 +725,11 @@ export default function CompilationPage() {
   }, [preview]);
   const marksRef = useRef(marks);
   marksRef.current = marks;
+  // In the page the intro's sound is a file the player plays (the export mixes it in afterwards)
+  const playerProps = useMemo(() => {
+    const montage = preview?.montage;
+    return montage?.intro?.sound ? { ...montage, intro: { ...montage.intro, sound: introSoundUrl(montage.intro.sound) } } : montage;
+  }, [preview]);
   // The same passages in the same order: the same player, which keeps its place when a cut or a template changes
   const playerKey = preview ? `${compilation?.id}-${templateKey}-${preview.files.join(",")}` : "";
   useEffect(() => {
@@ -754,7 +791,7 @@ export default function CompilationPage() {
       await saveCompilation(jobId, compilation);
       await startMontageRender(
         jobId,
-        { key: `comp_${compilation.id}.mp4`, name: compilation.name, pieces: renderPieces(built.montage, built.files, built.jobs), overlays: built.montage.overlays },
+        { key: `comp_${compilation.id}.mp4`, name: compilation.name, pieces: renderPieces(built.montage, built.files, built.jobs), overlays: built.montage.overlays, ...(built.montage.intro ? { intro: built.montage.intro } : {}) },
         { width: 1080, height: 1920, fps: FPS },
       );
       navigate(`/${jobId}/export`);
@@ -1005,11 +1042,11 @@ export default function CompilationPage() {
                     key={playerKey}
                     ref={playerRef}
                     component={MontageComposition}
-                    inputProps={preview.montage}
+                    inputProps={playerProps!}
                     compositionWidth={1080}
                     compositionHeight={1920}
                     fps={FPS}
-                    durationInFrames={montageFrames(preview.montage.segments, FPS)}
+                    durationInFrames={montageFrames(preview.montage.segments, FPS, preview.montage.intro)}
                     // Passages added, taken out or put in another order: it stays on the passage it was on
                     initialFrame={marks.find((mark) => mark.id === onItemRef.current)?.clear ?? 0}
                     controls
@@ -1028,7 +1065,7 @@ export default function CompilationPage() {
               </div>
               {preview && (
                 <p className="-mt-1 text-[12px] text-ink-3">
-                  {readyItems.length < items.length ? t("compilation.partial", { ready: readyItems.length, total: items.length }) : `${clock(compilationLength(compilation))} · ${t("compilation.moments", { count: items.length })}`}
+                  {readyItems.length < items.length ? t("compilation.partial", { ready: readyItems.length, total: items.length }) : `${clock(compilationLength(compilation) + introSeconds(compilation.intro))} · ${t("compilation.moments", { count: items.length })}`}
                 </p>
               )}
             </>
@@ -1108,6 +1145,7 @@ export default function CompilationPage() {
           playing={preview ? onItem : null}
           onEdit={openEditor}
           editing={editing}
+          brand={brand}
           cutting={cutting}
           templates={templates}
           onActivate={setActiveSection}

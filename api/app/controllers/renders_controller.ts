@@ -4,10 +4,10 @@ import { existsSync, statSync } from 'node:fs'
 import path from 'node:path'
 import archiver from 'archiver'
 import db from '@adonisjs/lucid/services/db'
-import { renderClip, renderMontage, type MontagePiece, type PlacedLayer } from '#services/remotion_renderer'
+import { introSoundFile, renderClip, renderMontage, type MontageIntro, type MontagePiece, type PlacedLayer } from '#services/remotion_renderer'
 import { uploadFile, getPresignedDownloadUrl, deleteObject, storagePath } from '#services/storage'
 import { clipDir } from '#services/data_paths'
-import { isTransition } from '#services/compilations'
+import { introFade, introFrames, isIntro, isIntroSound, isTransition } from '#services/compilations'
 import { enqueueRender } from '#services/render_queue'
 import { levelSound } from '#services/sound_level'
 import { loadJobSharedData, resolveEditEnv } from '#services/edit_env_resolver'
@@ -94,6 +94,34 @@ function parsePieces(raw: unknown): MontagePiece[] | null {
   return pieces
 }
 
+const COLOR = /^#[0-9a-f]{3,8}$/i
+
+/**
+ * The intro of a montage as sent by the app, with all it draws. Undefined: none was sent;
+ * null: what was sent isn't an intro this server can draw (the export is refused).
+ */
+function parseMontageIntro(raw: unknown): MontageIntro | null | undefined {
+  if (raw === undefined || raw === null) return undefined
+  const intro = raw as any
+  const words = (value: unknown, max: number) => (typeof value === 'string' ? value.trim().slice(0, max) : '')
+  const colors = intro?.colors
+  if (!isIntro(intro?.style) || !colors || !['accent', 'highlight', 'dark', 'light'].every((role) => COLOR.test(colors[role] ?? ''))) return null
+  // The logo is fetched by the renderer: a web address, nothing on this machine
+  const logo = typeof intro.logo === 'string' && /^https?:\/\//.test(intro.logo) && intro.logo.length <= 600 ? intro.logo : null
+  const font = words(intro.font, 80)
+  if (!/^[\w\s"',-]*$/.test(font)) return null
+  if (intro.sound !== undefined && !isIntroSound(intro.sound)) return null
+  return {
+    style: intro.style,
+    title: words(intro.title, 120),
+    name: words(intro.name, 80),
+    logo,
+    colors: { accent: colors.accent, highlight: colors.highlight, dark: colors.dark, light: colors.light },
+    font,
+    ...(intro.sound ? { sound: intro.sound } : {}),
+  }
+}
+
 // ── controller ───────────────────────────────────────────────────────────────
 
 export default class RendersController {
@@ -152,6 +180,7 @@ export default class RendersController {
       name?: unknown
       pieces?: unknown
       overlays?: unknown
+      intro?: unknown
       render_options?: { width?: number; height?: number; fps?: number }
     }
     const pieces = parsePieces(body.pieces)
@@ -159,6 +188,8 @@ export default class RendersController {
     if (!pieces || !overlays) {
       return response.badRequest({ error: 'pieces: [{ clip, from, duration, layers }] and overlays: [{ layer, z }] required' })
     }
+    const intro = parseMontageIntro(body.intro)
+    if (intro === null) return response.badRequest({ error: 'intro: { style, title, name, logo, colors, font, sound? } with a style and a sound this app has' })
     // Pieces of other lives: the user's own only
     const others = [...new Set(pieces.map((piece) => piece.jobId).filter((id): id is string => !!id && id !== jobId))]
     if (others.length > 0) {
@@ -186,7 +217,7 @@ export default class RendersController {
     })
 
     enqueueRender(() =>
-      runRender({ renderId, jobId, clipFilename: key, layers: [], outputPath, outputFilename, renderOptions: body.render_options, montage: { pieces, overlays } })
+      runRender({ renderId, jobId, clipFilename: key, layers: [], outputPath, outputFilename, renderOptions: body.render_options, montage: { pieces, overlays, ...(intro ? { intro } : {}) } })
     )
     return response.created({ render_id: renderId })
   }
@@ -393,7 +424,7 @@ async function runRender(opts: {
   trim?: { start: number; end: number }
   renderOptions?: { width?: number; height?: number; fps?: number }
   /** Several pieces one after the other instead of one clip (`layers` and `trim` unused) */
-  montage?: { pieces: MontagePiece[]; overlays: PlacedLayer[] }
+  montage?: { pieces: MontagePiece[]; overlays: PlacedLayer[]; intro?: MontageIntro }
 }) {
   const { renderId, jobId, clipFilename, layers, outputPath, outputFilename, trim, renderOptions, montage } = opts
 
@@ -420,20 +451,24 @@ async function runRender(opts: {
       },
     }
     const rendered = montage
-      ? await renderMontage({ ...output, pieces: montage.pieces, overlays: montage.overlays })
+      ? await renderMontage({ ...output, pieces: montage.pieces, overlays: montage.overlays, intro: montage.intro })
       : await renderClip({ ...output, layers, clipFilename, trim })
 
     // Its sound at the loudness the platforms play, the cuts between the pieces of a montage smoothed
     // (the picture is copied): a few seconds per minute
     const fps = renderOptions?.fps ?? 30
     const cuts: number[] = []
-    let frames = 0
+    // An intro holds the screen first: the first piece's sound starts there, out of nothing
+    let frames = montage?.intro ? introFrames(montage.intro.style, fps) : 0
+    if (frames > 0) cuts.push(frames / fps)
     for (const piece of (montage?.pieces ?? []).slice(0, -1)) {
       // As the renderer counts them: whole frames, one after the other
       frames += Math.max(1, Math.round(piece.duration * fps))
       cuts.push(frames / fps)
     }
-    const levelled = await levelSound(outputPath, cuts)
+    // The intro's sound goes in once the video's own is levelled: as loud as it was made to be
+    const jingle = introSoundFile(montage?.intro?.sound)
+    const levelled = await levelSound(outputPath, cuts, jingle ? { file: jingle, gain: 1, fade: introFade(montage?.intro?.style) ?? undefined } : undefined)
     if (levelled) console.log(`[Render] ${outputFilename}: sound brought from ${levelled.from.toFixed(1)} to ${levelled.to.toFixed(1)} LUFS`)
     const sizeMb = levelled ? statSync(outputPath).size / 1024 / 1024 : rendered.sizeMb
 

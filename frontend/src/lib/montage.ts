@@ -10,6 +10,7 @@
  */
 
 import type { ChatMessage, Layer, SubtitleWord } from "./editorTypes";
+import { introSpan, isIntro } from "./intro/intros";
 import type { TemplateContext } from "./templates";
 
 /** A part of a clip, [start, end] in clip seconds */
@@ -218,10 +219,29 @@ export interface MontageSegment {
   transition?: string;
 }
 
+/** The intro a montage opens with, with all it draws (see lib/intro) */
+export interface MontageIntro {
+  style: string;
+  title: string;
+  /** The channel's name and logo */
+  name: string;
+  logo: string | null;
+  colors: { accent: string; highlight: string; dark: string; light: string };
+  /** Font family of the title */
+  font: string;
+  /**
+   * Its sound. In the page: the address of the file, played with the preview. To the
+   * renderer: its name; the export mixes it in once the video's own sound is levelled.
+   */
+  sound?: string;
+}
+
 export interface MontageProps {
   segments: MontageSegment[];
   /** Layers on the montage's own clock (hook line, widgets, section titles) */
   overlays: PlacedLayer[];
+  /** A jingle before the first piece: the pieces and the overlays start once it has held the screen */
+  intro?: MontageIntro;
   // Remotion's props are a record
   [key: string]: unknown;
 }
@@ -252,9 +272,12 @@ const chatIn = (chat: ChatMessage[] | undefined, start: number, end: number) => 
 
 export const framesOf = (seconds: number, fps: number) => Math.max(1, Math.round(seconds * fps));
 
-/** Frames of the whole montage */
-export function montageFrames(segments: { duration: number }[], fps: number): number {
-  return segments.reduce((sum, s) => sum + framesOf(s.duration, fps), 0);
+/** Frames the intro holds the screen before the first piece (0: no intro) */
+export const introHold = (intro: { style: string } | null | undefined, fps: number): number => (intro && isIntro(intro.style) ? introSpan(intro.style, fps).hold : 0);
+
+/** Frames of the whole montage, its intro included */
+export function montageFrames(segments: { duration: number }[], fps: number, intro?: { style: string } | null): number {
+  return introHold(intro, fps) + segments.reduce((sum, s) => sum + framesOf(s.duration, fps), 0);
 }
 
 /**

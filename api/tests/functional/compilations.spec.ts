@@ -204,6 +204,27 @@ test.group('Compilations', (group) => {
     ;(await client.delete(`${url}/${compilation.id}`).loginAs(user)).assertStatus(404)
   })
 
+  test('keeps the intro a video opens with, counts it in its length, and forgets it when it goes', async ({ client, assert }) => {
+    const { user, job } = await setup()
+    const url = `/api/jobs/${job.id}/compilations`
+    const { compilation } = (await client.post(url).loginAs(user).json({ name: 'Calme' })).body() as any
+    const sections = [{ id: compilation.sections[0].id, title: '', query: '', items: [item('aaaaaaaaaa', 100, 104)] }]
+    const save = async (intro: unknown) => ((await client.put(`${url}/${compilation.id}`).loginAs(user).json({ ...compilation, sections, ...(intro === undefined ? {} : { intro }) })).body() as any).compilation
+
+    // Its style, a title of its own, a sound of its own
+    assert.deepEqual((await save({ style: 'slam', title: '  Le calme avant  ', sound: 'drum', colour: 'red' })).intro, { style: 'slam', title: 'Le calme avant', sound: 'drum' })
+    assert.deepEqual((await save({ style: 'neon', sound: 'none' })).intro, { style: 'neon', sound: 'none' })
+    // A sound nobody knows: the style's own will play
+    assert.deepEqual((await save({ style: 'card', sound: 'kazoo' })).intro, { style: 'card' })
+    // The card says how long the video is with it: 4 s of passages and 1.9 s of intro
+    const lives = ((await client.get('/api/compilations').loginAs(user)).body() as any).lives
+    assert.equal(lives[0].compilations[0].length, 5.9)
+    // An intro this server can't draw is not kept; no intro sent: the one it had is gone
+    assert.notProperty(await save({ style: 'wobble' }), 'intro')
+    await save({ style: 'slam' })
+    assert.notProperty(await save(undefined), 'intro')
+  })
+
   test('lists every live with its compilations, says which are exported, and duplicates one with clips of its own', async ({ client, assert }) => {
     const { user, job, dir } = await setup()
     const url = `/api/jobs/${job.id}/compilations`
@@ -528,6 +549,14 @@ test.group('Compilations', (group) => {
     const missing = await client.post(url).loginAs(user).json({ pieces: [{ ...pieces[0], transition: 'slide' }], overlays: [] })
     missing.assertStatus(404)
     assert.deepEqual(missing.body(), { error: 'clip not found', clip: 'a.mp4' })
+
+    // An intro: one this server draws, with the colours and the sound it knows, or the export is refused
+    const intro = { style: 'slam', title: 'De calme à débordés', name: 'Falkarst', logo: 'https://static-cdn.jtvnw.net/logo.png', colors: { accent: '#42BF85', highlight: '#F7C502', dark: '#19405A', light: '#BDF3DA' }, font: '"Luckiest Guy"', sound: 'boom' }
+    for (const bad of [{ ...intro, style: 'wobble' }, { ...intro, sound: 'kazoo' }, { ...intro, colors: { ...intro.colors, accent: 'url(evil)' } }, { ...intro, font: 'x; background: url(evil)' }, 'slam']) {
+      ;(await client.post(url).loginAs(user).json({ pieces, overlays: [], intro: bad })).assertStatus(400)
+    }
+    // A well-formed one gets as far as the clips
+    ;(await client.post(url).loginAs(user).json({ pieces, overlays: [], intro })).assertStatus(404)
 
     // With its clip there, the export is queued under what it stands for
     writeFileSync(path.join(dir, 'a.mp4'), '')

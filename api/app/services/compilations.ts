@@ -62,6 +62,8 @@ export interface Compilation {
   target: number | null
   /** The ready-made transition between its passages (absent: plain cuts) */
   transition?: string
+  /** The jingle it opens with (absent: none) */
+  intro?: Intro
   /** Described to the AI: what the streamer first asked for, then each change asked and what the AI answered */
   brief?: string
   asks?: { ask: string; note: string; added?: number; removed?: number; recut?: number }[]
@@ -94,6 +96,41 @@ export const isPieceId = (value: unknown): value is string => typeof value === '
 /** The ready-made transitions between two pieces (drawn by api/remotion/transitions.ts) */
 export const TRANSITIONS = ['flash', 'zoom', 'slide', 'swipe', 'shake', 'pop', 'fade']
 export const isTransition = (value: unknown): value is string => typeof value === 'string' && TRANSITIONS.includes(value)
+
+/**
+ * The ready-made intros (drawn by api/remotion/intro): how long each holds the screen before the
+ * video starts, then how long it takes to leave over the first piece, in frames at 30 a second.
+ * And the sound effects one can play (api/public/sounds/intro-<id>.mp3).
+ */
+export const INTROS: Record<string, [number, number]> = { slam: [48, 8], bands: [54, 12], glitch: [45, 6], neon: [60, 10], card: [57, 12] }
+export const INTRO_SOUNDS = ['boom', 'swish', 'zap', 'shine', 'drum']
+export const isIntro = (value: unknown): value is string => typeof value === 'string' && Object.hasOwn(INTROS, value)
+export const isIntroSound = (value: unknown): value is string => typeof value === 'string' && INTRO_SOUNDS.includes(value)
+
+/** The intro a compilation keeps: its style, its own title (else the video's name), its sound (else its style's; "none": silent) */
+export interface Intro {
+  style: string
+  title?: string
+  sound?: string
+}
+
+/** An intro as the app sends it, null when it isn't one this server can draw */
+export function parseIntro(raw: any): Intro | null {
+  if (!raw || typeof raw !== 'object' || !isIntro(raw.style)) return null
+  const title = typeof raw.title === 'string' ? raw.title.trim().slice(0, 80) : ''
+  return { style: raw.style, ...(title ? { title } : {}), ...(isIntroSound(raw.sound) || raw.sound === 'none' ? { sound: raw.sound } : {}) }
+}
+
+/** Frames an intro holds the screen before the first piece, at the video's own rate (0: not an intro) */
+export const introFrames = (style: unknown, fps: number): number => (isIntro(style) ? Math.max(1, Math.round((INTROS[style][0] * fps) / 30)) : 0)
+
+/** When an intro's sound fades out, seconds: from where the video starts, for as long as the intro takes to leave and a little more */
+export function introFade(style: unknown): { at: number; for: number } | null {
+  return isIntro(style) ? { at: INTROS[style][0] / 30, for: (INTROS[style][1] + 24) / 30 } : null
+}
+
+/** Seconds an intro adds to the video */
+export const introSeconds = (intro: Intro | undefined | null): number => (intro && isIntro(intro.style) ? INTROS[intro.style][0] / 30 : 0)
 
 const JOB_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 export const isJobId = (value: unknown): value is string => typeof value === 'string' && JOB_ID.test(value)
@@ -172,6 +209,7 @@ export function parseCompilation(raw: any, liveDuration: number, others?: Map<st
     hook: text(raw.hook, 120),
     target: Number.isFinite(target) && target >= 5 && target <= 1800 ? Math.round(target) : null,
     ...(isTransition(raw.transition) ? { transition: raw.transition } : {}),
+    ...(parseIntro(raw.intro) ? { intro: parseIntro(raw.intro)! } : {}),
     ...(lives.length > 0 ? { lives } : {}),
     ...(text(raw.brief, MAX_BRIEF) ? { brief: text(raw.brief, MAX_BRIEF) } : {}),
     // What the AI answered to the description: what it built and why
@@ -246,7 +284,8 @@ export function summarizeCompilation(jobId: string, c: Compilation) {
   return {
     id: c.id,
     name: c.name,
-    length: Math.round(compilationLength(c) * 10) / 10,
+    // Its intro is part of the video
+    length: Math.round((compilationLength(c) + introSeconds(c.intro)) * 10) / 10,
     passages: items.length,
     parts: c.sections.filter((s) => s.items.length > 0).length,
     described: !!c.brief,

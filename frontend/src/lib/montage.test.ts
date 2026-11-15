@@ -198,6 +198,9 @@ describe("montage for Remotion", () => {
     expect(framesOf(4, 30)).toBe(120);
     expect(framesOf(0.01, 30)).toBe(1);
     expect(montageFrames([{ duration: 4 }, { duration: 3.02 }], 30)).toBe(120 + 91);
+    // An intro holds the screen first: the video is that much longer (one this app doesn't know adds nothing)
+    expect(montageFrames([{ duration: 4 }], 30, { style: "slam" })).toBe(48 + 120);
+    expect(montageFrames([{ duration: 4 }], 30, { style: "wobble" })).toBe(120);
   });
 
   it("gives each piece the template's layers on the clip's clock, and lays the hook and widgets once over the whole", () => {

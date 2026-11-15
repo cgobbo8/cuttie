@@ -1628,9 +1628,35 @@
     "openEditor": "Open in the editor",
     "editorPreparing": "Preparing the video…",
     "editorHint": "In the editor, the video is a single clip: everything is retouched layer by layer.",
-    "editorLoses": "It has one layout for the whole video: transitions and the templates some passages have for themselves are not carried over.",
+    "editorLoses": "It has one layout for the whole video: the intro, transitions and the templates some passages have for themselves are not carried over.",
     "editorFailed": "The video could not be prepared for the editor.",
-    "editorKept": "You get back what you had done in the editor."
+    "editorKept": "You get back what you had done in the editor.",
+    "intro": {
+      "label": "Intro",
+      "hint": "A jingle with your logo and the title, before the first passage",
+      "on": "{{name}} · {{seconds}} s more",
+      "none": "None",
+      "pick": "The video's intro",
+      "title": "Title of the intro",
+      "sound": "Sound",
+      "soundOfStyle": "{{name}} (the style's own)",
+      "noSound": "No sound",
+      "style": {
+        "slam": "Impact",
+        "bands": "Bands",
+        "glitch": "Glitch",
+        "neon": "Neon",
+        "card": "Title card"
+      },
+      "sounds": {
+        "boom": "Impact",
+        "swish": "Whoosh",
+        "zap": "Static",
+        "shine": "Shine",
+        "drum": "Drums"
+      },
+      "chosen": "Intro chosen by the AI: {{name}}"
+    }
   },
   "compilations": {
     "title": "Compilations",

@@ -8,6 +8,9 @@
  *   maintained by hand on each side.
  * - transitions between the pieces of a montage: frontend/src/lib/transitions.ts ->
  *   api/remotion/transitions.ts, copied as is.
+ * - intros of a compilation: frontend/src/lib/intro/* -> api/remotion/intro, copied as is,
+ *   and their sounds frontend/public/sounds/*.mp3 -> api/public/sounds (the export mixes
+ *   them in; they are made by scripts/make-intro-sounds.py).
  *
  * Run after adding a font or touching a widget: node scripts/sync-remotion.mjs
  * (frontend/src/lib/remotionSync.test.ts fails when they drift apart).
@@ -52,4 +55,15 @@ for (const file of readdirSync(from)) {
 
 copyFileSync(path.join(root, "frontend/src/lib/transitions.ts"), path.join(root, "api/remotion/transitions.ts"));
 
-console.log(`Synced ${CLIP_FONTS.length} fonts, ${widgets} widgets and the transitions into api/`);
+/** Every file of a folder that matches, copied as is */
+function mirror(source, target, keep) {
+  mkdirSync(path.join(root, target), { recursive: true });
+  const files = readdirSync(path.join(root, source)).filter((file) => keep.test(file));
+  for (const file of files) copyFileSync(path.join(root, source, file), path.join(root, target, file));
+  return files.length;
+}
+// The tests of the intros stay with the editor
+const intros = mirror("frontend/src/lib/intro", "api/remotion/intro", /^(?!.*\.test\.).*\.tsx?$/);
+const sounds = mirror("frontend/public/sounds", "api/public/sounds", /\.mp3$/);
+
+console.log(`Synced ${CLIP_FONTS.length} fonts, ${widgets} widgets, the transitions, ${intros} intro files and ${sounds} sounds into api/`);

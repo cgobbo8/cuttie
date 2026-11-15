@@ -1213,7 +1213,7 @@ export interface MontageRenderPiece {
  */
 export async function startMontageRender(
   jobId: string,
-  montage: { key: string; name?: string; pieces: MontageRenderPiece[]; overlays: { layer: unknown; z: number }[] },
+  montage: { key: string; name?: string; pieces: MontageRenderPiece[]; overlays: { layer: unknown; z: number }[]; intro?: { style: string; title: string; name: string; logo: string | null; colors: BrandColors; font: string; sound?: string } },
   renderOptions?: { width?: number; height?: number; fps?: number },
 ): Promise<string> {
   const res = await fetch(`${BASE}/jobs/${jobId}/montage-render`, {
@@ -1487,6 +1487,8 @@ export interface Compilation {
   target: number | null;
   /** The ready-made transition between its passages (absent: plain cuts) */
   transition?: string;
+  /** The jingle it opens with (absent: none): its style, its own title (else the video's name), its sound (else its style's; "none": silent) */
+  intro?: { style: string; title?: string; sound?: string };
   /** Described to the AI: what was first asked for, then each change asked and what the AI answered */
   brief?: string;
   /** What the AI answered to the description: what it built and why */

@@ -1,5 +1,7 @@
-import { AbsoluteFill, Freeze, Sequence, Series, useCurrentFrame, useVideoConfig } from "remotion";
-import { framesOf, type MontageProps, type MontageSegment } from "../../lib/montage";
+import { AbsoluteFill, Audio, Freeze, Img, Sequence, Series, useCurrentFrame, useVideoConfig } from "remotion";
+import IntroCard, { INTRO_W } from "../../lib/intro/IntroCard";
+import { introFade, introSpan, introVolume, isIntro } from "../../lib/intro/intros";
+import { framesOf, type MontageIntro, type MontageProps, type MontageSegment } from "../../lib/montage";
 import { isTransition, lookStyle, transitionAt } from "../../lib/transitions";
 import { audibleLayerId, LayerBox } from "./CuttieComposition";
 
@@ -49,17 +51,43 @@ function Piece({ segment, before, next }: { segment: MontageSegment; before?: Mo
   );
 }
 
+/** How loud an intro's sound plays in the page. The export sets it against the video's levelled sound instead */
+const INTRO_VOLUME = 0.5;
+
+/** The intro, above everything: drawn in its own 1080-wide box, brought to the video's size */
+function Intro({ intro }: { intro: MontageIntro }) {
+  const frame = useCurrentFrame();
+  const { fps, width } = useVideoConfig();
+  if (!isIntro(intro.style)) return null;
+  return (
+    <AbsoluteFill style={{ zIndex: 100000, pointerEvents: "none" }}>
+      <div style={{ transform: `scale(${width / INTRO_W})`, transformOrigin: "0 0" }}>
+        <IntroCard id={intro.style} frame={frame} fps={fps} title={intro.title} name={intro.name} logo={intro.logo} colors={intro.colors} font={intro.font} Img={Img} />
+      </div>
+    </AbsoluteFill>
+  );
+}
+
 /**
  * Several pieces one after the other (mirrors api/remotion/MontageComposition.tsx).
  * Each piece plays its clip from where it was cut: inside it, the clock is the
  * clip's, so its videos, subtitles and chat need nothing special. The hook
- * line and the widgets sit above, on the montage's own clock.
+ * line and the widgets sit above, on the montage's own clock. An intro holds
+ * the screen first: pieces and overlays start after it, and it leaves over the
+ * first frames of the first piece.
  */
-export default function MontageComposition({ segments, overlays }: MontageProps) {
+export default function MontageComposition({ segments, overlays, intro }: MontageProps) {
   const { fps } = useVideoConfig();
+  const opening = intro && isIntro(intro.style) ? introSpan(intro.style, fps) : null;
   return (
     <AbsoluteFill style={{ background: "#000" }}>
       <Series>
+        {/* Nothing of the video plays while the intro holds the screen (a sequence of a series can't be empty) */}
+        {opening && (
+          <Series.Sequence durationInFrames={opening.hold}>
+            <AbsoluteFill />
+          </Series.Sequence>
+        )}
         {segments.map((segment, i) => (
           // Mounted a second early: the next piece's videos are already at the right frame at the cut
           <Series.Sequence key={i} durationInFrames={framesOf(segment.duration, fps)} premountFor={fps}>
@@ -68,8 +96,21 @@ export default function MontageComposition({ segments, overlays }: MontageProps)
         ))}
       </Series>
       {overlays.map(({ layer, z }) => (
-        <LayerBox key={layer.id} layer={layer} z={z + 1} audible={false} />
+        <Sequence key={layer.id} from={opening?.hold ?? 0} layout="none">
+          <LayerBox layer={layer} z={z + 1} audible={false} />
+        </Sequence>
       ))}
+      {opening && intro && (
+        <Sequence durationInFrames={opening.hold + opening.out} layout="none">
+          <Intro intro={intro} />
+        </Sequence>
+      )}
+      {opening && intro?.sound && isIntro(intro.style) && (
+        // It fades out as the video starts: a sound longer than its intro doesn't play on over the first words
+        <Sequence durationInFrames={opening.hold + introFade(intro.style, fps).frames} layout="none">
+          <Audio src={intro.sound} volume={(f) => INTRO_VOLUME * introVolume(f, intro.style as Parameters<typeof introVolume>[1], fps)} />
+        </Sequence>
+      )}
     </AbsoluteFill>
   );
 }

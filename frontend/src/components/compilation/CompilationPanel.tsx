@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type RefObject } from "react";
 import { useTranslation } from "react-i18next";
-import { ArrowDown, ArrowRight, ArrowUp, Blend, Check, FolderInput, Layers, Loader2, Plus, Sparkles, Trash2, X, LayoutTemplate } from "lucide-react";
+import { ArrowDown, ArrowRight, ArrowUp, Blend, Check, Clapperboard, FolderInput, Layers, Loader2, Plus, Sparkles, Trash2, X, LayoutTemplate } from "lucide-react";
 import type { Compilation, CompilationItem, CompilationSection, TwitchStoryboard } from "../../lib/api";
 import {
   PLAIN_CUT,
@@ -25,6 +25,8 @@ import {
 import { clock } from "../../lib/format";
 import { frameAt, tileStyle } from "../../lib/storyboard";
 import { useToast } from "../Toast";
+import { introSeconds, isIntro } from "../../lib/intro/intros";
+import IntroPicker, { type IntroBrand } from "./IntroPicker";
 import TransitionPicker from "./TransitionPicker";
 
 interface Props {
@@ -67,6 +69,8 @@ interface Props {
   /** The whole video opened in the layer editor, as one clip (`editing`: it is being made) */
   onEdit?: () => void;
   editing?: boolean;
+  /** What an intro is drawn with (the channel's logo and colours); without it the video's intro can't be chosen here */
+  brand?: IntroBrand;
 }
 
 /** Where passages being dragged would land: in a part, before one of its passages (null: at its end) */
@@ -178,6 +182,7 @@ export default function CompilationPanel({
   playing,
   onEdit,
   editing = false,
+  brand,
 }: Props) {
   const { t, i18n } = useTranslation();
   const toast = useToast();
@@ -213,7 +218,7 @@ export default function CompilationPanel({
   }, [picked.size]);
 
   // What is open: the list of parts to move the picked passages to, or the transitions (of the video, of the picked ones, of one passage)
-  const [menu, setMenu] = useState<"move" | "video" | "picked" | { item: string } | null>(null);
+  const [menu, setMenu] = useState<"move" | "video" | "picked" | "intro" | { item: string } | null>(null);
   const partName = (section: CompilationSection, among = compilation.sections) => section.title.trim() || t("compilation.partN", { n: among.indexOf(section) + 1 });
   const moveTo = (sectionId: string | null) => {
     setMenu(null);
@@ -265,7 +270,9 @@ export default function CompilationPanel({
     first?.scrollIntoView({ block: "center", behavior: "smooth" });
   }, [fresh, freshAt]);
   const ownLooks = allItems(compilation).filter((item) => item.template).length;
-  const total = compilationLength(compilation);
+  // The intro is part of the video: it counts in its length
+  const opening = introSeconds(compilation.intro);
+  const total = compilationLength(compilation) + opening;
   const count = allItems(compilation).length;
   // About half a tenth of a cent per passage looked at (measured): said before asking
   const dollars = (cost: number) => `${new Intl.NumberFormat(i18n.language, { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(cost)} $`;
@@ -479,7 +486,7 @@ export default function CompilationPanel({
               <span className={`mono font-semibold ${over ? "text-[#F5B14C]" : "text-white"}`}>{clock(total)}</span> · {t("compilation.moments", { count })}
             </span>
             {over && (
-              <button onClick={() => onChange(fitToTarget(compilation, target!))} className="btn btn-glass btn-sm h-7 px-2.5">
+              <button onClick={() => onChange(fitToTarget(compilation, target! - opening))} className="btn btn-glass btn-sm h-7 px-2.5">
                 {t("compilation.fit", { length: clock(target!) })}
               </button>
             )}
@@ -556,6 +563,37 @@ export default function CompilationPanel({
             )}
           </span>
         </div>
+        {/* A jingle before the first passage: the channel's logo and colours, the video's title */}
+        {brand && (
+          <div className="flex items-center gap-3">
+            <span className="flex-1 min-w-0">
+              <span className="block text-[13.5px] font-[550] text-white">{t("compilation.intro.label")}</span>
+              <span className="block text-[12px] text-ink-3">
+                {isIntro(compilation.intro?.style)
+                  ? t("compilation.intro.on", { name: t(`compilation.intro.style.${compilation.intro.style}`), seconds: new Intl.NumberFormat(i18n.language, { maximumFractionDigits: 1 }).format(opening) })
+                  : t("compilation.intro.hint")}
+              </span>
+            </span>
+            <span className="relative flex-none">
+              <button onClick={() => setMenu(menu === "intro" ? null : "intro")} aria-haspopup="dialog" aria-expanded={menu === "intro"} className="btn btn-glass btn-sm h-9 px-3">
+                <Clapperboard className="w-3.5 h-3.5 text-accent" /> {isIntro(compilation.intro?.style) ? t(`compilation.intro.style.${compilation.intro.style}`) : t("compilation.intro.none")}
+              </button>
+              {menu === "intro" && (
+                <IntroPicker
+                  value={compilation.intro ?? null}
+                  brand={brand}
+                  name={compilation.name}
+                  onChange={(next) => {
+                    const { intro: _before, ...rest } = compilation;
+                    onChange(next ? { ...rest, intro: next } : rest);
+                  }}
+                  onClose={() => setMenu(null)}
+                  className="right-0 bottom-full mb-2"
+                />
+              )}
+            </span>
+          </div>
+        )}
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <button onClick={onLooks} disabled={count === 0 || looking || cutting.size > 0} className="btn btn-glass btn-sm flex-1 min-w-[190px]">
@@ -596,7 +634,7 @@ export default function CompilationPanel({
               <p className="px-0.5 text-[12px] leading-snug text-ink-3">
                 {t("compilation.editorHint")}
                 {/* The editor has one layout for the whole video: said when this one has more */}
-                {(own > 0 || !!compilation.transition || ownLooks > 0) && <span className="text-[#f0c987]"> {t("compilation.editorLoses")}</span>}
+                {(own > 0 || !!compilation.transition || ownLooks > 0 || !!compilation.intro) && <span className="text-[#f0c987]"> {t("compilation.editorLoses")}</span>}
               </p>
             </>
           )}

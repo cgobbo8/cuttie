@@ -1,0 +1,21 @@
+# Musiques de fond
+
+Pistes téléchargées sur Pixabay Music par Corentin (licence de contenu Pixabay : utilisation libre, y compris dans des vidéos publiées, sans obligation de citer l'auteur). Merci à leurs auteurs.
+
+| Fichier | Titre | Auteur | Source |
+|---|---|---|---|
+| `phonk.mp3` | Drift Phonk | sub_clair | pixabay.com, 550480 (`sub_clair-drift-phonk-550480.mp3`) |
+| `phonk2.mp3` | Drift Phonk II | sub_clair | pixabay.com, 607579 (`sub_clair-drift-phonk-607579.mp3`) |
+| `phonk3.mp3` | Night Drift | zephiramusic | pixabay.com, 616472 (`zephiramusic-drift-phonk-616472.mp3`) |
+| `hiphop.mp3` | Energetic Hip-Hop | skilsel | pixabay.com, 8303 (`skilsel-energetic-hip-hop-8303.mp3`) |
+| `stream.mp3` | Stream Starting | the_mountain | pixabay.com, 593068 (`the_mountain-stream-starting-593068.mp3`) |
+| `vlog.mp3` | Vlog Intro | kulakovka | pixabay.com, 298919 (`kulakovka-vlog-intro-298919.mp3`) |
+| `synthwave.mp3` | Arcade Retro Nights | alex-morgan | pixabay.com, 573647 (`alex-morgan-synthwave-arcade-retro-nights-573647.mp3`) |
+| `chiptune.mp3` | Pixel Chiptune | alex-morgan | pixabay.com, 583271 (`alex-morgan-video-game-pixel-chiptune-music-583271.mp3`) |
+| `pixel.mp3` | Pixel Art Soundtrack | echoes_of_lumen | pixabay.com, 588667 (`echoes_of_lumen-pixel-art-game-soundtrack-chiptune-588667.mp3`) |
+| `retro.mp3` | 8-Bit Retro | the_mountain | pixabay.com, 522443 (`the_mountain-8-bit-retro-522443.mp3`) |
+| `lofi.mp3` | Lofi Upbeat | jonasblakewood | pixabay.com, 583358 (`jonasblakewood-lofi-upbeat-lofi-upbeat-music-583358.mp3`) |
+| `lofi2.mp3` | Lofi Upbeat II | kulakovka | pixabay.com, 611601 (`kulakovka-lofi-upbeat-611601.mp3`) |
+| `chill.mp3` | Chill Lo-Fi | zephiramusic | pixabay.com, 585361 (`zephiramusic-chill-lo-fi-585361.mp3`) |
+
+Réencodées en 128 kb/s par `scripts/make-musics.py`. Ce que chaque piste est (types de vidéo, description, mesures) : `catalogue.json`.

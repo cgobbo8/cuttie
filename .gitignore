@@ -20,9 +20,6 @@ backend/screenshots/
 
 # API data
 api/database/
-# The background musics themselves (scripts/make-musics.py puts them there): whether they go in
-# this public repository is still to be decided. Their catalogue is tracked.
-api/public/musics/*.mp3
 
 # Frontend
 frontend/node_modules/

@@ -1685,7 +1685,11 @@
         "neon": "Neon",
         "rush": "Speed",
         "sticker": "Stickers",
-        "split": "Versus"
+        "split": "Versus",
+        "arcade": "Arcade",
+        "news": "Breaking news",
+        "shatter": "Shatter",
+        "countdown": "Countdown"
       },
       "sounds": {
         "boom": "Impact",
@@ -1694,12 +1698,17 @@
         "shine": "Shine",
         "drum": "Drums",
         "rush": "Rush",
-        "clash": "Clash"
+        "clash": "Clash",
+        "coin": "Coin",
+        "sting": "News sting",
+        "glass": "Broken glass",
+        "beep": "Beeps"
       },
       "chosen": "Intro chosen by the AI: {{name}}",
       "followLabel": "Follow",
       "followDone": "Following",
-      "followToggle": "The channel's “Follow” button"
+      "followToggle": "The channel's “Follow” button",
+      "noneHint": "Without an intro, the video starts straight away. Pick one to set its sound and the follow button."
     },
     "music": {
       "label": "Music",
@@ -1736,7 +1745,14 @@
         "retro": "Fast, cheerful 8-bit. For funny moments and compilations.",
         "lofi": "Relaxed lofi, light drums, airy synths. For conversations.",
         "lofi2": "Laid-back lofi with light synths. For conversations and quiet moments.",
-        "chill": "Slow, soft lo-fi that stays far back. For conversations and calm play."
+        "chill": "Slow, soft lo-fi that stays far back. For conversations and calm play.",
+        "tension": "Slow, bare electronic with synth pads. To build tension or sit under a calm conversation.",
+        "tension2": "Muted electronic, light drums, synth pads. For tense moments and quiet storytelling.",
+        "grave": "Grave, tense atmosphere with minimal drums. For suspense and calm moments.",
+        "suspense": "Dark synths and driving drums. For suspense and plays where everything is at stake.",
+        "trap": "Energetic trap with punchy synths. For highlights and big plays.",
+        "sneaky": "Bouncy beat and mischievous synths, meme style. For funny moments and fails.",
+        "quirky": "Playful piano and light drums. For funny moments and relaxed conversations."
       },
       "unsorted": "Others"
     },

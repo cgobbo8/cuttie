@@ -1685,7 +1685,11 @@
         "neon": "Néon",
         "rush": "Vitesse",
         "sticker": "Stickers",
-        "split": "Duel"
+        "split": "Duel",
+        "arcade": "Arcade",
+        "news": "Flash info",
+        "shatter": "Éclats",
+        "countdown": "Décompte"
       },
       "sounds": {
         "boom": "Impact",
@@ -1694,12 +1698,17 @@
         "shine": "Éclat",
         "drum": "Tambours",
         "rush": "Élan",
-        "clash": "Choc"
+        "clash": "Choc",
+        "coin": "Pièce",
+        "sting": "Jingle info",
+        "glass": "Verre brisé",
+        "beep": "Bips"
       },
       "chosen": "Intro choisie par l'IA : {{name}}",
       "followLabel": "Suivre",
       "followDone": "Suivi",
-      "followToggle": "Bouton « Suivre » de la chaîne"
+      "followToggle": "Bouton « Suivre » de la chaîne",
+      "noneHint": "Sans intro, la vidéo commence directement. Choisis-en une pour régler son bruitage et le bouton « Suivre »."
     },
     "music": {
       "label": "Musique",
@@ -1736,7 +1745,14 @@
         "retro": "8-bit rapide et joyeux. Pour les moments drôles et les compilations.",
         "lofi": "Lofi détendue, percussions légères, synthés aériens. Pour les discussions.",
         "lofi2": "Lofi posée aux synthés légers. Pour les discussions et les moments tranquilles.",
-        "chill": "Lo-fi lente et douce, très en retrait. Pour les discussions et le jeu calme."
+        "chill": "Lo-fi lente et douce, très en retrait. Pour les discussions et le jeu calme.",
+        "tension": "Électro lente et dépouillée, nappes de synthés. Pour faire monter la tension ou accompagner une discussion calme.",
+        "tension2": "Électro feutrée, percussions légères, nappes de synthés. Pour les moments de tension et les récits posés.",
+        "grave": "Atmosphère grave et tendue, percussions minimales. Pour le suspense et les moments calmes.",
+        "suspense": "Synthés sombres et percussions qui avancent. Pour le suspense et les actions où tout se joue.",
+        "trap": "Trap énergique aux synthés percutants. Pour les temps forts et les grosses actions.",
+        "sneaky": "Rythme sautillant et synthés malicieux, façon mème. Pour les moments drôles et les fails.",
+        "quirky": "Piano espiègle et percussions légères. Pour les moments drôles et les discussions détendues."
       },
       "unsorted": "Autres"
     },

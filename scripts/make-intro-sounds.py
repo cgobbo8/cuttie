@@ -233,7 +233,92 @@ def clash() -> np.ndarray:
     return room(track, 0.55, 0.18)
 
 
-SOUNDS = {"boom": boom, "swish": swish, "zap": zap, "shine": shine, "rush": rush, "drum": drum, "clash": clash}
+def square(freq: float, seconds: float) -> np.ndarray:
+    """An old console's voice: a square wave with a short tail."""
+    x = t(seconds)
+    return np.sign(np.sin(2 * np.pi * freq * x)) * np.minimum(1, (seconds - x) / 0.02)
+
+
+def coin() -> np.ndarray:
+    """An arcade screen: the tube thumps on, blips as the logo comes block by block, a coin drops (0.87 s), the tube goes out."""
+    track = np.zeros(int(2.25 * SR))
+    place(track, thud(0.35, 90, 50, 14), 0.0, 0.7)
+    x = t(0.25)
+    place(track, np.sin(2 * np.pi * np.cumsum(2000 + 9000 * x / 0.25) / SR) * (1 - x / 0.25) * 0.5, 0.0, 0.12)
+    for i in range(9):
+        place(track, square(float(rng.choice([392, 523, 659, 784, 1047])), 0.035), 0.2 + i * 0.06, 0.13)
+    place(track, square(987.8, 0.07), 0.87, 0.28)
+    place(track, square(1318.5, 0.32) * np.exp(-t(0.32) * 5), 0.94, 0.28)
+    # Out: a tone that falls away as the picture shrinks to a dot
+    x = t(0.22)
+    place(track, np.sin(2 * np.pi * np.cumsum(700 * np.exp(-x * 12) + 50) / SR) * np.exp(-x * 9), 1.87, 0.55)
+    follow(track, 1.867)
+    return lowpass(room(track, 0.3, 0.1), 9000)
+
+
+def sting() -> np.ndarray:
+    """A news ident: three notes stabbed out as the banner slams across, a drum under the last, a chord held while the title opens."""
+    track = np.zeros(int(2.2 * SR))
+
+    def brass(freq: float, seconds: float) -> np.ndarray:
+        x = t(seconds)
+        tone = sum(signal.sawtooth(2 * np.pi * freq * detune * x) for detune in (1.0, 1.006, 0.5))
+        return lowpass(tone, 2600) * np.minimum(1, x / 0.012) * np.exp(-x * (2.2 / seconds))
+
+    for freq, at, length in ((392.0, 0.27, 0.13), (523.3, 0.4, 0.13), (659.3, 0.53, 0.9)):
+        place(track, brass(freq, length), at, 0.34)
+    for freq in (261.6, 392.0):
+        place(track, brass(freq, 0.9), 0.53, 0.2)
+    place(track, thud(0.8, 120, 55, 6), 0.53, 0.55)
+    place(track, sweep(0.3, 500, 4500, "up"), 0.0, 0.4)
+    # The set lifts away
+    place(track, sweep(0.4, 900, 5200, "up"), 1.78, 0.4)
+    follow(track, 1.8)
+    return room(track, 0.5, 0.16)
+
+
+def glass() -> np.ndarray:
+    """The logo hits the screen, which cracks (0.27 s); then the whole screen falls in pieces (1.67 s)."""
+    track = np.zeros(int(2.3 * SR))
+    place(track, sweep(0.28, 300, 4200, "up"), 0.0, 0.5)
+    place(track, thud(1.0, 150, 42, 4.5), 0.27, 0.75)
+    crack = highpass(rng.standard_normal(int(0.12 * SR)), 4000) * np.exp(-t(0.12) * 45)
+    place(track, crack, 0.27, 0.6)
+    place(track, crack[::-1] * 0.4, 0.4, 0.5)
+
+    def shard(freq: float) -> np.ndarray:
+        x = t(0.4)
+        return (np.sin(2 * np.pi * freq * x) + 0.5 * np.sin(2 * np.pi * freq * 2.41 * x)) * np.exp(-x * rng.uniform(12, 30))
+
+    # Glass: many small bright rings, none at the same time or the same pitch
+    for _ in range(26):
+        place(track, shard(rng.uniform(2200, 7500)), 1.67 + rng.uniform(0, 0.32), rng.uniform(0.1, 0.26))
+    place(track, highpass(rng.standard_normal(int(0.35 * SR)), 3000) * np.exp(-t(0.35) * 11), 1.67, 0.5)
+    place(track, thud(0.4, 110, 50, 12), 1.67, 0.6)
+    follow(track, 1.667)
+    return room(track, 0.4, 0.14)
+
+
+def beep() -> np.ndarray:
+    """A film leader: a beep for 3, for 2, for 1 (every 0.3 s), then the logo and the title hit (0.9 s)."""
+    track = np.zeros(int(2.5 * SR))
+    x = t(0.09)
+    tone = np.sin(2 * np.pi * 1000 * x) * np.minimum(1, np.minimum(x, 0.09 - x) / 0.006)
+    for at in (0.0, 0.3, 0.6):
+        place(track, tone, at, 0.42)
+    # The projector running under the count
+    flick = lowpass(rng.standard_normal(int(0.9 * SR)), 1800) * (0.5 + 0.5 * np.sign(np.sin(2 * np.pi * 24 * t(0.9)))) * 0.05
+    place(track, flick, 0.0)
+    place(track, np.sin(2 * np.pi * 2000 * t(0.22)) * np.exp(-t(0.22) * 9), 0.9, 0.3)
+    place(track, thud(1.1, 160, 42, 4), 0.9, 1.0)
+    place(track, highpass(rng.standard_normal(int(0.8 * SR)), 3500) * np.exp(-t(0.8) * 6), 0.9, 0.28)
+    place(track, bell(1.0, 523.3, 4), 0.95, 0.14)
+    place(track, sweep(0.3, 1200, 6500, "up"), 1.95, 0.3)
+    follow(track, 2.0)
+    return room(track, 0.5, 0.16)
+
+
+SOUNDS = {"boom": boom, "swish": swish, "zap": zap, "shine": shine, "rush": rush, "drum": drum, "clash": clash, "coin": coin, "sting": sting, "glass": glass, "beep": beep}
 
 
 def main() -> int:

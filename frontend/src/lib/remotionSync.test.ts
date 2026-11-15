@@ -55,6 +55,12 @@ describe("editor and server renderer stay in sync", () => {
     expect(sounds).toEqual([...INTRO_SOUND_IDS]);
   });
 
+  it("tells the AI about every intro there is, and no other", () => {
+    const worker = readFileSync(path.join(root, "backend/app/services/looks.py"), "utf-8");
+    const described = [...(worker.match(/^INTROS = \{([\s\S]*?)^\}/m)?.[1] ?? "").matchAll(/^\s+"(\w+)": /gm)].map((m) => m[1]);
+    expect(described).toEqual([...INTRO_IDS]);
+  });
+
   it("mixes the music with the curve the preview plays, and reads the same catalogue", () => {
     const same = (front: string, server: string) => {
       expect(existsSync(path.join(root, server)), `${server} missing: run node scripts/sync-remotion.mjs`).toBe(true);

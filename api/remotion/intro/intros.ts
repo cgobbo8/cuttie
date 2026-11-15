@@ -10,12 +10,12 @@
  * which is already playing underneath (nothing of the video is covered for
  * long, and its sound starts on time).
  */
-export const INTRO_IDS = ["slam", "bands", "glitch", "neon", "rush", "sticker", "split"] as const;
+export const INTRO_IDS = ["slam", "bands", "glitch", "neon", "rush", "sticker", "split", "arcade", "news", "shatter", "countdown"] as const;
 export type IntroId = (typeof INTRO_IDS)[number];
 export const isIntro = (value: unknown): value is IntroId => typeof value === "string" && (INTRO_IDS as readonly string[]).includes(value);
 
 /** The sound effects made for the intros, one timed on each (frontend/public/sounds/intro-<id>.mp3, made by scripts/make-intro-sounds.py) */
-export const INTRO_SOUND_IDS = ["boom", "swish", "zap", "shine", "rush", "drum", "clash"] as const;
+export const INTRO_SOUND_IDS = ["boom", "swish", "zap", "shine", "rush", "drum", "clash", "coin", "sting", "glass", "beep"] as const;
 export type IntroSoundId = (typeof INTRO_SOUND_IDS)[number];
 export const isIntroSound = (value: unknown): value is IntroSoundId => typeof value === "string" && (INTRO_SOUND_IDS as readonly string[]).includes(value);
 /** `intro.sound` when the intro is silent */
@@ -30,6 +30,10 @@ const SPANS: Record<IntroId, { hold: number; out: number; sound: IntroSoundId }>
   rush: { hold: 46, out: 7, sound: "rush" },
   sticker: { hold: 54, out: 10, sound: "drum" },
   split: { hold: 50, out: 12, sound: "clash" },
+  arcade: { hold: 56, out: 8, sound: "coin" },
+  news: { hold: 54, out: 10, sound: "sting" },
+  shatter: { hold: 50, out: 12, sound: "glass" },
+  countdown: { hold: 60, out: 8, sound: "beep" },
 };
 
 /** The intro a compilation keeps: its style, its own title (else the video's name), its sound (else its style's; "none": silent) */

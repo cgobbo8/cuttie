@@ -340,7 +340,243 @@ function Split(d: Drawn) {
   );
 }
 
-const DRAW: Record<IntroId, (d: Drawn) => ReactNode> = { slam: Slam, bands: Bands, glitch: Glitch, neon: Neon, rush: Rush, sticker: Sticker, split: Split };
+/** An arcade screen: the tube switches on, the logo comes block by block, the title blinks in like "insert coin"; the tube goes out on the video */
+function Arcade(d: Drawn) {
+  const on = easeOut(between(d.f, 0, 5));
+  // Out: squeezed to a bright line, then to a dot
+  const flat = between(d.leave, 0, 0.6);
+  const tall = d.leave > 0 ? Math.max(0.005, 1 - easeOut(flat)) : Math.max(0.012, on);
+  const wide = d.leave > 0.6 ? Math.max(0, 1 - between(d.leave, 0.6, 1)) : 1;
+  const bright = d.leave > 0 ? 1 + 2.5 * flat : 1 + 1.4 * (1 - on);
+  // The logo is hidden by an 8 x 8 wall of blocks that go one by one, each at its own time
+  const cells = 8;
+  const gone = (i: number) => d.f >= 6 + noise(i * 7.3 + 1) * 16;
+  // The title blinks a few times, then stays
+  const lit = d.f >= 40 || (d.f >= 26 && Math.floor((d.f - 26) / 3) % 2 === 0);
+  const corner = (x: 0 | 1, y: 0 | 1): CSSProperties => ({
+    position: "absolute",
+    [x ? "right" : "left"]: 84,
+    [y ? "bottom" : "top"]: y ? 520 : 250,
+    width: 120,
+    height: 120,
+    [x ? "borderRight" : "borderLeft"]: `14px solid ${d.colors.highlight}`,
+    [y ? "borderBottom" : "borderTop"]: `14px solid ${d.colors.highlight}`,
+    opacity: d.f >= 4 ? 1 : 0,
+  });
+  return (
+    <div style={{ ...FILL, transform: `scale(${wide}, ${tall})`, filter: `brightness(${bright})` }}>
+      <div style={{ ...FILL, background: "#0a0b13" }} />
+      <div style={{ ...FILL, background: `radial-gradient(circle at 50% 42%, ${d.colors.dark}, transparent 72%)` }} />
+      <div style={corner(0, 0)} />
+      <div style={corner(1, 0)} />
+      <div style={corner(0, 1)} />
+      <div style={corner(1, 1)} />
+      <div style={SAFE}>
+        <div style={{ position: "relative", marginBottom: 74 }}>
+          {d.logoBox(320, {}, true)}
+          <div style={{ position: "absolute", inset: -14, display: "grid", gridTemplateColumns: `repeat(${cells}, 1fr)`, gridTemplateRows: `repeat(${cells}, 1fr)` }}>
+            {Array.from({ length: cells * cells }, (_, i) => (
+              <div key={i} style={{ background: noise(i * 3.1) > 0.5 ? d.colors.accent : d.colors.highlight, opacity: gone(i) ? 0 : 1 }} />
+            ))}
+          </div>
+        </div>
+        <div style={{ opacity: lit ? 1 : 0 }}>
+          <Title d={d} color={d.colors.highlight} line={() => ({ textShadow: `7px 7px 0 ${d.colors.accent}, 14px 14px 0 rgba(0,0,0,0.6)` })} />
+        </div>
+        <Signature d={d} color="#ffffff" style={{ marginTop: 64, opacity: d.f >= 36 ? 1 : 0 }} />
+      </div>
+      {/* The lines of the tube, over everything */}
+      <div style={{ ...FILL, backgroundImage: "repeating-linear-gradient(0deg, rgba(0,0,0,0.3) 0 4px, transparent 4px 8px)" }} />
+    </div>
+  );
+}
+
+/** A breaking-news ident: the channel's logo like a station's, a FLASH banner slamming across, the title opening in a lower third; the set lifts away */
+function News(d: Drawn) {
+  const out = easeIn(d.leave);
+  const ident = backOut(between(d.f, 2, 14), 1.8);
+  const banner = backOut(between(d.f, 8, 20), 1.1);
+  const open = easeOut(between(d.f, 16, 30));
+  const live = Math.floor(d.f / 8) % 2 === 0;
+  return (
+    <div style={{ ...FILL, transform: `translateY(${-100 * out}%)` }}>
+      <div style={{ ...FILL, background: d.colors.dark }} />
+      <div style={{ position: "absolute", inset: "-25%", backgroundImage: "repeating-linear-gradient(115deg, transparent 0 230px, rgba(255,255,255,0.05) 230px 460px)", transform: `translateX(${d.f * 3}px)` }} />
+      <div style={SAFE}>
+        <div style={{ position: "relative", marginBottom: 56, transform: `scale(${ident})`, opacity: between(d.f, 2, 4) }}>
+          {d.logoBox(280)}
+          <div style={{ position: "absolute", top: -10, left: "100%", marginLeft: -40, display: "flex", alignItems: "center", gap: 12, padding: "8px 18px 8px 14px", background: "#e5383b", color: "#ffffff", fontFamily: GEIST, fontWeight: 800, fontSize: 34, letterSpacing: "0.06em", whiteSpace: "nowrap" }}>
+            <span style={{ width: 20, height: 20, borderRadius: "50%", background: "#ffffff", opacity: live ? 1 : 0.25 }} />
+            LIVE
+          </div>
+        </div>
+        {/* The banner runs past both edges of the screen */}
+        <div style={{ alignSelf: "stretch", margin: "0 -200px", padding: "18px 0 10px", background: d.colors.accent, transform: `translateX(${(1 - banner) * -1500}px) skewX(-10deg)`, boxShadow: `0 14px 0 ${d.colors.highlight}` }}>
+          <div style={{ fontFamily: d.font, fontSize: 150, lineHeight: 1, letterSpacing: "0.04em", color: inkOn(d.colors.accent), transform: "skewX(10deg)" }}>FLASH</div>
+        </div>
+        <div style={{ marginTop: 58, padding: "30px 48px 22px", background: "#ffffff", clipPath: `inset(0 ${(1 - open) * 100}% 0 0)`, boxShadow: `16px 16px 0 ${INK}` }}>
+          <Title d={{ ...d, size: Math.round(d.size * 0.82) }} color={INK} line={() => ({})} />
+        </div>
+        <Signature d={d} color="#ffffff" style={{ marginTop: 56, opacity: between(d.f, 30, 36), transform: `translateY(${(1 - easeOut(between(d.f, 30, 40))) * 40}px)` }} />
+      </div>
+    </div>
+  );
+}
+
+/** Where the screen breaks: twelve shards around the point the logo hits, each with the way it flies off */
+const BREAK = { x: 50, y: 40 };
+const SHARDS = (() => {
+  const edge: [number, number][] = [[0, 0], [34, 0], [68, 0], [100, 0], [100, 28], [100, 60], [100, 100], [62, 100], [28, 100], [0, 100], [0, 62], [0, 30]];
+  return edge.map(([x, y], i) => {
+    const [nx, ny] = edge[(i + 1) % edge.length];
+    const mid = { x: (x + nx + BREAK.x) / 3, y: (y + ny + BREAK.y) / 3 };
+    return { clip: `polygon(${BREAK.x}% ${BREAK.y}%, ${x}% ${y}%, ${nx}% ${ny}%)`, mid, dx: mid.x - BREAK.x, dy: mid.y - BREAK.y, spin: (i % 2 ? 1 : -1) * (16 + ((i * 7) % 22)), to: [x, y] as [number, number] };
+  });
+})();
+
+/** The logo hits the screen, which cracks around it; the title slams in, then the whole screen falls in pieces onto the video */
+function Shatter(d: Drawn) {
+  const hit = backOut(between(d.f, 0, 10), 2.6);
+  const crack = easeOut(between(d.f, 8, 15));
+  const shake = d.f >= 8 && d.f < 18 ? (1 - between(d.f, 8, 18)) * 20 : 0;
+  const screen = (
+    <>
+      <div style={{ ...FILL, background: d.colors.dark }} />
+      <div style={{ ...FILL, background: `radial-gradient(circle at ${BREAK.x}% ${BREAK.y}%, ${d.colors.accent}, transparent 60%)`, opacity: d.f < 8 ? 0.15 : 0.3 + 0.45 * (1 - between(d.f, 8, 26)) }} />
+      <svg viewBox={`0 0 ${INTRO_W} ${INTRO_H}`} style={{ ...FILL, width: "100%", height: "100%" }}>
+        {SHARDS.map((shard, i) => {
+          const from = [BREAK.x * 10.8, BREAK.y * 19.2];
+          const to = [shard.to[0] * 10.8, shard.to[1] * 19.2];
+          // A crack is not a straight line: it turns once on its way to the edge
+          const turn = [(from[0] + to[0]) / 2 + (noise(i * 5.1) - 0.5) * 150, (from[1] + to[1]) / 2 + (noise(i * 9.7) - 0.5) * 150];
+          const length = 2600;
+          return (
+            <polyline key={i} points={`${from} ${turn} ${to}`} fill="none" stroke="#ffffff" strokeOpacity={0.75} strokeWidth={i % 3 ? 4 : 7} strokeDasharray={length} strokeDashoffset={length * (1 - crack)} />
+          );
+        })}
+      </svg>
+      <div style={{ ...SAFE, transform: `translate(${shake * (noise(d.f * 3.1) - 0.5) * 2}px, ${shake * (noise(d.f * 7.7) - 0.5) * 2}px)` }}>
+        {d.logoBox(330, { marginBottom: 66, opacity: between(d.f, 0, 3), transform: `scale(${hit})` })}
+        <Title d={d} color="#ffffff" line={(i) => ({ opacity: between(d.f, 12 + i * 3, 15 + i * 3), transform: `scale(${1.8 - 0.8 * backOut(between(d.f, 12 + i * 3, 24 + i * 3))})`, textShadow: `8px 9px 0 ${d.colors.accent}` })} />
+        <Signature d={d} color="#ffffff" style={{ marginTop: 56, opacity: between(d.f, 26, 32), transform: `scale(${backOut(between(d.f, 26, 36))})` }} />
+      </div>
+    </>
+  );
+  if (d.leave === 0) return <div style={FILL}>{screen}</div>;
+  // Each shard is the whole screen seen through its own triangle, thrown outwards and down
+  const out = easeIn(d.leave);
+  return (
+    <div style={FILL}>
+      {SHARDS.map((shard, i) => (
+        <div key={i} style={{ ...FILL, clipPath: shard.clip, transformOrigin: `${shard.mid.x}% ${shard.mid.y}%`, transform: `translate(${shard.dx * out * 3.4}%, ${shard.dy * out * 3.4 + out * out * 45}%) rotate(${shard.spin * out}deg)` }}>
+          {screen}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Where the ink of a glyph is around its origin (the left end of its baseline), in ems */
+interface Ink {
+  left: number;
+  right: number;
+  up: number;
+  down: number;
+}
+const INKS = new Map<string, Ink>();
+/** A usual digit, when nothing can measure it */
+const ROUGH: Ink = { left: 0.04, right: 0.56, up: 0.72, down: 0 };
+
+/**
+ * A font's line box says little about where its glyphs are drawn (each font has its own
+ * ascent, some sit high, a "1" is narrower than its advance): to put a glyph on a point, its
+ * ink is measured. Asked again each frame until the font is there.
+ */
+function inkOf(char: string, font: string): Ink {
+  const key = `${font}|${char}`;
+  const known = INKS.get(key);
+  if (known) return known;
+  // No canvas outside a browser
+  if (typeof document === "undefined" || /jsdom/i.test(globalThis.navigator?.userAgent ?? "")) return ROUGH;
+  try {
+    const ctx = document.createElement("canvas").getContext("2d");
+    if (!ctx) return ROUGH;
+    const spec = `200px ${font}`;
+    ctx.font = spec;
+    // A family the canvas cannot read leaves its own font in place
+    if (!ctx.font.includes("200px")) return ROUGH;
+    const m = ctx.measureText(char);
+    const ink = { left: -m.actualBoundingBoxLeft / 200, right: m.actualBoundingBoxRight / 200, up: m.actualBoundingBoxAscent / 200, down: m.actualBoundingBoxDescent / 200 };
+    if (!(ink.right > ink.left) || !(ink.up + ink.down > 0)) return ROUGH;
+    // Measured on a stand-in while the font loads: not kept
+    if (document.fonts?.check(spec, char)) INKS.set(key, ink);
+    return ink;
+  } catch {
+    return ROUGH;
+  }
+}
+
+/** The centre of the leader's target */
+const TARGET = { x: INTRO_W / 2, y: INTRO_H * 0.45 };
+const DIGIT = 620;
+
+/** A film leader counts 3, 2, 1 on worn stock, a hand sweeping round each number; then the logo and the title hit */
+function Countdown(d: Drawn) {
+  const each = 9;
+  const number = d.f < 3 * each ? 3 - Math.floor(d.f / each) : 0;
+  const turned = (d.f % each) / each;
+  const go = d.f - 3 * each;
+  const out = easeIn(d.leave);
+  if (number > 0) {
+    const ink = inkOf(String(number), d.font);
+    return (
+      <div style={{ ...FILL, filter: `brightness(${0.9 + 0.12 * noise(d.f * 1.9)})` }}>
+        <div style={{ ...FILL, background: d.colors.light }} />
+        {/* The hand: what it has swept is darker */}
+        <div style={{ ...FILL, background: `conic-gradient(from 0deg at 50% 45%, rgba(0,0,0,0.2) ${turned * 360}deg, transparent 0)` }} />
+        <div style={{ position: "absolute", left: 0, right: 0, top: "45%", height: 6, marginTop: -3, background: INK, opacity: 0.55 }} />
+        <div style={{ position: "absolute", top: 0, bottom: 0, left: "50%", width: 6, marginLeft: -3, background: INK, opacity: 0.55 }} />
+        {[760, 560].map((size) => (
+          <div key={size} style={{ position: "absolute", left: "50%", top: "45%", width: size, height: size, margin: `${-size / 2}px 0 0 ${-size / 2}px`, borderRadius: "50%", border: `8px solid ${INK}`, opacity: 0.6 }} />
+        ))}
+        {/* The number, its ink centred on the cross */}
+        <svg viewBox={`0 0 ${INTRO_W} ${INTRO_H}`} style={{ ...FILL, width: "100%", height: "100%", overflow: "visible", transformOrigin: "50% 45%", transform: `scale(${1.3 - 0.3 * easeOut(between(turned, 0, 0.4))})` }}>
+          <text x={TARGET.x - ((ink.left + ink.right) / 2) * DIGIT} y={TARGET.y + ((ink.up - ink.down) / 2) * DIGIT} fill={INK} style={{ fontFamily: d.font, fontSize: DIGIT }}>
+            {number}
+          </text>
+        </svg>
+        {/* Scratches on the film, never twice at the same place */}
+        {[0, 1, 2].map((i) => (
+          <div key={i} style={{ position: "absolute", top: 0, bottom: 0, left: `${noise(d.f * 2.7 + i * 13) * 100}%`, width: i ? 3 : 5, background: INK, opacity: 0.22 }} />
+        ))}
+      </div>
+    );
+  }
+  return (
+    <div style={{ ...FILL, opacity: 1 - out, transform: `scale(${1 + 0.5 * out})` }}>
+      <div style={{ ...FILL, background: d.colors.accent }} />
+      {/* Rays turning slowly behind the logo, as on a cinema poster */}
+      <div style={{ position: "absolute", left: "50%", top: "42%", width: 2800, height: 2800, margin: "-1400px 0 0 -1400px", background: `repeating-conic-gradient(from ${go * 0.8}deg, ${d.colors.dark} 0 8deg, transparent 0 20deg)`, opacity: 0.2 }} />
+      <div style={{ ...FILL, background: `radial-gradient(circle at 50% 42%, ${d.colors.light}, transparent 50%)`, opacity: 0.6 }} />
+      <div style={{ ...FILL, boxShadow: "inset 0 0 420px rgba(0,0,0,0.45)" }} />
+      <div style={SAFE}>
+        {d.logoBox(330, { marginBottom: 66, transform: `scale(${backOut(between(go, 0, 10), 2.4)}) rotate(${-6 + 6 * easeOut(between(go, 0, 12))}deg)`, boxShadow: `0 0 0 14px ${INK}, 0 0 0 28px #ffffff` })}
+        <div style={{ transform: "rotate(-4deg)" }}>
+          <Title d={d} color="#ffffff" line={(i) => ({ opacity: between(go, 3 + i * 3, 5 + i * 3), transform: `scale(${1.9 - 0.9 * backOut(between(go, 3 + i * 3, 14 + i * 3))})`, WebkitTextStroke: `${Math.round(d.size * 0.09)}px ${INK}`, paintOrder: "stroke fill", textShadow: `9px 11px 0 ${d.colors.highlight}` })} />
+        </div>
+        <Signature d={d} color={INK} tone="ink" tag={{ padding: "10px 30px 8px", background: "#ffffff" }} style={{ marginTop: 56, opacity: between(go, 12, 16), transform: `scale(${backOut(between(go, 12, 22))})` }} />
+      </div>
+      {/* Still film: a scratch runs down it now and then */}
+      {[0, 1].map((i) => (
+        <div key={i} style={{ position: "absolute", top: 0, bottom: 0, left: `${noise(Math.floor(d.f / 2) * 3.3 + i * 17) * 100}%`, width: i ? 3 : 5, background: INK, opacity: 0.16 }} />
+      ))}
+      {/* The last frame of the leader burns out in white */}
+      <div style={{ ...FILL, background: "#ffffff", opacity: 1 - between(go, 0, 5) }} />
+    </div>
+  );
+}
+
+const DRAW: Record<IntroId, (d: Drawn) => ReactNode> = { slam: Slam, bands: Bands, glitch: Glitch, neon: Neon, rush: Rush, sticker: Sticker, split: Split, arcade: Arcade, news: News, shatter: Shatter, countdown: Countdown };
 
 /**
  * One frame of an intro, in a 1080 x 1920 box. It takes its frame as a number

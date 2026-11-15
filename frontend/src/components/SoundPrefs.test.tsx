@@ -61,7 +61,7 @@ describe("the sound preferences of the brand kit", () => {
     expect(screen.getByRole("button", { name: "Intro préférée" }).textContent).toBe("Vitesse");
     fireEvent.click(screen.getByRole("button", { name: "Intro préférée" }));
     let intros = screen.getByRole("dialog", { name: "Intro préférée" });
-    expect(within(intros).getAllByRole("button")).toHaveLength(8);
+    expect(within(intros).getAllByRole("button")).toHaveLength(12);
     expect(within(intros).queryByRole("textbox")).toBeNull();
     fireEvent.click(within(intros).getByRole("button", { name: "Stickers" }));
     expect(onSave).toHaveBeenLastCalledWith({ intro: "sticker" });

@@ -1685,7 +1685,11 @@
         "neon": "Neón",
         "rush": "Velocidad",
         "sticker": "Stickers",
-        "split": "Duelo"
+        "split": "Duelo",
+        "arcade": "Arcade",
+        "news": "Última hora",
+        "shatter": "Añicos",
+        "countdown": "Cuenta atrás"
       },
       "sounds": {
         "boom": "Impacto",
@@ -1694,12 +1698,17 @@
         "shine": "Destello",
         "drum": "Tambores",
         "rush": "Impulso",
-        "clash": "Choque"
+        "clash": "Choque",
+        "coin": "Moneda",
+        "sting": "Sintonía",
+        "glass": "Cristal roto",
+        "beep": "Pitidos"
       },
       "chosen": "Intro elegida por la IA: {{name}}",
       "followLabel": "Seguir",
       "followDone": "Siguiendo",
-      "followToggle": "Botón «Seguir» del canal"
+      "followToggle": "Botón «Seguir» del canal",
+      "noneHint": "Sin intro, el vídeo empieza directamente. Elige una para ajustar el sonido y el botón de seguir."
     },
     "music": {
       "label": "Música",
@@ -1736,7 +1745,14 @@
         "retro": "8-bit rápido y alegre. Para momentos divertidos y compilaciones.",
         "lofi": "Lofi relajado, percusiones ligeras, sintetizadores aéreos. Para charlas.",
         "lofi2": "Lofi pausado con sintetizadores ligeros. Para charlas y momentos tranquilos.",
-        "chill": "Lo-fi lento y suave, muy de fondo. Para charlas y juego tranquilo."
+        "chill": "Lo-fi lento y suave, muy de fondo. Para charlas y juego tranquilo.",
+        "tension": "Electrónica lenta y desnuda, con colchones de sintetizador. Para crear tensión o acompañar una charla tranquila.",
+        "tension2": "Electrónica suave, percusiones ligeras, colchones de sintetizador. Para momentos de tensión y relatos pausados.",
+        "grave": "Atmósfera grave y tensa, percusiones mínimas. Para el suspense y los momentos tranquilos.",
+        "suspense": "Sintetizadores oscuros y percusiones que avanzan. Para el suspense y las jugadas en las que todo está en juego.",
+        "trap": "Trap enérgico de sintetizadores contundentes. Para highlights y grandes jugadas.",
+        "sneaky": "Ritmo saltarín y sintetizadores traviesos, estilo meme. Para momentos divertidos y fails.",
+        "quirky": "Piano travieso y percusiones ligeras. Para momentos divertidos y charlas relajadas."
       },
       "unsorted": "Otras"
     },

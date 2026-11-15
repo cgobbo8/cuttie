@@ -269,6 +269,10 @@ INTROS = {
     "rush": "Speed: manga speed lines, the title slams down askew. For skill, fast action, hype.",
     "sticker": "Stickers: the logo and the title slapped on like stickers on a wall of dots. Playful: for funny videos.",
     "split": "Versus: two halves slam together, then pull apart on the video. For duels, fights, confrontations, a before and an after.",
+    "arcade": "Arcade: an old CRT screen switches on, the logo comes block by block, the title blinks like 'insert coin', the tube goes out. For retro games, nostalgia, fun and fails.",
+    "news": "Breaking news: a TV news ident with a FLASH banner and the title in a lower third. For stories and drama told with humour, 'you won't believe what happened'.",
+    "shatter": "Shatter: the logo hits the screen, which cracks, then falls in pieces onto the video. For action, rage, big plays, anything violent.",
+    "countdown": "Countdown: a film leader counts 3, 2, 1, then the logo and the title hit. For best-ofs, challenges, anything that builds anticipation.",
 }
 
 

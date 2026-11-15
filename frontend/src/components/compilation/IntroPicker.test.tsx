@@ -10,12 +10,12 @@ beforeEach(() => i18n.changeLanguage("fr"));
 afterEach(cleanup);
 
 describe("the intro picker", () => {
-  it("offers no intro and the seven styles, and says which is chosen", () => {
+  it("offers no intro and the eleven styles, and says which is chosen", () => {
     const onChange = vi.fn();
     render(<IntroPicker value={null} brand={brand} name="De calme à débordés" onChange={onChange} onClose={() => {}} />);
     // (each one is drawn small with the channel's own name and title: the drawing is not what the button is called)
-    for (const name of ["Aucune", "Impact", "Bandes", "Glitch", "Néon", "Vitesse", "Stickers", "Duel"]) expect(screen.getByRole("button", { name })).toBeTruthy();
-    expect(screen.getAllByRole("button")).toHaveLength(8);
+    for (const name of ["Aucune", "Impact", "Bandes", "Glitch", "Néon", "Vitesse", "Stickers", "Duel", "Arcade", "Flash info", "Éclats", "Décompte"]) expect(screen.getByRole("button", { name })).toBeTruthy();
+    expect(screen.getAllByRole("button")).toHaveLength(12);
     expect(screen.getByRole("button", { name: "Aucune" }).getAttribute("aria-pressed")).toBe("true");
     // No intro: nothing to name or to hear yet
     expect(screen.queryByPlaceholderText("De calme à débordés")).toBeNull();

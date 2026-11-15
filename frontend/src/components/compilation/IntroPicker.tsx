@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Check, Volume2, VolumeX } from "lucide-react";
 import IntroCard, { INTRO_W, type IntroColors } from "../../lib/intro/IntroCard";
@@ -91,6 +91,16 @@ export default function IntroPicker({ value, brand, name, onChange, onClose, hea
   const shown = title.trim() || name;
   const follow: [string, string] = [t("compilation.intro.followLabel"), t("compilation.intro.followDone")];
   const style = value && isIntro(value.style) ? value.style : null;
+  // Opened from a row near an edge of the window, it is pushed back inside (under the top bar, above the bottom)
+  useLayoutEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    el.style.transform = "";
+    const { top, bottom } = el.getBoundingClientRect();
+    const [min, max] = [76, window.innerHeight - 12];
+    const shift = top < min ? min - top : bottom > max ? Math.max(min - top, max - bottom) : 0;
+    if (shift) el.style.transform = `translateY(${Math.round(shift)}px)`;
+  }, [style, fields]);
   /** Heard as soon as it is chosen */
   const listen = (id: string) => {
     try {
@@ -164,51 +174,55 @@ export default function IntroPicker({ value, brand, name, onChange, onClose, hea
       aria-label={heading ?? t("compilation.intro.pick")}
       data-nodrag
       onClick={(e) => e.stopPropagation()}
-      className={`absolute z-40 w-[304px] p-3 rounded-[14px] bg-[#171a18]/[0.98] border border-white/[0.12] shadow-[0_24px_60px_-18px_rgba(0,0,0,0.9)] ${className}`}
+      // Three rows of four styles; what is set on the chosen one sits beside them, not under (the picker stays in the window)
+      className={`absolute z-40 max-w-[calc(100vw-24px)] p-3 rounded-[14px] bg-[#171a18]/[0.98] border border-white/[0.12] shadow-[0_24px_60px_-18px_rgba(0,0,0,0.9)] ${fields === "style" ? "w-[304px]" : "w-[556px]"} ${className}`}
     >
       <p className="px-0.5 pb-2 text-[12px] font-[550] text-ink-2">{heading ?? t("compilation.intro.pick")}</p>
-      <div className="grid grid-cols-4 gap-1">
-        {tile(null, t("compilation.intro.none"))}
-        {INTRO_IDS.map((id) => tile(id, t(`compilation.intro.style.${id}`)))}
+      <div className="flex flex-wrap gap-x-4 gap-y-3">
+        <div className="grid grid-cols-4 gap-1 w-[280px] flex-none content-start">
+          {tile(null, t("compilation.intro.none"))}
+          {INTRO_IDS.map((id) => tile(id, t(`compilation.intro.style.${id}`)))}
+        </div>
+        {!style && fields !== "style" && <p className="flex-1 min-w-[200px] px-0.5 pt-2 text-[12px] leading-relaxed text-ink-3">{t("compilation.intro.noneHint")}</p>}
+        {style && fields !== "style" && (
+          <div className="flex-1 min-w-[200px]">
+            <label className={fields === "all" ? "block" : "hidden"}>
+              <span className="block px-0.5 pb-1 text-[11.5px] text-ink-3">{t("compilation.intro.title")}</span>
+              <input
+                value={title}
+                maxLength={80}
+                placeholder={name}
+                onChange={(e) => setTitle(e.target.value)}
+                onBlur={commitTitle}
+                onKeyDown={(e) => e.key === "Enter" && commitTitle()}
+                className="w-full h-8 px-2.5 rounded-[9px] bg-black/30 border border-white/10 text-[13px] text-white outline-none focus:border-accent-line placeholder:text-ink-4"
+              />
+            </label>
+            <div className={`${fields === "all" ? "mt-3 " : "pt-1 "}flex items-center gap-3`}>
+              <span className="flex-1 min-w-0 px-0.5 text-[12px] text-ink-2">{t("compilation.intro.followToggle")}</span>
+              <button
+                role="switch"
+                aria-checked={value?.follow !== false}
+                aria-label={t("compilation.intro.followToggle")}
+                onClick={() => {
+                  if (!value) return;
+                  const { follow: _before, ...rest } = value;
+                  onChange(value.follow === false ? rest : { ...rest, follow: false });
+                }}
+                className="switch flex-none"
+              >
+                <span />
+              </button>
+            </div>
+            <p className="mt-3 px-0.5 pb-1.5 text-[11.5px] text-ink-3">{t("compilation.intro.sound")}</p>
+            <div className="flex flex-wrap gap-1.5">
+              {chip("style", t("compilation.intro.soundOfStyle", { name: t(`compilation.intro.sounds.${defaultIntroSound(style)}`) }), value?.sound === undefined || (!isIntroSound(value.sound) && value.sound !== NO_SOUND), () => pickSound(null))}
+              {INTRO_SOUND_IDS.filter((id) => id !== defaultIntroSound(style)).map((id) => chip(id, t(`compilation.intro.sounds.${id}`), value?.sound === id, () => pickSound(id)))}
+              {chip(NO_SOUND, t("compilation.intro.noSound"), value?.sound === NO_SOUND, () => pickSound(NO_SOUND), false)}
+            </div>
+          </div>
+        )}
       </div>
-      {style && fields !== "style" && (
-        <>
-          <label className={fields === "all" ? "block mt-3" : "hidden"}>
-            <span className="block px-0.5 pb-1 text-[11.5px] text-ink-3">{t("compilation.intro.title")}</span>
-            <input
-              value={title}
-              maxLength={80}
-              placeholder={name}
-              onChange={(e) => setTitle(e.target.value)}
-              onBlur={commitTitle}
-              onKeyDown={(e) => e.key === "Enter" && commitTitle()}
-              className="w-full h-8 px-2.5 rounded-[9px] bg-black/30 border border-white/10 text-[13px] text-white outline-none focus:border-accent-line placeholder:text-ink-4"
-            />
-          </label>
-          <div className="mt-3 flex items-center gap-3">
-            <span className="flex-1 min-w-0 px-0.5 text-[12px] text-ink-2">{t("compilation.intro.followToggle")}</span>
-            <button
-              role="switch"
-              aria-checked={value?.follow !== false}
-              aria-label={t("compilation.intro.followToggle")}
-              onClick={() => {
-                if (!value) return;
-                const { follow: _before, ...rest } = value;
-                onChange(value.follow === false ? rest : { ...rest, follow: false });
-              }}
-              className="switch flex-none"
-            >
-              <span />
-            </button>
-          </div>
-          <p className="mt-3 px-0.5 pb-1.5 text-[11.5px] text-ink-3">{t("compilation.intro.sound")}</p>
-          <div className="flex flex-wrap gap-1.5">
-            {chip("style", t("compilation.intro.soundOfStyle", { name: t(`compilation.intro.sounds.${defaultIntroSound(style)}`) }), value?.sound === undefined || (!isIntroSound(value.sound) && value.sound !== NO_SOUND), () => pickSound(null))}
-            {INTRO_SOUND_IDS.filter((id) => id !== defaultIntroSound(style)).map((id) => chip(id, t(`compilation.intro.sounds.${id}`), value?.sound === id, () => pickSound(id)))}
-            {chip(NO_SOUND, t("compilation.intro.noSound"), value?.sound === NO_SOUND, () => pickSound(NO_SOUND), false)}
-          </div>
-        </>
-      )}
     </div>
   );
 }

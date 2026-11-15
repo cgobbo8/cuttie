@@ -661,6 +661,10 @@ def test_a_video_is_planned_and_changed_over_several_lives(monkeypatch, tmp_path
     ])
     monkeypatch.setattr(live_tools, "load_cached", lambda job_id: lives[job_id])
     monkeypatch.setattr(ls, "load_cached", lambda job_id: lives.get(job_id))
+    # `overview` reads each live's title and summary in the worker's database
+    from app.services import db
+
+    monkeypatch.setattr(db, "get_job", lambda job_id: None)
     others = [{"job_id": "other", "duration": 500.0, "date": "2026-10-11"}]
 
     planned = ls.plan_video("job", "Les fois où je dis que c'est calme, dans mes lives", 4.0, {"date": "2026-11-09"}, 600.0, others=others)

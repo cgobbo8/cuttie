@@ -290,3 +290,8 @@ def test_what_a_model_gives_back_is_kept_short_and_as_lines():
     # An entry: every list bounded
     noted = memory.clean_entry({"summary": " Un   live. ", "events": [f"e{n}" for n in range(20)], "people": [{"name": f"p{n}"} for n in range(20)], "said": "non", "games": ["GTA", "GTA"]})
     assert (noted["summary"], len(noted["events"]), len(noted["people"]), noted["said"], noted["games"]) == ("Un live.", 8, 12, [], ["GTA"])
+    # What is too long is never cut inside a word
+    long = "[5:23:18] Maurice a opéré Cruz Wallace, " + "blessé par balle à l'épaule gauche, " * 12
+    cut = memory.clean_entry({"summary": "x", "events": [long, "[0:01:00] Court."]})["events"]
+    assert len(cut[0]) <= 321 and cut[0].endswith("…") and not cut[0].endswith(" …") and cut[0][:-1] in long and long[len(cut[0]) - 1] == " "
+    assert cut[1] == "[0:01:00] Court."

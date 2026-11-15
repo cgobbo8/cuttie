@@ -300,17 +300,26 @@ def _text(value, limit: int) -> str:
     return " ".join(str(value or "").split())[:limit]
 
 
+def _whole(value, limit: int) -> str:
+    """One line no longer than `limit`, never cut inside a word: what is too long ends on « … »
+    (told to write one short sentence, a model still writes three: seen cut mid-word on a real live)."""
+    line = " ".join(str(value or "").split())
+    if len(line) <= limit:
+        return line
+    return line[:limit].rsplit(" ", 1)[0].rstrip(" ,;:([«") + "…"
+
+
 def clean_entry(raw: dict) -> dict:
     """What a model noted of a live, as it is kept: bounded, nothing empty."""
-    events = [_text(event, 260) for event in raw.get("events") if _text(event, 260)] if isinstance(raw.get("events"), list) else []
-    said = [_text(line, 260) for line in raw.get("said") if _text(line, 260)] if isinstance(raw.get("said"), list) else []
+    events = [_whole(event, 320) for event in raw.get("events") if _text(event, 8)] if isinstance(raw.get("events"), list) else []
+    said = [_whole(line, 260) for line in raw.get("said") if _text(line, 8)] if isinstance(raw.get("said"), list) else []
     people: list[dict] = []
     for person in raw.get("people") if isinstance(raw.get("people"), list) else []:
         if not isinstance(person, dict):
             continue
         name = _text(person.get("name"), 60)
         if name and all(name.lower() != other["name"].lower() for other in people):
-            people.append({"name": name, "who": _text(person.get("who"), 200)})
+            people.append({"name": name, "who": _whole(person.get("who"), 200)})
     games = [_text(game, 80) for game in raw.get("games") if _text(game, 80)] if isinstance(raw.get("games"), list) else []
     return {
         "summary": _text(raw.get("summary"), 900),
@@ -380,7 +389,7 @@ WHAT THE ANALYSIS UNDERSTOOD OF THE LIVE
 
 Answer with JSON only, everything in the stream's language:
 {{"summary": "3 to 5 sentences: what this live was (what was played, what the streamer did, how it went, the mood)",
-"events": ["up to {MAX_EVENTS}, in the order of the live: what happened that will matter later. A fight or a reconciliation with someone (name them), someone met for the first time, a decision, a plan announced, a change of game or of habit, a running joke that started, something big that happened to them or to their character. One short sentence each, starting with its time [H:MM:SS] when you have it"],
+"events": ["up to {MAX_EVENTS}, in the order of the live: what happened that will matter later. A fight or a reconciliation with someone (name them), someone met for the first time, a decision, a plan announced, a change of game or of habit, a running joke that started, something big that happened to them or to their character. One short sentence each (30 words at most), starting with its time [H:MM:SS] when you have it"],
 "people": [{{"name": "...", "who": "who they are to the streamer or to their character, and what happened with them in this live, in a few words"}}],
 "said": ["up to {MAX_SAID}: what the streamer said about themselves: their tastes, their plans, their channel, their viewers, what they are tired of. Only what they really said"],
 "games": ["what was played, as Twitch names it"]}}

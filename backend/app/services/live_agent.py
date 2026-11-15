@@ -65,11 +65,13 @@ PLAN_MAX_COST = float(os.getenv("CUTTIE_PLAN_MAX_COST", "0.12"))
 # How hard the searching model thinks between two tools (as on the benchmark: it reads, it doesn't ponder)
 REASONING = {"effort": "low"}
 # Changes when the instructions do: answers kept on disk under the old ones are asked again
-ANSWERS_VERSION = "5"
+ANSWERS_VERSION = "6"
 MAX_STEPS = 28
 PLAN_STEPS = 36
 # A planned video that comes to less than this share of the length asked is sent back once
 SHORT_PLAN = 0.75
+# ...and so is one whose first moment takes longer than this to say: a hook is short
+HOOK_SECONDS = 5.0
 MAX_LISTENS = 12
 LISTEN_SECONDS = 30.0
 # Looks at the live's image: three frames each, over this many seconds at most, from a small rendition
@@ -154,13 +156,18 @@ PLAN_SPEC = {
                 "items": {
                     "type": "object",
                     "properties": {
-                        "title": {"type": "string", "description": "2 to 5 words shown on screen when the part begins, in the stream's language"},
+                        "title": {"type": "string", "description": "2 to 5 words shown on screen when the part begins, in the stream's language: a hook (a question, a promise, the line people will quote), not a label"},
                         "moments": {"type": "array", "items": _MOMENT},
                     },
                     "required": ["title", "moments"],
                 },
             },
-            "note": {"type": "string", "description": "Two to four sentences in the stream's language, said to the streamer: what each part holds and why you chose these moments, what is only close or missing"},
+            "hook": {
+                "type": "string",
+                "description": "What is written on screen over the first seconds of the video, to make people stay: 3 to 8 words in the stream's language, "
+                "a question, a promise or the line people will quote, true to what happens. Not the title again.",
+            },
+            "note": {"type": "string", "description": "Two to four sentences in the stream's language, said to the streamer: what the video opens on and ends on, what each part holds and why you chose these moments, what is only close or missing"},
             "look": {
                 "type": "string",
                 "description": "What the description asks about how the video looks (where the webcam and the game go, captions, pop-ups, style), "
@@ -205,6 +212,15 @@ How to work:
 7. Finish by calling `answer`, moments in the order of the stream. In the note, say what you searched, what really matches and what is only close."""
 )
 
+# What makes a video of several moments a short people watch to the end. The instructions used to be about
+# finding the right moments and filing them in the right parts; nothing said how a short opens or ends, and the
+# videos opened on whatever came first in the live, under titles that were labels
+_STORY = """The video is a short: most viewers decide in its first two seconds whether they stay, and those who stay want an ending.
+- The hook. The first moment of the video is what makes someone stay: give that place to a moment that needs no explanation and promises the rest (the claim that is about to turn out wrong, the loudest reaction, the strangest line), and keep it short. In a series of like moments, open on a strong one.
+- The way through. Each moment must be understood by someone who never saw the stream, on its own or thanks to the moment just before it in the video: leave out one that needs explaining, and one that only says again what the one before said. Prefer several short moments to one long one.
+- The ending. The last moment of the video is its payoff: the punchline, the biggest reaction, how the story ends. In a series, keep the strongest for the end. Never end on a setup, on a line that trails off or on someone saying goodbye.
+- What is written on screen. Each part's title shows while its first moment plays, and `hook` shows over the first seconds of the video: write them as hooks, not as labels. A question, a promise or the line people will quote (« C'est calme, hein ? » rather than « Les moments calmes »), in a few words, true to what happens."""
+
 PLAN_SYSTEM = (
     _INTRO.format(task="A streamer describes a whole video to make from one live stream; you find its moments with tools, check each one, and answer with the video's parts and their moments.")
     + """
@@ -217,11 +233,14 @@ How to work:
 6. """
     + _LINES
     + """ A video of many moments wants short ones, usually one to three lines; when the description says how long the moments of a part should be, follow it.
-7. Add up the seconds of the lines you keep: the whole video must come to about the length asked for (10 % over at most, and not much under when the live has enough). When more moments match than fit, keep the best ones, shared between the parts as the description suggests; when the streamer wants every moment of a kind, keep as many as fit. Inside a part, moments play in the order of the live unless the description says otherwise. Never use a moment twice.
+7. Add up the seconds of the lines you keep: the whole video must come to about the length asked for (10 % over at most, and not much under when the live has enough). When more moments match than fit, keep the best ones, shared between the parts as the description suggests; when the streamer wants every moment of a kind, keep as many as fit. Inside a part that tells a story, moments play in the order of the live; in a part that is a series of like moments (kills, fails, laughs, the same thing said again and again) their order is yours (see 8). What the description says about the order comes first. Never use a moment twice.
 8. """
+    + _STORY
+    + """
+9. """
     + _SCORES
     + """ A part with nothing that really matches gets its closest moments (3 at most, scored under 50) rather than staying empty, and the note says so. Never invent: every moment is one you read or listened to.
-9. Finish by calling `plan`. The note is your answer to the streamer, who reads it beside the video: for each part, what you put in it and why these moments, then what is only close or what you looked for and didn't find."""
+10. Finish by calling `plan`. The note is your answer to the streamer, who reads it beside the video: what the video opens on and what it ends on, then for each part what you put in it and why these moments, then what is only close or what you looked for and didn't find."""
 )
 
 
@@ -240,7 +259,7 @@ IDEAS_SPEC = {
                         "brief": {
                             "type": "string",
                             "description": "The request the streamer would type to have this video made, in the stream's language and in their voice (\"Fais-moi une vidéo...\"): "
-                            "what the video shows, its parts in order when it has several and what each holds, the words or the events to look for. Two to four sentences, no times. "
+                            "what the video shows, what it opens on (the hook) and what it ends on (the payoff), its parts in order when it has several and what each holds, the words or the events to look for. Two to four sentences, no times. "
                             "It is handed as it is to the editor that builds the video, who knows nothing of what you found: say everything it needs.",
                         },
                         "seconds": {"type": "number", "description": "How long the video should be: 20 to 90"},
@@ -266,7 +285,7 @@ IDEAS_WHAT = """A compilation is a short vertical video (20 to 90 seconds) made 
 - A story the live tells over time, with a beginning and an end: a mission that goes wrong, an argument and how it ends, a bet and who loses it.
 - The chat going wild several times about the same thing.
 - A best-of of the live: only when it has at least six strong moments of different kinds, and never the only idea when something more particular exists.
-An idea is one thing, said in one sentence, that someone who never watched the stream would get and watch to the end. It needs at least five moments that really belong together (a story: four), short enough to make a fast video. Two ideas never rest on the same moments.
+An idea is one thing, said in one sentence, that someone who never watched the stream would get and watch to the end. It has a hook (a first moment or a first line that makes people stay) and an ending (a punchline, a biggest moment, how the story ends): with neither it is a list, not a video. It needs at least five moments that really belong together (a story: four), short enough to make a fast video. Two ideas never rest on the same moments.
 A live of several hours usually holds three to five such videos, of different kinds: go through every kind above before settling for fewer.
 Score each idea honestly, 0 to 100, on how well it should do as a short: 80 and more for a particular idea with many moments that are funny or impressive on their own; 60 to 79 for good material on a more usual idea; under 60 it is thin. Never propose an idea under 50, and never fill with weak ones: a live that really has one good idea gets one."""
 
@@ -282,7 +301,7 @@ How to work:
 1. Start with `overview`, `best_moments`, `recurring` and `chat_peaks`, all at once: what the live is, what happens in its best moments (and of which kinds), what is said again and again, when the chat reacts. Then the sounds and the loud moments that this game and what you saw call for (shots for a shooter, laughter, raised voices).
 2. Take the kinds of compilation one by one and follow each lead, counting: `search_speech` lists every time something is said, `find_sounds` every burst of a sound, and `best_moments` gives each moment's kind (several funny ones, several fails, several great plays or several rages make a video each). Words of the game that come back because they are the game (the name of a character, of a place) are not an idea; a sentence people keep saying about what happens is.
 3. Check each idea on three or four of its moments before keeping it, with `read`{listen} An idea whose moments you did not check is not proposed.
-4. Write each idea's `brief` as the streamer would ask for the video, naming what to look for (the words said, the kind of moment, who is in it, the order of the parts): the editor that builds it starts from this request alone. No times in it: every moment you found for the idea goes in `moments`, checked or not, where the editor will start.
+4. Write each idea's `brief` as the streamer would ask for the video, naming what to look for (the words said, the kind of moment, who is in it, the order of the parts), what the video opens on and what it ends on: the editor that builds it starts from this request alone. No times in it: every moment you found for the idea goes in `moments`, checked or not, where the editor will start.
 5. Finish by calling `suggest`: {most} ideas at most, the best first, none when the live has nothing that repeats or builds. Everything the streamer reads (title, brief, pitch, tags, note) is in the stream's language."""
 )
 
@@ -325,6 +344,8 @@ class AgentRun:
     sections: list[dict] = field(default_factory=list)
     # What the description asks about the look, in the streamer's words (laid out by another step)
     look: str = ""
+    # What is written on screen over the first seconds of a planned video
+    hook: str = ""
     note: str = ""
     model: str = ""
     steps: int = 0
@@ -652,13 +673,14 @@ class Searcher:
                 "\nThis video was proposed after a first look through the live, which spotted moments for it around these times: "
                 f"{', '.join(hms(at) for at in sorted(leads)[:30])}. Start there: `read` them, keep those that fit, then look for the others."
             )
-        given = self._work(self._system(PLAN_SYSTEM), ask, PLAN_SPEC, max_steps, review=lambda plan: _short_plan(plan, target, self.tools.spoken))
+        given = self._work(self._system(PLAN_SYSTEM), ask, PLAN_SPEC, max_steps, review=lambda plan: _to_redo(plan, target, self.tools.spoken))
         sections = given.get("sections")
         for raw in sections if isinstance(sections, list) else []:
             if isinstance(raw, dict) and isinstance(raw.get("moments"), list):
                 self.run.sections.append({"title": str(raw.get("title") or "")[:60], "moments": [m for m in raw["moments"] if isinstance(m, dict)][:MAX_MOMENTS]})
         self.run.title = str(given.get("title") or "")[:80]
         self.run.look = " ".join(str(given.get("look") or "").split())[:600]
+        self.run.hook = " ".join(str(given.get("hook") or "").split())[:120]
         self._log(f"{len(self.run.sections)} parts, {sum(len(s['moments']) for s in self.run.sections)} moments")
         return self.run
 
@@ -802,6 +824,31 @@ class Searcher:
         self.run.note = str(given.get("note") or "")[:800]
         self.run.seconds = time.time() - t0
         return given
+
+
+def _to_redo(plan: dict, target: float, spoken=None) -> str | None:
+    """Everything a first plan is sent back for, in one message (it is sent back once): much shorter than asked,
+    or opening on a moment too long to be a hook. None when the plan stands."""
+    wrong = [said for said in (_short_plan(plan, target, spoken), _slow_opening(plan, spoken)) if said]
+    return " ".join(wrong) if wrong else None
+
+
+def _slow_opening(plan: dict, spoken=None) -> str | None:
+    """What is wrong with a planned video whose first moment is long: told to open on a hook, the models still open
+    on the first thing that happened, at length (11 s on the first try). `spoken(start, end, live)`: how long the
+    lines a moment names take to say. None when the opening is short enough, or can't be measured."""
+    sections = [s for s in plan.get("sections") or [] if isinstance(s, dict) and isinstance(s.get("moments"), list) and s["moments"]]
+    first = sections[0]["moments"][0] if sections else None
+    if not isinstance(first, dict) or not spoken:
+        return None
+    seconds = spoken(first.get("start"), first.get("end"), first.get("live"))
+    if seconds <= HOOK_SECONDS:
+        return None
+    return (
+        f"The video opens on a moment of about {seconds:.0f} seconds: too long for a hook, viewers decide in two. Call `plan` again with a first moment of "
+        f"{HOOK_SECONDS:.0f} seconds at most that makes someone stay: the strongest line of that moment alone (one line), or a shorter and stronger moment of the "
+        "same part moved to the front when the order allows; the rest of the long one can follow it as a second moment. Keep everything else as it is."
+    )
 
 
 def _short_plan(plan: dict, target: float, spoken=None) -> str | None:

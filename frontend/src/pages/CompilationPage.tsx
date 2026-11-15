@@ -518,12 +518,23 @@ export default function CompilationPage() {
       let planned: Compilation;
       if (allItems(compilation).length === 0 || again) {
         // The compilation on screen is empty: the plan fills it (a video the AI proposed keeps the name it was proposed under)
-        planned = { ...compilation, name: (compilation.suggestion ? compilation.name : plan.title) || compilation.name, sections, target, titles: sections.length > 1 || compilation.titles, brief, answer: plan.note ?? "", asks: [] };
+        // (the hook the AI wrote for the first seconds is the video's, unless the streamer had written one)
+        planned = {
+          ...compilation,
+          name: (compilation.suggestion ? compilation.name : plan.title) || compilation.name,
+          sections,
+          target,
+          titles: sections.length > 1 || compilation.titles,
+          hook: compilation.hook.trim() || (plan.hook ?? "").trim().slice(0, 120),
+          brief,
+          answer: plan.note ?? "",
+          asks: [],
+        };
         change(planned);
       } else {
         // Another video from the same lives
         const draft = { name: plan.title || t("compilation.defaultName"), target, titles: true, ...(compilation.lives?.length ? { lives: compilation.lives } : {}) };
-        planned = { ...(await createCompilation(jobId, draft)), sections, brief, answer: plan.note ?? "", asks: [] };
+        planned = { ...(await createCompilation(jobId, draft)), sections, hook: (plan.hook ?? "").trim().slice(0, 120), brief, answer: plan.note ?? "", asks: [] };
         setCompilations((prev) => [...(prev ?? []), planned]);
         setCurrentId(planned.id);
         change(planned);

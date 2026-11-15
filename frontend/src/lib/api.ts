@@ -1449,6 +1449,8 @@ export interface VideoPlan {
   note?: string;
   /** What the description asks about the look (layout, webcam, captions), in the streamer's words; empty when nothing */
   look?: string;
+  /** What is written on screen over the first seconds of the video, as the AI wrote it */
+  hook?: string;
 }
 
 /** A whole video planned by the AI from a description, `target` seconds long */

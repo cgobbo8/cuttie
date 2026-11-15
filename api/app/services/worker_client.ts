@@ -274,6 +274,8 @@ export interface VideoPlan {
   note?: string
   /** What the description asks about the look, in the streamer's words (empty: nothing) */
   look?: string
+  /** What is written on screen over the first seconds of the video, as the AI wrote it */
+  hook?: string
 }
 
 /** A change asked on a video the AI planned: what is asked now, the video as it is (live seconds), what was asked before */

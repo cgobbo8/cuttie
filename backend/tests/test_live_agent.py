@@ -497,6 +497,7 @@ def test_the_ai_plans_a_video_with_tools(monkeypatch, tmp_path):
         ],
         "note": "Rien pour la partie du milieu.",
         "look": "  ma caméra en haut,\n le jeu en dessous ",
+        "hook": "  C'est calme,\n hein ? ",
     }
     model = _live(monkeypatch, tmp_path, [
         [("search_speech", {"words": "calme"}), ("find_sounds", {"kind": "gunfire"})],
@@ -508,6 +509,8 @@ def test_the_ai_plans_a_video_with_tools(monkeypatch, tmp_path):
     assert planned["title"] == "Du calme à la tempête" and planned["note"] == "Rien pour la partie du milieu."
     # What the description asks about the look is handed on as it was said (another step lays the video out)
     assert planned["look"] == "ma caméra en haut, le jeu en dessous"
+    # ...and what it wrote for the first seconds of the video too
+    assert planned["hook"] == "C'est calme, hein ?"
     assert [(s["title"], len(s["hits"])) for s in planned["sections"]] == [("C'est calme", 1), ("Ça pète", 1)]
     assert planned["sections"][1]["hits"][0]["why"] == "Fusillade" and planned["cost"] == 0.003 and planned["cached"] is False
     # Planning has a model of its own (sorting moments between parts takes more than finding them), with more to spend
@@ -517,6 +520,10 @@ def test_the_ai_plans_a_video_with_tools(monkeypatch, tmp_path):
     first = model.seen[0]
     assert "le calme, puis ça pète" in first["messages"][1]["content"] and "about 30 seconds" in first["messages"][1]["content"]
     assert "whole video" in first["messages"][0]["content"]
+    # It was told what makes a short: a hook to open on, an ending, titles that are hooks
+    told = first["messages"][0]["content"]
+    assert "The hook." in told and "The ending." in told and "write them as hooks, not as labels" in told
+    assert "10. Finish by calling `plan`" in told and "{" not in told
     names = [f["function"]["name"] for f in first["tools"]]
     assert names[-1] == "plan" and "answer" not in names
     # What it was told of its short plan; the second one stands, even short (a live may have no more)
@@ -532,6 +539,22 @@ def test_the_ai_plans_a_video_with_tools(monkeypatch, tmp_path):
     # A model that answers in plain text is still understood
     text = live_agent.Searcher(_tools(monkeypatch), FakeModel(['{"title": "T", "sections": [{"title": "A", "moments": []}], "note": "n"}']), "m").plan("x", 60.0)
     assert text.finished and text.title == "T" and text.sections == [{"title": "A", "moments": []}] and text.note == "n"
+
+
+def test_a_planned_video_that_opens_slowly_is_sent_back_once():
+    long_first = {"sections": [{"title": "A", "moments": [{"start": "0:01:00", "end": "0:01:10"}, {"start": "0:02:00", "end": "0:02:03"}]}], "note": "ok"}
+    short_first = {"sections": [{"title": "A", "moments": [{"start": "0:02:00", "end": "0:02:03"}, {"start": "0:01:00", "end": "0:01:10"}]}], "note": "ok"}
+    seconds = lambda first, last, live=None: live_agent.parse_hms(last) - live_agent.parse_hms(first)  # noqa: E731
+    # Told what a hook is, a model still opens on the first thing that happened, at length: said with the seconds
+    slow = live_agent._slow_opening(long_first, seconds)
+    assert slow and "about 10 seconds" in slow and "5 seconds at most" in slow
+    assert live_agent._slow_opening(short_first, seconds) is None
+    # Nothing to measure with, nothing in the plan: nothing said
+    assert live_agent._slow_opening(long_first) is None and live_agent._slow_opening({"sections": []}, seconds) is None
+    # Sent back once for everything at a time: too short and opening slowly
+    both = live_agent._to_redo(long_first, 60.0, seconds)
+    assert "13 seconds once cut" in both and "opens on a moment of about 10 seconds" in both
+    assert live_agent._to_redo(short_first, 13.0, seconds) is None
 
 
 def test_the_streamer_comes_back_to_a_planned_video(monkeypatch, tmp_path):

@@ -907,7 +907,7 @@ def plan_video(
         models=[live_agent.PLAN_MODEL, live_agent.SEARCH_MODEL, live_agent.FALLBACK_MODEL], max_cost=_many_cost(others),
         others=others, date=meta.get("date"),
     )
-    result = {"title": run.title, "sections": _sections(run.sections, transcript, duration, by_lines=True, lives=lives if others else None), "note": run.note, "look": run.look}
+    result = {"title": run.title, "sections": _sections(run.sections, transcript, duration, by_lines=True, lives=lives if others else None), "note": run.note, "look": run.look, "hook": run.hook}
     _keep(path, result)
     total = sum(h["end"] - h["start"] for s in result["sections"] for h in s["hits"])
     logger.info(f"[{job_id[:8]}] AI plan \"{brief[:60]}\": {len(result['sections'])} sections, {total:.0f} s for a target of {target:.0f} s with {run.model} (~{cost:.4f} $, {run.seconds:.0f} s)")

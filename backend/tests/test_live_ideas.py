@@ -102,6 +102,8 @@ def test_the_ai_looks_through_the_live_and_proposes_videos(monkeypatch):
     # It was told what a compilation is and how many to give, and had the tool that says what comes back, then `suggest` to end
     system = model.seen[0]["messages"][0]["content"]
     assert "compilations worth making" in system and "3 ideas at most" in system and "{" not in system.replace("{most}", "")
+    # An idea has a hook and an ending, and its request says what the video opens on and ends on
+    assert "with neither it is a list, not a video" in system and "what the video opens on and what it ends on" in system
     names = [f["function"]["name"] for f in model.seen[0]["tools"]]
     assert "recurring" in names and names[-1] == "suggest" and "answer" not in names
     assert json.loads(model.seen[1]["messages"][-2]["content"])["found"] >= 0

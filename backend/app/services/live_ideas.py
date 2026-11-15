@@ -31,7 +31,7 @@ MIN_SECONDS, MAX_SECONDS, USUAL_SECONDS = 20.0, 120.0, 45.0
 # The kinds of video (the ones the musics are sorted by)
 KINDS = ("funny", "skill", "suspense", "chill", "hype")
 # Changes when the instructions do: ideas kept on disk under the old ones are looked for again
-IDEAS_VERSION = "1"
+IDEAS_VERSION = "2"
 
 # ── What is said again and again ─────────────────────────────────────────────
 

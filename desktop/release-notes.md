@@ -1,7 +1,9 @@
-- Nouveau : **Chercher dans le live** (bouton dans Choisir). Cherche des mots dits ou écrits dans le chat (gratuit), ou demande à l'IA (« les moments où ça pète », moins d'un centime), puis enchaîne les passages en une seule vidéo, en plusieurs parties titrées.
-- Nouveau : **Décrire la vidéo**. Tu décris la vidéo que tu veux (ses parties, sa durée, sa mise en page) et l'IA la construit : environ 0,04 $ par vidéo. Tout reste modifiable ensuite.
-- Nouveau : un clip peut être coupé en plusieurs morceaux dans Choisir (« Couper ici », « Enlever les silences », « Montage IA »).
-- Nouveau : chaque passage d'une compilation peut avoir sa propre mise en page, choisie à la main ou par l'IA.
-- Les passages trouvés dans le live sont coupés sur les mots : ils commencent quand la voix commence et s'arrêtent quand elle s'arrête.
-- Le son de tous les exports est mis au niveau de TikTok, Shorts et Reels (il était souvent bien trop bas).
-- Correctif : sur les nouveaux lives analysés, les sous-titres ne sont plus en avance sur la voix et l'image ne reste plus figée au début d'un clip. Les lives déjà analysés ne changent pas.
+- Nouveau : **Compilations** a son onglet dans la barre du haut. Toutes tes compilations y sont, rangées par live : ouvrir, dupliquer, renommer, supprimer, et voir lesquelles sont déjà exportées.
+- Nouveau : **une vidéo faite de plusieurs lives** (jusqu'à 5). Tu coches les lives et l'IA cherche dans tous à la fois. Un live pas encore analysé peut l'être depuis ce choix (environ 0,30 $ de crédits, annoncé avant de lancer). La compilation apparaît ensuite dans chacun de ses lives.
+- Nouveau : **parler à l'IA pour changer la vidéo**. Une fois la vidéo décrite construite, tu continues dans un fil (« retire le doublon », « ajoute les autres moments où ils disent calme ») : environ 0,02 $ par demande.
+- Nouveau : **transitions** entre les passages (flash, zoom, glissé, balayage, secousse, rebond, fondu), pour toute la vidéo ou pour un seul passage. La durée et le son de la vidéo ne changent pas.
+- Nouveau : **plusieurs passages à la fois**. Coche-les (ou Ctrl + clic, Maj + clic) pour les déplacer ensemble, les mettre dans une autre partie, leur donner une transition ou les retirer. Un passage se glisse aussi à la souris.
+- Nouveau : **Ouvrir dans l'éditeur**. Une compilation peut s'ouvrir dans l'éditeur à calques pour tout retoucher à la main. Les transitions et la mise en page propre à un passage n'y sont pas reprises.
+- L'écran d'une compilation montre la vidéo entière en haut et le passage ouvert en dessous. Un clic sur un passage y amène la vidéo, et le passage en cours de lecture est marqué dans la liste.
+- « Décrire la vidéo » est maintenant le premier onglet ; chercher à la main vient après.
+- Correctif : les coupes plus serrées demandées à l'IA sont bien appliquées.

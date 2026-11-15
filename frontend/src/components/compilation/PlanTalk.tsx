@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
-import { ArrowUp, Check, Loader2, Minus, Plus, Scissors, Sparkles } from "lucide-react";
+import { ArrowUp, Check, Loader2, Minus, Plus, RotateCcw, Scissors, Sparkles } from "lucide-react";
 import { Virality } from "./SuggestionCard";
 
 export interface TalkTurn {
@@ -36,6 +36,8 @@ interface Props {
   byAi?: boolean;
   /** ...and it is not built yet: the AI says what it noticed and offers to build it */
   proposal?: Proposal | null;
+  /** The answer on screen is one the AI kept from a time before (nothing was searched, nothing spent): ask it again */
+  again?: { cost: string | null; disabled: boolean; onAgain: () => void } | null;
   /** What the AI answered to it: what it built and why (absent on videos made before it was kept) */
   answer?: string;
   /** Passages in the video now */
@@ -71,7 +73,7 @@ const SHOWN_STEPS = 4;
  * change asked and what the AI did about it, what it is doing right now, and
  * where to ask for the next one. What it adds shows up in the video beside.
  */
-export default function PlanTalk({ brief, byAi = false, proposal = null, answer, passages, planning = false, turns, pending, trail, value, onValue, onSend, disabled, cost, onReveal, onAnother, failure }: Props) {
+export default function PlanTalk({ brief, byAi = false, proposal = null, again = null, answer, passages, planning = false, turns, pending, trail, value, onValue, onSend, disabled, cost, onReveal, onAnother, failure }: Props) {
   const { t } = useTranslation();
   const thread = useRef<HTMLDivElement>(null);
   const busy = pending !== null || planning;
@@ -144,6 +146,16 @@ export default function PlanTalk({ brief, byAi = false, proposal = null, answer,
             {!!passages && turns.length === 0 && (
               <div className="mt-2 flex flex-wrap gap-1.5">
                 <span className="talk-chip">{t("compilation.changePassages", { count: passages })}</span>
+              </div>
+            )}
+            {/* Nothing was searched: the same description had been answered before. One click has the AI search again */}
+            {again && turns.length === 0 && (
+              <div className="mt-2.5 pt-2.5 border-t border-white/[0.08] flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                <span className="flex-1 min-w-[160px] text-[12px] leading-snug text-ink-3">{t("compilation.keptAnswer")}</span>
+                <button type="button" onClick={again.onAgain} disabled={again.disabled} title={t("compilation.askAgainHint")} className="btn btn-glass btn-sm flex-none">
+                  <RotateCcw className="w-3.5 h-3.5" /> {t("compilation.askAgain")}
+                  {again.cost && <span className="mono text-[11.5px] text-ink-3">{again.cost}</span>}
+                </button>
               </div>
             )}
           </Theirs>

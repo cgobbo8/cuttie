@@ -39,6 +39,7 @@ test.group('Compilations proposed by the AI', (group) => {
         res.setHeader('Content-Type', 'application/json')
         if (req.url?.endsWith('/ideas')) res.end(JSON.stringify({ ideas, note: 'Un running gag et une histoire.', cost: 0.006, cached: false }))
         else if (req.url?.endsWith('/plan')) res.end(JSON.stringify({ title: 'Calme', sections: [], note: '' }))
+        else if (req.url?.endsWith('/search')) res.end(JSON.stringify({ hits: [], total: 0, transcript: true, cached: false, cost: 0.002 }))
         else res.writeHead(404).end('{}')
       })
     })
@@ -189,6 +190,22 @@ test.group('Compilations proposed by the AI', (group) => {
     ;(await client.post(`/api/jobs/${job.id}/plan`).loginAs(user).json({ brief: 'les moments calmes', request: 'ajoute', current: [], leads: [2421] })).assertStatus(200)
     assert.notProperty(asked[1].body, 'leads')
     assert.notProperty(asked[2].body, 'leads')
+  })
+
+  test('a question asked again on purpose is told to the engine as such', async ({ client, assert }) => {
+    const { user, job } = await setup()
+    const search = `/api/jobs/${job.id}/search`
+    const plan = `/api/jobs/${job.id}/plan`
+    ;(await client.post(search).loginAs(user).json({ query: 'calme', mode: 'ai' })).assertStatus(200)
+    ;(await client.post(search).loginAs(user).json({ query: 'calme', mode: 'ai', fresh: true })).assertStatus(200)
+    ;(await client.post(plan).loginAs(user).json({ brief: 'les moments calmes', target: 65, fresh: true })).assertStatus(200)
+    // Anything but a plain yes is not one; a change asked on a video is always asked anew, nothing to force
+    ;(await client.post(search).loginAs(user).json({ query: 'calme', mode: 'ai', fresh: 'yes' })).assertStatus(200)
+    ;(await client.post(plan).loginAs(user).json({ brief: 'les moments calmes', request: 'ajoute', current: [], fresh: true })).assertStatus(200)
+    assert.deepEqual(
+      asked.map((call) => call.body.fresh ?? null),
+      [null, true, true, null, null]
+    )
   })
 
   test('the end of an analysis has the AI look through the live, once', async ({ assert }) => {

@@ -507,7 +507,8 @@ export default function CompilationPage() {
     else toast.info(t("compilation.changeRevealGone"));
   };
 
-  const applyPlan = async (plan: VideoPlan, target: number, brief: string) => {
+  /** `again`: the same description asked again on purpose: the new plan takes the place of the video on screen */
+  const applyPlan = async (plan: VideoPlan, target: number, brief: string, again = false) => {
     // The same description as before is answered from the disk: said, or the streamer wonders why nothing was searched
     if (plan.cached) toast.info(t("compilation.planCached"));
     if (!jobId || !compilation) return;
@@ -515,7 +516,7 @@ export default function CompilationPage() {
     if (sections.length === 0) return;
     try {
       let planned: Compilation;
-      if (allItems(compilation).length === 0) {
+      if (allItems(compilation).length === 0 || again) {
         // The compilation on screen is empty: the plan fills it (a video the AI proposed keeps the name it was proposed under)
         planned = { ...compilation, name: (compilation.suggestion ? compilation.name : plan.title) || compilation.name, sections, target, titles: sections.length > 1 || compilation.titles, brief, answer: plan.note ?? "", asks: [] };
         change(planned);

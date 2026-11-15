@@ -1434,8 +1434,9 @@ export async function getLiveSearchProgress(jobId: string): Promise<LiveSearchSt
 }
 
 /** Moments of the live that match: "words" looks for what is said or written (free), "ai" has the AI search the live and check what it finds */
-export async function searchLive(jobId: string, query: string, mode: "words" | "ai"): Promise<LiveSearchResult> {
-  return liveJson(await postJson(`${BASE}/jobs/${jobId}/search`, { query, mode }));
+export async function searchLive(jobId: string, query: string, mode: "words" | "ai", fresh = false): Promise<LiveSearchResult> {
+  // `fresh`: asked again on purpose, the AI searches anew instead of giving the answer it kept
+  return liveJson(await postJson(`${BASE}/jobs/${jobId}/search`, { query, mode, ...(fresh ? { fresh: true } : {}) }));
 }
 
 export interface VideoPlan {
@@ -1450,10 +1451,11 @@ export interface VideoPlan {
 }
 
 /** A whole video planned by the AI from a description, `target` seconds long */
-export async function planLiveVideo(jobId: string, brief: string, target: number, change?: PlanChange, lives: string[] = [], leads: number[] = []): Promise<VideoPlan> {
+export async function planLiveVideo(jobId: string, brief: string, target: number, change?: PlanChange, lives: string[] = [], leads: number[] = [], fresh = false): Promise<VideoPlan> {
   // `lives`: other lives the video may take passages from (the AI works on all of them at once)
   // `leads`: the moments already spotted for it (live seconds), when the video is one the AI proposed
-  const body = { brief, target, ...(change ?? {}), ...(lives.length > 0 ? { lives } : {}), ...(leads.length > 0 ? { leads } : {}) };
+  // `fresh`: the same description asked again on purpose: the AI plans anew instead of giving the plan it kept
+  const body = { brief, target, ...(change ?? {}), ...(lives.length > 0 ? { lives } : {}), ...(leads.length > 0 ? { leads } : {}), ...(fresh ? { fresh: true } : {}) };
   const plan = await liveJson<VideoPlan>(await postJson(`${BASE}/jobs/${jobId}/plan`, body));
   // A passage says its live only when it isn't this one
   return { ...plan, sections: plan.sections.map((s) => ({ ...s, hits: s.hits.map(({ job, ...hit }) => (job && job !== jobId ? { ...hit, job } : hit)) })) };

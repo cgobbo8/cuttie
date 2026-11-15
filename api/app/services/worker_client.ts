@@ -251,9 +251,16 @@ export async function liveSearchProgress(jobId: string): Promise<{ doing: LiveSe
 }
 
 /** Moments that match a search: "words" is free and instant, "ai" searches the live with tools and checks what it finds (about a cent, up to a few minutes) */
-export async function searchLive(jobId: string, query: string, mode: 'words' | 'ai', context: LiveContext): Promise<LiveSearchResult> {
+export async function searchLive(
+  jobId: string,
+  query: string,
+  mode: 'words' | 'ai',
+  context: LiveContext,
+  /** Asked again on purpose: the AI searches anew instead of giving the answer it kept */
+  fresh = false
+): Promise<LiveSearchResult> {
   return call('POST', `/jobs/${encodeURIComponent(jobId)}/search`, {
-    body: { query, mode, ...context },
+    body: { query, mode, ...context, ...(fresh ? { fresh: true } : {}) },
     timeoutMs: mode === 'ai' ? 20 * 60_000 : 60_000,
   })
 }
@@ -296,9 +303,11 @@ export async function planLiveVideo(
   change?: PlanChange,
   lives: OtherLive[] = [],
   /** The moments already spotted for this video (live seconds), when it is one the AI proposed */
-  leads: number[] = []
+  leads: number[] = [],
+  /** Asked again on purpose: the AI plans anew instead of giving the plan it kept */
+  fresh = false
 ): Promise<VideoPlan> {
-  const body = { brief, target, ...context, ...(change ?? {}), ...(lives.length > 0 ? { lives } : {}), ...(leads.length > 0 ? { leads } : {}) }
+  const body = { brief, target, ...context, ...(change ?? {}), ...(lives.length > 0 ? { lives } : {}), ...(leads.length > 0 ? { leads } : {}), ...(fresh ? { fresh: true } : {}) }
   return call('POST', `/jobs/${encodeURIComponent(jobId)}/plan`, { body, timeoutMs: 30 * 60_000 })
 }
 

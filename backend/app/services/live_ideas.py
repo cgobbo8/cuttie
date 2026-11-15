@@ -246,7 +246,9 @@ def suggest_videos(
     if not transcript:
         raise live_search.NoTranscript(job_id)
     dev = bool(llm_text.dev_command())
-    path = live_search._cache_path(job_id, "ideas", live_search._signature(transcript), "dev" if dev else live_agent.IDEAS_MODEL, IDEAS_VERSION, str(most))
+    path = live_search._cache_path(
+        job_id, "ideas", live_search._signature(transcript), "dev" if dev else live_agent.IDEAS_MODEL, IDEAS_VERSION, str(most), *live_search.answered_by(),
+    )
     kept = live_search._cached(path)
     if kept:
         return {**kept, "cached": True, "cost": 0.0}

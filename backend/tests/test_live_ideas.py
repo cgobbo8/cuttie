@@ -154,6 +154,7 @@ def test_a_live_is_looked_through_once(monkeypatch, tmp_path):
     model = _live(monkeypatch, tmp_path, [
         [("recurring", {})],
         [("suggest", {"ideas": [IDEA, {**IDEA, "title": "Trop faible", "score": 30}], "note": "Un running gag, vérifié."})],
+        [("suggest", {"ideas": [IDEA], "note": "Toujours ce running gag."})],
     ])
     found = live_ideas.suggest_videos("job", {"streamer": "Maurice"}, 600.0)
     assert found["cached"] is False and found["cost"] == 0.002 and found["note"] == "Un running gag, vérifié."
@@ -164,6 +165,9 @@ def test_a_live_is_looked_through_once(monkeypatch, tmp_path):
     again = live_ideas.suggest_videos("job", {}, 600.0)
     assert again["cached"] is True and again["cost"] == 0.0 and again["ideas"] == found["ideas"] and len(model.seen) == 2
     assert ls.doing("job") is None
+    # ...until the app is updated: the new version looks through it itself
+    monkeypatch.setenv("CUTTIE_APP_VERSION", "0.2.3")
+    assert live_ideas.suggest_videos("job", {}, 600.0)["cached"] is False and len(model.seen) == 3
 
     monkeypatch.setattr(live_ideas, "load_cached", lambda job_id: None)
     with pytest.raises(ls.NoTranscript):

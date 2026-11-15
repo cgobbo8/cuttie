@@ -95,6 +95,8 @@ class SearchRequest(BaseModel):
     url: str | None = None
     # Every candidate the analysis rated (the job's timeline): {"t", "state", "score", "name", "category", "what"}
     moments: list[dict] = []
+    # Asked again on purpose: the AI searches anew instead of giving the answer it kept
+    fresh: bool = False
 
 
 # Longest description of a video (a real one came to 1300 characters)
@@ -136,6 +138,8 @@ class PlanRequest(BaseModel):
     lives: list[OtherLive] = []
     # The video is one the AI proposed: the moments it had spotted for it (live seconds)
     leads: list[float] = []
+    # Asked again on purpose: the AI plans anew instead of giving the plan it kept
+    fresh: bool = False
 
 
 class IdeasRequest(BaseModel):
@@ -490,7 +494,7 @@ def search_live(job_id: str, req: SearchRequest) -> dict:
     if req.mode != "ai":
         return live_search.search_words(_check_job_id(job_id), query, req.duration)
     try:
-        return live_search.search_ai(_check_job_id(job_id), query, req.meta, req.duration, req.energy, url=req.url, moments=req.moments[:400])
+        return live_search.search_ai(_check_job_id(job_id), query, req.meta, req.duration, req.energy, url=req.url, moments=req.moments[:400], fresh=req.fresh)
     except Exception as e:
         raise _ai_errors(e) from e
 
@@ -524,7 +528,7 @@ def plan_video(job_id: str, req: PlanRequest) -> dict:
             )
         return live_search.plan_video(
             _check_job_id(job_id), brief, max(10.0, min(req.target, 600.0)), req.meta, req.duration, req.energy, url=req.url, moments=req.moments[:400],
-            others=others, leads=[at for at in req.leads[:40] if at >= 0] or None,
+            others=others, leads=[at for at in req.leads[:40] if at >= 0] or None, fresh=req.fresh,
         )
     except Exception as e:
         raise _ai_errors(e) from e

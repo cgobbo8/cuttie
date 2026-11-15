@@ -1763,7 +1763,10 @@
       "done": "Música: {{music}} · Intro: {{intro}}",
       "none": "ninguna"
     },
-    "planCached": "La misma descripción que otra vez: la IA ha retomado la respuesta anterior, sin gastar nada. Cambia una palabra para que busque de nuevo."
+    "planCached": "Misma descripción que una vez anterior: la IA ha repetido la respuesta, sin gastar nada. «Volver a pedir» hace que busque de nuevo.",
+    "keptAnswer": "Respuesta de una vez anterior: la IA no ha buscado ni gastado nada.",
+    "askAgain": "Volver a pedir",
+    "askAgainHint": "La IA busca de nuevo, como si lo pidieras por primera vez. La nueva respuesta sustituye a esta."
   },
   "compilations": {
     "title": "Compilaciones",

@@ -355,6 +355,33 @@ def test_asking_the_ai_searches_with_tools_and_is_paid_once(monkeypatch, tmp_pat
     assert ls.info("job")["ai_cost"] is None
 
 
+def test_an_answer_kept_is_asked_again_on_purpose_and_never_served_by_another_version(monkeypatch, tmp_path):
+    answer = [("answer", {"moments": [SHOTS], "note": "Une fusillade."})]
+    plan = [("plan", {"sections": [{"title": "Ça pète", "moments": [SHOTS]}], "note": "Une partie."})]
+    model = _live(monkeypatch, tmp_path, [answer, answer, answer, plan, plan, plan])
+    monkeypatch.delenv("CUTTIE_APP_VERSION", raising=False)
+    ask = lambda **more: ls.search_ai("job", "les moments où ça pète", {}, 600.0, **more)  # noqa: E731
+    assert ask()["cached"] is False and ask()["cached"] is True and len(model.seen) == 1
+    # Asked again on purpose: the AI searches anew, and what it finds takes the place of what was kept
+    again = ask(fresh=True)
+    assert again["cached"] is False and again["cost"] == 0.001 and len(model.seen) == 2
+    assert ask()["cached"] is True and len(model.seen) == 2
+    # The app was updated: what the version before answered is not served (its instructions and tools were others)
+    monkeypatch.setenv("CUTTIE_APP_VERSION", "0.2.3")
+    assert ask()["cached"] is False and len(model.seen) == 3
+    assert ask()["cached"] is True and len(model.seen) == 3
+
+    # The same for a described video
+    describe = lambda **more: ls.plan_video("job", "une vidéo où ça pète", 1.0, {}, 600.0, **more)  # noqa: E731
+    assert describe()["cached"] is False and describe()["cached"] is True and len(model.seen) == 4
+    assert describe(fresh=True)["cached"] is False and len(model.seen) == 5
+    monkeypatch.setenv("CUTTIE_APP_VERSION", "0.2.4")
+    assert describe()["cached"] is False and describe()["cached"] is True and len(model.seen) == 6
+    # ...and back on the version before, its own answer is still there
+    monkeypatch.setenv("CUTTIE_APP_VERSION", "0.2.3")
+    assert describe()["cached"] is True and ask()["cached"] is True and len(model.seen) == 6
+
+
 def test_the_search_knows_every_moment_the_analysis_rated(monkeypatch, tmp_path):
     from app.services import db
 

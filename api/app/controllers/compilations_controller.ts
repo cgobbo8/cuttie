@@ -456,7 +456,8 @@ export default class CompilationsController {
     if (!query) return ctx.response.badRequest({ error: 'query required' })
     const mode = ctx.request.input('mode') === 'ai' ? 'ai' : 'words'
     try {
-      return await searchLive(job.id, query, mode, liveContext(job))
+      // { fresh: true }: asked again on purpose, the AI searches anew instead of giving the answer it kept
+      return await searchLive(job.id, query, mode, liveContext(job), ctx.request.input('fresh') === true)
     } catch (err) {
       return workerFailure(ctx.response, err)
     }
@@ -500,7 +501,8 @@ export default class CompilationsController {
     // A video the AI proposed ({ leads: [seconds] }): the moments it had spotted for it, where the one that builds it starts
     const leads = (Array.isArray(ctx.request.input('leads')) ? ctx.request.input('leads') : []).filter((at: unknown) => typeof at === 'number' && Number.isFinite(at) && at >= 0).slice(0, 40)
     try {
-      return await planLiveVideo(job.id, brief, target, liveContext(job), change, lives, change ? [] : leads)
+      // { fresh: true }: the same description asked again on purpose (a change is always asked anew)
+      return await planLiveVideo(job.id, brief, target, liveContext(job), change, lives, change ? [] : leads, !change && ctx.request.input('fresh') === true)
     } catch (err) {
       return workerFailure(ctx.response, err)
     }

@@ -675,6 +675,16 @@ def _cache_path(job_id: str, kind: str, *parts: str) -> str:
     return os.path.join(paths.transcript_dir(job_id), "search", f"{kind}_{key}.json")
 
 
+def answered_by() -> list[str]:
+    """What an answer of the AI kept on disk is filed under besides the question: the version of the app that
+    asked. An update never serves what an older version answered: its instructions, its tools and what is made
+    of the answer change from one version to the next, and the streamer who asks again after updating wants
+    what the new one finds (it happened: three versions answered from the first one's disk). Outside the
+    installed app there is no version: a development run keeps its answers until ANSWERS_VERSION changes."""
+    version = os.getenv("CUTTIE_APP_VERSION", "").strip()
+    return [f"app {version}"] if version else []
+
+
 def _cached(path: str) -> dict | None:
     try:
         with open(path, encoding="utf-8") as f:
@@ -820,11 +830,12 @@ def _ask(job_id: str, duration: float, lag: float, url: str | None, work, moment
 
 def search_ai(
     job_id: str, query: str, meta: dict, duration: float, energy: list[float] | None = None, lag: float = 5.0,
-    url: str | None = None, moments: list[dict] | None = None,
+    url: str | None = None, moments: list[dict] | None = None, fresh: bool = False,
 ) -> dict:
     """Moments that match `query` by meaning: the AI searches the live with tools and checks what it finds.
     `url`: the live on Twitch, to listen to it (without it, the search reads only); `moments`: every
-    candidate the analysis rated, as the app keeps them."""
+    candidate the analysis rated, as the app keeps them. `fresh`: asked again on purpose: the answer kept
+    on disk is not served, and the new one takes its place."""
     transcript = load_cached(job_id)
     if not transcript:
         raise NoTranscript(job_id)
@@ -832,8 +843,8 @@ def search_ai(
         return _search_by_reading(job_id, query, meta, duration, energy, lag)
     from app.services import live_agent
 
-    path = _cache_path(job_id, "agent", " ".join(tokens(query)), _signature(transcript), live_agent.SEARCH_MODEL, live_agent.ANSWERS_VERSION)
-    kept = _cached(path)
+    path = _cache_path(job_id, "agent", " ".join(tokens(query)), _signature(transcript), live_agent.SEARCH_MODEL, live_agent.ANSWERS_VERSION, *answered_by())
+    kept = None if fresh else _cached(path)
     if kept:
         return {**kept, "cached": True, "cost": 0.0}
     run, tools, cost = _ask(job_id, duration, lag, url, lambda searcher: searcher.search(query), moments)
@@ -865,10 +876,12 @@ def _many_cost(others: list[dict] | None) -> float:
 def plan_video(
     job_id: str, brief: str, target: float, meta: dict, duration: float, energy: list[float] | None = None, lag: float = 5.0,
     url: str | None = None, moments: list[dict] | None = None, others: list[dict] | None = None, leads: list[float] | None = None,
+    fresh: bool = False,
 ) -> dict:
     """A whole video from a description: sections (a title, moments in playing order).
     `others`: more lives the video may take moments from; each hit then says its live (`job`).
-    `leads`: moments already spotted for this video (live seconds), when it is one the AI proposed (live_ideas.py)."""
+    `leads`: moments already spotted for this video (live seconds), when it is one the AI proposed (live_ideas.py).
+    `fresh`: asked again on purpose: the plan kept on disk is not served, and the new one takes its place."""
     transcript = load_cached(job_id)
     if not transcript:
         raise NoTranscript(job_id)
@@ -880,8 +893,9 @@ def plan_video(
     path = _cache_path(
         job_id, "agent_plan", " ".join(tokens(brief)), f"{target:.0f}", _signature(transcript), live_agent.PLAN_MODEL, live_agent.ANSWERS_VERSION, "answer",
         *[f"{other}:{_signature(theirs)}" for other, theirs, _length in lives[1:]],
+        *answered_by(),
     )
-    kept = _cached(path)
+    kept = None if fresh else _cached(path)
     if kept:
         return {**kept, "cached": True, "cost": 0.0}
     # A model of its own (sorting moments between the parts of a description takes more than finding them),

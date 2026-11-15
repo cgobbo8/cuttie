@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
-import { Check, Loader2, MessageCircle, Mic, Play, Plus, Search, Sparkles } from "lucide-react";
+import { Check, Loader2, MessageCircle, Mic, Play, Plus, RotateCcw, Search, Sparkles } from "lucide-react";
 import {
   LiveError,
   getLiveSearchProgress,
@@ -34,8 +34,8 @@ interface Props {
   onPreview: (hit: LiveHit) => void;
   /** Add results to the compilation (`query`: the search they came from) */
   onAdd: (hits: LiveHit[], query: string) => void;
-  /** The AI planned a whole video from `brief` */
-  onPlan: (plan: VideoPlan, target: number, brief: string) => void;
+  /** The AI planned a whole video from `brief` (`again`: the same description asked again, the video on screen is the one to replace) */
+  onPlan: (plan: VideoPlan, target: number, brief: string, again?: boolean) => void;
   /** The video on screen was described to the AI: what was asked first, each change since and its answer (`byAi`: the AI proposed it and wrote that first request itself) */
   talk?: { brief: string; answer?: string; passages?: number; asks: TalkTurn[]; byAi?: boolean } | null;
   /**
@@ -82,7 +82,9 @@ export default function SearchPanel({ jobId, storyboards, lives, info, previewed
   const others = lives.filter((live) => live.job !== jobId).map((live) => live.job);
   const [busy, setBusy] = useState<"words" | "ai" | "plan" | null>(null);
   const [failure, setFailure] = useState<LiveFailure | null>(null);
-  const [results, setResults] = useState<{ hits: LiveHit[]; total: number; query: string; mode: "words" | "ai"; note?: string } | null>(null);
+  const [results, setResults] = useState<{ hits: LiveHit[]; total: number; query: string; mode: "words" | "ai"; note?: string; cached?: boolean } | null>(null);
+  /** The description whose answer came from the disk (nothing searched): it can be asked again */
+  const [kept, setKept] = useState<{ brief: string; target: number } | null>(null);
   const [brief, setBrief] = useState("");
   const [target, setTarget] = useState(90);
   /** What the AI is doing while its answer is awaited */
@@ -142,16 +144,17 @@ export default function SearchPanel({ jobId, storyboards, lives, info, previewed
     return [t("compilation.found", { count: sure }), near > 0 && t("compilation.near", { count: near })].filter(Boolean).join(" · ");
   };
 
-  const run = async (mode: "words" | "ai") => {
-    const asked = query.trim();
+  /** `again`: the question on screen asked again on purpose (the AI searches anew instead of giving the answer it kept) */
+  const run = async (mode: "words" | "ai", again = false) => {
+    const asked = again && results ? results.query : query.trim();
     if (!asked || busy) return;
     setBusy(mode);
     setFailure(null);
     try {
-      const found = await searchLive(searched, asked, mode);
+      const found = await searchLive(searched, asked, mode, again);
       // What is found in another live says so: its times are that live's
       const hits = searched === jobId ? found.hits : found.hits.map((hit) => ({ ...hit, job: searched }));
-      setResults({ hits, total: found.total, query: asked, mode, note: mode === "ai" ? found.note : undefined });
+      setResults({ hits, total: found.total, query: asked, mode, note: mode === "ai" ? found.note : undefined, cached: mode === "ai" && !!found.cached });
       onResults(hits);
       if (mode === "ai") toast.success([summary(found.hits), paid(found)].filter(Boolean).join(" · "));
     } catch (err) {
@@ -176,6 +179,8 @@ export default function SearchPanel({ jobId, storyboards, lives, info, previewed
         return;
       }
       onPlan(planned, target, asked);
+      // Answered from the disk: said in the conversation, where it can be asked again
+      setKept(planned.cached ? { brief: asked, target } : null);
       setAnother(false);
       setBrief("");
       setPlanNote("");
@@ -184,6 +189,31 @@ export default function SearchPanel({ jobId, storyboards, lives, info, previewed
       setFailure(err instanceof LiveError ? err.reason : "failed");
     } finally {
       setBusy(null);
+    }
+  };
+
+  /** The description on screen asked again on purpose: the AI plans anew, and its video takes the place of the one it had kept */
+  const planAgain = async () => {
+    if (busy || !kept) return;
+    const asked = kept;
+    setBusy("plan");
+    setBuilding(true);
+    setFailure(null);
+    try {
+      const planned = await planLiveVideo(jobId, asked.brief, asked.target, undefined, others, [], true);
+      const count = planned.sections.reduce((sum, s) => sum + s.hits.length, 0);
+      if (count === 0) {
+        toast.info(t("compilation.planEmpty"));
+        return;
+      }
+      onPlan(planned, asked.target, asked.brief, true);
+      setKept(null);
+      toast.success([t("compilation.planned", { count }), paid(planned)].filter(Boolean).join(" · "));
+    } catch (err) {
+      setFailure(err instanceof LiveError ? err.reason : "failed");
+    } finally {
+      setBusy(null);
+      setBuilding(false);
     }
   };
 
@@ -201,6 +231,7 @@ export default function SearchPanel({ jobId, storyboards, lives, info, previewed
         return;
       }
       onPlan(planned, proposal.target, talk.brief);
+      setKept(planned.cached ? { brief: talk.brief, target: proposal.target } : null);
       toast.success([t("compilation.planned", { count }), paid(planned)].filter(Boolean).join(" · "));
     } catch (err) {
       setFailure(err instanceof LiveError ? err.reason : "failed");
@@ -318,6 +349,7 @@ export default function SearchPanel({ jobId, storyboards, lives, info, previewed
           brief={planning && !building ? brief.trim() : talk!.brief}
           byAi={!!talk?.byAi && (!planning || building)}
           proposal={proposal && !planning ? { pitch: proposal.pitch, tags: proposal.tags, score: proposal.score, cost: planCost, disabled: !info?.transcript || !!busy, onBuild: build, onEdit: editProposal } : null}
+          again={kept && !planning && talk?.brief === kept.brief ? { cost: planCost, disabled: !info?.transcript || !!busy, onAgain: planAgain } : null}
           answer={planning ? undefined : talk!.answer}
           passages={planning ? undefined : talk!.passages}
           planning={planning}
@@ -388,6 +420,17 @@ export default function SearchPanel({ jobId, storyboards, lives, info, previewed
       {tab === "search" && results && (
         <div className="mt-3 pt-3 border-t border-white/[0.08] flex-1 min-h-0 flex flex-col">
           {results.note && <AiNote label={t("compilation.aiNote")} note={results.note} className="mb-2.5" />}
+          {/* Nothing was searched: the same question had been answered before. One click has the AI search again */}
+          {results.cached && (
+            <div className="mb-2.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 px-0.5">
+              <span className="flex-1 min-w-[160px] text-[12px] leading-snug text-ink-3">{t("compilation.keptAnswer")}</span>
+              <button type="button" onClick={() => run("ai", true)} disabled={!!busy || !info?.transcript} title={t("compilation.askAgainHint")} className="btn btn-glass btn-sm flex-none">
+                {busy === "ai" ? <Loader2 className="w-3.5 h-3.5 spinner" /> : <RotateCcw className="w-3.5 h-3.5" />}
+                {t("compilation.askAgain")}
+                {aiCost && <span className="mono text-[11.5px] text-ink-3">{aiCost}</span>}
+              </button>
+            </div>
+          )}
           <div className="flex items-center justify-between gap-2 px-0.5 pb-2">
             <span className="text-[13px] text-ink-2">
               {results.total === 0 ? t(results.mode === "ai" ? "compilation.nothingAi" : "compilation.nothingWords") : summary(results.hits, results.total)}

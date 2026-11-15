@@ -81,6 +81,25 @@ describe("a video the AI proposed", () => {
     expect(screen.queryByText("Demande écrite par l'IA à ta place")).toBeNull();
   });
 
+  it("an answer the AI took from a time before can be asked again", () => {
+    const again = { cost: "≈ 0,04 $", disabled: false, onAgain: vi.fn() };
+    const talk = (more: Partial<Parameters<typeof PlanTalk>[0]> = {}) => (
+      <TooltipProvider>
+        <PlanTalk brief="Les moments calmes." answer="Deux parties." passages={12} turns={[]} pending={null} trail={[]} value="" onValue={() => {}} onSend={() => {}} disabled={false} cost="≈ 0,04 $" onAnother={() => {}} {...more} />
+      </TooltipProvider>
+    );
+    const view = render(talk({ again }));
+    // Nothing was searched this time: said under the answer, with what asking again costs
+    expect(screen.getByText(/Réponse reprise d'une fois d'avant/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /Redemander.*0,04 \$/ }));
+    expect(again.onAgain).toHaveBeenCalledTimes(1);
+    // An answer the AI has just searched for, or a video changed since: nothing to ask again
+    view.rerender(talk());
+    expect(screen.queryByRole("button", { name: /Redemander/ })).toBeNull();
+    view.rerender(talk({ again, turns: [{ ask: "ajoute les autres", note: "Fait." }] }));
+    expect(screen.queryByRole("button", { name: /Redemander/ })).toBeNull();
+  });
+
   it("is counted next to Compilations in a project", () => {
     const view = render(
       <MemoryRouter>

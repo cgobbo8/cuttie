@@ -1,9 +1,8 @@
-- Nouveau : **Compilations** a son onglet dans la barre du haut. Toutes tes compilations y sont, rangées par live : ouvrir, dupliquer, renommer, supprimer, et voir lesquelles sont déjà exportées.
-- Nouveau : **une vidéo faite de plusieurs lives** (jusqu'à 5). Tu coches les lives et l'IA cherche dans tous à la fois. Un live pas encore analysé peut l'être depuis ce choix (environ 0,30 $ de crédits, annoncé avant de lancer). La compilation apparaît ensuite dans chacun de ses lives.
-- Nouveau : **parler à l'IA pour changer la vidéo**. Une fois la vidéo décrite construite, tu continues dans un fil (« retire le doublon », « ajoute les autres moments où ils disent calme ») : environ 0,02 $ par demande.
-- Nouveau : **transitions** entre les passages (flash, zoom, glissé, balayage, secousse, rebond, fondu), pour toute la vidéo ou pour un seul passage. La durée et le son de la vidéo ne changent pas.
-- Nouveau : **plusieurs passages à la fois**. Coche-les (ou Ctrl + clic, Maj + clic) pour les déplacer ensemble, les mettre dans une autre partie, leur donner une transition ou les retirer. Un passage se glisse aussi à la souris.
-- Nouveau : **Ouvrir dans l'éditeur**. Une compilation peut s'ouvrir dans l'éditeur à calques pour tout retoucher à la main. Les transitions et la mise en page propre à un passage n'y sont pas reprises.
-- L'écran d'une compilation montre la vidéo entière en haut et le passage ouvert en dessous. Un clic sur un passage y amène la vidéo, et le passage en cours de lecture est marqué dans la liste.
-- « Décrire la vidéo » est maintenant le premier onglet ; chercher à la main vient après.
-- Correctif : les coupes plus serrées demandées à l'IA sont bien appliquées.
+- Nouveau : **intro**. Une vidéo peut s'ouvrir sur un jingle d'environ 2 secondes avec ton logo, tes couleurs, son titre et un bruitage. 11 styles (Impact, Bandes, Glitch, Néon, Vitesse, Stickers, Duel, Arcade, Flash info, Éclats, Décompte), ou aucune. Le bouton « Suivre » de ta chaîne y est pressé juste avant que la vidéo commence (il se retire d'un clic).
+- Nouveau : **musique de fond**. 20 pistes sont livrées avec l'app, rangées par type de vidéo (drôle, skill et action, suspense, posé, best-of). Elle est forte pendant l'intro, baisse quand ça parle et remonte sur les passages de pur jeu ; sa présence se règle (discrète, normale, forte).
+- Nouveau : **Musique et intro par l'IA**, dans une compilation. Elle regarde quel genre de vidéo c'est et choisit la musique et l'intro qui vont avec, ou aucune (moins d'un centime). C'est fait tout seul après « Décrire la vidéo », et tu peux tout changer ensuite.
+- Nouveau : dans **Ma chaîne**, la carte « Musique et intro » : ta musique préférée pour chaque type de vidéo et ton intro préférée. L'IA les prend en premier, et les nouvelles compilations s'ouvrent avec ton intro.
+- Nouveau : **tes propres musiques** (Ma chaîne > « Tes musiques »). Tu ajoutes un fichier, l'IA l'écoute et écrit à quoi il sert (moins d'un centime) ; tu peux corriger son nom, ses types de vidéo et sa description.
+- Nouveau : dans **Monter**, la carte « Son » : intro et musique pour les clips classiques aussi. Par défaut, chaque clip prend ta musique préférée pour son type ; sans préférée, rien ne change.
+- Quand tu redécris une vidéo avec exactement la même description, l'IA reprend sa réponse d'avant sans rien dépenser, et l'app te le dit.
+- Correctifs d'affichage : la flèche des listes déroulantes reste dans son champ, et les cartes de Ma chaîne ne laissent plus de trou.

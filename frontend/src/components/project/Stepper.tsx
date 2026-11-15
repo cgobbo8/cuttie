@@ -22,7 +22,7 @@ export default function Stepper({ current, locked = [], links = {}, detail }: Pr
   const currentIndex = STEPS.indexOf(current);
 
   return (
-    <nav aria-label={t("project.steps")} className="glass flex items-center gap-0.5 p-1 rounded-[13px]">
+    <nav aria-label={t("project.steps")} className="glass-still flex items-center gap-0.5 p-1 rounded-[13px]">
       {STEPS.map((step, i) => {
         const done = i < currentIndex;
         const isCurrent = i === currentIndex;

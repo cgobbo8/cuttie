@@ -40,6 +40,7 @@ test.group('Compilations proposed by the AI', (group) => {
         if (req.url?.endsWith('/ideas')) res.end(JSON.stringify({ ideas, note: 'Un running gag et une histoire.', cost: 0.006, cached: false }))
         else if (req.url?.endsWith('/plan')) res.end(JSON.stringify({ title: 'Calme', sections: [], note: '' }))
         else if (req.url?.endsWith('/search')) res.end(JSON.stringify({ hits: [], total: 0, transcript: true, cached: false, cost: 0.002 }))
+        else if (req.url?.endsWith('/sound')) res.end(JSON.stringify({ kind: 'funny', music: null, intro: 'news', why: 'Flash info.', cost: 0.0004 }))
         else res.writeHead(404).end('{}')
       })
     })
@@ -206,6 +207,50 @@ test.group('Compilations proposed by the AI', (group) => {
       asked.map((call) => call.body.fresh ?? null),
       [null, true, true, null, null]
     )
+  })
+
+  test('the AI is told which intros it gave the last videos, never those the streamer picked', async ({ client, assert }) => {
+    const { user, job } = await setup()
+    const item = { id: 'aaaaaaaaaa', start: 10, end: 14, text: 'c’est calme', why: '', sources: ['ai'] }
+    const video = (id: string, intro: Record<string, unknown> | null, at: string, items = [item]) => ({
+      id,
+      name: id,
+      sections: [{ id: `${id}s`.slice(0, 10), title: '', query: '', items }],
+      template: null,
+      titles: true,
+      hook: '',
+      target: null,
+      ...(intro ? { intro } : {}),
+      created_at: at,
+      updated_at: at,
+    })
+    job.compilations = [
+      video('aiolder111', { style: 'sticker', by: 'ai' }, '2026-11-10T10:00:00.000Z'),
+      // Picked by the streamer, however often: their taste, nothing to stay away from
+      video('byhand1111', { style: 'slam' }, '2026-11-14T10:00:00.000Z'),
+      video('byhand2222', { style: 'slam' }, '2026-11-15T09:00:00.000Z'),
+      video('ainewer111', { style: 'arcade', by: 'ai' }, '2026-11-15T10:00:00.000Z'),
+      // An idea nobody opened has no video yet; the video being decided doesn't count against itself
+      video('waiting111', { style: 'glitch', by: 'ai' }, '2026-11-15T11:00:00.000Z', []),
+      video('deciding11', { style: 'rush', by: 'ai' }, '2026-11-15T12:00:00.000Z'),
+    ] as any
+    await job.save()
+    // ...and what another live of theirs holds counts too
+    const other = await Job.create({ id: randomUUID(), url: 'https://twitch.tv/videos/456', status: 'DONE', userId: user.id, vodDurationSeconds: 3600 })
+    other.compilations = [video('otherlive1', { style: 'bands', by: 'ai' }, '2026-11-12T10:00:00.000Z')] as any
+    await other.save()
+
+    const chosen = await client.post(`/api/jobs/${job.id}/sound`).loginAs(user).json({ title: 'Calme', parts: [], seconds: 60, passages: 8, said: [], compilation: 'deciding11' })
+    chosen.assertStatus(200)
+    assert.equal((chosen.body() as any).intro, 'news')
+    assert.deepEqual(asked[0].body.recent_intros, ['arcade', 'bands', 'sticker'])
+
+    // Saved by the app, an intro keeps who chose it; picked again by hand, it no longer says the AI did
+    const url = `/api/jobs/${job.id}/compilations/deciding11`
+    const kept = await client.put(url).loginAs(user).json({ ...video('deciding11', { style: 'news', by: 'ai' }, ''), name: 'Calme' })
+    assert.deepEqual((kept.body() as any).compilation.intro, { style: 'news', by: 'ai' })
+    const picked = await client.put(url).loginAs(user).json({ ...video('deciding11', { style: 'slam', by: 'someone' }, ''), name: 'Calme' })
+    assert.deepEqual((picked.body() as any).compilation.intro, { style: 'slam' })
   })
 
   test('the end of an analysis has the AI look through the live, once', async ({ assert }) => {

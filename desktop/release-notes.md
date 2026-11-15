@@ -3,4 +3,5 @@
 - Pour un live déjà analysé : Compilations, puis le live, puis « Demander des idées à l'IA ».
 - Nouveau : **l'IA regarde l'image**. Quand elle cherche des passages, elle peut jeter un œil à ce qu'il y a à l'écran (un kill, une victoire, un accident), en plus d'écouter et de lire.
 - Nouveau : **« Redemander »**. Quand l'IA reprend une réponse qu'elle avait gardée, l'app le dit et un bouton la fait chercher à nouveau. Après une mise à jour, elle ne ressert plus les réponses de la version d'avant : redonne tes anciennes descriptions, elle cherche pour de bon avec ses nouveaux outils.
+- L'IA ne met plus toujours la même intro. Elle retient les trois qui vont le mieux à la vidéo et prend celle qu'elle n'a pas déjà donnée à tes dernières vidéos ; ton intro préférée passe d'abord quand elle convient, et une intro que tu choisis toi-même n'est jamais écartée. Elle les appelle aussi par le nom que tu vois dans l'app.
 - Correctif d'affichage : le halo pâle qui pouvait apparaître sur les étapes d'un projet pendant l'analyse.

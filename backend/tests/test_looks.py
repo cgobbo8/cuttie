@@ -193,9 +193,13 @@ VIDEO = {"title": "De calme à débordés", "parts": ["C'est bien calme", "Les p
 
 
 def test_the_sound_of_a_video_is_chosen_from_what_it_is_and_what_the_streamer_likes():
-    model = Eyes({"kind": "funny", "music": "chiptune", "intro": "sticker", "why": "Une vidéo drôle : Pixel Chiptune et l'intro Stickers."})
+    model = Eyes({
+        "kind": "funny", "music": "chiptune", "why": "Une vidéo drôle : Pixel Chiptune.",
+        "intros": [{"key": "sticker", "why": "L'intro Stickers pour le ton léger."}, {"key": "news", "why": "Flash info pour l'histoire."}, {"key": "wobble", "why": "?"}, "arcade"],
+    })
     chosen = looks.choose_sound(VIDEO, MUSICS, favourites={"skill": "phonk", "epic": "phonk", "chill": "kazoo"}, preferred_intro="rush", asked="une musique marrante", language="fr", client=model)
-    assert chosen == {"kind": "funny", "music": "chiptune", "intro": "sticker", "why": "Une vidéo drôle : Pixel Chiptune et l'intro Stickers.", "cost": 0.002}
+    # The best of the intros that fit (the preferred one is not among them: it is not forced), with why this one
+    assert chosen == {"kind": "funny", "music": "chiptune", "intro": "sticker", "why": "Une vidéo drôle : Pixel Chiptune. L'intro Stickers pour le ton léger.", "cost": 0.002}
 
     call = model.seen[0]
     assert call["model"] == live_agent.SEARCH_MODEL
@@ -213,6 +217,59 @@ def test_the_sound_of_a_video_is_chosen_from_what_it_is_and_what_the_streamer_li
     for intro in looks.INTROS:
         assert f"[{intro}]" in shown
     assert "in French" in shown
+    # It ranks the intros that fit: no intro is the one of a kind of video
+    assert "Give the 3 that fit this video best" in shown and "a kind of video has no intro of its own" in shown
+    # (when one intro alone was said to be "for funny videos", every funny video opened on it)
+    light = ("funny", "humour", "jokes", "silly", "fails")
+    assert sum(any(word in what for word in light) for what in looks.INTROS.values()) >= 5
+    assert not any("for funny videos" in what for what in looks.INTROS.values())
+
+
+def test_the_ai_names_the_intros_as_the_app_does():
+    import pathlib
+
+    # In each language the app speaks, the names the screen shows
+    root = pathlib.Path(__file__).resolve().parents[2]
+    assert set(looks.INTRO_NAMES) == set(looks.LANGUAGES)
+    for language, names in looks.INTRO_NAMES.items():
+        shown = json.loads((root / "frontend" / "src" / "lib" / "i18n" / f"{language}.json").read_text(encoding="utf-8"))["compilation"]["intro"]["style"]
+        assert names == shown, language
+    told = Eyes({"kind": "funny", "music": "none", "why": "", "intros": []})
+    looks.choose_sound(VIDEO, MUSICS, language="fr", client=told)
+    assert "[news] « Flash info »." in told.seen[0]["messages"][0]["content"] and "Breaking news" not in told.seen[0]["messages"][0]["content"]
+    spanish = Eyes({"kind": "funny", "music": "none", "why": "", "intros": []})
+    looks.choose_sound(VIDEO, MUSICS, language="es", client=spanish)
+    assert "[split] « Duelo »." in spanish.seen[0]["messages"][0]["content"]
+
+
+def test_the_ai_does_not_open_every_video_the_same_way_and_never_leaves_what_fits():
+    fits = ["sticker", "news", "arcade"]
+    pick = looks.pick_intro
+    assert pick(fits) == "sticker"
+    # The AI gave Stickers to the last video: the next best one that fits
+    assert pick(fits, recent=["sticker"]) == "news"
+    assert pick(fits, recent=["news", "sticker"]) == "arcade"
+    # All of them given lately: the one given the longest ago
+    assert pick(fits, recent=["arcade", "news", "sticker"]) == "sticker"
+    # Only the last three videos count
+    assert pick(fits, recent=["glitch", "slam", "rush", "sticker"]) == "sticker"
+    # The intro the streamer prefers is taken whenever it fits, however often it was; it is not forced when it doesn't
+    assert pick(fits, preferred="news", recent=["news", "news", "news"]) == "news"
+    assert pick(fits, preferred="rush", recent=["sticker"]) == "news"
+    # One fits: that one, however often; none fits: no intro, whatever the streamer prefers
+    assert pick(["split"], recent=["split", "split"]) == "split"
+    assert pick([], preferred="rush") is None
+
+    answer = {"kind": "funny", "music": "none", "why": "Une vidéo drôle, sans musique.", "intros": [{"key": "sticker", "why": "Stickers, léger."}, {"key": "news", "why": "Flash info : c'est une histoire."}]}
+    # What the AI gave the last videos comes with the request (an intro nobody knows is ignored)
+    varied = looks.choose_sound(VIDEO, MUSICS, client=Eyes(answer), recent_intros=["sticker", "wobble"])
+    assert varied["intro"] == "news" and varied["why"] == "Une vidéo drôle, sans musique. Flash info : c'est une histoire."
+    assert looks.choose_sound(VIDEO, MUSICS, client=Eyes(answer))["intro"] == "sticker"
+    # No intro: said why
+    none = looks.choose_sound(VIDEO, MUSICS, client=Eyes({"kind": "funny", "music": "none", "why": "Un seul moment.", "intros": [], "no_intro": "Trop court pour une intro."}), recent_intros=["sticker"])
+    assert none["intro"] is None and none["why"] == "Un seul moment. Trop court pour une intro."
+    # An answer in the shape asked before (one intro) is still read
+    assert looks.choose_sound(VIDEO, MUSICS, client=Eyes({"kind": "funny", "music": "none", "intro": "arcade", "why": "Arcade."}))["intro"] == "arcade"
 
 
 def test_no_music_and_no_intro_are_kept_as_such_and_a_wrong_answer_is_made_safe():

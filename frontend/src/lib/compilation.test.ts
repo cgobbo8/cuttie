@@ -456,12 +456,13 @@ describe("what the AI is doing", () => {
 
     // The music and the intro it chose; what the streamer had set on them stays when the track or the style is the same
     const set = { name: "x", music: { track: "lofi", volume: 1.6 }, intro: { style: "slam", title: "Le calme", sound: "none" } };
-    expect(applySound(set, { music: "phonk", intro: "slam" })).toEqual({ name: "x", music: { track: "phonk", volume: 1.6 }, intro: { style: "slam", title: "Le calme", sound: "none" } });
+    // ...and the intro says the AI chose it (its next choices stay away from the ones it gave, not from those picked by hand)
+    expect(applySound(set, { music: "phonk", intro: "slam" })).toEqual({ name: "x", music: { track: "phonk", volume: 1.6 }, intro: { style: "slam", title: "Le calme", sound: "none", by: "ai" } });
     // Another style: its own sound, the title stays
-    expect(applySound(set, { music: "phonk", intro: "rush" }).intro).toEqual({ style: "rush", title: "Le calme" });
+    expect(applySound(set, { music: "phonk", intro: "rush" }).intro).toEqual({ style: "rush", title: "Le calme", by: "ai" });
     // It chose none: they are gone
     expect(applySound(set, { music: null, intro: null })).toEqual({ name: "x" });
     const bare: { name: string; music?: { track: string }; intro?: { style: string } } = { name: "x" };
-    expect(applySound(bare, { music: "phonk", intro: "neon" })).toEqual({ name: "x", music: { track: "phonk" }, intro: { style: "neon" } });
+    expect(applySound(bare, { music: "phonk", intro: "neon" })).toEqual({ name: "x", music: { track: "phonk" }, intro: { style: "neon", by: "ai" } });
   });
 });

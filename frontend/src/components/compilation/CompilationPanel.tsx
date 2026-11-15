@@ -602,8 +602,11 @@ export default function CompilationPanel({
                   brand={brand}
                   name={compilation.name}
                   onChange={(next) => {
-                    const { intro: _before, ...rest } = compilation;
-                    onChange(next ? { ...rest, intro: next } : rest);
+                    const { intro: before, ...rest } = compilation;
+                    if (!next) return onChange(rest);
+                    // Another style picked here is the streamer's choice, no longer the AI's
+                    const { by, ...picked } = next as typeof next & { by?: "ai" };
+                    onChange({ ...rest, intro: by && before?.style === next.style ? { ...picked, by } : picked });
                   }}
                   onClose={() => setMenu(null)}
                   className="right-0 bottom-full mb-2"

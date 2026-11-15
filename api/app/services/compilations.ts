@@ -146,13 +146,24 @@ export interface Intro {
   sound?: string
   /** False: without the channel's follow button */
   follow?: boolean
+  /**
+   * "ai": the AI chose this style (absent: the streamer did, or it is the one they prefer). The AI's next
+   * choices stay away from the intros it gave the last videos, never from those the streamer picked.
+   */
+  by?: 'ai'
 }
 
 /** An intro as the app sends it, null when it isn't one this server can draw */
 export function parseIntro(raw: any): Intro | null {
   if (!raw || typeof raw !== 'object' || !isIntro(raw.style)) return null
   const title = typeof raw.title === 'string' ? raw.title.trim().slice(0, 80) : ''
-  return { style: raw.style, ...(title ? { title } : {}), ...(isIntroSound(raw.sound) || raw.sound === 'none' ? { sound: raw.sound } : {}), ...(raw.follow === false ? { follow: false } : {}) }
+  return {
+    style: raw.style,
+    ...(title ? { title } : {}),
+    ...(isIntroSound(raw.sound) || raw.sound === 'none' ? { sound: raw.sound } : {}),
+    ...(raw.follow === false ? { follow: false } : {}),
+    ...(raw.by === 'ai' ? { by: 'ai' as const } : {}),
+  }
 }
 
 /** A compilation's music as the app sends it, null when it isn't a track of the catalogue */

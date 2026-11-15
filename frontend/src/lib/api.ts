@@ -1253,7 +1253,8 @@ export interface SoundChoice {
 /** The AI says what kind of video this is and chooses its music and its intro, starting from the streamer's favourites */
 export async function chooseSound(
   jobId: string,
-  body: { title: string; parts: string[]; seconds: number; passages: number; said: string[]; asked?: string; language?: string },
+  // `compilation`: the video being decided (its own intro doesn't count among those the streamer's last videos open with)
+  body: { title: string; parts: string[]; seconds: number; passages: number; said: string[]; asked?: string; language?: string; compilation?: string },
 ): Promise<SoundChoice> {
   return liveJson(await postJson(`${BASE}/jobs/${jobId}/sound`, body));
 }
@@ -1558,7 +1559,7 @@ export interface Compilation {
   /** The ready-made transition between its passages (absent: plain cuts) */
   transition?: string;
   /** The jingle it opens with (absent: none): its style, its own title (else the video's name), its sound (else its style's; "none": silent) */
-  intro?: { style: string; title?: string; sound?: string };
+  intro?: { style: string; title?: string; sound?: string; follow?: boolean; by?: "ai" };
   /** The music it plays in the background (absent: none): a track of the catalogue, and how present it is (1: as Cuttie sets it) */
   music?: { track: string; volume?: number };
   /** Described to the AI: what was first asked for, then each change asked and what the AI answered */

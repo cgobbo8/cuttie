@@ -506,13 +506,24 @@ export function soundBrief(c: Pick<Compilation, "name" | "sections">, most = 14)
 /**
  * The video with the sound the AI chose: its music and its intro, or without them when it
  * chose none. What the streamer had set on them stays (the music's presence, the intro's own
- * title and sound) when the track or the style doesn't change.
+ * title and sound) when the track or the style doesn't change. The intro says the AI chose it (`by`):
+ * its next choices stay away from the intros it gave the last videos, not from those picked by hand.
  */
 export function applySound<T extends Pick<Compilation, "music" | "intro">>(c: T, choice: { music: string | null; intro: string | null }): T {
   const { music, intro, ...rest } = c;
   return {
     ...rest,
     ...(choice.music ? { music: { ...(music?.volume !== undefined ? { volume: music.volume } : {}), track: choice.music } } : {}),
-    ...(choice.intro ? { intro: { ...(intro?.title ? { title: intro.title } : {}), ...(intro?.style === choice.intro && intro.sound ? { sound: intro.sound } : {}), style: choice.intro } } : {}),
+    ...(choice.intro
+      ? {
+          intro: {
+            ...(intro?.title ? { title: intro.title } : {}),
+            ...(intro?.style === choice.intro && intro.sound ? { sound: intro.sound } : {}),
+            ...(intro?.follow === false ? { follow: false } : {}),
+            style: choice.intro,
+            by: "ai",
+          },
+        }
+      : {}),
   } as T;
 }

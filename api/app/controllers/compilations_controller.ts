@@ -339,6 +339,15 @@ export default class CompilationsController {
     const musics = musicTracks()
       .filter((track) => musicFile(track.id))
       .map((track) => ({ key: track.id, name: track.name, kinds: track.kinds, about: track.about || track.description || track.genre || track.name }))
+    // The intros the AI gave the streamer's last videos, the newest first (the video being decided left out):
+    // its choice stays away from them, or every funny video opens the same way. An intro the streamer picked
+    // themselves is their taste, not a repetition: it is never one to stay away from
+    const deciding = String(ctx.request.input('compilation') ?? '')
+    const recent = (await everyCompilation(job.userId))
+      .filter((c) => c.id !== deciding && c.intro?.by === 'ai' && c.sections.some((s) => s.items.length > 0))
+      .sort((a, b) => Date.parse(b.updated_at) - Date.parse(a.updated_at))
+      .slice(0, 6)
+      .map((c) => c.intro!.style)
     try {
       const chosen = await chooseSound({
         video: {
@@ -353,6 +362,7 @@ export default class CompilationsController {
         intro: kit.intro,
         asked: words(ctx.request.input('asked'), 800),
         language: ['fr', 'en', 'es'].includes(ctx.request.input('language')) ? ctx.request.input('language') : 'fr',
+        recent_intros: recent,
       })
       return {
         kind: isMusicKind(chosen.kind) ? chosen.kind : null,

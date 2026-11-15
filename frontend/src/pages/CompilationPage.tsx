@@ -747,7 +747,7 @@ export default function CompilationPage() {
       if (!jobId || allItems(source).length === 0) return;
       setSounding(true);
       try {
-        const choice = await chooseSound(jobId, { ...soundBrief(source), asked, language: i18n.language.slice(0, 2) });
+        const choice = await chooseSound(jobId, { ...soundBrief(source), asked, language: i18n.language.slice(0, 2), compilation: source.id });
         // What the streamer changed while the AI was thinking stays
         const current = compilationsRef.current?.find((c) => c.id === source.id) ?? source;
         // A track whose file isn't on this machine can't be played: left out

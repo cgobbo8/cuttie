@@ -408,6 +408,8 @@ export async function chooseSound(body: {
   intro: string | null
   asked: string
   language: string
+  /** The intros the AI gave the streamer's last videos, the newest first: the choice stays away from them */
+  recent_intros: string[]
 }): Promise<SoundChoice> {
   return call('POST', '/sound', { body, timeoutMs: 3 * 60_000 })
 }

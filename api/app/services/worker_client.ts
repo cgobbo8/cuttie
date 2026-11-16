@@ -4,6 +4,7 @@
  * through the worker's loopback HTTP server, authenticated by a shared secret.
  */
 
+import http from 'node:http'
 import env from '#start/env'
 
 export interface WorkerJob {
@@ -41,30 +42,51 @@ function baseUrl(): string {
   return (env.get('WORKER_URL') ?? 'http://127.0.0.1:3334').replace(/\/$/, '')
 }
 
+/**
+ * One request to the worker, answered as text. Through node:http, not fetch: Node's fetch gives
+ * up after 5 minutes without an answer whatever it is told it may wait (undici's own limit on
+ * the answer's first byte), and the worker's longest work takes more: a live transcribed again
+ * before the AI reads it is 12 minutes for 7 hours. `timeoutMs` is the only limit here.
+ */
+export function workerRequest(method: string, url: string, body: string | undefined, timeoutMs: number): Promise<{ status: number; text: string }> {
+  return new Promise((resolve, reject) => {
+    const req = http.request(
+      url,
+      {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Cuttie-Secret': env.get('CUTTIE_INTERNAL_SECRET') ?? '',
+        },
+        signal: AbortSignal.timeout(timeoutMs),
+      },
+      (res) => {
+        const chunks: Buffer[] = []
+        res.on('data', (chunk: Buffer) => chunks.push(chunk))
+        res.on('end', () => resolve({ status: res.statusCode ?? 0, text: Buffer.concat(chunks).toString('utf-8') }))
+        res.on('error', reject)
+      }
+    )
+    req.on('error', reject)
+    req.end(body)
+  })
+}
+
 async function call<T>(
   method: string,
   path: string,
   { body, timeoutMs = 10_000 }: { body?: unknown; timeoutMs?: number } = {}
 ): Promise<T> {
-  let res: Response
+  let res: { status: number; text: string }
   try {
-    res = await fetch(`${baseUrl()}${path}`, {
-      method,
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Cuttie-Secret': env.get('CUTTIE_INTERNAL_SECRET') ?? '',
-      },
-      body: body === undefined ? undefined : JSON.stringify(body),
-      signal: AbortSignal.timeout(timeoutMs),
-    })
+    res = await workerRequest(method, `${baseUrl()}${path}`, body === undefined ? undefined : JSON.stringify(body), timeoutMs)
   } catch (err) {
     throw new WorkerUnavailableError(err)
   }
-  if (!res.ok) {
-    const text = await res.text().catch(() => '')
-    throw new WorkerHttpError(res.status, `Worker ${method} ${path} failed: HTTP ${res.status} ${text.slice(0, 200)}`)
+  if (res.status < 200 || res.status >= 300) {
+    throw new WorkerHttpError(res.status, `Worker ${method} ${path} failed: HTTP ${res.status} ${res.text.slice(0, 200)}`)
   }
-  return (await res.json()) as T
+  return JSON.parse(res.text) as T
 }
 
 /** Queue a job. Retries for a while so a job submitted while the worker boots isn't lost. */

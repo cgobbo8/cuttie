@@ -6,6 +6,7 @@ import { clearLogs, journalSince, logsSize, redact } from '#services/app_logs'
 import { DATA_DIR } from '#services/data_paths'
 import { dbMillis } from '#services/db_time'
 import { cleanupDays, diskUsage } from '#services/disk_space'
+import { compilationsReport, transcriptShape } from '#services/support_report'
 import { readSettings } from '#services/user_settings'
 import { getCachedMachineProfile, getDiagnostics } from '#services/worker_client'
 import { zip } from '#services/zip'
@@ -112,6 +113,9 @@ export default class SupportController {
         clips: (job.hotPoints ?? []).filter((hp: any) => hp.clip_filename).length,
         kept: Object.values(job.selection ?? {}).filter((s: any) => s?.state === 'kept').length,
         clips_freed_at: job.clipsFreedAt?.toISO() ?? null,
+        // How the live's transcript is cut into lines (the AI picks passages by lines), and its compilations in numbers
+        transcript: transcriptShape(job.id),
+        compilations: compilationsReport(job.compilations),
       })),
       exports: renders.map((r) => ({
         id: r.id,

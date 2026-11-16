@@ -62,6 +62,8 @@ def live(tmp_path, monkeypatch):
     monkeypatch.setattr(vod_transcript, "transcript_dir", lambda job_id: str(tmp_path / "transcripts" / job_id))
     monkeypatch.setattr(llm_analyzer, "_transcribe_audio", fake_transcribe)
     monkeypatch.setattr(transcriber, "chosen_engine", lambda: "local")
+    # An Apple chip (an NVIDIA card dates the words of a whole live: test_transcript_lines.py)
+    monkeypatch.setattr(transcriber, "local_backend", lambda: "mlx")
     state["wav"] = str(wav)
     return state
 

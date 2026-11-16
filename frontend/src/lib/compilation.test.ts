@@ -41,6 +41,7 @@ import {
   revisedSections,
   sectionStarts,
   sectionsFromPlan,
+  sameStep,
   stepText,
   tightened,
   updateItem,
@@ -431,6 +432,20 @@ describe("what the AI is doing", () => {
     expect(stepText(t, { step: "find_sounds", detail: "gunfire", count: 5 })).toBe("find_sounds sound=coups de feu");
     expect(stepText(t, { step: "loud_moments", detail: "raised_voices", count: 6 })).toBe("raised_voices");
     expect(stepText(t, { step: "read", detail: "3:04:30", count: 7 })).toBe("read at=3:04:30");
+  });
+
+  it("says that a live is listened to again, and how far it is", () => {
+    // Before the first chunk is done, then chunk after chunk
+    expect(stepText(t, { step: "relistening", detail: "", count: 1 })).toBe("relistening");
+    expect(stepText(t, { step: "relistening", detail: "12/41", count: 13 })).toBe("relisteningAt done=12/41");
+    // In the conversation the count moves on one line, it doesn't write 41 of them
+    expect(sameStep("relisteningAt done=12/41", "relisteningAt done=13/41")).toBe(true);
+    // As the streamer reads them: the line said before the first chunk is the same line, its count just arrived
+    expect(sameStep("Cuttie réécoute tout le live pour couper au mot près", "Cuttie réécoute tout le live pour couper au mot près (1/41)")).toBe(true);
+    expect(sameStep("Cuttie réécoute tout le live pour couper au mot près (40/41)", "Cuttie réécoute tout le live pour couper au mot près (41/41)")).toBe(true);
+    expect(sameStep("Cuttie écoute tout le live", "Cuttie réécoute tout le live pour couper au mot près (1/41)")).toBe(false);
+    expect(sameStep("read at=3:04:30", "read at=3:05:10")).toBe(false);
+    expect(sameStep("overview", "overview")).toBe(true);
   });
 
   it("copes with what a model may send", () => {

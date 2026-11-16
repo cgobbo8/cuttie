@@ -62,7 +62,7 @@ def test_out_of_memory_retries_with_fewer_chunks(monkeypatch):
         def __init__(self, model):
             pass
 
-        def transcribe(self, audio, word_timestamps, vad_filter, batch_size):
+        def transcribe(self, audio, word_timestamps, vad_filter, batch_size, without_timestamps):
             tried.append(batch_size)
             if batch_size > 2:
                 raise RuntimeError("CUDA failed with error out of memory")

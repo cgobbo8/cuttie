@@ -562,10 +562,23 @@ export function liveClock(seconds: number): string {
   return `${h}:${String(m).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
 }
 
+/** A step that counts how far it is (« 12/41 ») */
+const STEP_COUNT = /\d+\s*\/\s*\d+/;
+/** The count as a line ends with it: « ... (12/41) » */
+const COUNT_AT_END = /\s*[(:·-]?\s*\d+\s*\/\s*\d+\s*\)?\s*$/;
+
+/** Two lines of the same step, of which only the count moved (or just arrived): the second takes the place of the first */
+export function sameStep(a: string, b: string): boolean {
+  return a === b || ((STEP_COUNT.test(a) || STEP_COUNT.test(b)) && a.replace(COUNT_AT_END, "") === b.replace(COUNT_AT_END, ""));
+}
+
 /** What the AI is doing, in the streamer's words: the tool it just called and on what */
 export function stepText(t: TFunction, step: LiveSearchStep | null): string {
   const detail = step?.detail ?? "";
   switch (step?.step) {
+    case "relistening":
+      // A live transcribed in half-minute lines by an earlier version, transcribed again: « 12/41 » once it is under way
+      return STEP_COUNT.test(detail) ? t("compilation.step.relisteningAt", { done: detail }) : t("compilation.step.relistening");
     case "hearing":
     case "overview":
     case "best_moments":

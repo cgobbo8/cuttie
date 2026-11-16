@@ -368,7 +368,10 @@ def extract_pieces(job_id: str, vod_url: str, pieces: list[dict]) -> dict:
             ready.append(piece)
     fitted = [p for p in ready if p.get("tight")]
     if fitted:
-        logger.info(f"[{job_id[:8]}] Pieces cut on their words: {len(fitted)}/{sum(1 for p in ready if 'tight' in p)}")
+        # What each passage lasted as the transcript's lines gave it, and once cut on its words
+        fits = {p["id"]: p["fit"] for p in pieces if p.get("fit") and len(p["fit"]) == 2}
+        cuts = ", ".join(f"{float(fits[p['id']][1]) - float(fits[p['id']][0]):.1f} -> {p['tight'][1] - p['tight'][0]:.1f} s" for p in fitted if p["id"] in fits)
+        logger.info(f"[{job_id[:8]}] Pieces cut on their words: {len(fitted)}/{sum(1 for p in ready if 'tight' in p)} ({cuts})")
     return {"pieces": ready, "failed": [p["id"] for p in wanted if not done.get(p["id"], True)]}
 
 

@@ -26,6 +26,7 @@ from dataclasses import asdict, dataclass, field
 from app.services import memory, notes
 from app.services import llm_text, paths
 from app.services.presort import chat_highlights, hms, parse_hms
+from app.services import vod_transcript
 from app.services.vod_transcript import VodTranscript, load_cached
 
 logger = logging.getLogger(__name__)
@@ -765,6 +766,17 @@ def doing(job_id: str) -> dict | None:
     return {"step": now["step"], "detail": now["detail"], "count": now["count"]}
 
 
+def _lasts(hits: list[dict]) -> str:
+    """How long each moment the AI gave lasts, for the logs: « 12 moments of 3 s (median), longest 9 s:
+    2.1, 4.0, 9.3... ». Moments of half a minute say the transcript's lines are half minutes."""
+    seconds = [max(0.0, float(h["end"]) - float(h["start"])) for h in hits]
+    if not seconds:
+        return "no moment"
+    ordered = sorted(seconds)
+    listed = ", ".join(f"{s:.1f}" for s in seconds[:40])
+    return f"{len(seconds)} moments of {ordered[len(ordered) // 2]:.1f} s (median), longest {ordered[-1]:.1f} s: {listed}{'...' if len(seconds) > 40 else ''}"
+
+
 def _tell(job_id: str, step: str, detail: str = "") -> None:
     with _doing_lock:
         count = _doing.get(job_id, {}).get("count", 0) + 1
@@ -777,6 +789,23 @@ def _step_detail(args: dict) -> str:
         if args.get(key):
             return str(args[key])
     return ""
+
+
+def relisten(job_id: str, url: str | None, others: list[dict] | None = None) -> None:
+    """Before the AI works on a live: one transcribed in half-minute lines (an NVIDIA card up to
+    0.2.5, see vod_transcript.refine) is transcribed again by this computer, once. The AI picks
+    passages by lines: with half minutes it can only pick half minutes. Called before the
+    transcript is read and before a kept answer is looked for: both go by the lines.
+    `others`: the other lives it will work on ({"job_id", "url"})."""
+    for live, link in [(job_id, url), *[(other.get("job_id"), other.get("url")) for other in (others or [])]]:
+        if not live or not link or not vod_transcript.coarse_chunks(live):
+            continue
+        _tell(job_id, "relistening")
+        try:
+            vod_transcript.refine(live, link, on_chunk=lambda done, total: _tell(job_id, "relistening", f"{done}/{total}"))
+        finally:
+            with _doing_lock:
+                _doing.pop(job_id, None)
 
 
 def _ask(job_id: str, duration: float, lag: float, url: str | None, work, moments: list[dict] | None = None,
@@ -799,6 +828,9 @@ def _ask(job_id: str, duration: float, lag: float, url: str | None, work, moment
                 _tell(job_id, "hearing")
                 sound_index.ensure(live["job_id"], live["url"])
         each = [LiveTools(live["job_id"], live.get("duration") or 0.0, lag, live.get("moments"), date=live.get("date")) for live in lives]
+        for tools in each:
+            if tools.transcript:
+                logger.info(f"[{tools.job_id[:8]}] The AI reads a transcript of {vod_transcript.told(vod_transcript.shape(tools.transcript.segments, tools.transcript.words))}")
         tools = ManyLives(each) if others else each[0]
         urls = [live.get("url") for live in lives] if others else url
         models = list(dict.fromkeys(m for m in (models or (live_agent.SEARCH_MODEL, live_agent.FALLBACK_MODEL)) if m))
@@ -839,6 +871,7 @@ def search_ai(
     `url`: the live on Twitch, to listen to it (without it, the search reads only); `moments`: every
     candidate the analysis rated, as the app keeps them. `fresh`: asked again on purpose: the answer kept
     on disk is not served, and the new one takes its place."""
+    relisten(job_id, url)
     transcript = load_cached(job_id)
     if not transcript:
         raise NoTranscript(job_id)
@@ -855,6 +888,7 @@ def search_ai(
     result = {"hits": _complete(hits, transcript), "total": len(hits), "transcript": True, "note": run.note}
     _keep(path, result)
     logger.info(f"[{job_id[:8]}] AI search \"{query[:60]}\": {len(hits)} moments with {run.model} (~{cost:.4f} $, {run.seconds:.0f} s)")
+    logger.info(f"[{job_id[:8]}] AI search: {_lasts(result['hits'])}")
     return {**result, "cached": False, "cost": round(cost, 4)}
 
 
@@ -885,6 +919,7 @@ def plan_video(
     `others`: more lives the video may take moments from; each hit then says its live (`job`).
     `leads`: moments already spotted for this video (live seconds), when it is one the AI proposed (live_ideas.py).
     `fresh`: asked again on purpose: the plan kept on disk is not served, and the new one takes its place."""
+    relisten(job_id, url, others)
     transcript = load_cached(job_id)
     if not transcript:
         raise NoTranscript(job_id)
@@ -914,6 +949,7 @@ def plan_video(
     _keep(path, result)
     total = sum(h["end"] - h["start"] for s in result["sections"] for h in s["hits"])
     logger.info(f"[{job_id[:8]}] AI plan \"{brief[:60]}\": {len(result['sections'])} sections, {total:.0f} s for a target of {target:.0f} s with {run.model} (~{cost:.4f} $, {run.seconds:.0f} s)")
+    logger.info(f"[{job_id[:8]}] AI plan: {_lasts([h for s in result['sections'] for h in s['hits']])}")
     return {**result, "remembered": memory.remember(run.remember), "cached": False, "cost": round(cost, 4)}
 
 
@@ -961,6 +997,7 @@ def revise_video(
     hits), what is kept given back at its place. `current`: its parts as they are now,
     [{"title", "items": [{"start", "end"}]}] in live seconds; `asks`: what was asked before.
     Never kept on disk: the video it starts from is never the same twice."""
+    relisten(job_id, url, others)
     transcript = load_cached(job_id)
     if not transcript:
         raise NoTranscript(job_id)
@@ -999,6 +1036,7 @@ def revise_video(
             recut += hit["recut"]
     logger.info(f"[{job_id[:8]}] AI change: {recut} moments given with other lines")
     logger.info(f"[{job_id[:8]}] AI change \"{request[:60]}\": {sum(len(s['hits']) for s in result['sections'])} moments with {run.model} (~{cost:.4f} $, {run.seconds:.0f} s)")
+    logger.info(f"[{job_id[:8]}] AI change: {_lasts([h for s in result['sections'] for h in s['hits']])}")
     return {**result, "cached": False, "cost": round(cost, 4)}
 
 

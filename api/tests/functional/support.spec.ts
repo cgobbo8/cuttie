@@ -7,7 +7,7 @@ import path from 'node:path'
 import User from '#models/user'
 import Job from '#models/job'
 import { LOGS_DIR } from '#services/app_logs'
-import { SETTINGS_PATH } from '#services/data_paths'
+import { SETTINGS_PATH, TRANSCRIPTS_DIR } from '#services/data_paths'
 import { unzip } from '../helpers/unzip.js'
 
 // The .zip as bytes, not parsed
@@ -86,6 +86,65 @@ test.group('Help from afar | journal', (group) => {
     const analyses = JSON.parse(files['analyses.json'])
     assert.equal(analyses.jobs.length, 1)
     assert.include(analyses.jobs[0], { status: 'ERROR', error: 'Analyse interrompue', title: 'Maurice' })
+    // Never transcribed, no compilation
+    assert.isNull(analyses.jobs[0].transcript)
+    assert.deepEqual(analyses.jobs[0].compilations, [])
+  })
+
+  test('the export says how a live is cut into lines and what its compilations hold', async ({ client, assert }) => {
+    const user = await User.create({ fullName: 'Streamer', email: `s-${randomUUID()}@cuttie.app`, password: 'password123' })
+    const halfMinute = Array(70).fill('alors').join(' ')
+    const item = (id: string, start: number, end: number, more: object = {}) => ({ id, start, end, text: 'c’est calme', why: '', sources: ['ai'], ...more })
+    const job = await Job.create({
+      id: randomUUID(),
+      url: 'https://twitch.tv/videos/1',
+      status: 'DONE',
+      userId: user.id,
+      vodTitle: 'Maurice',
+      compilations: [
+        {
+          id: 'abcdefghij',
+          name: 'Trop calme',
+          template: null,
+          titles: true,
+          hook: '',
+          target: 90,
+          brief: `Une vidéo sur le calme ${'x'.repeat(400)}`,
+          asks: [{ ask: 'Ça ne correspond pas, utilise un maximum de passages', note: 'Voilà.', added: 11 }],
+          sections: [
+            { id: 's1', title: 'Calme', query: '', items: [item('p1', 100, 143.2), item('p2', 500, 538, { fit: [500, 538] })] },
+            { id: 's2', title: 'Plus calme', query: '', items: [] },
+          ],
+          created_at: '2026-11-16T15:27:00.000Z',
+          updated_at: '2026-11-16T15:57:00.000Z',
+        },
+      ] as any,
+    })
+    // As an NVIDIA card wrote it up to 0.2.5: one line per half minute of speech, no dated word
+    const folder = path.join(TRANSCRIPTS_DIR, job.id)
+    mkdirSync(folder, { recursive: true })
+    try {
+      writeFileSync(path.join(folder, 'chunk_000.json'), JSON.stringify({ start: 0, segments: [[0, 27, halfMinute], [30, 58.5, halfMinute], [60, 62, 'bonsoir Ralen']], words: [] }))
+      writeFileSync(path.join(folder, 'chunk_001.json'), '{ not json')
+      writeJournal()
+      const files = unzip((await client.get('/api/logs/export?hours=24').loginAs(user)).body() as Buffer)
+      const [told] = JSON.parse(files['analyses.json']).jobs
+      assert.deepEqual(told.transcript, { chunks: 1, lines: 3, dated_words: 0, median_seconds: 27, longest_seconds: 28.5, long_share: 0.986, relistened: false })
+      assert.equal(told.compilations.length, 1)
+      assert.include(told.compilations[0], { id: 'abcdefghij', name: 'Trop calme', target_seconds: 90, parts: 2, passages: 2, seconds: 81, rough_cuts: 1, other_lives: 0, proposed_by_ai: false })
+      // Two passages of about 40 seconds: what a live in half-minute lines gives
+      assert.deepEqual(told.compilations[0].passage_seconds, [43.2, 38])
+      assert.lengthOf(told.compilations[0].brief, 300)
+      assert.deepEqual(told.compilations[0].asks, [{ ask: 'Ça ne correspond pas, utilise un maximum de passages', added: 11, removed: 0, recut: 0 }])
+
+      // Transcribed again since, in sentences
+      writeFileSync(path.join(folder, 'chunk_000.json'), JSON.stringify({ start: 0, lines: 2, segments: [[0, 2, 'bon là c’est calme'], [2.5, 4, 'trop calme']], words: [{ word: 'bon', start: 0, end: 0.3 }] }))
+      writeFileSync(path.join(folder, 'relistened.json'), '{}')
+      const after = JSON.parse(unzip((await client.get('/api/logs/export?hours=24').loginAs(user)).body() as Buffer)['analyses.json']).jobs[0]
+      assert.include(after.transcript, { lines: 2, dated_words: 1, median_seconds: 2, longest_seconds: 2, long_share: 0, relistened: true })
+    } finally {
+      rmSync(folder, { recursive: true, force: true })
+    }
   })
 
   test('the whole journal, and an unknown period falls back to a day', async ({ client, assert }) => {

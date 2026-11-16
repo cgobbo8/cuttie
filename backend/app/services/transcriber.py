@@ -15,8 +15,14 @@ The "transcription" setting picks the engine:
 A cloud engine that keeps refusing (rate limits, errors) or this computer
 failing hands the audio to OpenRouter: its key is required for the analysis
 anyway.
+
+A transcript is read line by line: the AI that searches a live picks a passage
+by its first and last lines. A line is therefore a sentence, a few seconds,
+whatever the engine (`split_long`, and the timestamps asked of the NVIDIA path:
+left to itself it gives one line per 30 seconds).
 """
 
+import bisect
 import importlib.util
 import logging
 import os
@@ -59,6 +65,63 @@ def tidy_words(words: list[dict]) -> list[dict]:
             continue
         out.append({"word": text, "start": start, "end": end})
     return out
+
+
+# A line this long holding this many words is a stretch the model gave no time inside
+LONG_LINE = 10.0
+LONG_WORDS = 20
+# A line cut on its words: what it lasts at most, and the silence between two words that ends it
+LINE_SECONDS = 6.0
+LINE_PAUSE = 0.6
+
+
+def lines_from_words(words: list[dict]) -> list[tuple[float, float, str]]:
+    """Dated words cut into lines the way speech falls: at the end of a sentence, at a
+    silence, and at the latest after LINE_SECONDS (sooner on a comma)."""
+    lines: list[tuple[float, float, str]] = []
+    line: list[dict] = []
+    for i, w in enumerate(words):
+        line.append(w)
+        if i + 1 == len(words):
+            break
+        lasted = w["end"] - line[0]["start"]
+        text = w["word"]
+        if (
+            (text.endswith((".", "?", "!", "…")) and len(line) >= 2)
+            or words[i + 1]["start"] - w["end"] >= LINE_PAUSE
+            or lasted >= LINE_SECONDS
+            or (lasted >= LINE_SECONDS / 2 and text.endswith((",", ";", ":")))
+        ):
+            lines.append((line[0]["start"], line[-1]["end"], " ".join(x["word"] for x in line)))
+            line = []
+    if line:
+        lines.append((line[0]["start"], line[-1]["end"], " ".join(x["word"] for x in line)))
+    return lines
+
+
+def split_long(segments: list[tuple[float, float, str]], words: list[dict]) -> list[tuple[float, float, str]]:
+    """The same lines, those too long to be a sentence cut on the dated words they hold.
+    Without dated words (or when a line's are missing) nothing changes."""
+    if not words:
+        return segments
+    starts = [w["start"] for w in words]
+    out: list[tuple[float, float, str]] = []
+    for start, end, text in segments:
+        said = len(text.split())
+        if end - start < LONG_LINE or said < LONG_WORDS:
+            out.append((start, end, text))
+            continue
+        inside = [w for w in words[bisect.bisect_left(starts, start - 0.3) : bisect.bisect_right(starts, end)] if w["end"] <= end + 0.3]
+        # Too few of its words are dated to cut on them: the line stays whole
+        out += lines_from_words(inside) if len(inside) >= 0.6 * said else [(start, end, text)]
+    return out
+
+
+def whole_live_words() -> bool:
+    """Whether this computer dates each word of a whole live it transcribes. An NVIDIA card
+    does (measured on an RTX 4070 SUPER: as fast with as without); an Apple chip goes 2.5x
+    slower with them and a CPU is slow enough, so their clips get theirs from their own audio."""
+    return local_backend() == "cuda"
 
 
 def has_key(engine: str) -> bool:
@@ -105,7 +168,7 @@ def transcribe(audio_path: str, engine: str, words: bool = True) -> Transcript:
         )
     segments = [(s.start, s.end, s.text) for s in (getattr(result, "segments", None) or [])]
     word_list = tidy_words([{"word": w.word, "start": w.start, "end": w.end} for w in (getattr(result, "words", None) or [])])
-    return Transcript((result.text or "").strip(), segments, word_list)
+    return Transcript((result.text or "").strip(), split_long(segments, word_list), word_list)
 
 
 # ── This computer ────────────────────────────────────────────────────────────
@@ -203,14 +266,19 @@ def _cuda_batch_size() -> int:
 
 
 def _transcribe_cuda(model, audio, words: bool) -> list:
-    """Batched on the GPU; when its memory runs out, fewer chunks at a time from then on."""
+    """Batched on the GPU; when its memory runs out, fewer chunks at a time from then on.
+
+    The batched pipeline writes no timestamps unless asked (`without_timestamps` is its
+    default): each 30-second stretch of speech then comes back as ONE line. A whole live
+    was 625 lines of half a minute on an NVIDIA card where an Apple chip gives 8,000
+    sentences, and the AI, which picks passages by lines, could only pick half minutes."""
     global _batch_size
     from faster_whisper import BatchedInferencePipeline
 
     while True:
         try:
             segments, _info = BatchedInferencePipeline(model=model).transcribe(
-                audio, word_timestamps=words, vad_filter=True, batch_size=_cuda_batch_size()
+                audio, word_timestamps=words, vad_filter=True, batch_size=_cuda_batch_size(), without_timestamps=False
             )
             return list(segments)
         except RuntimeError as e:
@@ -272,16 +340,18 @@ def _local(audio_path: str, words: bool = True) -> Transcript:
             segments = _transcribe_cuda(model, audio, words)
         else:
             segments, _info = model.transcribe(audio, word_timestamps=words, vad_filter=True, beam_size=1)
-        out = Transcript(text="")
-        texts = []
-        word_list = []
-        for s in segments:
-            out.segments.append((float(s.start), float(s.end), s.text))
-            texts.append(s.text.strip())
-            word_list += [{"word": w.word, "start": w.start, "end": w.end} for w in s.words or []]
-    out.words = tidy_words(word_list)
-    out.text = " ".join(t for t in texts if t)
-    return out
+        return _transcript_of(segments)
+
+
+def _transcript_of(segments) -> Transcript:
+    """What faster-whisper gives (a list, or a generator still running the model) as a transcript."""
+    lines: list[tuple[float, float, str]] = []
+    word_list: list[dict] = []
+    for s in segments:
+        lines.append((float(s.start), float(s.end), s.text))
+        word_list += [{"word": w.word, "start": w.start, "end": w.end} for w in s.words or []]
+    dated = tidy_words(word_list)
+    return Transcript(" ".join(t.strip() for _s, _e, t in lines if t.strip()), split_long(lines, dated), dated)
 
 
 def _local_mlx(audio_path: str, words: bool) -> Transcript:
@@ -292,5 +362,5 @@ def _local_mlx(audio_path: str, words: bool) -> Transcript:
     with _run_lock:
         result = mlx_whisper.transcribe(audio, path_or_hf_repo=model, word_timestamps=words, condition_on_previous_text=False)
     segments = [(float(s["start"]), float(s["end"]), s["text"]) for s in result.get("segments", [])]
-    word_list = [{"word": w["word"], "start": w["start"], "end": w["end"]} for s in result.get("segments", []) for w in s.get("words", [])]
-    return Transcript(" ".join(t.strip() for _s, _e, t in segments if t.strip()), segments, tidy_words(word_list))
+    word_list = tidy_words([{"word": w["word"], "start": w["start"], "end": w["end"]} for s in result.get("segments", []) for w in s.get("words", [])])
+    return Transcript(" ".join(t.strip() for _s, _e, t in segments if t.strip()), split_long(segments, word_list), word_list)

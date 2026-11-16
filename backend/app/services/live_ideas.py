@@ -242,6 +242,7 @@ def suggest_videos(
     from app.services import live_agent
     from app.services.live_tools import LiveTools
 
+    live_search.relisten(job_id, url)
     transcript = load_cached(job_id)
     if not transcript:
         raise live_search.NoTranscript(job_id)

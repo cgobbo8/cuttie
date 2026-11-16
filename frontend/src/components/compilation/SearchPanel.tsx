@@ -14,7 +14,7 @@ import {
   type PlanChange,
   type VideoPlan,
 } from "../../lib/api";
-import { isNear, liveClock, stepText } from "../../lib/compilation";
+import { isNear, liveClock, sameStep, stepText } from "../../lib/compilation";
 import { frameAt, tileStyle } from "../../lib/storyboard";
 import { useToast } from "../Toast";
 import PlanTalk, { type TalkTurn } from "./PlanTalk";
@@ -116,9 +116,12 @@ export default function SearchPanel({ jobId, storyboards, lives, info, previewed
       const doing = await getLiveSearchProgress(jobId);
       if (stopped || !doing) return;
       setStep(doing);
-      // One line per thing done, in the conversation
+      // One line per thing done, in the conversation (a step that counts, « 12/41 », keeps its line)
       const line = stepText(t, doing);
-      setTrail((lines) => (lines[lines.length - 1] === line ? lines : [...lines, line]));
+      setTrail((lines) => {
+        const last = lines[lines.length - 1];
+        return last === line ? lines : last !== undefined && sameStep(last, line) ? [...lines.slice(0, -1), line] : [...lines, line];
+      });
     };
     const timer = window.setInterval(ask, PROGRESS_EVERY);
     return () => {
@@ -410,7 +413,7 @@ export default function SearchPanel({ jobId, storyboards, lives, info, previewed
           <div className="min-w-0">
             <p className="text-[13px] leading-snug text-white break-words">{stepText(t, step)}</p>
             <p className="mt-0.5 text-[12px] leading-snug text-ink-3">
-              {t(step?.step === "hearing" ? "compilation.aiHearing" : busy === "plan" ? "compilation.aiPlanning" : "compilation.aiReading")}
+              {t(step?.step === "relistening" ? "compilation.aiRelistening" : step?.step === "hearing" ? "compilation.aiHearing" : busy === "plan" ? "compilation.aiPlanning" : "compilation.aiReading")}
             </p>
           </div>
         </div>

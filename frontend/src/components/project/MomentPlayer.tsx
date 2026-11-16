@@ -63,8 +63,10 @@ interface Props {
   words?: TranscriptWord[];
   /** 30 s more cut on one side (the clip's file grows from the live when needed) */
   onExtend?: (side: "start" | "end") => Promise<void>;
-  /** More cutting tools, after the built-in ones */
+  /** What cuts the clip on its own (the AI's montage): first in the row, before the hand tools */
   tools?: ReactNode;
+  /** What the cut on screen is, when that is worth a word (« the cut advised by the analysis »): said next to its length */
+  cutLabel?: string;
   /** Decision row, under the trim bar */
   children?: ReactNode;
 }
@@ -80,7 +82,7 @@ const FRESH_MS = 1100;
 const CUT_HINT_KEY = "cuttie_cut_hint";
 
 const MomentPlayer = forwardRef<MomentPlayerHandle, Props>(function MomentPlayer(
-  { jobId, moment, categoryLabel, autoPlay, onPiecesChange, chat, words, onExtend, tools, children },
+  { jobId, moment, categoryLabel, autoPlay, onPiecesChange, chat, words, onExtend, tools, cutLabel, children },
   ref,
 ) {
   const { t } = useTranslation();
@@ -593,10 +595,12 @@ const MomentPlayer = forwardRef<MomentPlayerHandle, Props>(function MomentPlayer
         </div>
       </div>
 
-      {/* Cutting tools: at the playhead, on the silences; what the cut makes in the end */}
+      {/* Cutting tools on one line: what cuts on its own first, then by hand (at the playhead, on the silences); what the cut makes in the end */}
       <div className="flex flex-wrap items-center gap-x-1 gap-y-1.5 px-1.5 pt-1.5">
+        {tools}
+        {tools && <span aria-hidden className="mx-1.5 w-px h-4 bg-white/10" />}
         <Tooltip content={t(inPiece ? "project.cutHereHint" : "project.keepHereHint")}>
-          <button type="button" onClick={cut} className="btn btn-ghost btn-sm h-7 px-2 -ml-2">
+          <button type="button" onClick={cut} className={`btn btn-ghost btn-sm h-7 px-2 ${tools ? "" : "-ml-2"}`}>
             {inPiece ? <Scissors className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" strokeWidth={2.4} />}
             {t(inPiece ? "project.cutHere" : "project.keepHere")}
             <kbd className="bg-white/[0.08] border-white/10 text-ink-2">C</kbd>
@@ -607,14 +611,13 @@ const MomentPlayer = forwardRef<MomentPlayerHandle, Props>(function MomentPlayer
             <AudioLines className="w-3.5 h-3.5" /> {t("project.tighten")}
           </button>
         </Tooltip>
-        {tools}
         {undoCount > 0 && (
           <button type="button" onClick={undo} className="btn btn-ghost btn-sm h-7 px-2">
             <Undo2 className="w-3.5 h-3.5" /> {t("project.undo")}
           </button>
         )}
         <span className="ml-auto pl-2 text-[12.5px] text-ink-3 whitespace-nowrap">
-          {pieces.length > 1 && <>{t("project.pieces", { count: pieces.length })} · </>}
+          {pieces.length > 1 ? <>{t("project.pieces", { count: pieces.length })} · </> : cutLabel ? <>{cutLabel} · </> : null}
           <span className="mono text-ink-2">{clock(total)}</span>
         </span>
       </div>

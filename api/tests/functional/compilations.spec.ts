@@ -2,11 +2,14 @@ import { test } from '@japa/runner'
 import testUtils from '@adonisjs/core/services/test_utils'
 import { randomUUID } from 'node:crypto'
 import { existsSync, mkdirSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
+import { createServer } from 'node:http'
+import type { AddressInfo } from 'node:net'
 import path from 'node:path'
 import db from '@adonisjs/lucid/services/db'
 import User from '#models/user'
 import Job from '#models/job'
 import { clipDir, DATA_DIR } from '#services/data_paths'
+import env from '#start/env'
 
 test.group('Compilations', (group) => {
   group.each.setup(() => testUtils.db().withGlobalTransaction())
@@ -563,6 +566,41 @@ test.group('Compilations', (group) => {
     assert.deepEqual(progress.body(), { doing: null })
     ;(await client.post(`/api/clips/${job.id}/a.mp4/suggest-cut`).loginAs(user).json({})).assertStatus(503)
     ;(await client.post(`/api/clips/${job.id}/b.mp4/suggest-cut`).loginAs(user).json({})).assertStatus(404)
+  })
+
+  test('the AI is told the length the streamer aims for when it cuts a clip', async ({ client, assert }) => {
+    const { user, job } = await setup()
+    const asked: any[] = []
+    const engine = createServer((req, res) => {
+      let raw = ''
+      req.on('data', (chunk) => (raw += chunk))
+      req.on('end', () => {
+        asked.push({ url: req.url, body: JSON.parse(raw || '{}') })
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ parts: [[2, 30], [40, 71.5]], note: 'Le contexte puis la chute.', cost: 0.001 }))
+      })
+    })
+    await new Promise<void>((resolve) => engine.listen(0, '127.0.0.1', resolve))
+    const before = env.get('WORKER_URL')
+    env.set('WORKER_URL', `http://127.0.0.1:${(engine.address() as AddressInfo).port}`)
+    try {
+      const url = `/api/clips/${job.id}/a.mp4/suggest-cut`
+      const cut = await client.post(url).loginAs(user).json({ target: 60 })
+      cut.assertStatus(200)
+      assert.deepEqual((cut.body() as any).parts, [[2, 30], [40, 71.5]])
+      assert.equal(asked[0].url, `/clips/${job.id}/a.mp4/suggest-cut`)
+      assert.equal(asked[0].body.target, 60)
+      // Left free, or anything that is no length: the AI is told nothing and keeps what a short lasts
+      for (const body of [{}, { target: 'libre' }, { target: 0 }, { target: 4 }, { target: null }]) await client.post(url).loginAs(user).json(body)
+      assert.deepEqual(asked.slice(1).map((a) => 'target' in a.body), [false, false, false, false, false])
+      // Never more than three minutes, and whole seconds
+      await client.post(url).loginAs(user).json({ target: 1200 })
+      await client.post(url).loginAs(user).json({ target: '44.6' })
+      assert.deepEqual(asked.slice(-2).map((a) => a.body.target), [180, 45])
+    } finally {
+      env.set('WORKER_URL', before ?? 'http://127.0.0.1:9')
+      await new Promise<void>((resolve) => engine.close(() => resolve()))
+    }
   })
 
   test("an export of a compilation shows its first moment, and a clip's words are read as they are", async ({ client, assert }) => {

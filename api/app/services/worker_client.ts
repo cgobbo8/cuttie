@@ -497,7 +497,7 @@ export async function extractLivePieces(
 export async function suggestClipCut(
   jobId: string,
   clipFilename: string,
-  body: { summary: string; current: [number, number][]; wish: string }
+  body: { summary: string; current: [number, number][]; wish: string; target?: number }
 ): Promise<{ parts: [number, number][]; note: string; cost: number }> {
   return call('POST', `/clips/${encodeURIComponent(jobId)}/${encodeURIComponent(clipFilename)}/suggest-cut`, { body, timeoutMs: 10 * 60_000 })
 }

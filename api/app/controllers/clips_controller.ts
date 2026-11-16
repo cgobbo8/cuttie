@@ -161,11 +161,15 @@ export default class ClipsController {
     if (!hp) return response.notFound({ error: 'clip not found' })
     const choice = job.selection?.[filename]
     const current = choice?.segments ?? (choice?.trim ? [choice.trim] : suggestedCut(hp) ? [suggestedCut(hp)!] : [])
+    // The length the streamer aims for (seconds); anything else: left to the AI
+    const asked = Number(request.input('target'))
+    const target = Number.isFinite(asked) && asked >= 10 ? Math.min(180, Math.round(asked)) : undefined
     try {
       return await suggestClipCut(job.id, filename, {
         summary: [hp.clip_name, hp.llm?.summary].filter(Boolean).join(' — '),
         current,
         wish: String(request.input('wish') ?? '').trim().slice(0, 300),
+        ...(target ? { target } : {}),
       })
     } catch (err) {
       return workerFailure(response, err)

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { useTranslation } from "react-i18next";
-import { AlertTriangle, ArrowLeft, ArrowRight, Check, ChevronDown, Loader2, RotateCcw, Sparkles, Upload, WandSparkles, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ArrowRight, Check, ChevronDown, Loader2, RotateCcw, Upload, X } from "lucide-react";
 import {
   clipThumbUrl,
   deleteClip,
@@ -27,6 +27,7 @@ import { useBackdrop } from "../lib/BackdropContext";
 import { useChannel } from "../lib/ChannelContext";
 import { useTransmitChannel } from "../lib/TransmitContext";
 import { buildMoments, countStates, nextTodo, type MomentState } from "../lib/moments";
+import { GROW_ORDER, readCutTarget, saveCutTarget, tooShortFor, type CutTarget } from "../lib/cutTarget";
 import type { Range } from "../lib/montage";
 import { hoursMinutes, shortDate, splitVodTitle } from "../lib/format";
 import { useToast } from "../components/Toast";
@@ -38,9 +39,9 @@ import ModeSwitch from "../components/project/ModeSwitch";
 import Stepper from "../components/project/Stepper";
 import VodTimeline from "../components/project/VodTimeline";
 import MomentPlayer, { type MomentPlayerHandle } from "../components/project/MomentPlayer";
+import AiCutButton from "../components/project/AiCutButton";
 import MomentDetails from "../components/project/MomentDetails";
 import MomentList from "../components/project/MomentList";
-import { Tooltip } from "../components/ui/Tooltip";
 import FreedNotice from "../components/project/FreedNotice";
 import { latestPerClip } from "../lib/renders";
 
@@ -171,7 +172,6 @@ export default function ProjectPage() {
   }, [jobId, wordsKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const trimmedByUser = !!current?.suggested && !!current?.trimmedByUser;
-  const hasChat = !!current && (clipChat[current.filename]?.length ?? 0) > 0;
   const vodId = vodIdOf(job?.url ?? null);
   const vodThumb = channel?.vods.find((v) => v.id === vodId)?.thumbnail_url ?? null;
   useBackdrop(current && jobId ? clipThumbUrl(jobId, current.filename, { version: `${current.start}-${current.end}` }) : vodThumb);
@@ -243,6 +243,14 @@ export default function ProjectPage() {
     [saveChoice],
   );
 
+  // The length the AI's montage aims for, kept for this project (null: left to the AI)
+  const [cutTarget, setCutTarget] = useState<CutTarget>(() => (jobId ? readCutTarget(jobId) : null));
+  useEffect(() => setCutTarget(jobId ? readCutTarget(jobId) : null), [jobId]);
+  const chooseCutTarget = (target: CutTarget) => {
+    setCutTarget(target);
+    if (jobId) saveCutTarget(jobId, target);
+  };
+
   // The AI's montage of the clip on screen: the parts worth keeping, shown as pieces (and taken back with Undo)
   const [aiCutting, setAiCutting] = useState<string | null>(null);
   const aiCut = async () => {
@@ -250,7 +258,24 @@ export default function ProjectPage() {
     const filename = current.filename;
     setAiCutting(filename);
     try {
-      const { parts, note } = await suggestClipCut(jobId, filename);
+      // A clip that holds less of the live than the length aimed for grows first, 30 s at a time
+      // (the « + 30 s » of its strip: its words, its cam and its pictures follow), then the AI cuts
+      let length = current.duration;
+      if (tooShortFor(length, cutTarget)) toast.info(t("project.aiCutGrowing"));
+      for (const side of GROW_ORDER) {
+        if (!tooShortFor(length, cutTarget)) break;
+        try {
+          await extendClip(jobId, filename, side);
+        } catch (err) {
+          // The live starts or ends there: the other side. The live is gone: with what the clip holds
+          if (err instanceof ExtendError && err.reason === "edge") continue;
+          break;
+        }
+        const grown = await getJobStatus(jobId);
+        setJob(grown);
+        length = buildMoments(grown.hot_points ?? [], grown.selection ?? {}).find((m) => m.filename === filename)?.duration ?? length;
+      }
+      const { parts, note } = await suggestClipCut(jobId, filename, { target: cutTarget });
       // The streamer moved on to another clip meanwhile: nothing to show there
       if (playing.current !== filename) return;
       if (parts.length === 0 || !playerRef.current?.setCut(parts)) toast.info(t("project.aiCutSame"));
@@ -488,41 +513,23 @@ export default function ProjectPage() {
                 words={wordsKey ? clipWords[wordsKey] : undefined}
                 onExtend={(side) => extendMoment(current.filename, side)}
                 onPiecesChange={(pieces) => saveCut(current.filename, pieces)}
+                cutLabel={current.suggested && !current.trimmedByUser ? t("project.cutAdvised") : undefined}
                 tools={
-                  <Tooltip content={t("project.aiCutHint")}>
-                    <button type="button" onClick={aiCut} disabled={!!aiCutting || !wordsKey || !clipWords[wordsKey]?.length} className="btn btn-ghost btn-sm h-7 px-2">
-                      {aiCutting === current.filename ? <Loader2 className="w-3.5 h-3.5 spinner" /> : <WandSparkles className="w-3.5 h-3.5 text-accent" />}
-                      {t("project.aiCut")}
-                    </button>
-                  </Tooltip>
+                  // Everything the AI does to the cut in one control: it cuts, its menu says how long and takes the advised cut back
+                  <AiCutButton
+                    busy={aiCutting === current.filename}
+                    disabled={!!aiCutting || !wordsKey || !clipWords[wordsKey]?.length}
+                    target={cutTarget}
+                    onTarget={chooseCutTarget}
+                    onCut={aiCut}
+                    onReset={trimmedByUser ? () => saveChoice(current.filename, { trim: null }) : undefined}
+                  />
                 }
               >
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-2.5 px-1.5 pt-3 pb-1.5">
-                  {/* The hint, and the way back to the AI's cut under it */}
-                  <div className="flex-1 min-w-[220px] flex flex-col items-start gap-1">
-                    <span className="text-[12.5px] text-ink-3">
-                      {current.duplicateOf
-                        ? t("project.duplicateHint", { rank: current.duplicateOf.rank })
-                        : current.suggested && !current.trimmedByUser
-                          ? t("project.suggestedTrimHint", { seconds: Math.round(current.suggested[1] - current.suggested[0]) })
-                          : current.pieces.length > 1
-                            ? t("project.piecesHint")
-                            : t("project.trimHint")}
-                    </span>
-                    {(trimmedByUser || hasChat) && (
-                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                        {trimmedByUser && (
-                          <button onClick={() => saveChoice(current.filename, { trim: null })} className="btn btn-ghost btn-sm h-7 px-2 -ml-2">
-                            <Sparkles className="w-3.5 h-3.5" /> {t("project.backToSuggestedTrim")}
-                          </button>
-                        )}
-                        {hasChat && (
-                          <span className="inline-flex items-center gap-1.5 text-[12px] text-ink-3 whitespace-nowrap">
-                            <span className="w-1.5 h-1.5 rounded-full bg-white/90" /> {t("project.chatDots")}
-                          </span>
-                        )}
-                      </div>
-                    )}
+                  {/* Only what the streamer has to know before deciding: this moment is one they already have */}
+                  <div className="flex-1 min-w-[120px]">
+                    {current.duplicateOf && <span className="text-[12.5px] text-ink-3">{t("project.duplicateHint", { rank: current.duplicateOf.rank })}</span>}
                   </div>
                   {/* Pass and keep stay side by side */}
                   <div className="flex items-center gap-2.5 ml-auto">

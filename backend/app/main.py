@@ -250,10 +250,12 @@ class TemplateUsageRequest(BaseModel):
 
 
 class CutRequest(BaseModel):
-    # What happens in the clip, the cut kept now (clip seconds), what the streamer asks for
+    # What happens in the clip, the cut kept now (clip seconds), what the streamer asks for,
+    # the length they aim for (seconds; none: left to the AI)
     summary: str = ""
     current: list[list[float]] = []
     wish: str = ""
+    target: float | None = None
 
 
 class VodFacecamRequest(BaseModel):
@@ -674,7 +676,10 @@ def clip_suggest_cut(job_id: str, clip_filename: str, req: CutRequest) -> dict:
     except (OSError, ValueError):
         words = []
     try:
-        return live_search.suggest_cut(words if isinstance(words, list) else [], _duration(clip_path), req.summary[:600], req.current[:20], req.wish[:300])
+        return live_search.suggest_cut(
+            words if isinstance(words, list) else [], _duration(clip_path), req.summary[:600], req.current[:20], req.wish[:300],
+            target=live_search.cut_target(req.target),
+        )
     except Exception as e:
         raise _ai_errors(e) from e
 

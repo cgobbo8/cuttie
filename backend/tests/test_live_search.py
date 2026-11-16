@@ -281,6 +281,60 @@ def test_a_clip_s_words_become_sentences_and_the_ai_keeps_parts(monkeypatch):
     assert "10.0-40.0" in prompts[0] and "plus court" in prompts[0] and "Un tigre" in prompts[0]
     with pytest.raises(ls.NoTranscript):
         ls.suggest_cut([], 60.0)
+    # Left free, the AI is told what a short posted on the networks lasts (it used to be 15 to 45 seconds)
+    assert "45 to 90 seconds in all" in prompts[0] and "15 to 45" not in prompts[0]
+
+
+def test_the_ai_s_montage_aims_for_the_length_the_streamer_gives(monkeypatch):
+    words = [{"word": "Regarde", "start": 1.0, "end": 1.4}, {"word": "ça.", "start": 1.5, "end": 1.8}]
+    asked = []
+    answers = []
+
+    def answer(prompt, **kwargs):
+        asked.append(prompt)
+        parts = answers.pop(0)
+        if parts is None:
+            raise RuntimeError("the provider hung up")
+        return llm_text.Answer(json.dumps({"parts": [{"start": a, "end": b} for a, b in parts], "note": f"{len(asked)}"}), 300, 50, 0.001, 1.0)
+
+    monkeypatch.setattr(ls.llm_text, "complete", answer)
+    total = lambda cut: round(sum(end - start for start, end in cut["parts"]))  # noqa: E731
+
+    # Near what was asked (a quarter of it at most): taken as it is, asked once
+    answers[:] = [[(10, 60)]]
+    cut = ls.suggest_cut(words, 120.0, target=60.0)
+    assert total(cut) == 50 and len(asked) == 1 and cut["cost"] == 0.001
+    # The length replaces the range, as "about", and no sentence is cut to land on it
+    assert "about 60 seconds in all" in asked[0] and "never cut a sentence short" in asked[0] and "45 to 90" not in asked[0]
+
+    # Far too short: sent back once with what it gave, and the nearer of the two is kept (both are paid)
+    asked.clear()
+    answers[:] = [[(10, 30)], [(10, 40), (50, 75)]]
+    cut = ls.suggest_cut(words, 120.0, target=60.0)
+    assert total(cut) == 56 and cut["note"] == "2" and cut["cost"] == 0.002 and len(asked) == 2
+    assert "You answered" in asked[1] and "20 seconds in all, for about 60 asked: too short" in asked[1] and asked[1].startswith(asked[0])
+    # Far too long: the same, the other way
+    asked.clear()
+    answers[:] = [[(0, 100)], [(20, 55)]]
+    cut = ls.suggest_cut(words, 120.0, target=30.0)
+    assert total(cut) == 35 and "too long" in asked[1]
+    # A second try that is no nearer, or that fails, leaves the first
+    answers[:] = [[(10, 30)], [(10, 15)]]
+    assert total(ls.suggest_cut(words, 120.0, target=60.0)) == 20
+    answers[:] = [[(10, 30)], None]
+    assert total(ls.suggest_cut(words, 120.0, target=60.0)) == 20
+
+    # A clip that holds less than what is asked can only give what it has: most of it is enough
+    asked.clear()
+    answers[:] = [[(2, 38)]]
+    assert total(ls.suggest_cut(words, 40.0, target=90.0)) == 36 and len(asked) == 1
+    # Left free: never sent back, whatever it lasts
+    asked.clear()
+    answers[:] = [[(2, 8)]]
+    assert total(ls.suggest_cut(words, 120.0)) == 6 and len(asked) == 1
+
+    # What the app may send: seconds between 10 and 180, anything else is "free"
+    assert [ls.cut_target(v) for v in (60, "45", 400, 5, 0, None, "libre")] == [60.0, 45.0, 180.0, None, None, None, None]
 
 
 def test_what_a_call_costs_and_the_answer_s_json():

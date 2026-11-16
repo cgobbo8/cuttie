@@ -1901,8 +1901,13 @@ export async function ensurePieces(
 }
 
 /** The parts of a clip the AI would keep for a tight video (clip seconds); nothing is saved */
-export async function suggestClipCut(jobId: string, filename: string, wish = ""): Promise<{ parts: [number, number][]; note: string; cost: number }> {
-  return liveJson(await postJson(`${BASE}/clips/${jobId}/${encodeURIComponent(filename)}/suggest-cut`, { wish }));
+/** `target`: the length aimed for, seconds (none: left to the AI, which keeps 45 s to 1 min 30) */
+export async function suggestClipCut(
+  jobId: string,
+  filename: string,
+  { wish = "", target = null }: { wish?: string; target?: number | null } = {},
+): Promise<{ parts: [number, number][]; note: string; cost: number }> {
+  return liveJson(await postJson(`${BASE}/clips/${jobId}/${encodeURIComponent(filename)}/suggest-cut`, { wish, ...(target ? { target } : {}) }));
 }
 
 // ── Assets ──────────────────────────────────────────────

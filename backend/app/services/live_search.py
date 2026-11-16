@@ -1164,8 +1164,30 @@ def _clip_line(words: list[dict]) -> str:
     return f"[{words[0]['start']:.1f}-{words[-1]['end']:.1f}] {f'{speaker}: ' if speaker else ''}{text}"
 
 
-def cut_prompt(lines: list[str], clip_seconds: float, summary: str, current: list[list[float]], wish: str) -> str:
+# A length asked for the montage of a clip: what the app offers goes from 30 to 90 seconds
+CUT_TARGETS = (10.0, 180.0)
+# A montage this far from the length asked (a quarter of it) is sent back to the model, once
+CUT_OFF = 0.25
+
+
+def cut_target(asked) -> float | None:
+    """The length the streamer aims for, seconds, None when they left it free (or sent nonsense)."""
+    try:
+        seconds = float(asked)
+    except (TypeError, ValueError):
+        return None
+    return min(CUT_TARGETS[1], seconds) if seconds >= CUT_TARGETS[0] else None
+
+
+def cut_prompt(lines: list[str], clip_seconds: float, summary: str, current: list[list[float]], wish: str, target: float | None = None) -> str:
     now = ", ".join(f"{a:.1f}-{b:.1f}" for a, b in current) or "the whole clip"
+    # What a short posted on the networks lasts when nothing is asked; else the length the streamer aims for
+    length = (
+        f"about {target:.0f} seconds in all: that is the length the streamer wants, so keep enough to get near it (a few seconds "
+        "over or under is fine), but never cut a sentence short nor keep filler to land on it"
+        if target
+        else "45 to 90 seconds in all unless the story needs more or the clip holds less worth keeping"
+    )
     return f"""You are the editor of a Twitch streamer's short vertical videos (TikTok, Shorts, Reels). Below is everything said in one
 clip of their stream ({clip_seconds:.0f} seconds long), one line per sentence with its start and end in seconds.
 What happens in it: {summary or "(no summary)"}
@@ -1176,18 +1198,12 @@ WORDS
 
 Choose the parts to keep so the video tells its story as tightly as possible: the context that is needed to get it, then the payoff
 and the reaction. Take out dead air, repetitions, digressions and false starts. The parts play one after the other: the result must
-still make sense. 1 to 5 parts, each at least 2 seconds; cut between sentences, never inside one; 15 to 45 seconds in all unless the
-story needs more.{f" What the streamer asks for: {wish}" if wish else ""}
+still make sense. 1 to 5 parts, each at least 2 seconds; cut between sentences, never inside one; {length}.{f" What the streamer asks for: {wish}" if wish else ""}
 Answer with JSON only: {{"parts": [{{"start": seconds, "end": seconds}}], "note": "one short sentence in the clip's language on what you kept and why"}}"""
 
 
-def suggest_cut(words: list[dict], clip_seconds: float, summary: str = "", current: list[list[float]] | None = None, wish: str = "") -> dict:
-    """The parts of a clip worth keeping, for a tight video: [[start, end], ...] in clip seconds."""
-    lines = clip_lines(words)
-    if not lines:
-        raise NoTranscript("clip")
-    answer = llm_text.complete(cut_prompt(lines, clip_seconds, summary, current or [], wish), max_tokens=6000)
-    data = llm_text.parse_json(answer.text)
+def _cut_parts(data: dict, clip_seconds: float) -> list[list[float]]:
+    """The parts a model gave, as the app takes them: a little air around each, in the clip's order, the nonsense dropped."""
     parts: list[list[float]] = []
     for raw in data.get("parts", []) if isinstance(data.get("parts"), list) else []:
         try:
@@ -1198,4 +1214,55 @@ def suggest_cut(words: list[dict], clip_seconds: float, summary: str = "", curre
         if end - start >= 1.0:
             parts.append([round(start, 2), round(end, 2)])
     parts.sort()
-    return {"parts": parts, "note": str(data.get("note") or "")[:240], "cost": answer.cost}
+    return parts
+
+
+def _cut_off(parts: list[list[float]], target: float, clip_seconds: float) -> str | None:
+    """What to tell the model when its montage is more than a quarter away from the length asked,
+    None when it is near enough. A clip that holds less than what is asked can only give what it has."""
+    total = sum(end - start for start, end in parts)
+    if total > (1 + CUT_OFF) * target:
+        return (
+            f"These parts last {total:.0f} seconds in all, for about {target:.0f} asked: too long. Give the parts again, keeping "
+            "what the story needs first and taking out the weakest (whole sentences, never half of one)."
+        )
+    if total < (1 - CUT_OFF) * min(target, clip_seconds):
+        return (
+            f"These parts last {total:.0f} seconds in all, for about {target:.0f} asked: too short. Give the parts again with more of "
+            "the clip: the context before, the reaction after, the next best exchanges (whole sentences, no filler)."
+        )
+    return None
+
+
+def suggest_cut(
+    words: list[dict], clip_seconds: float, summary: str = "", current: list[list[float]] | None = None, wish: str = "", target: float | None = None,
+) -> dict:
+    """The parts of a clip worth keeping, for a tight video: [[start, end], ...] in clip seconds.
+    `target`: the length the streamer aims for (seconds), None when left free. A montage more than a
+    quarter away from it is sent back to the model once, and the nearer of the two is kept."""
+    lines = clip_lines(words)
+    if not lines:
+        raise NoTranscript("clip")
+    prompt = cut_prompt(lines, clip_seconds, summary, current or [], wish, target)
+    answer = llm_text.complete(prompt, max_tokens=6000)
+    data = llm_text.parse_json(answer.text)
+    parts, note, cost = _cut_parts(data, clip_seconds), str(data.get("note") or ""), answer.cost
+    off = _cut_off(parts, target, clip_seconds) if target and parts else None
+    if off:
+        first = sum(end - start for start, end in parts)
+        given = json.dumps({"parts": [{"start": start, "end": end} for start, end in parts]})
+        try:
+            again = llm_text.complete(f"{prompt}\n\nYou answered: {given}\n{off}", max_tokens=6000)
+            cost += again.cost
+            redone = llm_text.parse_json(again.text)
+            other = _cut_parts(redone, clip_seconds)
+            second = sum(end - start for start, end in other)
+            if other and abs(second - target) < abs(first - target):
+                parts, note = other, str(redone.get("note") or note)
+            logger.info(f"AI montage: {first:.0f} s for about {target:.0f} asked, sent back: {second:.0f} s")
+        except Exception as e:
+            # The first montage stands: a second opinion that fails is no reason to lose it
+            logger.warning(f"AI montage: the second try failed ({type(e).__name__}: {e}), the first is kept")
+    total = sum(end - start for start, end in parts)
+    logger.info(f"AI montage: {len(parts)} parts, {total:.0f} s of a clip of {clip_seconds:.0f} s{f' for about {target:.0f} s asked' if target else ''} (~{cost:.4f} $)")
+    return {"parts": parts, "note": note[:240], "cost": cost}

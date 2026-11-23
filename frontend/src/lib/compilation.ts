@@ -267,7 +267,7 @@ export function addSection<T extends Pick<Compilation, "sections">>(c: T, title 
 
 /** Without a section and its items (the last section standing stays, emptied) */
 export function removeSection<T extends Pick<Compilation, "sections">>(c: T, sectionId: string): T {
-  if (c.sections.length <= 1) return mapSections(c, (s) => (s.id === sectionId ? { ...s, title: "", query: "", items: [] } : s));
+  if (c.sections.length <= 1) return mapSections(c, (s) => (s.id === sectionId ? (({ hidden: _hidden, ...rest }) => ({ ...rest, title: "", query: "", items: [] }))(s) : s));
   return { ...c, sections: c.sections.filter((s) => s.id !== sectionId) };
 }
 
@@ -280,13 +280,25 @@ export function moveSection<T extends Pick<Compilation, "sections">>(c: T, secti
   return { ...c, sections };
 }
 
+/**
+ * A part's title written in the video (`shown`), or kept for the list only: the part still has its
+ * name here, the video just doesn't write it when the part starts.
+ */
+export function showTitle<T extends Pick<Compilation, "sections">>(c: T, sectionId: string, shown: boolean): T {
+  return mapSections(c, (s) => {
+    if (s.id !== sectionId) return s;
+    const { hidden: _hidden, ...rest } = s;
+    return shown ? rest : { ...rest, hidden: true };
+  });
+}
+
 /** When each section with items starts in the video, and how long it runs (seconds) */
-export function sectionStarts(c: Pick<Compilation, "sections">): { id: string; title: string; at: number; length: number }[] {
-  const starts: { id: string; title: string; at: number; length: number }[] = [];
+export function sectionStarts(c: Pick<Compilation, "sections">): { id: string; title: string; at: number; length: number; hidden?: boolean }[] {
+  const starts: { id: string; title: string; at: number; length: number; hidden?: boolean }[] = [];
   let at = 0;
   for (const s of c.sections) {
     const length = sectionLength(s);
-    if (s.items.length > 0) starts.push({ id: s.id, title: s.title, at, length });
+    if (s.items.length > 0) starts.push({ id: s.id, title: s.title, at, length, ...(s.hidden ? { hidden: true } : {}) });
     at += length;
   }
   return starts;

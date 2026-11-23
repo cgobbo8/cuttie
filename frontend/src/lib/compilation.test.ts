@@ -40,6 +40,7 @@ import {
   removeSection,
   revisedSections,
   sectionStarts,
+  showTitle,
   sectionsFromPlan,
   sameStep,
   stepText,
@@ -112,6 +113,23 @@ describe("compilations", () => {
     expect(removeSection(c, "s1").sections.map((s) => s.id)).toEqual(["s2"]);
     // The last one stays, emptied
     expect(removeSection({ sections: [c.sections[0]] }, "s1").sections).toEqual([{ id: "s1", title: "", query: "", items: [] }]);
+    // (and no longer says its title is hidden: it has none)
+    expect(removeSection({ sections: [{ ...c.sections[0], hidden: true }] }, "s1").sections).toEqual([{ id: "s1", title: "", query: "", items: [] }]);
+  });
+
+  it("keeps a part's title out of the video when it is hidden", () => {
+    const c = { sections: [section("s1", [item("a", 0, 2)], "Calme"), section("s2", [item("b", 20, 24)], "Ça pète")] };
+    const hidden = showTitle(c, "s2", false);
+    // The part keeps its name, its place and its length: only the video is told not to write it
+    expect(hidden.sections[1]).toEqual({ ...c.sections[1], hidden: true });
+    expect(hidden.sections[0]).toBe(c.sections[0]);
+    expect(sectionStarts(hidden)).toEqual([
+      { id: "s1", title: "Calme", at: 0, length: 2 },
+      { id: "s2", title: "Ça pète", at: 2, length: 4, hidden: true },
+    ]);
+    // Shown again: the field is gone, not set to false
+    expect(showTitle(hidden, "s2", true)).toEqual(c);
+    expect(showTitle(c, "nope", false)).toEqual(c);
   });
 
   it("knows when each section starts in the video", () => {

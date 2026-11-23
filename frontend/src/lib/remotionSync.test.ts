@@ -5,6 +5,7 @@ import { INTRO_IDS, INTRO_SOUND_IDS, introSpan, JINGLE_IDS } from "./intro/intro
 import { MUSIC_KINDS } from "./music/mix";
 import { TRANSITION_IDS } from "./transitions";
 import { UNIVERSES } from "./universes";
+import { HOOK_STYLES } from "./templateSpec";
 
 /** The server renderer must draw exactly what the editor shows (scripts/sync-remotion.mjs) */
 const root = path.resolve(__dirname, "../../..");
@@ -51,11 +52,20 @@ describe("editor and server renderer stay in sync", () => {
   it("knows the same universes on both sides: their layout, their graphics, their games", () => {
     const service = readFileSync(path.join(root, "api/app/services/compilations.ts"), "utf8");
     for (const universe of UNIVERSES) {
-      const said = service.match(new RegExp(`${universe.id}: \\{ template: '(\\w+)', look: '(\\w+)', intros: \\[([^\\]]+)\\]`));
+      const said = service.match(new RegExp(`${universe.id}: \\{ template: '(\\w+)', look: '(\\w+)', intros: \\[([^\\]]+)\\], titles: \\[([^\\]]+)\\]`));
       expect(said?.[1], universe.id).toBe(universe.template);
       expect(said?.[2], universe.id).toBe(universe.look);
       expect(said?.[3].match(/\w+/g), universe.id).toEqual([...universe.intros]);
+      expect(said?.[4].match(/\w+/g), universe.id).toEqual([...universe.titles]);
     }
+  });
+
+  it("knows the same ways of writing a title on both sides", () => {
+    const service = readFileSync(path.join(root, "api/app/services/compilations.ts"), "utf8");
+    const kit = readFileSync(path.join(root, "api/app/services/brand_kit.ts"), "utf8");
+    expect(service.match(/export const TITLE_STYLES = \[([^\]]+)\]/)?.[1].match(/\w+/g)).toEqual(HOOK_STYLES);
+    // (and a template of the streamer's can be saved with each of them)
+    for (const style of HOOK_STYLES) expect(kit, style).toContain(`'${style}'`);
   });
 
   it("makes a jingle follow a music the same way on both sides", () => {

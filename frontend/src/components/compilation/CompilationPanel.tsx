@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from "react";
 import { useTranslation } from "react-i18next";
-import { ArrowDown, ArrowRight, ArrowUp, Blend, Check, ChevronRight, Clapperboard, FolderInput, Gamepad2, Layers, Loader2, Music2, Plus, Sparkles, Trash2, Type, X, LayoutTemplate, type LucideIcon } from "lucide-react";
+import { ArrowDown, ArrowRight, ArrowUp, Blend, Check, ChevronRight, Clapperboard, Eye, EyeOff, FolderInput, Gamepad2, Layers, Loader2, Music2, Palette, Plus, Sparkles, Trash2, Type, X, LayoutTemplate, type LucideIcon } from "lucide-react";
 import type { Compilation, CompilationItem, CompilationSection, TwitchStoryboard } from "../../lib/api";
 import {
   PLAIN_CUT,
@@ -22,6 +22,7 @@ import {
   sectionLength,
   setTransition,
   setVideoTransition,
+  showTitle,
 } from "../../lib/compilation";
 import { clock } from "../../lib/format";
 import { frameAt, tileStyle } from "../../lib/storyboard";
@@ -33,6 +34,7 @@ import IntroPicker, { type HookMenu, type IntroBrand } from "./IntroPicker";
 import MusicPicker from "./MusicPicker";
 import TemplateMenu from "../TemplateMenu";
 import { dressAs, UNIVERSES, universeOf } from "../../lib/universes";
+import { HOOK_STYLES, isHookStyle, type HookStyle } from "../../lib/templateSpec";
 import TransitionPicker from "./TransitionPicker";
 
 interface Props {
@@ -240,7 +242,7 @@ export default function CompilationPanel({
   }, [picked.size]);
 
   // What is open: the list of parts to move the picked passages to, or the transitions (of the video, of the picked ones, of one passage)
-  const [menu, setMenu] = useState<"move" | "video" | "picked" | "intro" | "music" | "template" | "universe" | { item: string } | null>(null);
+  const [menu, setMenu] = useState<"move" | "video" | "picked" | "intro" | "music" | "template" | "universe" | "titles" | { item: string } | null>(null);
   const partName = (section: CompilationSection, among = compilation.sections) => section.title.trim() || t("compilation.partN", { n: among.indexOf(section) + 1 });
   const moveTo = (sectionId: string | null) => {
     setMenu(null);
@@ -296,6 +298,7 @@ export default function CompilationPanel({
   const track = trackOf(musics, compilation.music?.track);
   // The look of a game the video is dressed in (none: the channel's own)
   const universe = universeOf(compilation.universe);
+  const titleStyle = isHookStyle(compilation.titleStyle) ? compilation.titleStyle : null;
   // The intro is part of the video: it counts in its length
   const opening = openingSeconds(compilation, trackOf(musics, compilation.music?.track)?.bpm);
   const total = compilationLength(compilation) + opening;
@@ -352,6 +355,18 @@ export default function CompilationPanel({
                 className="flex-1 min-w-0 h-8 px-2 rounded-[8px] bg-transparent border border-transparent hover:border-white/10 focus:border-accent-line focus:bg-black/30 text-[13.5px] font-[550] text-white outline-none placeholder:text-ink-3"
               />
               <span className="mono text-[12px] text-ink-3 px-1">{clock(sectionLength(section))}</span>
+              {/* A part can keep its name here without writing it in the video */}
+              {compilation.titles && section.title.trim() && (
+                <button
+                  onClick={() => onChange(showTitle(compilation, section.id, !!section.hidden))}
+                  aria-pressed={!section.hidden}
+                  aria-label={t(section.hidden ? "compilation.titleShow" : "compilation.titleHide")}
+                  title={t(section.hidden ? "compilation.titleShow" : "compilation.titleHide")}
+                  className={`${iconButton} ${section.hidden ? "text-ink-3/70" : ""}`}
+                >
+                  {section.hidden ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                </button>
+              )}
               {compilation.sections.length > 1 && (
                 <>
                   <button onClick={() => onChange(moveSection(compilation, section.id, -1))} disabled={si === 0} aria-label={t("compilation.moveUp")} className={iconButton}>
@@ -611,6 +626,31 @@ export default function CompilationPanel({
                 />
               )}
             </div>
+            {/* How the video writes its titles (each part's, its hook line, the title over its hook): as its template does, or its own way */}
+            <SettingRow
+              icon={Palette}
+              label={t("compilation.titleStyle.label")}
+              value={titleStyle ? t(TITLE_STYLE_NAMES[titleStyle]) : t("compilation.titleStyle.template")}
+              set={!!titleStyle}
+              open={menu === "titles"}
+              onOpen={() => setMenu(menu === "titles" ? null : "titles")}
+            >
+              {menu === "titles" && (
+                <TemplateMenu
+                  label={t("compilation.titleStyle.label")}
+                  value={titleStyle}
+                  // (the ways of writing of the video's universe first)
+                  templates={[...(universe?.titles ?? []), ...HOOK_STYLES.filter((style) => !universe?.titles.includes(style))].map((style) => ({ key: style, name: t(TITLE_STYLE_NAMES[style]) }))}
+                  fallback={t("compilation.titleStyle.template")}
+                  onPick={(key) => {
+                    setMenu(null);
+                    const { titleStyle: _before, ...rest } = compilation;
+                    onChange(isHookStyle(key) ? { ...rest, titleStyle: key } : rest);
+                  }}
+                  onClose={() => setMenu(null)}
+                />
+              )}
+            </SettingRow>
             {/* How every passage comes in; one passage can do otherwise (its row, or several picked) */}
             <SettingRow
               icon={Blend}
@@ -739,6 +779,15 @@ const ROW = "relative first:rounded-t-[12px] last:rounded-b-[12px] hover:bg-whit
  * (`children`, laid against the row). `set`: it has a value of its own (else what it shows is
  * "none"). `apart`: some passages do otherwise, said under it with a way to bring them back.
  */
+/** What each way of writing a title is called (the template editor's own names) */
+const TITLE_STYLE_NAMES: Record<HookStyle, string> = {
+  outline: "templateEditor.hookOutline",
+  box: "templateEditor.hookBox",
+  brand: "templateEditor.hookBrand",
+  vice: "templateEditor.hookVice",
+  viceplate: "templateEditor.hookVicePlate",
+};
+
 function SettingRow({
   icon: Icon,
   label,

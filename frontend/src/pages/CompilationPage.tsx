@@ -80,7 +80,7 @@ import type { HookMenu, IntroBrand } from "../components/compilation/IntroPicker
 import { clipTemplateContext } from "../lib/templateContext";
 import { templateGuides } from "../lib/templateGuide";
 import { buildAny, customTemplates, defaultTemplateKey, findCustom, hookOf, isBuiltIn, type TemplateKey } from "../lib/templateKeys";
-import { titleCard } from "../lib/templateSpec";
+import { isHookStyle, titleCard } from "../lib/templateSpec";
 import { TEMPLATE_IDS } from "../lib/templates";
 import MontageComposition from "../components/remotion-editor/MontageComposition";
 import ModeSwitch from "../components/project/ModeSwitch";
@@ -630,6 +630,8 @@ export default function CompilationPage() {
       const jobs: (string | undefined)[] = [];
       // Each passage in its own template when it has one, else the video's
       const keys = items.map((item) => (item.template && (isBuiltIn(item.template) || findCustom(item.template, customs)) ? item.template : templateKey));
+      // How the video writes its titles, when it says so (else each template writes them its own way)
+      const written = isHookStyle(all.titleStyle) ? all.titleStyle : null;
       for (const item of items) {
         const piece = states[item.id];
         const env = piece && known[pieceVersion(piece)];
@@ -666,17 +668,18 @@ export default function CompilationPage() {
       }
       const montage = buildMontage(
         cuts,
-        (c, index) => buildAny(index >= 0 ? keys[index] : templateKey, c, customs),
+        (c, index) => buildAny(index >= 0 ? keys[index] : templateKey, c, customs, written),
         FPS,
         (total) =>
           source.titles
             ? sectionStarts(source)
-                .filter((s) => s.title.trim())
+                // (a part whose title is hidden keeps it in the list, not in the video)
+                .filter((s) => s.title.trim() && !s.hidden)
                 .flatMap((s) => {
                   // A part's title is written as the template of its first passage writes its hook, where it puts it
                   const index = firstOf.get(s.id) ?? 0;
                   const ctx = cuts[index].ctx;
-                  return titleCard(ctx, hookOf(keys[index], ctx, customs), s.title.trim(), s.at, Math.min(total, s.at + Math.min(TITLE_SECONDS, s.length * 0.7)), s.id);
+                  return titleCard(ctx, hookOf(keys[index], ctx, customs, written), s.title.trim(), s.at, Math.min(total, s.at + Math.min(TITLE_SECONDS, s.length * 0.7)), s.id);
                 })
             : [],
       );
@@ -693,12 +696,12 @@ export default function CompilationPage() {
         // Cut out of a longer passage by the app: it starts on a word, not inside one
         const start = moment.auto && raw > floor + 0.05 ? hookStart(ctx.words, raw, floor) : raw;
         const end = moment.end - piece.file_start;
-        const [segment] = buildMontage([{ ctx, start, end }], (c) => buildAny(keys[hookAt], c, customs), FPS).segments;
+        const [segment] = buildMontage([{ ctx, start, end }], (c) => buildAny(keys[hookAt], c, customs, written), FPS).segments;
         const top = Math.max(0, ...segment.layers.map((p) => p.z)) + 1;
         // (there on the very first picture, the video's cover, and until the cut to the video: no entrance, no exit of its own)
-        const written = titleCard(ctx, hookOf(keys[hookAt], ctx, customs), all.intro?.title?.trim() || all.name, 0, segment.from + segment.duration + 1, "hook");
+        const cover = titleCard(ctx, hookOf(keys[hookAt], ctx, customs, written), all.intro?.title?.trim() || all.name, 0, segment.from + segment.duration + 1, "hook");
         opener = {
-          segment: { ...segment, layers: [...segment.layers, ...written.map((layer, i) => ({ layer, z: top + i }))] },
+          segment: { ...segment, layers: [...segment.layers, ...cover.map((layer, i) => ({ layer, z: top + i }))] },
           file: piece.file,
           ...(piece.job !== jobId ? { job: piece.job } : {}),
           sound: { words: ctx.words, start, end, said: !!moment.item.text.trim() },
@@ -713,7 +716,7 @@ export default function CompilationPage() {
           name: first.displayName ?? first.login ?? "",
           logo: first.avatarUrl,
           colors: first.colors,
-          font: fontFamily(hookOf(templateKey, first, customs).font),
+          font: fontFamily(hookOf(templateKey, first, customs, written).font),
           follow: [t("compilation.intro.followLabel"), t("compilation.intro.followDone")],
         },
         opener?.segment,
@@ -741,10 +744,12 @@ export default function CompilationPage() {
             name: channel?.display_name ?? channel?.login ?? kit.twitch_login ?? "",
             logo: channel?.avatar_url ?? null,
             colors: kit.colors,
-            font: fontFamily(hookOf(templateKey, { facecam: null, subtitleStyle: kit.subtitles.style } as Parameters<typeof hookOf>[1], customs).font),
+            font: fontFamily(
+              hookOf(templateKey, { facecam: null, subtitleStyle: kit.subtitles.style } as Parameters<typeof hookOf>[1], customs, isHookStyle(compilation?.titleStyle) ? compilation.titleStyle : null).font,
+            ),
           }
         : undefined,
-    [channel, customs, kit, templateKey],
+    [channel, compilation?.titleStyle, customs, kit, templateKey],
   );
 
   /* ── The look of each passage ───────────────────────────── */
@@ -1001,18 +1006,19 @@ export default function CompilationPage() {
           followers: channel?.followers ?? null,
           game: job?.vod_game ?? null,
         };
+        const styled = isHookStyle(compilation.titleStyle) ? compilation.titleStyle : null;
         // Each part's title where its first passage starts in the clip
         const titles: ReturnType<typeof titleCard> = [];
         let index = 0;
         for (const section of compilation.sections) {
           const from = flat.starts[index];
           index += section.items.length;
-          if (!compilation.titles || section.items.length === 0 || !section.title.trim() || from === undefined) continue;
+          if (!compilation.titles || section.hidden || section.items.length === 0 || !section.title.trim() || from === undefined) continue;
           const length = (flat.starts[index] ?? flat.duration) - from;
-          titles.push(...titleCard(ctx, hookOf(templateKey, ctx, customs), section.title.trim(), from, Math.min(flat.duration, from + Math.min(TITLE_SECONDS, length * 0.7)), section.id));
+          titles.push(...titleCard(ctx, hookOf(templateKey, ctx, customs, styled), section.title.trim(), from, Math.min(flat.duration, from + Math.min(TITLE_SECONDS, length * 0.7)), section.id));
         }
         try {
-          localStorage.setItem(key, JSON.stringify([...buildAny(templateKey, ctx, customs), ...titles]));
+          localStorage.setItem(key, JSON.stringify([...buildAny(templateKey, ctx, customs, styled), ...titles]));
           localStorage.setItem(`cuttie_trim_${jobId}_${flat.clip}`, JSON.stringify({ start: 0, end: flat.duration }));
         } catch {
           // The editor will start from its own default layout

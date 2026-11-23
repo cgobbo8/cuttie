@@ -1714,6 +1714,8 @@ export interface CompilationSection {
   id: string;
   /** Shown on screen when the section starts */
   title: string;
+  /** Its title is only a name for the streamer: not written in the video */
+  hidden?: boolean;
   /** The search its moments came from */
   query: string;
   items: CompilationItem[];
@@ -1746,6 +1748,8 @@ export interface Compilation {
   lives?: string[];
   /** The look of a game it is dressed in instead of the channel's own (see lib/universes.ts; absent: the channel's) */
   universe?: string;
+  /** How its titles are written (the titles of its parts, its hook line): one of the template editor's ways (absent: as its template writes them) */
+  titleStyle?: string;
   /** The AI proposed this video on its own once the live was analysed: `brief` is the request it wrote in the streamer's place */
   suggestion?: CompilationSuggestion;
   created_at: string;

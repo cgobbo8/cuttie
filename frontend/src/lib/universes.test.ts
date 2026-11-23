@@ -3,10 +3,11 @@ import type { Compilation } from "./api";
 import { dressAs, universeFor, universeOf, universeTracks, UNIVERSES } from "./universes";
 import { INTRO_PACKS } from "./intro/intros";
 import { TEMPLATE_IDS } from "./templates";
+import { HOOK_STYLES } from "./templateSpec";
 
 const gta = universeOf("gta")!;
 const passage = (id: string) => ({ id, start: 0, end: 5, text: "", why: "", sources: [] });
-type Video = Pick<Compilation, "template" | "intro" | "sections" | "universe">;
+type Video = Pick<Compilation, "template" | "intro" | "sections" | "universe" | "titleStyle">;
 const video = (items: number, more: Partial<Video> = {}): Video => ({ template: null, sections: [{ id: "s", title: "", query: "", items: Array.from({ length: items }, (_, i) => passage(`p${i}`)) }], ...more });
 
 describe("the look of a game a video can be dressed in", () => {
@@ -16,6 +17,8 @@ describe("the look of a game a video can be dressed in", () => {
       const pack = INTRO_PACKS.find((one) => one.id === universe.pack)!;
       expect(pack.jingles).toEqual(universe.intros);
       expect(universe.intros).toContain(universe.look);
+      expect(universe.titles.length).toBeGreaterThan(0);
+      for (const style of universe.titles) expect(HOOK_STYLES).toContain(style);
     }
   });
 
@@ -44,6 +47,18 @@ describe("the look of a game a video can be dressed in", () => {
     expect(dressAs(video(3, { intro: { style: "hook", look: "neon", hook: { item: "p1", start: 1, end: 4 } } }), gta).intro).toEqual({ style: "hook", look: "sunset", hook: { item: "p1", start: 1, end: 4 } });
     expect(dressAs(video(3, { intro: { style: "hook", look: "wanted" } }), gta).intro).toEqual({ style: "hook", look: "wanted" });
     expect(dressAs(video(3, { intro: { style: "miami", title: "Le titre" } }), gta).intro).toEqual({ style: "miami", title: "Le titre" });
+  });
+
+  it("writes the titles of a dressed video its way, whatever the layout of each passage", () => {
+    // Nothing chosen, or a way of the channel's: the universe's first; one of the universe's own stays
+    expect(dressAs(video(3), gta).titleStyle).toBe("viceplate");
+    expect(dressAs(video(3, { titleStyle: "brand" }), gta).titleStyle).toBe("viceplate");
+    expect(dressAs(video(3, { titleStyle: "vice" }), gta).titleStyle).toBe("vice");
+    // Back to the channel: as each template writes them again
+    expect(dressAs(dressAs(video(3), gta), null)).not.toHaveProperty("titleStyle");
+    // (a way the streamer chose that isn't the universe's stays, in a video that was dressed or not)
+    expect(dressAs({ ...dressAs(video(3), gta), titleStyle: "box" }, null).titleStyle).toBe("box");
+    expect(dressAs(video(3, { titleStyle: "viceplate" }), null).titleStyle).toBe("viceplate");
   });
 
   it("goes back to the channel's look: its default layout, the app's own graphics", () => {

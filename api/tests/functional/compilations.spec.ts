@@ -221,13 +221,18 @@ test.group('Compilations', (group) => {
     const dressed = ((await client.post(url).loginAs(user).json({ name: 'Braquage' })).body() as any).compilation
     assert.equal(dressed.universe, 'gta')
     assert.equal(dressed.template, 'gta')
+    // (and its titles are written the game's way, whatever the layout of each passage)
+    assert.equal(dressed.titleStyle, 'viceplate')
+    assert.notProperty(plain, 'titleStyle')
     // What it opens on takes the game's graphics: the jingle the channel prefers becomes the look's own, a hook is framed by it
     assert.deepEqual(((await client.post(url).loginAs(user).json({ name: 'Intro', intro: { style: 'slam', title: 'Le titre', sound: 'boom' } })).body() as any).compilation.intro, { style: 'sunset', title: 'Le titre' })
     assert.deepEqual(((await client.post(url).loginAs(user).json({ name: 'Hook', intro: { style: 'hook', look: 'neon' } })).body() as any).compilation.intro, { style: 'hook', look: 'sunset' })
     assert.deepEqual(((await client.post(url).loginAs(user).json({ name: 'Déjà', intro: { style: 'wanted' } })).body() as any).compilation.intro, { style: 'wanted' })
     // ...unless it comes with a layout of its own: the look is said, the layout stays
     const own = ((await client.post(url).loginAs(user).json({ name: 'Autre', template: 'plein' })).body() as any).compilation
-    assert.deepInclude(own, { universe: 'gta', template: 'plein' })
+    assert.deepInclude(own, { universe: 'gta', template: 'plein', titleStyle: 'viceplate' })
+    // (a way of writing its titles it comes with stays)
+    assert.equal(((await client.post(url).loginAs(user).json({ name: 'Titres', titleStyle: 'box' })).body() as any).compilation.titleStyle, 'box')
     // The streamer goes back to their channel's look: it is kept that way, and a look nobody knows is not kept
     const save = async (body: object) => ((await client.put(`${url}/${dressed.id}`).loginAs(user).json({ ...dressed, ...body })).body() as any).compilation
     const { universe: _was, ...back } = dressed
@@ -236,6 +241,37 @@ test.group('Compilations', (group) => {
     assert.isNull(undressed.template)
     assert.notProperty(await save({ universe: 'fortnite' }), 'universe')
     assert.equal((await save({ universe: 'gta' })).universe, 'gta')
+  })
+
+  test('keeps how a video writes its titles, and which parts keep theirs out of the video', async ({ client, assert }) => {
+    const { user, job } = await setup()
+    const url = `/api/jobs/${job.id}/compilations`
+    const created = ((await client.post(url).loginAs(user).json({ name: 'Titres' })).body() as any).compilation
+    assert.notProperty(created, 'titleStyle')
+    const save = async (body: object) => ((await client.put(`${url}/${created.id}`).loginAs(user).json({ ...created, ...body })).body() as any).compilation
+    const sections = [
+      { id: 'part0001', title: 'Calme', query: '', items: [], hidden: true },
+      { id: 'part0002', title: 'Ça pète', query: '', items: [] },
+      // Only a plain yes hides a title
+      { id: 'part0003', title: 'La fin', query: '', items: [], hidden: 'yes' },
+    ]
+    const saved = await save({ titles: true, titleStyle: 'vice', sections })
+    assert.equal(saved.titleStyle, 'vice')
+    assert.deepEqual(saved.sections.map((s: any) => [s.title, s.hidden]), [['Calme', true], ['Ça pète', undefined], ['La fin', undefined]])
+    assert.notProperty(saved.sections[1], 'hidden')
+    // Read back as saved
+    const listed = ((await client.get(url).loginAs(user)).body() as any).compilations.find((c: any) => c.id === created.id)
+    assert.equal(listed.titleStyle, 'vice')
+    assert.isTrue(listed.sections[0].hidden)
+    // A copy writes its titles the same way and hides the same ones
+    const copy = ((await client.post(`${url}/${created.id}/duplicate`).loginAs(user).json({ name: 'Copie' })).body() as any).compilation
+    assert.equal(copy.titleStyle, 'vice')
+    assert.deepEqual(copy.sections.map((s: any) => !!s.hidden), [true, false, false])
+    // The title shown again, the style left to the template: both fields go; a way of writing nobody knows is not kept
+    const back = await save({ titles: true, sections: sections.map(({ hidden: _hidden, ...s }) => s) })
+    assert.notProperty(back, 'titleStyle')
+    assert.isTrue(back.sections.every((s: any) => !('hidden' in s)))
+    assert.notProperty(await save({ titleStyle: 'comic' }), 'titleStyle')
   })
 
   test('keeps the intro a video opens with, counts it in its length, and forgets it when it goes', async ({ client, assert }) => {

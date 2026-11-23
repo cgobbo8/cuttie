@@ -47,6 +47,8 @@ export interface CompilationSection {
   id: string
   /** Shown on screen when the section starts */
   title: string
+  /** Its title is only a name for the streamer: not written in the video */
+  hidden?: boolean
   /** The search its moments came from */
   query: string
   items: CompilationItem[]
@@ -83,6 +85,8 @@ export interface Compilation {
   lives?: string[]
   /** The look of a game it is dressed in instead of the channel's own (absent: the channel's) */
   universe?: string
+  /** How its titles are written (the titles of its parts, its hook line): one of the template editor's ways (absent: as its template writes them) */
+  titleStyle?: string
   created_at: string
   updated_at: string
 }
@@ -92,19 +96,21 @@ export interface Compilation {
  * channel's own (the app draws them and says what belongs to each: frontend/src/lib/universes.ts).
  * The server only knows their names, the layout each one sets and the games each one is for.
  */
-export const UNIVERSES: Record<string, { template: string; look: string; intros: string[]; plays: RegExp }> = {
-  gta: { template: 'gta', look: 'sunset', intros: ['sunset', 'miami', 'wanted', 'cover'], plays: /grand theft auto|^\s*gta\b/i },
+export const UNIVERSES: Record<string, { template: string; look: string; intros: string[]; titles: string[]; plays: RegExp }> = {
+  gta: { template: 'gta', look: 'sunset', intros: ['sunset', 'miami', 'wanted', 'cover'], titles: ['viceplate', 'vice'], plays: /grand theft auto|^\s*gta\b/i },
 }
+/** The ways a title can be written (frontend/src/lib/templateSpec.ts: HOOK_STYLES) */
+export const TITLE_STYLES = ['outline', 'box', 'brand', 'vice', 'viceplate']
 export const isUniverse = (value: unknown): value is string => typeof value === 'string' && Object.hasOwn(UNIVERSES, value)
 /** The universe of a live's game (undefined: none) */
 export const universeFor = (game: string | null | undefined): string | undefined => Object.keys(UNIVERSES).find((id) => UNIVERSES[id].plays.test(game ?? ''))
 
 /**
  * A new video of a live on a game that has a universe is dressed in it: its name, its layout unless
- * the video comes with one, and its graphics round what the video opens on (the jingle the channel
- * prefers becomes the universe's own, a hook is framed by it).
+ * the video comes with one, its way of writing titles, and its graphics round what the video opens
+ * on (the jingle the channel prefers becomes the universe's own, a hook is framed by it).
  */
-export function dressed<T extends { universe?: string; template: string | null; intro?: Intro }>(video: T, game: string | null | undefined): T {
+export function dressed<T extends { universe?: string; template: string | null; intro?: Intro; titleStyle?: string }>(video: T, game: string | null | undefined): T {
   const id = video.universe ?? universeFor(game)
   if (!id) return video
   const universe = UNIVERSES[id]
@@ -116,7 +122,7 @@ export function dressed<T extends { universe?: string; template: string | null; 
       : universe.intros.includes(intro.style)
         ? intro
         : (({ sound: _sound, ...jingle }) => ({ ...jingle, style: universe.look }))(intro)
-  return { ...video, universe: id, template: video.template ?? universe.template, ...(opening ? { intro: opening } : {}) }
+  return { ...video, universe: id, template: video.template ?? universe.template, titleStyle: video.titleStyle ?? universe.titles[0], ...(opening ? { intro: opening } : {}) }
 }
 
 /** What the AI saw in the live that makes a video it proposes */
@@ -370,7 +376,7 @@ export function parseCompilation(raw: any, liveDuration: number, others?: Map<st
       seen.add(parsed.id)
       items.push(parsed)
     }
-    sections.push({ id: section.id, title: text(section.title, 60), query: text(section.query, 300), items })
+    sections.push({ id: section.id, title: text(section.title, 60), query: text(section.query, 300), items, ...(section.hidden === true ? { hidden: true } : {}) })
   }
   const target = Number(raw.target)
   // A hook plays one of the video's own passages: the moment of one that is gone is forgotten
@@ -388,6 +394,7 @@ export function parseCompilation(raw: any, liveDuration: number, others?: Map<st
     ...(parseMusic(raw.music) ? { music: parseMusic(raw.music)! } : {}),
     ...(lives.length > 0 ? { lives } : {}),
     ...(isUniverse(raw.universe) ? { universe: raw.universe } : {}),
+    ...(TITLE_STYLES.includes(raw.titleStyle) ? { titleStyle: raw.titleStyle } : {}),
     ...(text(raw.brief, MAX_BRIEF) ? { brief: text(raw.brief, MAX_BRIEF) } : {}),
     // What the AI answered to the description: what it built and why
     ...(text(raw.brief, MAX_BRIEF) && text(raw.answer, 800) ? { answer: text(raw.answer, 800) } : {}),

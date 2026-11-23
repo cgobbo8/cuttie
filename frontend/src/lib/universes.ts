@@ -11,6 +11,7 @@ import type { Compilation } from "./api";
 import { DEFAULT_HOOK_LOOK, GTA_JINGLES, introPack, isJingle, type IntroPackId, type JingleId } from "./intro/intros";
 import type { MusicTrack } from "./music/mix";
 import type { TemplateId } from "./templates";
+import type { HookStyle } from "./templateSpec";
 
 export interface Universe {
   id: string;
@@ -21,6 +22,8 @@ export interface Universe {
   /** What frames the hook of a video dressed in it, and the jingle it takes when it has one of another pack */
   look: JingleId;
   intros: readonly JingleId[];
+  /** Its ways of writing a title */
+  titles: readonly HookStyle[];
   /** A live on its game, as Twitch names it */
   plays: (game: string | null | undefined) => boolean;
   /** A music that goes with it, by what it is called (a theme of the game, a track of its soundtrack) or one that ships with the app */
@@ -36,6 +39,7 @@ export const UNIVERSES: Universe[] = [
     template: "gta",
     look: "sunset",
     intros: GTA_JINGLES,
+    titles: ["viceplate", "vice"],
     plays: (game) => /grand theft auto|^\s*gta\b/i.test(game ?? ""),
     // (the synthwave track that ships has the sound of an evening in Vice City)
     sounds: (track) => track.id === "synthwave" || GTA_WORDS.test(track.name),
@@ -58,11 +62,16 @@ export function universeTracks<T extends Pick<MusicTrack, "id" | "name">>(tracks
  * the universe's, a hook is framed by it, and a video with no opening and several passages opens
  * on its hook (its content plays from the first frame, in the universe's frame: what the
  * most-viewed short videos do). Going back: the channel's default layout, and graphics of the
- * universe give way to the app's own. Everything else the streamer set stays.
+ * universe give way to the app's own. Its titles are written the universe's way, whatever the
+ * layout of each passage (going back: as each template writes them, unless the streamer chose a
+ * way that isn't the universe's). Everything else the streamer set stays.
  */
-export function dressAs<T extends Pick<Compilation, "template" | "intro" | "sections" | "universe">>(c: T, universe: Universe | null): T {
-  const { universe: before, intro, ...rest } = c;
+export function dressAs<T extends Pick<Compilation, "template" | "intro" | "sections" | "universe" | "titleStyle">>(c: T, universe: Universe | null): T {
+  const { universe: before, intro, titleStyle, ...kept } = c;
   const was = universeOf(before);
+  // (a way of writing the streamer chose stays, unless it belongs to the look the video leaves)
+  const own = titleStyle && !(was?.titles as readonly string[] | undefined)?.includes(titleStyle) ? titleStyle : undefined;
+  const rest = { ...kept, ...(own && !universe ? { titleStyle: own } : {}) };
   if (!universe) {
     const mine = (graphic: unknown) => !was || introPack(graphic) !== was.pack;
     const back =
@@ -84,5 +93,6 @@ export function dressAs<T extends Pick<Compilation, "template" | "intro" | "sect
       : introPack(intro.style) === universe.pack
         ? intro
         : (({ sound: _sound, ...jingle }) => ({ ...jingle, style: universe.look }))(intro);
-  return { ...rest, universe: universe.id, template: universe.template, ...(opening ? { intro: opening } : {}) } as unknown as T;
+  const titles = (universe.titles as readonly string[]).includes(titleStyle ?? "") ? titleStyle : universe.titles[0];
+  return { ...rest, universe: universe.id, template: universe.template, titleStyle: titles, ...(opening ? { intro: opening } : {}) } as unknown as T;
 }

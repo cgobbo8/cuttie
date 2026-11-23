@@ -46,7 +46,7 @@
     "navigation": "Navegación principal",
     "update": "Actualización",
     "updateReady": "Reiniciar para actualizar",
-    "compilations": "Compilaciones"
+    "compilations": "Vídeos"
   },
   "workspace": {
     "allCreators": "Todos los creadores",
@@ -883,7 +883,10 @@
     "modes": "Clips o compilaciones",
     "mode": {
       "clips": "Clips",
-      "compilations": "Compilaciones"
+      "compilations": "Compilaciones",
+      "clip": "Clips",
+      "sequence": "Secuencias",
+      "compilation": "Compilaciones"
     }
   },
   "montage": {
@@ -1503,10 +1506,10 @@
       "ai": "IA"
     },
     "add": "Añadir",
-    "added": "Ya está en la recopilación",
+    "added": "Ya está en el vídeo",
     "remove": "Quitar",
     "alreadyAsked": "ya preguntado: gratis",
-    "alreadyThere": "Estos trozos ya están en la recopilación.",
+    "alreadyThere": "Estos pasajes ya están en el vídeo.",
     "addedCount_one": "{{count}} trozo añadido",
     "addedCount_other": "{{count}} trozos añadidos",
     "planEmpty": "La IA no ha encontrado nada para este vídeo. Descríbelo de otra manera.",
@@ -1526,8 +1529,8 @@
     "emptySection": "Haz clic aquí y añade trozos desde la búsqueda.",
     "moments_one": "{{count}} trozo",
     "moments_other": "{{count}} trozos",
-    "inCompilation_one": "{{count}} en la recopilación",
-    "inCompilation_other": "{{count}} en la recopilación",
+    "inCompilation_one": "{{count}} en el vídeo",
+    "inCompilation_other": "{{count}} en el vídeo",
     "fit": "Ajustar a {{length}}",
     "titles": "Títulos de las partes",
     "titlesHint": "Cada parte se abre con el título",
@@ -1546,7 +1549,7 @@
     "hookPlaceholder": "Gancho del vídeo",
     "template": "Plantilla",
     "defaultTemplate": "Plantilla por defecto",
-    "export": "Exportar la recopilación",
+    "export": "Exportar el vídeo",
     "cuttingPiece": "Cortando este trozo del directo…",
     "cuttingCount_one": "Cortando {{count}} trozo…",
     "cuttingCount_other": "Cortando {{count}} trozos…",
@@ -1887,6 +1890,10 @@
       "label": "Universo",
       "channel": "Tu canal",
       "gta": "GTA"
+    },
+    "briefFor": {
+      "clip": "Ej.: hacia las 3 h, salgo del hidroavión y muero en la hélice.",
+      "sequence": "Ej.: la misión del yate, desde la llegada en moto de agua hasta la huida en aerodeslizador."
     }
   },
   "compilations": {
@@ -2112,5 +2119,48 @@
       "failed": "No se pudo cambiar la nota"
     },
     "rememberedLine": "Recordado para tus próximos vídeos: {{said}}"
+  },
+  "videos": {
+    "title": "Vídeos",
+    "subtitle": "Tres formas de sacar un vídeo de un directo: un momento, un tramo seguido o pasajes de todas partes.",
+    "count": {
+      "clip_one": "{{count}} clip",
+      "clip_other": "{{count}} clips",
+      "sequence_one": "{{count}} secuencia",
+      "sequence_other": "{{count}} secuencias",
+      "compilation_one": "{{count}} compilación",
+      "compilation_other": "{{count}} compilaciones"
+    },
+    "about": {
+      "clip": "Un momento del directo, cerca de un minuto.",
+      "sequence": "Un tramo seguido (una misión, una situación que dura), contado en un vídeo.",
+      "compilation": "Pasajes de todo el directo, o de varios directos."
+    },
+    "new": {
+      "clip": "Nuevo clip",
+      "sequence": "Nueva secuencia",
+      "compilation": "Nueva compilación"
+    },
+    "newHint": {
+      "clip": "Describe el momento, aunque sea aproximado («hacia las 3 h pasó…»): la IA lo encuentra y lo corta.",
+      "sequence": "Di qué tramo contar: la IA guarda sus momentos clave, en orden.",
+      "compilation": "Describe el vídeo: la IA lo construye con los pasajes del directo."
+    },
+    "fromAnalysis": "Encontrado por el análisis",
+    "watched": "Visto en la imagen",
+    "open": "Montar este clip",
+    "opening": "Abriendo…",
+    "sort": "Ordenar los clips (guardar / pasar)",
+    "none": {
+      "clip": "Ningún clip para este directo.",
+      "sequence": "Ninguna secuencia por ahora.",
+      "compilation": "Ninguna compilación por ahora."
+    },
+    "kept": "Guardado",
+    "onScreenTitle": "Título en pantalla",
+    "changeFor": {
+      "clip": "Ej.: «corta el principio», «guarda también lo que pasa justo después». Intro para enviar.",
+      "sequence": "Ej.: «acorta la parte del medio», «añade el final de la misión». Intro para enviar."
+    }
   }
 }

@@ -36,6 +36,7 @@ import TemplateMenu from "../TemplateMenu";
 import { dressAs, UNIVERSES, universeOf } from "../../lib/universes";
 import { HOOK_STYLES, isHookStyle, type HookStyle } from "../../lib/templateSpec";
 import { EFFECT_LEVELS, isEffectLevel } from "../../lib/effects";
+import type { VideoSource } from "../../lib/videoSources";
 import TransitionPicker from "./TransitionPicker";
 
 interface Props {
@@ -43,6 +44,8 @@ interface Props {
   /** Each live's preview frames, by job id; `home`: the live the compilation is kept with */
   storyboards: Record<string, TwitchStoryboard>;
   home: string;
+  /** What the video is made from: a clip is one moment (no parts, no part titles: one title written on it) */
+  source?: VideoSource;
   /** Made from several lives: each one's number, by job id (a passage then shows which it is from) */
   liveNumbers?: Record<string, number>;
   /** The section search results are added to */
@@ -179,6 +182,7 @@ export default function CompilationPanel({
   compilation,
   storyboards,
   home,
+  source = "compilation",
   liveNumbers,
   activeSection,
   selectedItem,
@@ -299,6 +303,8 @@ export default function CompilationPanel({
   const track = trackOf(musics, compilation.music?.track);
   // The look of a game the video is dressed in (none: the channel's own)
   const universe = universeOf(compilation.universe);
+  // A clip: one moment, so no parts and no part titles
+  const single = source === "clip";
   const titleStyle = isHookStyle(compilation.titleStyle) ? compilation.titleStyle : null;
   const effects = isEffectLevel(compilation.effects) ? compilation.effects : null;
   // The intro is part of the video: it counts in its length
@@ -348,7 +354,7 @@ export default function CompilationPanel({
               drag?.drop?.section === section.id && section.items.length === 0 ? "border-accent bg-accent-soft" : active ? "border-accent-line bg-white/[0.05]" : "border-white/[0.07] hover:bg-white/[0.03]"
             }`}
           >
-            <div className="flex items-center gap-1">
+            <div className={single ? "hidden" : "flex items-center gap-1"}>
               <input
                 value={section.title}
                 onChange={(e) => onChange({ ...compilation, sections: compilation.sections.map((s) => (s.id === section.id ? { ...s, title: e.target.value } : s)) })}
@@ -455,16 +461,18 @@ export default function CompilationPanel({
         );
       })}
 
-      <button
-        onClick={() => {
-          const { compilation: next, id } = addSection(compilation);
-          onChange(next);
-          onActivate(id);
-        }}
-        className="btn btn-ghost btn-sm self-start"
-      >
-        <Plus className="w-[15px] h-[15px]" /> {t("compilation.addSection")}
-      </button>
+      {!single && (
+        <button
+          onClick={() => {
+            const { compilation: next, id } = addSection(compilation);
+            onChange(next);
+            onActivate(id);
+          }}
+          className="btn btn-ghost btn-sm self-start"
+        >
+          <Plus className="w-[15px] h-[15px]" /> {t("compilation.addSection")}
+        </button>
+      )}
 
       {/* What is being dragged follows the pointer */}
       {drag && (
@@ -610,15 +618,23 @@ export default function CompilationPanel({
               )}
             </SettingRow>
             <div className={ROW}>
-              <label className="flex items-center gap-2.5 h-11 px-3 cursor-pointer">
-                <Type className={`w-4 h-4 flex-none ${compilation.titles ? "text-accent" : "text-ink-3"}`} />
-                <span className="flex-1 min-w-0 truncate text-[13.5px] font-[550] text-white">{t("compilation.titles")}</span>
-                <button role="switch" aria-checked={compilation.titles} aria-label={t("compilation.titles")} title={t("compilation.titlesHint")} onClick={() => onChange({ ...compilation, titles: !compilation.titles })} className="switch flex-none">
-                  <span />
-                </button>
-              </label>
+              {single ? (
+                // A clip is one moment: one title, written on its first seconds
+                <div className="flex items-center gap-2.5 h-11 px-3">
+                  <Type className={`w-4 h-4 flex-none ${compilation.hook.trim() ? "text-accent" : "text-ink-3"}`} />
+                  <span className="flex-1 min-w-0 truncate text-[13.5px] font-[550] text-white">{t("videos.onScreenTitle")}</span>
+                </div>
+              ) : (
+                <label className="flex items-center gap-2.5 h-11 px-3 cursor-pointer">
+                  <Type className={`w-4 h-4 flex-none ${compilation.titles ? "text-accent" : "text-ink-3"}`} />
+                  <span className="flex-1 min-w-0 truncate text-[13.5px] font-[550] text-white">{t("compilation.titles")}</span>
+                  <button role="switch" aria-checked={compilation.titles} aria-label={t("compilation.titles")} title={t("compilation.titlesHint")} onClick={() => onChange({ ...compilation, titles: !compilation.titles })} className="switch flex-none">
+                    <span />
+                  </button>
+                </label>
+              )}
               {/* Without titles, one line is written over the first seconds of the video */}
-              {!compilation.titles && (
+              {(single || !compilation.titles) && (
                 <input
                   value={compilation.hook}
                   onChange={(e) => onChange({ ...compilation, hook: e.target.value })}
@@ -653,7 +669,8 @@ export default function CompilationPanel({
                 />
               )}
             </SettingRow>
-            {/* How every passage comes in; one passage can do otherwise (its row, or several picked) */}
+            {/* How every passage comes in; one passage can do otherwise (its row, or several picked). A video of one passage has no cut to dress */}
+            {count > 1 && (
             <SettingRow
               icon={Blend}
               label={t("compilation.transition.label")}
@@ -676,6 +693,7 @@ export default function CompilationPanel({
                 />
               )}
             </SettingRow>
+            )}
             {/* How much the picture moves on what is said: a zoom from one passage to the next, a punch on a line that lands, a shake */}
             <SettingRow
               icon={Zap}

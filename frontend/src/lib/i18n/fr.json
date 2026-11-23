@@ -46,7 +46,7 @@
     "navigation": "Navigation principale",
     "update": "Mise à jour",
     "updateReady": "Redémarrer pour mettre à jour",
-    "compilations": "Compilations"
+    "compilations": "Vidéos"
   },
   "workspace": {
     "allCreators": "Tous les créateurs",
@@ -883,7 +883,10 @@
     "modes": "Clips ou compilations",
     "mode": {
       "clips": "Clips",
-      "compilations": "Compilations"
+      "compilations": "Compilations",
+      "clip": "Clips",
+      "sequence": "Séquences",
+      "compilation": "Compilations"
     }
   },
   "montage": {
@@ -1503,10 +1506,10 @@
       "ai": "IA"
     },
     "add": "Ajouter",
-    "added": "Déjà dans la compilation",
+    "added": "Déjà dans la vidéo",
     "remove": "Retirer",
     "alreadyAsked": "déjà demandé : gratuit",
-    "alreadyThere": "Ces passages sont déjà dans la compilation.",
+    "alreadyThere": "Ces passages sont déjà dans la vidéo.",
     "addedCount_one": "{{count}} passage ajouté",
     "addedCount_other": "{{count}} passages ajoutés",
     "planEmpty": "L'IA n'a rien trouvé pour cette vidéo. Décris-la autrement.",
@@ -1526,8 +1529,8 @@
     "emptySection": "Clique ici, puis ajoute des passages depuis la recherche.",
     "moments_one": "{{count}} passage",
     "moments_other": "{{count}} passages",
-    "inCompilation_one": "{{count}} dans la compilation",
-    "inCompilation_other": "{{count}} dans la compilation",
+    "inCompilation_one": "{{count}} dans la vidéo",
+    "inCompilation_other": "{{count}} dans la vidéo",
     "fit": "Ajuster à {{length}}",
     "titles": "Titres des parties",
     "titlesHint": "Chaque partie s'ouvre sur son titre",
@@ -1546,7 +1549,7 @@
     "hookPlaceholder": "Accroche de la vidéo",
     "template": "Modèle",
     "defaultTemplate": "Modèle par défaut",
-    "export": "Exporter la compilation",
+    "export": "Exporter la vidéo",
     "cuttingPiece": "Découpe du passage dans le live…",
     "cuttingCount_one": "Découpe de {{count}} passage…",
     "cuttingCount_other": "Découpe de {{count}} passages…",
@@ -1887,6 +1890,10 @@
       "label": "Univers",
       "channel": "Ta chaîne",
       "gta": "GTA"
+    },
+    "briefFor": {
+      "clip": "Ex. : vers 3 h, je sors de l'hydravion et je meurs dans l'hélice.",
+      "sequence": "Ex. : la mission du yacht, de l'arrivée en jet-ski jusqu'à la fuite en hydroglisseur."
     }
   },
   "compilations": {
@@ -2112,5 +2119,48 @@
       "failed": "La note n'a pas pu être modifiée"
     },
     "rememberedLine": "Retenu pour tes prochaines vidéos : {{said}}"
+  },
+  "videos": {
+    "title": "Vidéos",
+    "subtitle": "Trois façons de tirer une vidéo d'un live : un moment, un passage d'affilée, ou des passages pris partout.",
+    "count": {
+      "clip_one": "{{count}} clip",
+      "clip_other": "{{count}} clips",
+      "sequence_one": "{{count}} séquence",
+      "sequence_other": "{{count}} séquences",
+      "compilation_one": "{{count}} compilation",
+      "compilation_other": "{{count}} compilations"
+    },
+    "about": {
+      "clip": "Un moment du live, environ une minute.",
+      "sequence": "Un passage d'affilée (une mission, une situation qui dure), raconté en une vidéo.",
+      "compilation": "Des passages pris partout dans le live, ou dans plusieurs lives."
+    },
+    "new": {
+      "clip": "Nouveau clip",
+      "sequence": "Nouvelle séquence",
+      "compilation": "Nouvelle compilation"
+    },
+    "newHint": {
+      "clip": "Décris le moment, même à peu près (« vers 3 h, il s'est passé… ») : l'IA le retrouve et le coupe.",
+      "sequence": "Dis quel passage raconter : l'IA en garde les temps forts, dans l'ordre.",
+      "compilation": "Décris la vidéo : l'IA la construit avec les passages du live."
+    },
+    "fromAnalysis": "Trouvé par l'analyse",
+    "watched": "Repéré à l'image",
+    "open": "Monter ce clip",
+    "opening": "Ouverture…",
+    "sort": "Trier les clips (garder / passer)",
+    "none": {
+      "clip": "Aucun clip pour ce live.",
+      "sequence": "Aucune séquence pour l'instant.",
+      "compilation": "Aucune compilation pour l'instant."
+    },
+    "kept": "Gardé",
+    "onScreenTitle": "Titre à l'écran",
+    "changeFor": {
+      "clip": "Ex. : « coupe le début », « garde aussi ce qui se passe juste après ». Entrée pour envoyer.",
+      "sequence": "Ex. : « raccourcis le passage du milieu », « ajoute la fin de la mission ». Entrée pour envoyer."
+    }
   }
 }

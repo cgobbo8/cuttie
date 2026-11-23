@@ -274,9 +274,83 @@ test.group('Compilations', (group) => {
     assert.notProperty(back, 'titleStyle')
     assert.isTrue(back.sections.every((s: any) => !('hidden' in s)))
     assert.notProperty(await save({ titleStyle: 'comic' }), 'titleStyle')
-    assert.notProperty(back, 'effects')
+    // (a new video's picture moves a little on what is said; taken off, it stays off)
+    assert.equal(created.effects, 'light')
+    assert.equal(back.effects, 'light')
+    assert.notProperty(await save({ effects: undefined }), 'effects')
     assert.notProperty(await save({ effects: 'wild' }), 'effects')
     assert.equal((await save({ effects: 'light' })).effects, 'light')
+  })
+
+  test('a video says what it is made from: a clip, a sequence or a compilation', async ({ client, assert }) => {
+    const { user, job } = await setup()
+    const url = `/api/jobs/${job.id}/compilations`
+    const make = async (body: object) => ((await client.post(url).loginAs(user).json(body)).body() as any).compilation
+    // Nothing said: a compilation (the only one that can take from several lives)
+    const compilation = await make({ name: 'Calme' })
+    assert.notProperty(compilation, 'source')
+    const sequence = await make({ name: 'La mission', source: 'sequence' })
+    assert.equal(sequence.source, 'sequence')
+    assert.notProperty(await make({ name: 'Autre chose', source: 'film' }), 'source')
+    // A clip is one moment: it never opens on an intro, even when one is asked for
+    const clip = await make({ name: 'Le tigre', source: 'clip', intro: { style: 'slam' } })
+    assert.equal(clip.source, 'clip')
+    assert.notProperty(clip, 'intro')
+    // Asked plain, a new video has no effects
+    assert.notProperty(await make({ name: 'Sans effets', effects: null }), 'effects')
+    // The library says each one's source, and it is kept when the video is saved
+    const saved = ((await client.put(`${url}/${sequence.id}`).loginAs(user).json({ ...sequence, name: 'La mission du yacht' })).body() as any).compilation
+    assert.equal(saved.source, 'sequence')
+    const live = ((await client.get('/api/compilations').loginAs(user)).body() as any).lives.find((one: any) => one.job_id === job.id)
+    const sources = Object.fromEntries(live.compilations.map((c: any) => [c.name, c.source]))
+    assert.deepInclude(sources, { 'Calme': 'compilation', 'La mission du yacht': 'sequence', 'Le tigre': 'clip' })
+  })
+
+  test('a clip of the analysis opens as a video like the others, once, with its own file', async ({ client, assert }) => {
+    const { user, job, dir } = await setup()
+    job.vodGame = 'Grand Theft Auto VI'
+    job.vodDurationSeconds = 15000
+    job.hotPoints = [
+      { clip_filename: 'helice.mp4', clip_name: 'Mort Dans L Helice', clip_start: 11560, clip_end: 11640, timestamp_seconds: 11591, final_score: 0.82, found_by: 'watching',
+        llm: { summary: 'Il sort de l\'avion et le regrette', seen: 'Le personnage marche dans l\'hélice et meurt.', tags: ['mort', 'hydravion', 'drôle'], hook: 'Il descend de l\'hydravion du mauvais côté', transcript: 'Oh non !', cut_start: 20, cut_end: 55 } },
+      { clip_filename: 'banque.mp4', clip_name: 'Goeland A La Banque', clip_start: 3300, clip_end: 3360, timestamp_seconds: 3330, final_score: 0.66, llm: { summary: 'Un goéland à la banque' } },
+    ] as any
+    job.selection = { 'banque.mp4': { state: 'kept', trim: [5, 40] } } as any
+    await job.save()
+    // The first clip was cut since files say where their first picture is; the second one was not
+    for (const suffix of ['.mp4', '_probe.json', '_words.json']) writeFileSync(path.join(dir, `helice${suffix}`), suffix === '.mp4' ? 'video' : '[]')
+    writeFileSync(path.join(dir, 'helice_meta.json'), JSON.stringify({ vod_start: 11562.4, vod_end: 11640, settled: true }))
+    writeFileSync(path.join(dir, 'banque.mp4'), 'video')
+
+    // The library lists the clips nobody opened yet, the best first, with what the analysis said of each
+    const library = async () => ((await client.get('/api/compilations').loginAs(user)).body() as any).lives.find((one: any) => one.job_id === job.id)
+    const before = await library()
+    assert.deepEqual(before.clips.map((c: any) => [c.filename, c.score, c.length, c.found_by, c.state]), [['helice.mp4', 82, 35, 'watching', null], ['banque.mp4', 66, 60, null, 'kept']])
+    assert.deepInclude(before.clips[0], { name: 'Mort Dans L Helice', seen: 'Le personnage marche dans l\'hélice et meurt.', tags: ['mort', 'hydravion', 'drôle'], at: 11591 })
+
+    const open = async (clip: string) => client.post(`/api/jobs/${job.id}/compilations/from-clip`).loginAs(user).json({ clip })
+    const made = await open('helice.mp4')
+    made.assertStatus(201)
+    const video = (made.body() as any).compilation
+    // One passage: the cut the AI advised, placed in the live from where the clip's file really starts
+    assert.deepInclude(video, { name: 'Mort Dans L Helice', source: 'clip', clip: 'helice.mp4', hook: 'Il descend de l\'hydravion du mauvais côté', titles: false, effects: 'light', universe: 'gta', template: 'gta' })
+    assert.notProperty(video, 'intro')
+    const [passage] = video.sections[0].items
+    assert.deepInclude(passage, { start: 11582.4, end: 11617.4, ready: true, file_start: 11562.4 })
+    // Its file is the clip's own, copied with what goes with it: nothing is fetched from the live
+    for (const suffix of ['.mp4', '_meta.json', '_probe.json', '_words.json']) assert.isTrue(existsSync(path.join(dir, `piece_${passage.id}${suffix}`)), suffix)
+    // Opened again: the same video, not a second one; it is no longer among the clips to open
+    const again = await open('helice.mp4')
+    again.assertStatus(200)
+    assert.equal((again.body() as any).compilation.id, video.id)
+    assert.deepEqual((await library()).clips.map((c: any) => c.filename), ['banque.mp4'])
+
+    // A clip cut before files said where they start: the streamer's cut, from where the analysis put the clip; its passage is cut when the video opens
+    const old = ((await open('banque.mp4')).body() as any).compilation
+    assert.deepInclude(old.sections[0].items[0], { start: 3305, end: 3340, ready: false })
+    assert.notProperty(old, 'universe.x')
+    ;(await open('nope.mp4')).assertStatus(404)
+    ;(await open('../../etc/passwd')).assertStatus(404)
   })
 
   test('keeps the intro a video opens with, counts it in its length, and forgets it when it goes', async ({ client, assert }) => {

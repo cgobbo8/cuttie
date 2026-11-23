@@ -413,7 +413,7 @@ export default function ProjectPage() {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {!processing && job.status === "DONE" && <ModeSwitch jobId={jobId} current="clips" suggested={job.suggested} />}
+          {!processing && job.status === "DONE" && <ModeSwitch jobId={jobId} current="clip" suggested={job.suggested} />}
         <Stepper
           current={processing ? "analyze" : "choose"}
           links={stepLinks}

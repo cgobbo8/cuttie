@@ -87,6 +87,8 @@ export function proposed(ideas: LiveIdea[], known: Set<string>, room: number, in
         moments: (Array.isArray(idea.moments) ? idea.moments : []).filter((at): at is number => Number.isFinite(at) && at >= 0).slice(0, 40),
         ...(span ? { span } : {}),
       },
+      // (a stretch of the live in a row is a sequence; what the AI puts together from all over, a compilation)
+      ...(span ? { source: 'sequence' as const } : {}),
       created_at: now,
       updated_at: now,
     })

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { sourceOf, type VideoSource } from "./videoSources";
 import { MEMORY_READ } from "./aiMemory";
 import { getSuggestions, type Compilation, type CompilationSummary, type LiveCompilations } from "./api";
 import { useTransmitChannel } from "./TransmitContext";
@@ -51,5 +52,16 @@ export function useSuggested(jobId: string | undefined, known?: number): number 
     // The AI has also just read the live into its memory: it may have a correction to propose for a note (NoteProposals)
     if (data?.type === "memory") window.dispatchEvent(new Event(MEMORY_READ));
   });
+  return count;
+}
+
+/** How many proposed videos wait to be built, by what they are made from (a sequence, a compilation) */
+export function waitingBySource(videos: { waiting?: boolean; suggestion?: { span?: unknown } | null; source?: string | null; answer?: string; sections?: { items: unknown[] }[] }[]): Partial<Record<VideoSource, number>> {
+  const count: Partial<Record<VideoSource, number>> = {};
+  for (const video of videos) {
+    // (a card of the library says it waits; a whole compilation waits while nothing was built from its idea)
+    const waits = video.waiting ?? (!!video.suggestion && !video.answer && (video.sections ?? []).every((section) => section.items.length === 0));
+    if (waits) count[sourceOf(video)] = (count[sourceOf(video)] ?? 0) + 1;
+  }
   return count;
 }

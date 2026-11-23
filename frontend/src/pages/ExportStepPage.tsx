@@ -60,7 +60,7 @@ export default function ExportStepPage() {
           {title && <p className="mt-2 text-[13.5px] text-ink-2">{title}</p>}
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {jobId && <ModeSwitch jobId={jobId} current="clips" />}
+          {jobId && <ModeSwitch jobId={jobId} current="clip" />}
           <Stepper current="export" links={{ analyze: `/${jobId}`, choose: `/${jobId}`, edit: `/${jobId}/montage` }} />
         </div>
       </header>

@@ -89,6 +89,14 @@ export interface Compilation {
   titleStyle?: string
   /** How much its picture moves on what is said: "light" or "strong" (absent: it plays plain) */
   effects?: string
+  /**
+   * What the video is made from. All three are the same thing after that (passages, a dressing, an
+   * export): a clip is one moment, a sequence a stretch of the live in a row, a compilation passages
+   * from all over (absent: a compilation, the only one that can take from several lives).
+   */
+  source?: VideoSource
+  /** The clip of the analysis it was opened from (a clip video only) */
+  clip?: string
   created_at: string
   updated_at: string
 }
@@ -101,6 +109,12 @@ export interface Compilation {
 export const UNIVERSES: Record<string, { template: string; look: string; intros: string[]; titles: string[]; plays: RegExp }> = {
   gta: { template: 'gta', look: 'sunset', intros: ['sunset', 'miami', 'wanted', 'cover'], titles: ['viceplate', 'vice'], plays: /grand theft auto|^\s*gta\b/i },
 }
+/** What a video is made from (frontend/src/lib/videoSources.ts: VIDEO_SOURCES) */
+export type VideoSource = 'clip' | 'sequence' | 'compilation'
+export const VIDEO_SOURCES: VideoSource[] = ['clip', 'sequence', 'compilation']
+export const isVideoSource = (value: unknown): value is VideoSource => typeof value === 'string' && (VIDEO_SOURCES as string[]).includes(value)
+/** What a video is made from: said on it, else a stretch of the live the AI proposed is a sequence, anything else a compilation */
+export const sourceOf = (c: Pick<Compilation, 'source' | 'suggestion'>): VideoSource => c.source ?? (c.suggestion?.span ? 'sequence' : 'compilation')
 /** How much a video's picture moves on what is said (frontend/src/lib/effects.ts: EFFECT_LEVELS); absent: it plays plain */
 export const EFFECT_LEVELS = ['light', 'strong']
 /** The ways a title can be written (frontend/src/lib/templateSpec.ts: HOOK_STYLES) */
@@ -402,6 +416,8 @@ export function parseCompilation(raw: any, liveDuration: number, others?: Map<st
     ...(isUniverse(raw.universe) ? { universe: raw.universe } : {}),
     ...(TITLE_STYLES.includes(raw.titleStyle) ? { titleStyle: raw.titleStyle } : {}),
     ...(EFFECT_LEVELS.includes(raw.effects) ? { effects: raw.effects } : {}),
+    ...(isVideoSource(raw.source) && raw.source !== 'compilation' ? { source: raw.source } : {}),
+    ...(typeof raw.clip === 'string' && /^[\w.-]{1,120}\.mp4$/.test(raw.clip) ? { clip: raw.clip } : {}),
     ...(text(raw.brief, MAX_BRIEF) ? { brief: text(raw.brief, MAX_BRIEF) } : {}),
     // What the AI answered to the description: what it built and why
     ...(text(raw.brief, MAX_BRIEF) && text(raw.answer, 800) ? { answer: text(raw.answer, 800) } : {}),
@@ -460,6 +476,22 @@ export function describeCompilations(jobId: string, compilations: Compilation[])
 
 const PIECE_FILES = ['.mp4', '_meta.json', '_probe.json', '_words.json']
 
+/**
+ * A clip of the analysis as a piece of its own (its file and what goes with it, copied): the video opened
+ * from that clip plays at once, without the live being fetched again. False when the clip is not there.
+ */
+export function clipAsPiece(jobId: string, clipFilename: string, to: string): boolean {
+  if (!isPieceId(to)) return false
+  const dir = clipDir(jobId)
+  const base = path.basename(clipFilename, path.extname(clipFilename))
+  if (!existsSync(path.join(dir, `${base}.mp4`))) return false
+  for (const suffix of PIECE_FILES) {
+    const source = path.join(dir, `${base}${suffix}`)
+    if (existsSync(source)) copyFileSync(source, path.join(dir, `piece_${to}${suffix}`))
+  }
+  return true
+}
+
 /** A piece's clip and sidecars under another id (a duplicated compilation has clips of its own) */
 export function copyPiece(jobId: string, from: string, to: string): void {
   if (!isPieceId(from) || !isPieceId(to)) return
@@ -477,6 +509,7 @@ export function summarizeCompilation(jobId: string, c: Compilation) {
   return {
     id: c.id,
     name: c.name,
+    source: sourceOf(c),
     // Its intro is part of the video
     length: Math.round((compilationLength(c) + introSeconds(c.intro, findMusic(c.music?.track)?.bpm)) * 10) / 10,
     passages: items.length,

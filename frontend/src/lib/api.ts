@@ -1628,11 +1628,12 @@ export interface VideoPlan {
 }
 
 /** A whole video planned by the AI from a description, `target` seconds long */
-export async function planLiveVideo(jobId: string, brief: string, target: number, change?: PlanChange, lives: string[] = [], leads: number[] = [], fresh = false): Promise<VideoPlan> {
+export async function planLiveVideo(jobId: string, brief: string, target: number, change?: PlanChange, lives: string[] = [], leads: number[] = [], fresh = false, source?: string): Promise<VideoPlan> {
   // `lives`: other lives the video may take passages from (the AI works on all of them at once)
   // `leads`: the moments already spotted for it (live seconds), when the video is one the AI proposed
   // `fresh`: the same description asked again on purpose: the AI plans anew instead of giving the plan it kept
-  const body = { brief, target, ...(change ?? {}), ...(lives.length > 0 ? { lives } : {}), ...(leads.length > 0 ? { leads } : {}), ...(fresh ? { fresh: true } : {}) };
+  // `source`: what is being built (a clip, a sequence, a compilation: see lib/videoSources.ts), told to the AI before the streamer's words
+  const body = { brief, target, ...(change ?? {}), ...(lives.length > 0 ? { lives } : {}), ...(leads.length > 0 ? { leads } : {}), ...(fresh ? { fresh: true } : {}), ...(source ? { source } : {}) };
   const plan = await liveJson<VideoPlan>(await postJson(`${BASE}/jobs/${jobId}/plan`, body));
   // A passage says its live only when it isn't this one
   return { ...plan, sections: plan.sections.map((s) => ({ ...s, hits: s.hits.map(({ job, ...hit }) => (job && job !== jobId ? { ...hit, job } : hit)) })) };
@@ -1751,6 +1752,10 @@ export interface Compilation {
   lives?: string[];
   /** How much its picture moves on what is said: "light" or "strong" (see lib/effects.ts; absent: it plays plain) */
   effects?: string;
+  /** What it is made from: a clip, a sequence or a compilation (see lib/videoSources.ts; absent: a compilation) */
+  source?: string;
+  /** The clip of the analysis it was opened from (a clip video only) */
+  clip?: string;
   /** The look of a game it is dressed in instead of the channel's own (see lib/universes.ts; absent: the channel's) */
   universe?: string;
   /** How its titles are written (the titles of its parts, its hook line): one of the template editor's ways (absent: as its template writes them) */
@@ -1798,7 +1803,7 @@ export async function getSuggestions(jobId: string): Promise<{ suggested: number
   return jsonOrThrow(await fetch(`${BASE}/jobs/${jobId}/suggestions`), "Failed to load the suggestions");
 }
 
-export type CompilationDraft = Pick<Compilation, "name" | "sections" | "template" | "titles" | "hook" | "target" | "brief" | "answer" | "asks" | "lives">;
+export type CompilationDraft = Pick<Compilation, "name" | "sections" | "template" | "titles" | "hook" | "target" | "brief" | "answer" | "asks" | "lives" | "source">;
 
 /** A change asked on a video the AI planned: what is asked now, the video as it is (live seconds), what was asked before */
 export interface PlanChange {
@@ -1814,6 +1819,12 @@ export async function listCompilations(jobId: string): Promise<Compilation[]> {
 
 export async function createCompilation(jobId: string, draft: Partial<CompilationDraft> = {}): Promise<Compilation> {
   const json = await jsonOrThrow<{ compilation: Compilation }>(await postJson(`${BASE}/jobs/${jobId}/compilations`, draft), "Failed to create the compilation");
+  return json.compilation;
+}
+
+/** A clip of the analysis opened as a video like any other (the same one comes back when it was opened before) */
+export async function openClipVideo(jobId: string, clip: string): Promise<Compilation> {
+  const json = await jsonOrThrow<{ compilation: Compilation }>(await postJson(`${BASE}/jobs/${jobId}/compilations/from-clip`, { clip }), "Failed to open the clip");
   return json.compilation;
 }
 
@@ -1842,9 +1853,32 @@ export async function flattenCompilation(jobId: string, compilationId: string): 
 export const flatCompilationId = (clip: string): string | null => clip.match(/^flat_([a-z0-9]{10})_[a-f0-9]{8}\.mp4$/)?.[1] ?? null;
 
 /** A compilation as a card shows it */
+/** A clip the analysis found that nobody opened as a video yet: what the library shows of it */
+export interface LiveClip {
+  filename: string;
+  name: string;
+  /** 0-100 */
+  score: number;
+  /** Where it is in the live, seconds */
+  at: number;
+  /** Seconds of its advised cut */
+  length: number;
+  /** Its title, what is on screen said plainly, the words to find it by */
+  pitch: string;
+  seen: string;
+  tags: string[];
+  category: string | null;
+  /** "reading" / "watching": how the analysis came to it, when not by the sound and the chat */
+  found_by: string | null;
+  /** Kept or passed in Choisir, when the streamer said */
+  state: "kept" | "passed" | null;
+}
+
 export interface CompilationSummary {
   id: string;
   name: string;
+  /** What it is made from: "clip", "sequence" or "compilation" */
+  source?: string;
   /** Seconds */
   length: number;
   passages: number;
@@ -1887,6 +1921,8 @@ export interface LiveCompilations {
   looked_at?: string | null;
   looking?: boolean;
   compilations: CompilationSummary[];
+  /** The analysis' clips not opened as a video yet, the best first */
+  clips?: LiveClip[];
 }
 
 /** Every analysed live with its compilations (`jobId`: that live only) */

@@ -46,7 +46,7 @@
     "navigation": "Main navigation",
     "update": "Update",
     "updateReady": "Restart to update",
-    "compilations": "Compilations"
+    "compilations": "Videos"
   },
   "workspace": {
     "allCreators": "All creators",
@@ -883,7 +883,10 @@
     "modes": "Clips or compilations",
     "mode": {
       "clips": "Clips",
-      "compilations": "Compilations"
+      "compilations": "Compilations",
+      "clip": "Clips",
+      "sequence": "Sequences",
+      "compilation": "Compilations"
     }
   },
   "montage": {
@@ -1503,10 +1506,10 @@
       "ai": "AI"
     },
     "add": "Add",
-    "added": "Already in the compilation",
+    "added": "Already in the video",
     "remove": "Remove",
     "alreadyAsked": "asked before: free",
-    "alreadyThere": "These parts are already in the compilation.",
+    "alreadyThere": "These passages are already in the video.",
     "addedCount_one": "{{count}} part added",
     "addedCount_other": "{{count}} parts added",
     "planEmpty": "The AI found nothing for this video. Describe it another way.",
@@ -1526,8 +1529,8 @@
     "emptySection": "Click here, then add parts from the search.",
     "moments_one": "{{count}} part",
     "moments_other": "{{count}} parts",
-    "inCompilation_one": "{{count}} in the compilation",
-    "inCompilation_other": "{{count}} in the compilation",
+    "inCompilation_one": "{{count}} in the video",
+    "inCompilation_other": "{{count}} in the video",
     "fit": "Fit to {{length}}",
     "titles": "Part titles",
     "titlesHint": "Each section opens with its title",
@@ -1546,7 +1549,7 @@
     "hookPlaceholder": "Hook line of the video",
     "template": "Template",
     "defaultTemplate": "Default template",
-    "export": "Export the compilation",
+    "export": "Export the video",
     "cuttingPiece": "Cutting this part from the live…",
     "cuttingCount_one": "Cutting {{count}} part…",
     "cuttingCount_other": "Cutting {{count}} parts…",
@@ -1887,6 +1890,10 @@
       "label": "Look",
       "channel": "Your channel",
       "gta": "GTA"
+    },
+    "briefFor": {
+      "clip": "E.g. around 3 h in, I step out of the seaplane and die in the propeller.",
+      "sequence": "E.g. the yacht mission, from the jet-ski arrival to the airboat escape."
     }
   },
   "compilations": {
@@ -2112,5 +2119,48 @@
       "failed": "The note could not be changed"
     },
     "rememberedLine": "Remembered for your next videos: {{said}}"
+  },
+  "videos": {
+    "title": "Videos",
+    "subtitle": "Three ways to get a video out of a live: one moment, a stretch in a row, or passages from all over.",
+    "count": {
+      "clip_one": "{{count}} clip",
+      "clip_other": "{{count}} clips",
+      "sequence_one": "{{count}} sequence",
+      "sequence_other": "{{count}} sequences",
+      "compilation_one": "{{count}} compilation",
+      "compilation_other": "{{count}} compilations"
+    },
+    "about": {
+      "clip": "One moment of the live, about a minute.",
+      "sequence": "A stretch in a row (a mission, a situation that lasts), told as one video.",
+      "compilation": "Passages from all over the live, or from several lives."
+    },
+    "new": {
+      "clip": "New clip",
+      "sequence": "New sequence",
+      "compilation": "New compilation"
+    },
+    "newHint": {
+      "clip": "Describe the moment, even roughly (“around 3 h in, this happened…”): the AI finds it and cuts it.",
+      "sequence": "Say which stretch to tell: the AI keeps its beats, in order.",
+      "compilation": "Describe the video: the AI builds it from the live's passages."
+    },
+    "fromAnalysis": "Found by the analysis",
+    "watched": "Spotted on screen",
+    "open": "Edit this clip",
+    "opening": "Opening…",
+    "sort": "Sort the clips (keep / pass)",
+    "none": {
+      "clip": "No clip for this live.",
+      "sequence": "No sequence yet.",
+      "compilation": "No compilation yet."
+    },
+    "kept": "Kept",
+    "onScreenTitle": "Title on screen",
+    "changeFor": {
+      "clip": "E.g. “cut the beginning”, “also keep what happens right after”. Enter to send.",
+      "sequence": "E.g. “shorten the middle part”, “add the end of the mission”. Enter to send."
+    }
   }
 }

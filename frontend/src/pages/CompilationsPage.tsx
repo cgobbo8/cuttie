@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { useTranslation } from "react-i18next";
-import { ArrowLeft, ArrowRight, Layers, Lightbulb, Loader2, Plus, Sparkles } from "lucide-react";
+import { ArrowLeft, ArrowRight, Film, Layers, Lightbulb, Loader2, Plus, Scissors, Sparkles } from "lucide-react";
 import {
   LiveError,
   clipThumbUrl,
@@ -10,14 +10,17 @@ import {
   findSuggestions,
   listAllCompilations,
   listCompilations,
+  openClipVideo,
   saveCompilation,
   type CompilationSummary,
   type LiveCompilations,
 } from "../lib/api";
 import { useChannel } from "../lib/ChannelContext";
-import { copyName, libraryCount, libraryGroups, liveWhen, namesKeptWith, plainDate } from "../lib/compilationLibrary";
+import { copyName, libraryGroups, liveWhen, namesKeptWith, plainDate } from "../lib/compilationLibrary";
 import { hoursMinutes, splitVodTitle } from "../lib/format";
-import { waitingIn, withProposedFirst } from "../lib/suggestions";
+import { waitingBySource, waitingIn, withProposedFirst } from "../lib/suggestions";
+import { VIDEO_SOURCES, isVideoSource, sourceOf, type VideoSource } from "../lib/videoSources";
+import ClipCard from "../components/compilation/ClipCard";
 import CompilationCard from "../components/compilation/CompilationCard";
 import SuggestionCard from "../components/compilation/SuggestionCard";
 import LivePicker from "../components/compilation/LivePicker";
@@ -25,11 +28,16 @@ import ModeSwitch from "../components/project/ModeSwitch";
 import ConfirmModal from "../components/ConfirmModal";
 import { useToast } from "../components/Toast";
 
+const SOURCE_ICONS = { clip: Scissors, sequence: Film, compilation: Layers } as const;
+
 /**
- * /compilations — every compilation, by live: open, copy, rename, delete,
- * see which are exported, start a new one from any analysed live.
- * /:jobId/compilations — the same for one live, the other side of its project
- * (clips on one side, compilations on the other).
+ * /compilations — every video, by live: open, copy, rename, delete, see which are exported,
+ * start a new one from any analysed live.
+ * /:jobId/compilations — the same for one live.
+ * Three sources at the same level (?kind=clip|sequence|compilation, see lib/videoSources.ts):
+ * a live's clips (those the analysis found, opened as a video on a click, and those asked to the
+ * AI), its sequences and its compilations. After its source a video is the same thing: the same
+ * card, the same editor, the same export.
  * A compilation made from several lives is with each of them: the same card, the
  * same compilation (`home`: the live it is kept with, where every action on it goes).
  * The videos the AI proposed for a live come first, each on a card of its own: an
@@ -40,6 +48,9 @@ export default function CompilationsPage() {
   const toast = useToast();
   const navigate = useNavigate();
   const { jobId } = useParams<{ jobId: string }>();
+  const [search, setSearch] = useSearchParams();
+  // The source on screen (nothing said: compilations, where this page used to open)
+  const kind: VideoSource = isVideoSource(search.get("kind")) ? (search.get("kind") as VideoSource) : "compilation";
   const { channel } = useChannel();
   const [lives, setLives] = useState<LiveCompilations[] | null>(null);
   const [filter, setFilter] = useState("");
@@ -91,9 +102,7 @@ export default function CompilationsPage() {
     return [when ? plainDate(when, i18n.language) : null, live.game, live.duration ? hoursMinutes(live.duration) : null].filter(Boolean).join(" · ");
   };
 
-  const groups = useMemo(() => libraryGroups(lives ?? [], jobId ?? (filter || null)), [lives, jobId, filter]);
   const withSome = useMemo(() => libraryGroups(lives ?? []), [lives]);
-  const total = libraryCount(lives ?? []);
   const proposed = waitingIn(lives ?? []);
   /** "9 nov. · Le titre du live", for each live a compilation is made from */
   const madeFrom = (c: CompilationSummary) =>
@@ -105,12 +114,28 @@ export default function CompilationsPage() {
     });
   const own = jobId ? (lives ?? []).find((live) => live.job_id === jobId) : null;
 
-  const startIn = (id: string) => navigate(`/${id}/compilation?new=1`);
+  const startIn = (id: string) => navigate(`/${id}/compilation?new=1&kind=${kind}`);
   const startNew = () => {
     if (jobId) startIn(jobId);
-    // Always the picker: several lives can be ticked, and one not analysed yet can be analysed from it
+    // Always the picker: several lives can be ticked (a compilation only), and one not analysed yet can be analysed from it
     else setPicking(true);
   };
+  /** A clip of the analysis becomes a video like the others, and opens in the editor */
+  const openClip = async (id: string, filename: string) => {
+    if (busy) return;
+    setBusy(filename);
+    try {
+      const video = await openClipVideo(id, filename);
+      navigate(`/${id}/compilation?c=${video.id}`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t("common.error"));
+      setBusy(null);
+    }
+  };
+  /** How many videos of each source there are on screen (one live's, or every live's) */
+  const scope = (lives ?? []).filter((live) => (jobId ? live.job_id === jobId : !filter || live.job_id === filter));
+  const countOf = (source: VideoSource) =>
+    scope.reduce((sum, live) => sum + live.compilations.filter((c) => c.home === live.job_id && sourceOf(c) === source).length + (source === "clip" ? (live.clips?.length ?? 0) : 0), 0);
 
   const run = async (key: string, work: () => Promise<void>) => {
     setBusy(key);
@@ -155,8 +180,8 @@ export default function CompilationsPage() {
   }
 
   const grid = "grid gap-4 grid-cols-[repeat(auto-fill,minmax(250px,1fr))]";
-  const cards = (live: LiveCompilations) =>
-    withProposedFirst(live.compilations).map((c) =>
+  const cards = (live: LiveCompilations) => [
+    ...withProposedFirst(live.compilations.filter((c) => sourceOf(c) === kind)).map((c) =>
       c.waiting ? (
         // An idea of the AI, not built yet
         <SuggestionCard key={`${c.home}/${c.id}`} jobId={c.home} compilation={c} fallback={liveCover(live)} busy={busy === c.id} onDismiss={() => setToDelete(c)} />
@@ -173,7 +198,10 @@ export default function CompilationsPage() {
         onDelete={() => setToDelete(c)}
       />
       ),
-    );
+    ),
+    // The clips the analysis found, not opened yet: a click makes each a video like the others
+    ...(kind === "clip" ? (live.clips ?? []).map((clip) => <ClipCard key={`${live.job_id}/${clip.filename}`} jobId={live.job_id} clip={clip} busy={busy === clip.filename} onOpen={() => openClip(live.job_id, clip.filename)} />) : []),
+  ];
   /** A live the AI never looked through (analysed before it did so by itself): it can be asked to */
   const canFind = (live: LiveCompilations | null | undefined): live is LiveCompilations => !!live && !live.looked_at && !live.looking;
   const ideasTile = (live: LiveCompilations) => (
@@ -205,8 +233,8 @@ export default function CompilationsPage() {
       <span className="w-10 h-10 rounded-[12px] bg-accent-soft grid place-items-center text-accent">
         <Sparkles className="w-[18px] h-[18px]" />
       </span>
-      <span className="mt-3 text-[15px] font-[600] text-white">{t("compilation.new")}</span>
-      <span className="mt-1 text-[12.5px] leading-snug text-ink-2">{t("compilations.newHint")}</span>
+      <span className="mt-3 text-[15px] font-[600] text-white">{t(`videos.new.${kind}`)}</span>
+      <span className="mt-1 text-[12.5px] leading-snug text-ink-2">{t(`videos.newHint.${kind}`)}</span>
     </button>
   );
 
@@ -219,10 +247,8 @@ export default function CompilationsPage() {
               <ArrowLeft className="w-4 h-4" /> {t("sidebar.projects")}
             </Link>
           )}
-          <h1 className={`${jobId ? "mt-2 " : ""}text-[32px] leading-[1.1] tracking-[-0.03em] font-[650] text-white`}>{t("compilations.title")}</h1>
-          <p className="mt-2 text-[13.5px] text-ink-2 max-w-[62ch]">
-            {jobId && own ? [liveTitle(own), liveLine(own)].filter(Boolean).join(" · ") : total > 0 ? t("compilations.count", { count: total }) : t("compilations.subtitle")}
-          </p>
+          <h1 className={`${jobId ? "mt-2 " : ""}text-[32px] leading-[1.1] tracking-[-0.03em] font-[650] text-white`}>{t("videos.title")}</h1>
+          <p className="mt-2 text-[13.5px] text-ink-2 max-w-[62ch]">{jobId && own ? [liveTitle(own), liveLine(own)].filter(Boolean).join(" · ") : t("videos.subtitle")}</p>
           {!jobId && proposed > 0 && (
             <p className="mt-1.5 flex items-center gap-1.5 text-[13px] text-accent">
               <Sparkles className="w-3.5 h-3.5" /> {t("suggestions.waiting", { count: proposed })}
@@ -242,20 +268,52 @@ export default function CompilationsPage() {
           )}
           {!jobId && (lives.length > 0 || (channel?.vods.length ?? 0) > 0) && (
             <button onClick={startNew} className="btn btn-primary btn-sm">
-              <Plus className="w-[15px] h-[15px]" /> {t("compilation.new")}
+              <Plus className="w-[15px] h-[15px]" /> {t(`videos.new.${kind}`)}
             </button>
           )}
-          {jobId && <ModeSwitch jobId={jobId} current="compilations" suggested={waitingIn(lives, jobId)} />}
+          {jobId && <ModeSwitch jobId={jobId} current={kind} here suggested={waitingBySource(own?.compilations ?? [])} />}
         </div>
       </header>
+
+      {/* The three sources, at the same level (on one live's page the switch above says it) */}
+      {!jobId && (
+        <nav aria-label={t("project.modes")} className="mt-6 glass-still inline-flex items-center gap-0.5 p-1 rounded-[13px]">
+          {VIDEO_SOURCES.map((source) => {
+            const Icon = SOURCE_ICONS[source];
+            return (
+              <button
+                key={source}
+                type="button"
+                aria-pressed={source === kind}
+                onClick={() => setSearch(source === "compilation" ? {} : { kind: source }, { replace: true })}
+                className={`flex items-center gap-2 h-9 px-3.5 rounded-[9px] text-[13.5px] transition-colors ${source === kind ? "font-semibold bg-ink text-ground" : "text-ink-2 hover:bg-white/[0.08] hover:text-white"}`}
+              >
+                <Icon className="w-4 h-4" /> {t(`project.mode.${source}`)}
+                <span className={`mono text-[11.5px] ${source === kind ? "opacity-60" : "text-ink-3"}`}>{countOf(source)}</span>
+              </button>
+            );
+          })}
+        </nav>
+      )}
+      <p className="mt-3 text-[13px] text-ink-3">
+        {t(`videos.about.${kind}`)}
+        {kind === "clip" && jobId && (
+          <>
+            {" "}
+            <Link to={`/${jobId}`} className="text-ink-2 underline decoration-white/20 underline-offset-2 hover:text-white">
+              {t("videos.sort")}
+            </Link>
+          </>
+        )}
+      </p>
 
       {jobId ? (
         <>
           {own?.looking && <div className="mt-5">{lookingNote}</div>}
-          <section className={`mt-7 ${grid}`}>
+          <section className={`mt-5 ${grid}`}>
             {newTile}
-            {canFind(own) && ideasTile(own)}
-            {groups[0] && cards(groups[0])}
+            {kind !== "clip" && canFind(own) && ideasTile(own)}
+            {own && cards(own)}
           </section>
         </>
       ) : lives.length === 0 ? (
@@ -267,10 +325,10 @@ export default function CompilationsPage() {
             {t("compilations.analyse")} <ArrowRight className="w-4 h-4" />
           </Link>
         </section>
-      ) : groups.length === 0 ? (
-        <section className={`mt-7 ${grid}`}>{newTile}</section>
+      ) : scope.every((live) => cards(live).length === 0) ? (
+        <section className={`mt-5 ${grid}`}>{newTile}</section>
       ) : (
-        groups.map((live) => (
+        scope.filter((live) => cards(live).length > 0).map((live) => (
           <section key={live.job_id} className="mt-8">
             <div className="flex flex-wrap items-end justify-between gap-3 mb-3">
               <div className="min-w-0">
@@ -279,17 +337,17 @@ export default function CompilationsPage() {
                 {live.looking && <div className="mt-1.5">{lookingNote}</div>}
               </div>
               <div className="flex items-center gap-1.5">
-                {canFind(live) && (
+                {kind !== "clip" && canFind(live) && (
                   <button onClick={() => findIdeas(live.job_id)} disabled={!!finding} title={t("suggestions.findHint")} className="btn btn-ghost btn-sm">
                     {finding === live.job_id ? <Loader2 className="w-[15px] h-[15px] animate-spin" /> : <Lightbulb className="w-[15px] h-[15px] text-accent" />}
                     {t(finding === live.job_id ? "suggestions.finding" : "suggestions.find")}
                   </button>
                 )}
-                <Link to={`/${live.job_id}/compilations`} className="btn btn-ghost btn-sm">
+                <Link to={`/${live.job_id}/compilations?kind=${kind}`} className="btn btn-ghost btn-sm">
                   {t("compilations.openLive")}
                 </Link>
                 <button onClick={() => startIn(live.job_id)} className="btn btn-glass btn-sm">
-                  <Plus className="w-[15px] h-[15px]" /> {t("compilations.newHere")}
+                  <Plus className="w-[15px] h-[15px]" /> {t(`videos.new.${kind}`)}
                 </button>
               </div>
             </div>
@@ -304,10 +362,11 @@ export default function CompilationsPage() {
           hint={t("compilations.pickLiveHint")}
           lives={lives}
           coverOf={liveCover}
-          multiple
-          confirm={(count) => (count > 1 ? t("compilations.createFrom", { count }) : t("compilation.new"))}
-          // The newest live keeps the compilation; the others are the lives it also takes from
-          onPick={([first, ...rest]) => navigate(`/${first}/compilation?new=1${rest.length > 0 ? `&lives=${rest.join(",")}` : ""}`)}
+          // (only a compilation takes from several lives)
+          multiple={kind === "compilation"}
+          confirm={(count) => (count > 1 ? t("compilations.createFrom", { count }) : t(`videos.new.${kind}`))}
+          // The newest live keeps the video; the others are the lives a compilation also takes from
+          onPick={([first, ...rest]) => navigate(`/${first}/compilation?new=1&kind=${kind}${rest.length > 0 ? `&lives=${rest.join(",")}` : ""}`)}
           onClose={() => setPicking(false)}
           onAnalysed={() => load().catch(() => {})}
         />

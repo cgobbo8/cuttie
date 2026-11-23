@@ -375,7 +375,7 @@ export default function MontagePage() {
 
   const stepper = (
     <div className="flex flex-wrap items-center gap-2">
-    <ModeSwitch jobId={jobId} current="clips" />
+    <ModeSwitch jobId={jobId} current="clip" />
     <Stepper
       current="edit"
       links={{ analyze: `/${jobId}`, choose: `/${jobId}`, export: `/${jobId}/export` }}

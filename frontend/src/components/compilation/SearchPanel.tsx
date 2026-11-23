@@ -18,6 +18,7 @@ import { isNear, liveClock, sameStep, stepText } from "../../lib/compilation";
 import { frameAt, tileStyle } from "../../lib/storyboard";
 import { useToast } from "../Toast";
 import PlanTalk, { type TalkTurn } from "./PlanTalk";
+import type { VideoSource } from "../../lib/videoSources";
 
 interface Props {
   jobId: string;
@@ -27,6 +28,8 @@ interface Props {
   lives: { job: string; label: string }[];
   /** What can be searched in this live, and what asking the AI costs */
   info: LiveSearchInfo | null;
+  /** What the video is made from (a clip, a sequence, a compilation): the AI builds that */
+  source?: VideoSource;
   /** The result shown in the preview */
   previewed: LiveHit | null;
   /** The compilation already shows this moment */
@@ -37,7 +40,7 @@ interface Props {
   /** The AI planned a whole video from `brief` (`again`: the same description asked again, the video on screen is the one to replace) */
   onPlan: (plan: VideoPlan, target: number, brief: string, again?: boolean) => void;
   /** The video on screen was described to the AI: what was asked first, each change since and its answer (`byAi`: the AI proposed it and wrote that first request itself) */
-  talk?: { brief: string; answer?: string; passages?: number; asks: TalkTurn[]; byAi?: boolean } | null;
+  talk?: { brief: string; answer?: string; passages?: number; asks: TalkTurn[]; byAi?: boolean; wrote?: string } | null;
   /**
    * The video on screen is one the AI proposed and that is not built yet: what it noticed, the
    * moments it spotted (where building starts), the length it should have. `auto`: build it
@@ -70,7 +73,7 @@ const head = (text: string) => (text.length > AROUND ? `${text.slice(0, text.las
 const PROGRESS_EVERY = 1200;
 
 /** Looking for moments in the whole live: by words, by asking the AI, or by describing the whole video */
-export default function SearchPanel({ jobId, storyboards, lives, info, previewed, isAdded, onPreview, onAdd, onPlan, onResults, talk, proposal = null, current, onChange, onReveal }: Props) {
+export default function SearchPanel({ jobId, storyboards, lives, info, source = "compilation", previewed, isAdded, onPreview, onAdd, onPlan, onResults, talk, proposal = null, current, onChange, onReveal }: Props) {
   const { t, i18n } = useTranslation();
   const toast = useToast();
   // « I don't like it when you... »: the AI keeps it for the next videos, and says so
@@ -176,7 +179,7 @@ export default function SearchPanel({ jobId, storyboards, lives, info, previewed
     setBusy("plan");
     setFailure(null);
     try {
-      const planned = await planLiveVideo(jobId, asked, target, undefined, others);
+      const planned = await planLiveVideo(jobId, asked, target, undefined, others, [], false, source);
       noted(planned);
       const count = planned.sections.reduce((sum, s) => sum + s.hits.length, 0);
       setPlanNote(planned.note ?? "");
@@ -206,7 +209,7 @@ export default function SearchPanel({ jobId, storyboards, lives, info, previewed
     setBuilding(true);
     setFailure(null);
     try {
-      const planned = await planLiveVideo(jobId, asked.brief, asked.target, undefined, others, [], true);
+      const planned = await planLiveVideo(jobId, asked.brief, asked.target, undefined, others, [], true, source);
       noted(planned);
       const count = planned.sections.reduce((sum, s) => sum + s.hits.length, 0);
       if (count === 0) {
@@ -231,7 +234,7 @@ export default function SearchPanel({ jobId, storyboards, lives, info, previewed
     setBuilding(true);
     setFailure(null);
     try {
-      const planned = await planLiveVideo(jobId, talk.brief, proposal.target, undefined, others, proposal.leads);
+      const planned = await planLiveVideo(jobId, talk.brief, proposal.target, undefined, others, proposal.leads, false, source);
       noted(planned);
       const count = planned.sections.reduce((sum, s) => sum + s.hits.length, 0);
       if (count === 0) {
@@ -275,7 +278,7 @@ export default function SearchPanel({ jobId, storyboards, lives, info, previewed
     setRequest("");
     setFailure(null);
     try {
-      const planned = await planLiveVideo(jobId, talk.brief, target, { request: asked, current: current(), asks: talk.asks.map((a) => a.ask) }, others);
+      const planned = await planLiveVideo(jobId, talk.brief, target, { request: asked, current: current(), asks: talk.asks.map((a) => a.ask) }, others, [], false, source);
       onChange(planned, asked);
     } catch (err) {
       setFailure(err instanceof LiveError ? err.reason : "failed");
@@ -356,6 +359,8 @@ export default function SearchPanel({ jobId, storyboards, lives, info, previewed
         <PlanTalk
           brief={planning && !building ? brief.trim() : talk!.brief}
           byAi={!!talk?.byAi && (!planning || building)}
+          wrote={talk?.wrote}
+          example={source === "compilation" ? undefined : t(`videos.changeFor.${source}`)}
           proposal={proposal && !planning ? { pitch: proposal.pitch, tags: proposal.tags, score: proposal.score, cost: planCost, disabled: !info?.transcript || !!busy, onBuild: build, onEdit: editProposal } : null}
           again={kept && !planning && talk?.brief === kept.brief ? { cost: planCost, disabled: !info?.transcript || !!busy, onAgain: planAgain } : null}
           answer={planning ? undefined : talk!.answer}
@@ -380,7 +385,7 @@ export default function SearchPanel({ jobId, storyboards, lives, info, previewed
             onChange={(e) => setBrief(e.target.value)}
             rows={4}
             maxLength={MAX_BRIEF}
-            placeholder={t("compilation.briefPlaceholder")}
+            placeholder={t(source === "compilation" ? "compilation.briefPlaceholder" : `compilation.briefFor.${source}`)}
             aria-label={t("compilation.tab.describe")}
             className="w-full p-3 rounded-[11px] bg-black/30 border border-white/10 text-[14px] leading-snug text-white outline-none focus:border-accent-line placeholder:text-ink-3 resize-y"
           />

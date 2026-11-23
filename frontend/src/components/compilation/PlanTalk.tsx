@@ -36,6 +36,10 @@ interface Props {
   brief: string;
   /** The video is one the AI proposed: the first request is its own, written as the streamer would have */
   byAi?: boolean;
+  /** Who wrote it, when that isn't « the AI in your place » (a clip of the analysis: what the analysis saw) */
+  wrote?: string;
+  /** What can be asked, by example, when the video isn't a compilation (a clip: « coupe le début ») */
+  example?: string;
   /** ...and it is not built yet: the AI says what it noticed and offers to build it */
   proposal?: Proposal | null;
   /** The answer on screen is one the AI kept from a time before (nothing was searched, nothing spent): ask it again */
@@ -75,7 +79,7 @@ const SHOWN_STEPS = 4;
  * change asked and what the AI did about it, what it is doing right now, and
  * where to ask for the next one. What it adds shows up in the video beside.
  */
-export default function PlanTalk({ brief, byAi = false, proposal = null, again = null, answer, passages, planning = false, turns, pending, trail, value, onValue, onSend, disabled, cost, onReveal, onAnother, failure }: Props) {
+export default function PlanTalk({ brief, byAi = false, wrote, example, proposal = null, again = null, answer, passages, planning = false, turns, pending, trail, value, onValue, onSend, disabled, cost, onReveal, onAnother, failure }: Props) {
   const { t } = useTranslation();
   const thread = useRef<HTMLDivElement>(null);
   const busy = pending !== null || planning;
@@ -99,10 +103,10 @@ export default function PlanTalk({ brief, byAi = false, proposal = null, again =
       <div ref={thread} role="log" aria-label={t("compilation.changeTitle")} className="talk-thread flex flex-col gap-3.5 h-[max(360px,calc(100dvh-390px))] overflow-y-auto p-4">
         {byAi && (
           <p className="self-end -mb-2 flex items-center gap-1.5 text-[11.5px] text-accent">
-            <Sparkles className="w-3 h-3" /> {t("suggestions.wrote")}
+            <Sparkles className="w-3 h-3" /> {wrote ?? t("suggestions.wrote")}
           </p>
         )}
-        <Mine label={t(byAi ? "suggestions.wrote" : "compilation.changeYou")} text={brief} folded={!proposal} />
+        <Mine label={byAi ? (wrote ?? t("suggestions.wrote")) : t("compilation.changeYou")} text={brief} folded={!proposal} />
         {proposal && !planning && (
           <Theirs label={t("compilation.aiNote")}>
             <div className="flex items-start gap-3">
@@ -244,7 +248,7 @@ export default function PlanTalk({ brief, byAi = false, proposal = null, again =
       </form>
       <div hidden={!!proposal} className={`px-4 pb-3 flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[11.5px] text-ink-3 ${proposal ? "" : "flex"}`}>
         <span>
-          {t("compilation.changeEnter")}
+          {example ?? t("compilation.changeEnter")}
           {cost && <span className="mono"> · {cost}</span>}
         </span>
         <button type="button" onClick={onAnother} disabled={busy} className="underline decoration-white/20 underline-offset-2 hover:text-ink-2 disabled:opacity-50">

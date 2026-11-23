@@ -5,7 +5,8 @@ import { randomBytes } from 'node:crypto'
 import logger from '@adonisjs/core/services/logger'
 import db from '@adonisjs/lucid/services/db'
 import Job from '#models/job'
-import { dropClipCaches } from '#services/clip_extend'
+import path from 'node:path'
+import { dropClipCaches, readClipMeta } from '#services/clip_extend'
 import {
   MAX_COMPILATIONS,
   MAX_LIVES,
@@ -27,6 +28,9 @@ import {
   summarizeCompilation,
   type Compilation,
   dressed,
+  clipAsPiece,
+  isVideoSource,
+  type VideoSource,
 } from '#services/compilations'
 import {
   chooseLooks,
@@ -47,6 +51,21 @@ import { workerFailure } from '#services/worker_failure'
 
 /** Longest description of a video (a real one came to 1300 characters) */
 const MAX_BRIEF = 4000
+
+/**
+ * What the AI that builds a video is told before the streamer's own words, by what the video is made from.
+ * The streamer may only remember roughly (« vers 3 h, il s'est passé ça ») : a time said is where to read first.
+ */
+const BUILDS: Record<VideoSource, string> = {
+  clip:
+    '[What is asked for is ONE CLIP: a single moment of the live, 30 to 75 seconds in a row (lines that follow each other, in ONE part, no part title). ' +
+    'Give the whole moment in one passage, two when a dead stretch must go: its setup, what happens, the reaction. ' +
+    'When the streamer gives a time, even roughly, read around that time first with `read` (a few minutes before and after), then look for what they describe.] ',
+  sequence:
+    '[What is asked for is ONE SEQUENCE: a stretch of the live in a row where one thing goes on (a mission, a situation that lasts), retold IN ORDER as one short video: ' +
+    'its setup first, its turns, its payoff last, nothing taken from elsewhere in the live. When the streamer gives a time, even roughly, start reading there with `read`.] ',
+  compilation: '',
+}
 
 const newId = () => randomBytes(8).toString('base64url').toLowerCase().replace(/[^a-z0-9]/g, 'x').slice(0, 10)
 
@@ -106,8 +125,66 @@ export default class CompilationsController {
     // The intro the streamer prefers (their brand kit), unless this one comes with its own
     const preferred = preferredIntro(await getBrandKit())
     if (!parsed.intro && preferred) parsed.intro = preferred
+    // (a clip is one moment: nothing to announce, it opens on its picture)
+    if (parsed.source === 'clip') delete parsed.intro
+    // A new video's picture moves a little on what is said, unless it says otherwise (the row « Effets » takes it off)
+    if (!parsed.effects && body.effects !== null) parsed.effects = 'light'
     const now = new Date().toISOString()
     // A live on a game that has a look of its own (GTA): the video takes it, the streamer can go back to their channel's
+    const compilation: Compilation = { id: newId(), ...dressed(parsed, job.vodGame), created_at: now, updated_at: now }
+    job.compilations = [...existing, compilation]
+    await job.save()
+    return ctx.response.created({ compilation: describeCompilations(job.id, [compilation])[0] })
+  }
+
+  /**
+   * POST /api/jobs/:id/compilations/from-clip { clip } — a clip of the analysis opened as a video like any
+   * other: one passage (the streamer's cut, else the AI's, else the whole clip), its title written on it,
+   * the same dressing as a sequence or a compilation. Opened again, the same video comes back.
+   */
+  async fromClip(ctx: HttpContext) {
+    const job = await ownJob(ctx)
+    if (!job) return ctx.response.notFound({ error: 'job not found' })
+    const clip = path.basename(String(ctx.request.input('clip') ?? ''))
+    const hp = (job.hotPoints ?? []).find((point: any) => point?.clip_filename === clip) as any
+    if (!clip || !hp) return ctx.response.notFound({ error: 'clip not found' })
+    const existing = job.compilations ?? []
+    const already = existing.find((c) => c.clip === clip)
+    if (already) return { compilation: describeCompilations(job.id, [already])[0] }
+    if (existing.length >= MAX_COMPILATIONS) return ctx.response.badRequest({ error: 'too many compilations' })
+
+    // Where the clip's file is in the live, and what is kept of it
+    const meta = readClipMeta(job.id, clip)
+    const fileStart = meta?.vod_start ?? Number(hp.clip_start)
+    const fileEnd = meta?.vod_end ?? Number(hp.clip_end)
+    if (!Number.isFinite(fileStart) || !Number.isFinite(fileEnd) || fileEnd <= fileStart) return ctx.response.badRequest({ error: 'clip without its place in the live' })
+    const trim = job.selection?.[clip]?.trim
+    const advised = Number.isFinite(hp.llm?.cut_start) && Number.isFinite(hp.llm?.cut_end) ? [hp.llm.cut_start, hp.llm.cut_end] : null
+    const [from, to] = Array.isArray(trim) && trim.length === 2 ? trim : (advised ?? [0, fileEnd - fileStart])
+    const start = Math.min(fileEnd - 1, Math.max(fileStart, fileStart + Number(from)))
+    const end = Math.min(fileEnd, Math.max(start + 1, fileStart + Number(to)))
+    const id = newId()
+    // Its file is the clip's own, copied (nothing is fetched from the live again); a clip cut before files said
+    // where their first picture is gets cut from the live when the video opens, like any passage
+    if (meta?.settled === true) clipAsPiece(job.id, clip, id)
+    const parsed = parseCompilation(
+      {
+        name: String(hp.clip_name || 'Clip').slice(0, 80),
+        sections: [{ id: newId(), title: '', query: '', items: [{ id, start, end, text: hp.llm?.transcript ?? '', why: hp.llm?.seen || hp.llm?.summary || '', sources: ['ai'], score: hp.final_score }] }],
+        titles: false,
+        hook: String(hp.llm?.hook ?? '').slice(0, 80),
+        target: null,
+        source: 'clip',
+        clip,
+        effects: 'light',
+        // What the analysis saw of it opens the thread with the AI: the clip is changed by asking, like any video
+        brief: String(hp.llm?.seen || hp.llm?.summary || hp.clip_name || '').slice(0, 600),
+        answer: String(hp.llm?.narrative || '').slice(0, 800),
+      },
+      job.vodDurationSeconds ?? 0
+    )
+    if (!parsed || parsed.sections[0]?.items.length !== 1) return ctx.response.badRequest({ error: 'invalid clip' })
+    const now = new Date().toISOString()
     const compilation: Compilation = { id: newId(), ...dressed(parsed, job.vodGame), created_at: now, updated_at: now }
     job.compilations = [...existing, compilation]
     await job.save()
@@ -168,6 +245,23 @@ export default class CompilationsController {
           looked_at: job.suggestions?.at ?? null,
           looking: isLooking(job.id),
           compilations: cards.get(job.id) ?? [],
+          // The clips the analysis found that were not opened as a video yet: the same card as the rest, the best first
+          clips: (job.hotPoints ?? [])
+            .filter((hp: any) => hp?.clip_filename && !(job.compilations ?? []).some((c) => c.clip === hp.clip_filename))
+            .map((hp: any) => ({
+              filename: hp.clip_filename as string,
+              name: (hp.clip_name || hp.clip_filename) as string,
+              score: Math.round(100 * Number(hp.final_score ?? hp.score ?? 0)),
+              at: Number(hp.timestamp_seconds) || 0,
+              length: Number.isFinite(hp.llm?.cut_start) && Number.isFinite(hp.llm?.cut_end) ? Math.round(hp.llm.cut_end - hp.llm.cut_start) : Math.round((Number(hp.clip_end) || 0) - (Number(hp.clip_start) || 0)),
+              pitch: String(hp.llm?.summary ?? ''),
+              seen: String(hp.llm?.seen ?? ''),
+              tags: Array.isArray(hp.llm?.tags) ? hp.llm.tags.slice(0, 4) : [],
+              category: hp.llm?.category ?? null,
+              found_by: hp.found_by || null,
+              state: job.selection?.[hp.clip_filename]?.state ?? null,
+            }))
+            .sort((a: { score: number }, b: { score: number }) => b.score - a.score),
         })),
     }
   }
@@ -500,8 +594,11 @@ export default class CompilationsController {
   async plan(ctx: HttpContext) {
     const job = await ownJob(ctx)
     if (!job) return ctx.response.notFound({ error: 'job not found' })
-    const brief = String(ctx.request.input('brief') ?? '').trim().slice(0, MAX_BRIEF)
-    if (!brief) return ctx.response.badRequest({ error: 'brief required' })
+    const said = String(ctx.request.input('brief') ?? '').trim().slice(0, MAX_BRIEF)
+    if (!said) return ctx.response.badRequest({ error: 'brief required' })
+    // What kind of video is asked for: one moment, a stretch in a row, or passages from all over (the AI is told before the streamer's words)
+    const source: VideoSource = isVideoSource(ctx.request.input('source')) ? ctx.request.input('source') : 'compilation'
+    const brief = (BUILDS[source] + said).slice(0, MAX_BRIEF)
     const target = Math.min(600, Math.max(10, Number(ctx.request.input('target')) || 90))
     // A change asked on a video already planned: { request, current: [{ title, items: [{ start, end }] }], asks }
     const request = String(ctx.request.input('request') ?? '').trim().slice(0, MAX_BRIEF)

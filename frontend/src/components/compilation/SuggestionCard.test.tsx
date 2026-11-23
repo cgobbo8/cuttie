@@ -122,7 +122,7 @@ describe("a video the AI proposed", () => {
   it("is counted next to Compilations in a project", () => {
     const view = render(
       <MemoryRouter>
-        <ModeSwitch jobId="live" current="clips" suggested={4} />
+        <ModeSwitch jobId="live" current="clip" suggested={4} />
       </MemoryRouter>,
     );
     const link = screen.getByRole("link", { name: /Compilations/ });
@@ -131,7 +131,7 @@ describe("a video the AI proposed", () => {
     // None waiting: no badge
     view.rerender(
       <MemoryRouter>
-        <ModeSwitch jobId="live" current="clips" suggested={0} />
+        <ModeSwitch jobId="live" current="clip" suggested={0} />
       </MemoryRouter>,
     );
     expect(screen.queryByLabelText(/proposées par l'IA/)).toBeNull();

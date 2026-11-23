@@ -127,6 +127,7 @@ router
         router.post('/jobs/:id/pieces', [() => import('#controllers/compilations_controller'), 'pieces'])
         router.get('/jobs/:id/compilations', [() => import('#controllers/compilations_controller'), 'index'])
         router.post('/jobs/:id/compilations', [() => import('#controllers/compilations_controller'), 'store'])
+        router.post('/jobs/:id/compilations/from-clip', [() => import('#controllers/compilations_controller'), 'fromClip'])
         router.put('/jobs/:id/compilations/:compId', [() => import('#controllers/compilations_controller'), 'update'])
         router.delete('/jobs/:id/compilations/:compId', [() => import('#controllers/compilations_controller'), 'destroy'])
         router.post('/jobs/:id/compilations/:compId/duplicate', [() => import('#controllers/compilations_controller'), 'duplicate'])

@@ -82,10 +82,11 @@ import { templateGuides } from "../lib/templateGuide";
 import { buildAny, customTemplates, defaultTemplateKey, findCustom, hookOf, isBuiltIn, type TemplateKey } from "../lib/templateKeys";
 import { isHookStyle, titleCard } from "../lib/templateSpec";
 import { isEffectLevel } from "../lib/effects";
+import { SOURCE_TARGET, isVideoSource, sourceOf, sourcePath, type VideoSource } from "../lib/videoSources";
 import { TEMPLATE_IDS } from "../lib/templates";
 import MontageComposition from "../components/remotion-editor/MontageComposition";
 import ModeSwitch from "../components/project/ModeSwitch";
-import { isWaiting } from "../lib/suggestions";
+import { isWaiting, waitingBySource } from "../lib/suggestions";
 import LivePicker from "../components/compilation/LivePicker";
 import CompilationGuide from "../components/compilation/CompilationGuide";
 import CompilationPanel from "../components/compilation/CompilationPanel";
@@ -247,6 +248,8 @@ export default function CompilationPage() {
     const wantsLives = (search.get("lives") ?? "").split(",").filter((id) => id && id !== jobId).slice(0, MAX_OTHER_LIVES);
     // Asked once per live, even when this runs twice (development): a new compilation is created once
     const wantsNew = search.get("new") === "1";
+    // ?kind=clip|sequence: what the new video is made from (nothing said: a compilation)
+    const wantsKind: VideoSource = isVideoSource(search.get("kind")) ? (search.get("kind") as VideoSource) : "compilation";
     // ?build=1: a video the AI proposed, opened from its card to be built
     if (search.get("build") === "1" && search.get("c")) buildFor.current = search.get("c");
     if (loaded.current?.job !== jobId) {
@@ -255,13 +258,17 @@ export default function CompilationPage() {
         // The first visit opens on an empty compilation
         all: listCompilations(jobId).then(async (list) => {
           // A new one is asked for: the empty one left from last time does, rather than piling them up
-          const blank = list.find((c) => allItems(c).length === 0 && !c.brief);
+          const blank = list.find((c) => allItems(c).length === 0 && !c.brief && !c.suggestion && sourceOf(c) === wantsKind);
           if (wantsNew && blank) {
             const same = (blank.lives ?? []).join() === wantsLives.join();
             const { lives: _before, ...rest } = blank;
             return [...list.filter((c) => c !== blank), same ? blank : await saveCompilation(jobId, { ...rest, ...(wantsLives.length > 0 ? { lives: wantsLives } : {}) })];
           }
-          const draft = { name: t("compilation.defaultName"), ...(wantsNew && wantsLives.length > 0 ? { lives: wantsLives } : {}) };
+          const draft = {
+            name: t(`videos.new.${wantsNew ? wantsKind : "compilation"}`),
+            ...(wantsNew && wantsKind === "compilation" && wantsLives.length > 0 ? { lives: wantsLives } : {}),
+            ...(wantsNew && wantsKind !== "compilation" ? { source: wantsKind, target: SOURCE_TARGET[wantsKind], titles: wantsKind !== "clip" } : {}),
+          };
           return list.length === 0 || wantsNew ? [...list, await createCompilation(jobId, draft)] : list;
         }),
       };
@@ -308,6 +315,8 @@ export default function CompilationPage() {
   // Its own first, then the others: the order the AI numbers them in
   const liveIds = useMemo(() => (jobId ? [jobId, ...(compilation?.lives ?? [])] : []), [jobId, compilation?.lives]);
   const several = liveIds.length > 1;
+  // What the video is made from: a clip, a sequence or a compilation (the same editor for the three)
+  const source: VideoSource = sourceOf(compilation);
   const liveInfo = useCallback((job?: string) => library.find((live) => live.job_id === (job ?? jobId)), [library, jobId]);
   /** How long a live is (a passage's own when it names one) */
   const lengthOf = useCallback((job?: string) => (job && job !== jobId ? (liveInfo(job)?.duration ?? 0) : liveDuration), [jobId, liveDuration, liveInfo]);
@@ -544,7 +553,7 @@ export default function CompilationPage() {
         change(planned);
       } else {
         // Another video from the same lives
-        const draft = { name: plan.title || t("compilation.defaultName"), target, titles: true, ...(compilation.lives?.length ? { lives: compilation.lives } : {}) };
+        const draft = { name: plan.title || t("compilation.defaultName"), target, titles: true, ...(compilation.lives?.length ? { lives: compilation.lives } : {}), ...(sourceOf(compilation) !== "compilation" ? { source: sourceOf(compilation) } : {}) };
         planned = { ...(await createCompilation(jobId, draft)), sections, hook: (plan.hook ?? "").trim().slice(0, 120), brief, answer: plan.note ?? "", asks: [] };
         setCompilations((prev) => [...(prev ?? []), planned]);
         setCurrentId(planned.id);
@@ -578,7 +587,9 @@ export default function CompilationPage() {
   const startNew = async () => {
     if (!jobId) return;
     try {
-      const created = await createCompilation(jobId, { name: t("compilation.defaultName") });
+      // Another video of the same source as the one on screen
+      const kind = sourceOf(compilation);
+      const created = await createCompilation(jobId, { name: t(`videos.new.${kind}`), ...(kind !== "compilation" ? { source: kind, target: SOURCE_TARGET[kind], titles: kind !== "clip" } : {}) });
       setCompilations((prev) => [...(prev ?? []), created]);
       setCurrentId(created.id);
       setActiveSection(created.sections[0]?.id ?? "");
@@ -1069,7 +1080,7 @@ export default function CompilationPage() {
     return when ? plainDate(when, i18n.language) : "";
   };
   // Another live to take passages from: one already analysed, or one of the channel's that can be analysed from the picker
-  const canAddLive = liveIds.length <= MAX_OTHER_LIVES && (library.some((live) => !liveIds.includes(live.job_id)) || (channel?.vods ?? []).some((vod) => !vod.recording && vod.job?.status !== "DONE"));
+  const canAddLive = source === "compilation" && liveIds.length <= MAX_OTHER_LIVES && (library.some((live) => !liveIds.includes(live.job_id)) || (channel?.vods ?? []).some((vod) => !vod.recording && vod.job?.status !== "DONE"));
   const addLive = (id: string) => {
     setAddingLive(false);
     if (liveIds.includes(id) || liveIds.length > MAX_OTHER_LIVES) return;
@@ -1086,20 +1097,20 @@ export default function CompilationPage() {
     <div className="animate-fade-in">
       <header className="flex flex-wrap items-end justify-between gap-5">
         <div className="min-w-0">
-          <Link to={`/${jobId}/compilations`} className="btn btn-ghost btn-sm -ml-2 h-7 px-2">
-            <ArrowLeft className="w-4 h-4" /> {t("compilations.title")}
+          <Link to={sourcePath(jobId, source)} className="btn btn-ghost btn-sm -ml-2 h-7 px-2">
+            <ArrowLeft className="w-4 h-4" /> {t(`project.mode.${source}`)}
           </Link>
           <h1 className="mt-2 text-[32px] leading-[1.1] tracking-[-0.03em] font-[650] text-white truncate">{compilation.name || t("compilation.title")}</h1>
-          <p className="mt-2 text-[13.5px] text-ink-2 max-w-[62ch]">{t("compilation.subtitle")}</p>
+          <p className="mt-2 text-[13.5px] text-ink-2 max-w-[62ch]">{t(`videos.about.${source}`)}</p>
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
           <button onClick={() => setGuide(true)} className="btn btn-ghost btn-sm">
             <CircleQuestionMark className="w-[15px] h-[15px]" /> {t("compilation.guide.open")}
           </button>
           <button onClick={startNew} className="btn btn-glass btn-sm">
-            <Plus className="w-[15px] h-[15px]" /> {t("compilation.new")}
+            <Plus className="w-[15px] h-[15px]" /> {t(`videos.new.${source}`)}
           </button>
-          <ModeSwitch jobId={jobId} current="compilations" suggested={(compilations ?? []).filter(isWaiting).length} />
+          <ModeSwitch jobId={jobId} current={source} suggested={waitingBySource(compilations ?? [])} />
         </div>
       </header>
 
@@ -1181,12 +1192,13 @@ export default function CompilationPage() {
           storyboards={storyboards}
           lives={liveIds.map((id, n) => ({ job: id, label: several ? `${n + 1} · ${[liveDay(id), liveTitle(id)].filter(Boolean).join(" · ")}` : liveTitle(id) }))}
           info={info}
+          source={source}
           previewed={null}
           isAdded={(hit) => !!itemFor(compilation, draftOf(hit))}
           onPreview={watch}
           onAdd={add}
           onPlan={applyPlan}
-          talk={compilation.brief ? { brief: compilation.brief, answer: compilation.answer, passages: allItems(compilation).length, asks: compilation.asks ?? [], byAi: !!compilation.suggestion } : null}
+          talk={compilation.brief ? { brief: compilation.brief, answer: compilation.answer, passages: allItems(compilation).length, asks: compilation.asks ?? [], byAi: !!compilation.suggestion || !!compilation.clip, ...(compilation.clip ? { wrote: t("videos.fromAnalysis") } : {}) } : null}
           proposal={
             compilation.suggestion && isWaiting(compilation)
               ? {
@@ -1318,6 +1330,7 @@ export default function CompilationPage() {
           compilation={compilation}
           storyboards={storyboards}
           home={jobId}
+          source={source}
           liveNumbers={several ? Object.fromEntries(liveIds.map((id, n) => [id, n + 1])) : undefined}
           activeSection={activeSection}
           selectedItem={shownItem?.id ?? null}

@@ -97,6 +97,7 @@ import MontageComposition from "../components/remotion-editor/MontageComposition
 import { isWaiting } from "../lib/suggestions";
 import LiveHeader from "../components/live/LiveHeader";
 import VideoRail from "../components/live/VideoRail";
+import TemplateSketch from "../components/montage/TemplateSketch";
 import VideoTimeline from "../components/montage/VideoTimeline";
 import AiCutButton from "../components/project/AiCutButton";
 import LivePicker from "../components/compilation/LivePicker";
@@ -1252,6 +1253,23 @@ export default function CompilationPage() {
   const firstReady = readyItems[0];
   useBackdrop(jobId && firstReady ? clipThumbUrl(pieces[firstReady.id].job, pieces[firstReady.id].file) : null);
 
+  // A template drawn small on a picture of this video: what the looks and the template picker show of each one
+  const sketchOn = useMemo(() => {
+    const piece = firstReady ? pieces[firstReady.id] : undefined;
+    const env = piece ? envs[pieceVersion(piece)] : undefined;
+    if (!kit || !jobId || !compilation || !piece || !env) return null;
+    const ctx = clipTemplateContext({ jobId: piece.job, filename: piece.file, env, kit, login: channel?.login ?? kit.twitch_login, avatarUrl: channel?.avatar_url ?? null, facecam: env.facecam, startAt: 0, endAt: 1, hook: compilation.hook.trim() || compilation.name });
+    return { ctx: { ...ctx, words: [], displayName: channel?.display_name ?? null, followers: channel?.followers ?? null, game: job?.vod_game ?? null }, frame: clipThumbUrl(piece.job, piece.file) };
+  }, [channel, compilation?.hook, compilation?.name, envs, firstReady, job?.vod_game, jobId, kit, pieces]); // eslint-disable-line react-hooks/exhaustive-deps
+  const sketch = useCallback(
+    (key: string | null, width: number) => {
+      if (!sketchOn) return null;
+      const known: TemplateKey = key && (isBuiltIn(key) || findCustom(key, customs)) ? key : defaultKey;
+      return <TemplateSketch layers={buildAny(known, sketchOn.ctx, customs, isHookStyle(compilation?.titleStyle) ? compilation.titleStyle : null)} frameUrl={sketchOn.frame} width={width} sample={[]} />;
+    },
+    [compilation?.titleStyle, customs, defaultKey, sketchOn],
+  );
+
   // What is kept from this live, by source: the row above the montage
   const liveMoments = useMemo(() => buildMoments(job?.hot_points ?? [], job?.selection ?? {}), [job]);
   const entries = useMemo(() => liveEntries(liveMoments, compilations ?? []), [liveMoments, compilations]);
@@ -1345,6 +1363,7 @@ export default function CompilationPage() {
     fresh: fresh?.ids,
     freshAt: fresh?.at,
     gone,
+    sketch,
   };
 
   return (

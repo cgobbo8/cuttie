@@ -55,15 +55,18 @@ interface Props {
   onClose: () => void;
   /** Where it sits against what opened it */
   className?: string;
+  /** Laid inside the panel that opened it (not floating over it): it takes its width, and a click elsewhere leaves it open */
+  inline?: boolean;
 }
 
 /** The ready-made transitions to choose from, each one playing in small */
-export default function TransitionPicker({ title, value, video, onPick, onClose, className = "" }: Props) {
+export default function TransitionPicker({ title, value, video, onPick, onClose, className = "", inline = false }: Props) {
   const { t } = useTranslation();
   const box = useRef<HTMLDivElement>(null);
   const frame = useLoop();
   useEffect(() => {
-    const outside = (e: PointerEvent) => !box.current?.contains(e.target as Node) && onClose();
+    // (laid inside a panel, it stays open while the video is looked at: its panel closes it)
+    const outside = (e: PointerEvent) => !inline && !box.current?.contains(e.target as Node) && onClose();
     const escape = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     document.addEventListener("pointerdown", outside, true);
     document.addEventListener("keydown", escape);
@@ -71,7 +74,7 @@ export default function TransitionPicker({ title, value, video, onPick, onClose,
       document.removeEventListener("pointerdown", outside, true);
       document.removeEventListener("keydown", escape);
     };
-  }, [onClose]);
+  }, [inline, onClose]);
 
   const choices: { value: string | null; sketch: string; label: string }[] = [
     ...(video !== undefined ? [{ value: null, sketch: video ?? PLAIN_CUT, label: t("compilation.transition.asVideo") }] : []),
@@ -85,9 +88,9 @@ export default function TransitionPicker({ title, value, video, onPick, onClose,
       aria-label={title}
       data-nodrag
       onClick={(e) => e.stopPropagation()}
-      className={`absolute z-40 w-[268px] p-2.5 rounded-[14px] bg-[#171a18]/[0.98] border border-white/[0.12] shadow-[0_24px_60px_-18px_rgba(0,0,0,0.9)] ${className}`}
+      className={inline ? "w-full" : `absolute z-40 w-[268px] p-2.5 rounded-[14px] bg-[#171a18]/[0.98] border border-white/[0.12] shadow-[0_24px_60px_-18px_rgba(0,0,0,0.9)] ${className}`}
     >
-      <p className="px-0.5 pb-2 text-[12px] font-[550] text-ink-2">{title}</p>
+      {!inline && <p className="px-0.5 pb-2 text-[12px] font-[550] text-ink-2">{title}</p>}
       <div className="grid grid-cols-4 gap-1.5">
         {choices.map((choice) => {
           const chosen = choice.value === value;

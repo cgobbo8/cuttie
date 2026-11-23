@@ -27,6 +27,8 @@ interface Props {
   auto?: { label: string; hint?: string; chosen: boolean; onPick: () => void };
   /** Where it sits against what opened it */
   className?: string;
+  /** Laid inside the panel that opened it (not floating over it): it takes its width, and a click elsewhere leaves it open */
+  inline?: boolean;
 }
 
 /** Plays a track from where it is in full swing: one at a time, stopped when the picker closes */
@@ -59,12 +61,13 @@ export function useListen() {
 }
 
 /** The musics a video can play in the background, by the kind of video they suit, each one to listen to */
-export default function MusicPicker({ value, tracks: every, favourites = {}, onChange, onClose, title, noneLabel, presence = true, first, universe, auto, className = "" }: Props) {
+export default function MusicPicker({ value, tracks: every, favourites = {}, onChange, onClose, title, noneLabel, presence = true, first, universe, auto, className = "", inline = false }: Props) {
   const { t } = useTranslation();
   const box = useRef<HTMLDivElement>(null);
   const { playing, toggle } = useListen();
   useEffect(() => {
-    const outside = (e: PointerEvent) => !box.current?.contains(e.target as Node) && onClose();
+    // (laid inside a panel, it stays open while the video is looked at: its panel closes it)
+    const outside = (e: PointerEvent) => !inline && !box.current?.contains(e.target as Node) && onClose();
     const escape = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     document.addEventListener("pointerdown", outside, true);
     document.addEventListener("keydown", escape);
@@ -72,7 +75,7 @@ export default function MusicPicker({ value, tracks: every, favourites = {}, onC
       document.removeEventListener("pointerdown", outside, true);
       document.removeEventListener("keydown", escape);
     };
-  }, [onClose]);
+  }, [inline, onClose]);
 
   // The musics of the video's universe first, under its name; then each track under the first kind it suits, one that
   // says none last. Asked for a kind: every track that suits it first
@@ -95,9 +98,9 @@ export default function MusicPicker({ value, tracks: every, favourites = {}, onC
       aria-label={title ?? t("compilation.music.pick")}
       data-nodrag
       onClick={(e) => e.stopPropagation()}
-      className={`absolute z-40 w-[340px] max-h-[min(460px,50dvh)] flex flex-col p-3 rounded-[14px] bg-[#171a18]/[0.98] border border-white/[0.12] shadow-[0_24px_60px_-18px_rgba(0,0,0,0.9)] ${className}`}
+      className={inline ? "w-full max-h-[max(360px,calc(100dvh-470px))] flex flex-col" : `absolute z-40 w-[340px] max-h-[min(460px,50dvh)] flex flex-col p-3 rounded-[14px] bg-[#171a18]/[0.98] border border-white/[0.12] shadow-[0_24px_60px_-18px_rgba(0,0,0,0.9)] ${className}`}
     >
-      <p className="px-0.5 pb-2 text-[12px] font-[550] text-ink-2">{title ?? t("compilation.music.pick")}</p>
+      {!inline && <p className="px-0.5 pb-2 text-[12px] font-[550] text-ink-2">{title ?? t("compilation.music.pick")}</p>}
       <div className="flex-1 min-h-0 overflow-y-auto -mx-1 px-1 flex flex-col gap-0.5">
         <button
           type="button"

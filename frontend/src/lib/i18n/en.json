@@ -1833,7 +1833,8 @@
         "label": "Pack",
         "cuttie": "Cuttie",
         "gta": "GTA"
-      }
+      },
+      "opening": "Opening"
     },
     "music": {
       "label": "Music",
@@ -1896,7 +1897,14 @@
       "label": "Look and sound",
       "ai": "Let the AI choose",
       "working": "The AI is choosing…",
-      "hint": "The AI looks at the video and chooses each passage's template, the transition, the intro and the music. It starts from your favourites (My channel)."
+      "hint": "The AI looks at the video and chooses each passage's template, the transition, the intro and the music. It starts from your favourites (My channel).",
+      "group": {
+        "picture": "Picture",
+        "text": "Text",
+        "motion": "Motion",
+        "sound": "Opening and sound"
+      },
+      "aiShort": "AI's pick"
     },
     "ownLooks_one": "{{count}} passage has its own",
     "ownLooks_other": "{{count}} passages have their own",

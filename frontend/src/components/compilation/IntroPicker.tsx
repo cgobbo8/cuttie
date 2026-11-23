@@ -159,6 +159,8 @@ interface Props {
   fields?: "all" | "sound" | "style";
   /** Where it sits against what opened it */
   className?: string;
+  /** Laid inside the panel that opened it (not floating over it): it takes its width, and a click elsewhere leaves it open */
+  inline?: boolean;
   /** The pack shown first when nothing is chosen yet: the one of the look the video is dressed in */
   pack?: IntroPackId;
   /**
@@ -178,14 +180,15 @@ type Mode = "none" | "jingle" | "hook";
  * jingles. They come in packs, one shown at a time: Cuttie's twelve, drawn with the channel's
  * colours, and the GTA pack, drawn with its own. Each one plays in small with the channel's logo.
  */
-export default function IntroPicker({ value, brand, name, onChange, onClose, heading, fields = "all", className = "", hook, pack: preferred }: Props) {
+export default function IntroPicker({ value, brand, name, onChange, onClose, heading, fields = "all", className = "", hook, pack: preferred, inline = false }: Props) {
   const { t, i18n } = useTranslation();
   const box = useRef<HTMLDivElement>(null);
   const frame = useIntroLoop();
   const [title, setTitle] = useState(value?.title ?? "");
   const playing = useRef<HTMLAudioElement | null>(null);
   useEffect(() => {
-    const outside = (e: PointerEvent) => !box.current?.contains(e.target as Node) && onClose();
+    // (laid inside a panel, it stays open while the video is looked at: its panel closes it)
+    const outside = (e: PointerEvent) => !inline && !box.current?.contains(e.target as Node) && onClose();
     const escape = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     document.addEventListener("pointerdown", outside, true);
     document.addEventListener("keydown", escape);
@@ -194,7 +197,7 @@ export default function IntroPicker({ value, brand, name, onChange, onClose, hea
       document.removeEventListener("keydown", escape);
       playing.current?.pause();
     };
-  }, [onClose]);
+  }, [inline, onClose]);
 
   const shown = title.trim() || name;
   const follow: [string, string] = [t("compilation.intro.followLabel"), t("compilation.intro.followDone")];
@@ -214,13 +217,13 @@ export default function IntroPicker({ value, brand, name, onChange, onClose, hea
   // Opened from a row near an edge of the window, it is pushed back inside (under the top bar, above the bottom)
   useLayoutEffect(() => {
     const el = box.current;
-    if (!el) return;
+    if (!el || inline) return;
     el.style.transform = "";
     const { top, bottom } = el.getBoundingClientRect();
     const [min, max] = [76, window.innerHeight - 12];
     const shift = top < min ? min - top : bottom > max ? Math.max(min - top, max - bottom) : 0;
     if (shift) el.style.transform = `translateY(${Math.round(shift)}px)`;
-  }, [mode, fields, pack, hook?.passages.length]);
+  }, [inline, mode, fields, pack, hook?.passages.length]);
   /** Heard as soon as it is chosen */
   const listen = (id: string) => {
     try {
@@ -324,10 +327,10 @@ export default function IntroPicker({ value, brand, name, onChange, onClose, hea
       data-nodrag
       onClick={(e) => e.stopPropagation()}
       // Three rows of four graphics; what is set on the chosen one sits beside them, not under (the picker stays in the window)
-      className={`absolute z-40 max-w-[calc(100vw-24px)] p-3 rounded-[14px] bg-[#171a18]/[0.98] border border-white/[0.12] shadow-[0_24px_60px_-18px_rgba(0,0,0,0.9)] ${fields === "style" ? "w-[304px]" : "w-[556px]"} ${className}`}
+      className={inline ? "w-full" : `absolute z-40 max-w-[calc(100vw-24px)] p-3 rounded-[14px] bg-[#171a18]/[0.98] border border-white/[0.12] shadow-[0_24px_60px_-18px_rgba(0,0,0,0.9)] ${fields === "style" ? "w-[304px]" : "w-[556px]"} ${className}`}
     >
       <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5">
-        <p className="px-0.5 text-[12px] font-[550] text-ink-2">{heading ?? t("compilation.intro.pick")}</p>
+        {!inline && <p className="px-0.5 text-[12px] font-[550] text-ink-2">{heading ?? t("compilation.intro.pick")}</p>}
         {/* First what the video opens with; the graphics below are the ones of that kind */}
         <div role="group" aria-label={t("compilation.intro.kind")} className="seg">
           {modes.map((kind) => (
@@ -338,7 +341,7 @@ export default function IntroPicker({ value, brand, name, onChange, onClose, hea
         </div>
       </div>
       <div className="flex flex-wrap gap-x-4 gap-y-3">
-        <div className="w-[280px] flex-none">
+        <div className={inline ? "w-full" : "w-[280px] flex-none"}>
           <div role="tablist" aria-label={t("compilation.intro.pack.label")} className="flex gap-1 pb-2">
             {packs.map((one) => (
               <button

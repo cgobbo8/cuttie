@@ -1833,7 +1833,8 @@
         "label": "Univers",
         "cuttie": "Cuttie",
         "gta": "GTA"
-      }
+      },
+      "opening": "Ouverture"
     },
     "music": {
       "label": "Musique",
@@ -1896,7 +1897,14 @@
       "label": "Habillage",
       "ai": "Laisser l'IA choisir",
       "working": "L'IA choisit…",
-      "hint": "L'IA regarde la vidéo et choisit le modèle de chaque passage, la transition, l'intro et la musique. Elle part de tes préférées (Ma chaîne)."
+      "hint": "L'IA regarde la vidéo et choisit le modèle de chaque passage, la transition, l'intro et la musique. Elle part de tes préférées (Ma chaîne).",
+      "group": {
+        "picture": "Image",
+        "text": "Texte",
+        "motion": "Mouvement",
+        "sound": "Début et son"
+      },
+      "aiShort": "L'IA choisit"
     },
     "ownLooks_one": "{{count}} passage a le sien",
     "ownLooks_other": "{{count}} passages ont le leur",

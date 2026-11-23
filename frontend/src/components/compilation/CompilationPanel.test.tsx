@@ -166,10 +166,13 @@ describe("the passages of a compilation", () => {
     // Nothing comes before the first passage: no transition to choose there
     expect(within(row("a")).queryByRole("button", { name: "Transition avant ce passage" })).toBeNull();
 
+    // Its choices open in the panel, in place of the list of settings (another can be tried while the video is looked at)
     fireEvent.click(screen.getByRole("button", { name: "Transitions : Coupe nette" }));
+    expect(screen.queryByRole("button", { name: /^Modèle/ })).toBeNull();
     fireEvent.click(within(screen.getByRole("dialog", { name: "Transition entre tous les passages" })).getByRole("button", { name: "Zoom" }));
     expect(transitions()).toEqual(["zoom", null, null, null, null]);
-    // Its row says what it is set to
+    // Back to the list: its row says what it is set to
+    fireEvent.click(screen.getByRole("button", { name: /Habillage/ }));
     expect(screen.getByRole("button", { name: "Transitions : Zoom" })).toBeInTheDocument();
 
     fireEvent.click(within(row("c")).getByRole("button", { name: "Transition avant ce passage" }));
@@ -200,14 +203,15 @@ describe("the passages of a compilation", () => {
     const onEdit = vi.fn();
     const view = render(<Harness start={video()} onEdit={onEdit} />);
     const lost = /L'éditeur ne reprend ni l'intro, ni la musique, ni les transitions/;
-    // Plain cuts and one template: nothing to lose, nothing said
-    expect(screen.queryByText(lost)).toBeNull();
+    // Plain cuts and one template: nothing to lose, nothing said (what it says is said on hover, not in a paragraph)
+    expect(screen.getByRole("button", { name: "Ouvrir dans l'éditeur" }).getAttribute("title")).not.toMatch(lost);
     fireEvent.click(screen.getByRole("button", { name: "Ouvrir dans l'éditeur" }));
     expect(onEdit).toHaveBeenCalledTimes(1);
 
     fireEvent.click(screen.getByRole("button", { name: "Transitions : Coupe nette" }));
     fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Zoom" }));
-    expect(screen.getByText(lost)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Habillage/ }));
+    expect(screen.getByRole("button", { name: "Ouvrir dans l'éditeur" }).getAttribute("title")).toMatch(lost);
     view.unmount();
 
     // No passage: nothing to open
@@ -265,12 +269,17 @@ describe("the passages of a compilation", () => {
     const start = { ...video(), template: "stacked", intro: { style: "slam" } };
     const { rerender } = render(<CompilationPanel {...base} compilation={start} onChange={onChange} brand={brand} musics={MUSICS.filter((track) => track.id === "phonk")} templates={templates} templateName={(key) => templates.find((tpl) => tpl.key === key)?.name ?? key} onSameLook={onSameLook} />);
     // Each row: what it is and what it is set to (an intro says what it adds to the video)
-    for (const name of ["Modèle : Empilé", "Transitions : Coupe nette", "Intro : Impact · +1,6 s", "Musique : Aucune"]) expect(screen.getByRole("button", { name })).toBeInTheDocument();
+    for (const name of ["Modèle : Empilé", "Style des titres : Comme le modèle", "Transitions : Coupe nette", "Ouverture : Impact · +1,6 s", "Musique : Aucune"]) expect(screen.getByRole("button", { name })).toBeInTheDocument();
     expect(screen.getByRole("switch", { name: "Titres des parties" })).toHaveAttribute("aria-checked", "true");
+    // Three answers or fewer: chosen on the row itself
+    const effects = screen.getByRole("group", { name: "Effets" });
+    expect(within(effects).getAllByRole("button").map((button) => [button.textContent, button.getAttribute("aria-pressed")])).toEqual([["Aucun", "true"], ["Légers", "false"], ["Marqués", "false"]]);
+    fireEvent.click(within(effects).getByRole("button", { name: "Marqués" }));
+    expect(onChange).toHaveBeenLastCalledWith({ ...start, effects: "strong" });
 
-    // The template: a menu of its own, the channel's default first
+    // The template: its choices take the panel, the channel's default first
     fireEvent.click(screen.getByRole("button", { name: "Modèle : Empilé" }));
-    const menu = screen.getByRole("dialog", { name: "Modèle" });
+    const menu = screen.getByRole("group", { name: "Modèle" });
     expect(within(menu).getAllByRole("button").map((button) => [button.textContent, button.getAttribute("aria-pressed")])).toEqual([
       ["Modèle par défaut", "false"],
       ["Mes fails", "false"],
@@ -278,10 +287,11 @@ describe("the passages of a compilation", () => {
     ]);
     fireEvent.click(within(menu).getByRole("button", { name: "Mes fails" }));
     expect(onChange).toHaveBeenLastCalledWith({ ...start, template: "mine" });
-    expect(screen.queryByRole("dialog", { name: "Modèle" })).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Modèle : Empilé" }));
-    fireEvent.click(within(screen.getByRole("dialog", { name: "Modèle" })).getByRole("button", { name: "Modèle par défaut" }));
+    fireEvent.click(within(screen.getByRole("group", { name: "Modèle" })).getByRole("button", { name: "Modèle par défaut" }));
     expect(onChange).toHaveBeenLastCalledWith({ ...start, template: null });
+    // The way back to the list of settings
+    fireEvent.click(screen.getByRole("button", { name: /Habillage/ }));
+    expect(screen.queryByRole("group", { name: "Modèle" })).toBeNull();
 
     // Without titles, the line written over the first seconds is asked for, in the list
     fireEvent.click(screen.getByRole("switch", { name: "Titres des parties" }));

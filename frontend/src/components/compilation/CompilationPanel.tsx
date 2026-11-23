@@ -341,7 +341,8 @@ export default function CompilationPanel({
     <aside
       ref={list}
       aria-label={t(part === "look" ? "compilation.dress.label" : "compilation.title")}
-      className={`glass rounded-[20px] p-3 min-w-0 flex flex-col gap-2.5 ${part === "passages" ? "flex-[1_1_300px] max-w-[400px]" : part === "look" ? "flex-[1_1_340px] max-w-[420px]" : "flex-[1_1_360px]"}`}
+      className={`glass rounded-[20px] p-3 min-w-0 flex flex-col gap-2.5 ${// (its passages scroll inside it: the timeline under the workshop stays in view)
+        part === "passages" ? "flex-[1_1_300px] max-w-[400px] max-h-[max(420px,calc(100dvh-400px))] overflow-y-auto" : part === "look" ? "flex-[1_1_340px] max-w-[420px]" : "flex-[1_1_360px]"}`}
     >
       {passages && (
       <>

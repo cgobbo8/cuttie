@@ -1671,6 +1671,8 @@ export interface CompilationItem extends Partial<PieceState> {
   transition?: string;
   /** The AI named it as the moment the video can open on (what a "hook" intro plays first unless the streamer chose another) */
   opening?: boolean;
+  /** The passage it was made out of (cut in two, its silences taken out): that one's clip does for it until it has its own (not kept by the server) */
+  like?: string;
 }
 
 /** A template as the AI is told about it (see templateGuide.ts) */
@@ -1964,7 +1966,8 @@ export async function suggestClipCut(
   jobId: string,
   filename: string,
   { wish = "", target = null }: { wish?: string; target?: number | null } = {},
-): Promise<{ parts: [number, number][]; note: string; cost: number }> {
+): Promise<{ parts: [number, number][]; note: string; cost: number; origin?: number }> {
+  // (`origin`: where the clip's file starts in the live, seconds: what places its parts in the live)
   return liveJson(await postJson(`${BASE}/clips/${jobId}/${encodeURIComponent(filename)}/suggest-cut`, { wish, ...(target ? { target } : {}) }));
 }
 

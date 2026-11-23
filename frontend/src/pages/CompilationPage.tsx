@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { AssistantSlot, useAssistant } from "../lib/AssistantContext";
 import { useTranslation } from "react-i18next";
 import { Player, type PlayerRef } from "@remotion/player";
-import { ArrowLeft, Check, Loader2, Plus, X } from "lucide-react";
+import { ArrowLeft, ArrowLeftToLine, ArrowRightToLine, Check, Loader2, Plus, Scissors, Sparkles, Undo2, X } from "lucide-react";
 import {
   chooseLooks,
   clipThumbUrl,
@@ -25,6 +25,7 @@ import {
   openClipVideo,
   saveCompilation,
   startMontageRender,
+  suggestClipCut,
   type Compilation,
   type CompilationItem,
   type EditEnvironment,
@@ -49,6 +50,8 @@ import {
   soundBrief,
   clearLooks,
   compilationLength,
+  cutItem,
+  extendItem,
   fitToTarget,
   hookMoment,
   hookStart,
@@ -61,16 +64,19 @@ import {
   sectionStarts,
   transitionsOf,
   planCurrent,
+  recutVideo,
   revisedSections,
   sectionsFromPlan,
   setVideoTransition,
+  splitItem,
   tightened,
   updateItem,
   withHook,
 } from "../lib/compilation";
 import { liveWhen, plainDate } from "../lib/compilationLibrary";
 import { clock, splitVodTitle } from "../lib/format";
-import { buildMontage, framesOf, introHold, montageFrames, playsIntro, renderIntro, renderPieces, type MontageCut, type MontageProps, type MontageSegment, withEffects } from "../lib/montage";
+import { buildMontage, framesOf, introHold, montageFrames, playsIntro, renderIntro, renderPieces, snapToWords, tighten, wordsIn, type MontageCut, type MontageProps, type MontageSegment, withEffects } from "../lib/montage";
+import { readCutTarget, saveCutTarget, type CutTarget } from "../lib/cutTarget";
 import { evenFrames, tileStyle } from "../lib/storyboard";
 import { isTransition, transitionSpan } from "../lib/transitions";
 import { introSpan, isIntro } from "../lib/intro/intros";
@@ -91,6 +97,8 @@ import MontageComposition from "../components/remotion-editor/MontageComposition
 import { isWaiting } from "../lib/suggestions";
 import LiveHeader from "../components/live/LiveHeader";
 import VideoRail from "../components/live/VideoRail";
+import VideoTimeline from "../components/montage/VideoTimeline";
+import AiCutButton from "../components/project/AiCutButton";
 import LivePicker from "../components/compilation/LivePicker";
 import CompilationPanel from "../components/compilation/CompilationPanel";
 import PiecePreview from "../components/compilation/PiecePreview";
@@ -104,6 +112,8 @@ const CUT_BATCH = 4;
 /** A section's title stays this long on screen, seconds (less in a short section) */
 const TITLE_SECONDS = 2.2;
 const SAVE_DELAY = 500;
+/** How many changes of a video's passages can be taken back */
+const UNDO_STEPS = 40;
 const STRIP_TILES = 24;
 
 const hitKey = (hit: LiveHit) => `${hit.job ?? ""}:${hit.start}-${hit.end}`;
@@ -359,11 +369,25 @@ export default function CompilationPage() {
 
   const saveTimers = useRef(new Map<string, number>());
   const latest = useRef(new Map<string, Compilation>());
+  // What each video's passages were before its last changes (cuts, order, what is in it): taken back with Undo
+  const history = useRef(new Map<string, { stack: Compilation[]; at: number }>());
+  const [undoable, setUndoable] = useState<Record<string, number>>({});
   const change = useCallback(
-    (changed: Compilation) => {
+    (changed: Compilation, back = false) => {
       if (!jobId) return;
       // (a "hook" intro: the moment it plays is written on the video, the library counts its length with it)
       const next = withHook(changed);
+      const before = compilationsRef.current?.find((c) => c.id === next.id);
+      const passagesOf = (c: Compilation) => JSON.stringify(c.sections.map((sec) => sec.items.map((item) => [item.id, item.start, item.end])));
+      if (!back && before && passagesOf(before) !== passagesOf(next)) {
+        const kept = history.current.get(next.id) ?? { stack: [], at: 0 };
+        // (a handle being dragged changes the cut many times a second: one step back for the whole move)
+        if (Date.now() - kept.at > 700) kept.stack.push(before);
+        kept.at = Date.now();
+        if (kept.stack.length > UNDO_STEPS) kept.stack.shift();
+        history.current.set(next.id, kept);
+        setUndoable((prev) => (prev[next.id] === kept.stack.length ? prev : { ...prev, [next.id]: kept.stack.length }));
+      }
       setCompilations((prev) => prev?.map((c) => (c.id === next.id ? next : c)) ?? prev);
       latest.current.set(next.id, next);
       window.clearTimeout(saveTimers.current.get(next.id));
@@ -400,7 +424,7 @@ export default function CompilationPage() {
         }
         for (const { live, batch } of batches) {
           // A passage still on the transcript's rough times: its clip holds those lines whole, and tells where they are really said
-          const asked = batch.map(({ id, start, end, fit }) => (fit ? { id, start: Math.min(start, fit[0]), end: Math.max(end, fit[1]), fit } : { id, start, end }));
+          const asked = batch.map(({ id, start, end, fit, like }) => (fit ? { id, start: Math.min(start, fit[0]), end: Math.max(end, fit[1]), fit } : { id, start, end, ...(like ? { like } : {}) }));
           const done = await ensurePieces(live, asked);
           const states = Object.fromEntries(done.pieces.map(({ id, tight: _found, ...state }) => [id, { ...state, job: live }]));
           const found = Object.fromEntries(done.pieces.filter((piece) => piece.tight !== undefined).map((piece) => [piece.id, piece.tight ?? null]));
@@ -1016,6 +1040,131 @@ export default function CompilationPage() {
     }
   };
 
+  /* ── Cutting, from the timeline ─────────────────────────── */
+
+  /** The last change of the video's passages is taken back */
+  const undo = () => {
+    if (!compilation) return;
+    const kept = history.current.get(compilation.id);
+    const before = kept?.stack.pop();
+    if (!kept || !before) return;
+    setUndoable((prev) => ({ ...prev, [compilation.id]: kept.stack.length }));
+    // (what is said of the video elsewhere stays as it is now: only its passages go back)
+    change({ ...compilation, sections: before.sections }, true);
+    setShown(null);
+    ensure(allItems(before));
+  };
+  /** The words said in a passage's clip (clip seconds), fetched once */
+  const wordsOf = async (piece: Piece): Promise<TranscriptWord[]> => {
+    const key = pieceVersion(piece);
+    if (words[key]) return words[key];
+    const list = await getClipWords(piece.job, piece.file).catch(() => [] as TranscriptWord[]);
+    setWords((prev) => ({ ...prev, [key]: list }));
+    return list;
+  };
+  /** The passage the tools work on: the one open to be cut, else the one the video is on */
+  const toolItem = () => {
+    if (!compilation) return null;
+    const all = allItems(compilation);
+    return all.find((item) => item.id === shown?.id) ?? all.find((item) => item.id === onItemRef.current) ?? null;
+  };
+  const afterCut = (next: Compilation, ids: string[]) => {
+    change(next);
+    ensure(allItems(next));
+    light(ids.slice(1));
+  };
+  /** The passage under the playhead is cut in two there (between two words when its words are known) */
+  const cutHere = async () => {
+    const player = playerRef.current;
+    if (!compilation || !player) return;
+    const frame = player.getCurrentFrame();
+    const mark = marksRef.current.find((m) => frame >= m.from && frame < m.to);
+    const item = mark ? allItems(compilation).find((one) => one.id === mark.id) : undefined;
+    const piece = item ? piecesRef.current[item.id] : undefined;
+    if (!mark || !item || !covers(piece, item)) return toast.info(t("montage.cutNowhere"));
+    const said = await wordsOf(piece);
+    const origin = piece.file_start;
+    const at = origin + snapToWords(item.start - origin + (frame - mark.from) / FPS, said);
+    const text = (a: number, b: number) => wordsIn(said, a - origin, b - origin).map((w) => w.word).join(" ");
+    const { compilation: next, ids } = splitItem(compilation, item.id, at, said.length > 0 ? [text(item.start, at), text(at, item.end)] : undefined);
+    if (ids.length === 0) return toast.info(t("montage.cutTooClose"));
+    afterCut(next, ids);
+  };
+  /** The blanks of a passage are taken out: it becomes as many passages as there is talk between them */
+  const dropSilences = async () => {
+    const item = toolItem();
+    const piece = item ? piecesRef.current[item.id] : undefined;
+    if (!compilation || !item || !covers(piece, item)) return;
+    const said = await wordsOf(piece);
+    const origin = piece.file_start;
+    const kept = tighten([[item.start - origin, item.end - origin]], said, piece.file_end - origin);
+    if (said.length === 0) return toast.info(t("project.tightenNoWords"));
+    if (kept.length === 1 && Math.abs(kept[0][0] - (item.start - origin)) < 0.05 && Math.abs(kept[0][1] - (item.end - origin)) < 0.05) return toast.info(t("montage.noSilence"));
+    const { compilation: next, ids } = cutItem(compilation, item.id, kept.map(([a, b]) => [a + origin, b + origin] as [number, number]), kept.map(([a, b]) => wordsIn(said, a, b).map((w) => w.word).join(" ")));
+    afterCut(next, ids);
+    toast.success(t("montage.silencesOut", { count: ids.length }));
+  };
+  /** 30 s more of the live on one side of a passage (its clip is cut again from the live) */
+  const extend = (side: "start" | "end") => {
+    const item = toolItem();
+    if (!compilation || !item) return;
+    const next = extendItem(compilation, item.id, side, 30, lengthOf(item.job));
+    if (next === compilation) return toast.info(t(side === "start" ? "project.extendEdgeStart" : "project.extendEdgeEnd"));
+    change(next);
+    const moved = allItems(next).find((one) => one.id === item.id)!;
+    setShown((open) => (open?.id === item.id ? moved : open));
+    ensure([moved]);
+  };
+  // The length the AI's cut of a clip aims for, kept for this live (null: left to the AI)
+  const [cutTarget, setCutTarget] = useState<CutTarget>(() => (jobId ? readCutTarget(jobId) : null));
+  const [aiCutting, setAiCutting] = useState(false);
+  /** A clip's video is cut again by the AI: the parts worth keeping become its passages */
+  const aiCut = async () => {
+    if (!jobId || !compilation?.clip || aiCutting) return;
+    const id = compilation.id;
+    setAiCutting(true);
+    try {
+      const { parts, note, origin } = await suggestClipCut(jobId, compilation.clip, { target: cutTarget });
+      const current = compilationsRef.current?.find((c) => c.id === id);
+      if (!current || parts.length === 0 || origin == null) return toast.info(t("project.aiCutSame"));
+      const next = recutVideo(current, parts.map(([a, b]) => [origin + a, origin + b] as [number, number]));
+      change(next);
+      setShown(null);
+      ensure(allItems(next));
+      toast.success(note || t("project.aiCutDone", { count: parts.length }));
+    } catch (err) {
+      const reason = err instanceof LiveError ? err.reason : "failed";
+      toast.error(t(reason === "no_transcript" ? "project.tightenNoWords" : `compilation.failure.${reason}`));
+    } finally {
+      setAiCutting(false);
+    }
+  };
+
+  // Space plays the whole video, C cuts it where it is, Ctrl / Cmd + Z takes the last cut back
+  const keys = useRef({ cutHere, undo });
+  keys.current = { cutHere, undo };
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement | null;
+      if (!el || el.closest("input, textarea, select, [contenteditable=true], [role=dialog]") || e.altKey) return;
+      const key = e.key.toLowerCase();
+      if (e.metaKey || e.ctrlKey) {
+        if (key === "z" && !e.shiftKey) {
+          e.preventDefault();
+          keys.current.undo();
+        }
+        return;
+      }
+      // (a button that has the focus keeps its own Space)
+      if (key === " " && !el.closest("button, a, video")) {
+        e.preventDefault();
+        playerRef.current?.toggle();
+      } else if (key === "c") keys.current.cutHere();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   /**
    * The whole video in the layer editor: its passages joined into one clip
    * (with their words and chat), dressed in the video's template, every layer
@@ -1321,7 +1470,8 @@ export default function CompilationPage() {
               <div
                 aria-label={t("compilation.wholeVideo")}
                 className="relative max-w-full aspect-[9/16] rounded-[24px] overflow-hidden border border-white/[0.14] shadow-[0_50px_100px_-40px_rgba(0,0,0,0.9)] bg-black"
-                style={{ height: "clamp(360px, calc(100dvh - 300px), 604px)" }}
+                // (as tall as the window leaves it above the timeline)
+                style={{ height: "clamp(340px, calc(100dvh - 430px), 604px)" }}
               >
                 {preview ? (
                   <Player
@@ -1369,6 +1519,66 @@ export default function CompilationPage() {
 
         <CompilationPanel part="look" {...panel} />
       </section>
+
+      {preview && (
+        <VideoTimeline
+          compilation={compilation}
+          marks={marks}
+          fps={FPS}
+          frames={montageFrames(preview.montage.segments, FPS, preview.montage.intro)}
+          opening={playsIntro(preview.montage.intro) ? { frames: introHold(preview.montage.intro, FPS), hook: !!preview.montage.intro.hook } : null}
+          pieces={pieces}
+          player={playerRef}
+          playerKey={playerKey}
+          playing={videoPlaying}
+          selected={inCompilation ? (shownItem?.id ?? null) : null}
+          onSelect={(id) => {
+            const item = items.find((one) => one.id === id);
+            if (item) panel.onSelect(item);
+          }}
+          music={preview.montage.music ? { curve: preview.montage.music.curve, name: trackOf(musics, compilation.music?.track)?.name ?? "" } : null}
+          fresh={fresh?.ids}
+          waiting={items.length - readyItems.length}
+          tools={
+            <>
+              {/* What cuts on its own first: the AI, on a clip (its parts worth keeping) or by asking it in the assistant */}
+              {compilation.clip ? (
+                <AiCutButton
+                  busy={aiCutting}
+                  disabled={aiCutting || cutting.size > 0}
+                  target={cutTarget}
+                  onTarget={(next) => {
+                    setCutTarget(next);
+                    saveCutTarget(jobId, next);
+                  }}
+                  onCut={aiCut}
+                />
+              ) : (
+                <button onClick={() => assistant.setOpen(true)} title={t("montage.tightenHint")} className="btn btn-glass btn-sm">
+                  <Sparkles className="w-3.5 h-3.5 text-accent" /> {t("montage.tighten")}
+                </button>
+              )}
+              <span aria-hidden className="w-px h-5 bg-white/[0.14] mx-0.5" />
+              <button onClick={cutHere} title={t("montage.cutHereHint")} className="btn btn-glass btn-sm pr-2">
+                <Scissors className="w-3.5 h-3.5" /> {t("project.cutHere")}
+                <kbd className="bg-white/[0.08] border-white/10 text-ink-2">C</kbd>
+              </button>
+              <button onClick={dropSilences} title={t("montage.silencesHint")} className="btn btn-glass btn-sm">
+                {t("project.tighten")}
+              </button>
+              <button onClick={() => extend("start")} aria-label={t("montage.extendBefore")} title={t("montage.extendBefore")} className="btn btn-glass btn-sm px-2.5">
+                <ArrowLeftToLine className="w-3.5 h-3.5" /> 30 s
+              </button>
+              <button onClick={() => extend("end")} aria-label={t("montage.extendAfter")} title={t("montage.extendAfter")} className="btn btn-glass btn-sm px-2.5">
+                30 s <ArrowRightToLine className="w-3.5 h-3.5" />
+              </button>
+              <button onClick={undo} disabled={!undoable[compilation.id]} aria-label={t("project.undo")} title={`${t("project.undo")} (Ctrl+Z)`} className="btn btn-ghost btn-icon w-8 h-8 text-ink-2 hover:text-white disabled:opacity-30">
+                <Undo2 className="w-4 h-4" />
+              </button>
+            </>
+          }
+        />
+      )}
 
       {/* The passage open to be cut (one of the video's, or a search result not added yet) */}
       {shownItem && (

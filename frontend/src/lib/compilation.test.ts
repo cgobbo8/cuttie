@@ -46,6 +46,10 @@ import {
   stepText,
   tightened,
   updateItem,
+  cutItem,
+  extendItem,
+  recutVideo,
+  splitItem,
 } from "./compilation";
 
 const hit = (start: number, end: number, more: Partial<LiveHit> = {}): LiveHit => ({ start, end, sources: ["voice"], text: "c'est calme", before: "", after: "", chat: [], why: "", score: 0, ...more });
@@ -645,5 +649,61 @@ describe("the moment a hook intro plays", () => {
     // A passage it adds and names
     const added = revisedSections(now, { title: "", sections: [{ title: "A", hits: [hit(100, 104), hit(200, 204), hit(300, 304), hit(400, 404, { opening: true })] }], note: "" } as VideoPlan, 0);
     expect(added.sections[0].items.map((item) => !!item.opening)).toEqual([false, false, false, true]);
+  });
+});
+
+describe("cutting a passage in the montage", () => {
+  const piece = (id: string, start: number, end: number, more: Partial<CompilationItem> = {}): CompilationItem => ({ id, start, end, text: "", why: "", sources: ["ai"], ...more });
+  const video = (items: CompilationItem[], second: CompilationItem[] = []) => ({ sections: [{ id: "s1", title: "A", query: "", items }, ...(second.length ? [{ id: "s2", title: "B", query: "", items: second }] : [])] });
+
+  it("cuts a passage in two where the video is: the first half keeps its id, the second is made out of it", () => {
+    const before = video([piece("aaaaaaaaaa", 100, 110, { text: "avant après", fit: [100, 110], opening: true }), piece("bbbbbbbbbb", 200, 204)]);
+    const { compilation, ids } = splitItem(before, "aaaaaaaaaa", 104.126, ["avant", "après"]);
+    const items = compilation.sections[0].items;
+    expect(items.map((i) => [i.start, i.end, i.text])).toEqual([[100, 104.13, "avant"], [104.13, 110, "après"], [200, 204, ""]]);
+    expect(ids).toEqual([items[0].id, items[1].id]);
+    expect(items[0].id).toBe("aaaaaaaaaa");
+    // The second half plays the first one's clip until it has its own, and follows it with a plain cut
+    expect(items[1]).toMatchObject({ like: "aaaaaaaaaa", transition: "cut" });
+    expect(items[1].id).not.toBe("aaaaaaaaaa");
+    // Cut by hand: no longer waiting to be set on its words; one moment only opens the video
+    expect(items[0]).not.toHaveProperty("fit");
+    expect([items[0].opening, items[1].opening]).toEqual([true, undefined]);
+    // Too close to an end: nothing to cut
+    expect(splitItem(before, "aaaaaaaaaa", 100.1).compilation).toBe(before);
+    expect(splitItem(before, "aaaaaaaaaa", 109.9).ids).toEqual([]);
+    expect(splitItem(before, "nope", 104).compilation).toBe(before);
+  });
+
+  it("cuts a passage into several pieces (its silences taken out), in its place among the others", () => {
+    const before = video([piece("aaaaaaaaaa", 100, 130, { text: "tout" })], [piece("cccccccccc", 300, 305)]);
+    const { compilation, ids } = cutItem(before, "aaaaaaaaaa", [[100, 108], [112.5, 112.6], [115, 130]]);
+    // (a piece too short to be one is left out)
+    expect(compilation.sections[0].items.map((i) => [i.start, i.end])).toEqual([[100, 108], [115, 130]]);
+    expect(ids).toHaveLength(2);
+    expect(compilation.sections[1]).toBe(before.sections[1]);
+    expect(cutItem(before, "aaaaaaaaaa", [[100, 100.1]]).compilation).toBe(before);
+  });
+
+  it("gives a passage 30 s more of the live on one side, within the live", () => {
+    const before = video([piece("aaaaaaaaaa", 20, 40, { fit: [20, 40] }), piece("bbbbbbbbbb", 3580, 3595)]);
+    expect(allItems(extendItem(before, "aaaaaaaaaa", "start", 30, 3600))[0]).toMatchObject({ start: 0, end: 40 });
+    expect(allItems(extendItem(before, "aaaaaaaaaa", "end", 30, 3600))[0]).toMatchObject({ start: 20, end: 70 });
+    // (moved by hand: no longer waiting to be set on its words)
+    expect(allItems(extendItem(before, "aaaaaaaaaa", "end", 30, 3600))[0].fit).toBeUndefined();
+    expect(allItems(extendItem(before, "bbbbbbbbbb", "end", 30, 3600))[1]).toMatchObject({ end: 3600 });
+    // At the live's end already: nothing changes
+    const atEnd = video([piece("aaaaaaaaaa", 3590, 3600)]);
+    expect(extendItem(atEnd, "aaaaaaaaaa", "end", 30, 3600)).toBe(atEnd);
+  });
+
+  it("cuts a clip's video again as a whole: its passages become the pieces given", () => {
+    const before = video([piece("aaaaaaaaaa", 1000, 1020, { text: "début" }), piece("bbbbbbbbbb", 1030, 1050)]);
+    const after = recutVideo(before, [[1004, 1012], [1040, 1046.5], [1060, 1071]]);
+    const items = allItems(after);
+    expect(items.map((i) => [i.start, i.end])).toEqual([[1004, 1012], [1040, 1046.5], [1060, 1071]]);
+    expect(items[0].id).toBe("aaaaaaaaaa");
+    expect(items.slice(1).every((i) => i.like === "aaaaaaaaaa")).toBe(true);
+    expect(recutVideo(before, [])).toBe(before);
   });
 });

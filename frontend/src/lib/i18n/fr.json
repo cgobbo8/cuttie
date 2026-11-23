@@ -994,7 +994,21 @@
       "pickMusic": "Musique des clips",
       "pickIntro": "Intro des clips",
       "autoNoneHint": "Pas de musique préférée pour ce type de clip : aucune ici. Elles se règlent dans Ma chaîne."
-    }
+    },
+    "timeline": "La vidéo, sur toute sa durée",
+    "play": "Lire la vidéo",
+    "pause": "Mettre en pause",
+    "tighten": "Resserrer",
+    "tightenHint": "Demande à l'assistant de couper ce qui traîne",
+    "cutHereHint": "Coupe en deux le passage là où est la vidéo",
+    "silencesHint": "Retire les blancs du passage ouvert",
+    "extendBefore": "30 s de plus avant ce passage",
+    "extendAfter": "30 s de plus après ce passage",
+    "cutNowhere": "Place la vidéo sur un passage pour le couper.",
+    "cutTooClose": "Trop près du bord du passage pour couper ici.",
+    "noSilence": "Aucun blanc à retirer dans ce passage.",
+    "silencesOut_one": "Blancs retirés : {{count}} passage",
+    "silencesOut_other": "Blancs retirés : {{count}} passages"
   },
   "exportStep": {
     "title": "Tes clips sont prêts",

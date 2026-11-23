@@ -994,7 +994,21 @@
       "pickMusic": "The clips' music",
       "pickIntro": "The clips' intro",
       "autoNoneHint": "No favourite music for this kind of clip: none here. They are set in My channel."
-    }
+    },
+    "timeline": "The video, over its whole length",
+    "play": "Play the video",
+    "pause": "Pause",
+    "tighten": "Tighten",
+    "tightenHint": "Ask the assistant to cut what drags",
+    "cutHereHint": "Cuts the passage in two where the video is",
+    "silencesHint": "Takes the blanks out of the open passage",
+    "extendBefore": "30 s more before this passage",
+    "extendAfter": "30 s more after this passage",
+    "cutNowhere": "Put the video on a passage to cut it.",
+    "cutTooClose": "Too close to the passage's edge to cut here.",
+    "noSilence": "No blank to take out of this passage.",
+    "silencesOut_one": "Blanks taken out: {{count}} passage",
+    "silencesOut_other": "Blanks taken out: {{count}} passages"
   },
   "exportStep": {
     "title": "Your clips are ready",

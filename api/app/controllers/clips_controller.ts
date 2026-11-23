@@ -165,12 +165,15 @@ export default class ClipsController {
     const asked = Number(request.input('target'))
     const target = Number.isFinite(asked) && asked >= 10 ? Math.min(180, Math.round(asked)) : undefined
     try {
-      return await suggestClipCut(job.id, filename, {
+      const answer = await suggestClipCut(job.id, filename, {
         summary: [hp.clip_name, hp.llm?.summary].filter(Boolean).join(' — '),
         current,
         wish: String(request.input('wish') ?? '').trim().slice(0, 300),
         ...(target ? { target } : {}),
       })
+      // Where the clip's file starts in the live: what places these parts in the live (a video made of the clip is cut there)
+      const origin = readClipMeta(job.id, filename)?.vod_start ?? Number((hp as any).clip_start)
+      return { ...answer, ...(Number.isFinite(origin) ? { origin } : {}) }
     } catch (err) {
       return workerFailure(response, err)
     }

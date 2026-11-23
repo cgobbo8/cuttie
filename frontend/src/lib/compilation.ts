@@ -206,6 +206,72 @@ export function itemsBetween(c: Pick<Compilation, "sections">, a: string, b: str
 
 /* ── Transitions ──────────────────────────────────────────── */
 
+
+/* ── Cutting a passage ────────────────────────────────────── */
+
+/** A piece of a passage shorter than this is not one (seconds) */
+export const MIN_CUT = 0.3;
+
+/**
+ * A passage cut into pieces (live seconds, in order): the first keeps its place and its id, the
+ * others come right after it, each a passage of its own made out of it (`like`: its clip does for
+ * them, nothing is fetched from the live). `texts`: what is said in each piece, when it is known.
+ * Pieces of the same passage follow each other with a plain cut.
+ */
+export function cutItem<T extends Pick<Compilation, "sections">>(c: T, itemId: string, pieces: [number, number][], texts?: string[]): { compilation: T; ids: string[] } {
+  const said = pieces.map((_, i) => texts?.[i]);
+  const kept = pieces.map((piece, i) => ({ piece, text: said[i] })).filter(({ piece }) => piece[1] - piece[0] >= MIN_CUT);
+  const item = allItems(c).find((one) => one.id === itemId);
+  if (!item || kept.length === 0) return { compilation: c, ids: [] };
+  const round = (seconds: number) => Math.round(seconds * 100) / 100;
+  // (cut by hand: no longer waiting to be set on its words; one moment of it only can open the video)
+  const { fit: _fit, opening: _opening, ...base } = item;
+  const made: CompilationItem[] = kept.map(({ piece, text }, i) => ({
+    ...base,
+    ...(i === 0 ? (item.opening ? { opening: true } : {}) : { id: newId(), like: item.id, transition: PLAIN_CUT }),
+    start: round(piece[0]),
+    end: round(piece[1]),
+    text: text ?? (i === 0 ? item.text : ""),
+  }));
+  return {
+    compilation: { ...c, sections: c.sections.map((s) => (s.items.some((one) => one.id === itemId) ? { ...s, items: s.items.flatMap((one) => (one.id === itemId ? made : [one])) } : s)) },
+    ids: made.map((one) => one.id),
+  };
+}
+
+/** A passage cut in two at a time of the live (nothing when that leaves a piece too short to be one) */
+export function splitItem<T extends Pick<Compilation, "sections">>(c: T, itemId: string, at: number, texts?: [string, string]): { compilation: T; ids: string[] } {
+  const item = allItems(c).find((one) => one.id === itemId);
+  if (!item || at - item.start < MIN_CUT || item.end - at < MIN_CUT) return { compilation: c, ids: [] };
+  return cutItem(c, itemId, [[item.start, at], [at, item.end]], texts);
+}
+
+/** A passage that takes `seconds` more of the live on one side (never past the live's ends, nor over 3 minutes) */
+export function extendItem<T extends Pick<Compilation, "sections">>(c: T, itemId: string, side: "start" | "end", seconds: number, liveDuration: number): T {
+  const item = allItems(c).find((one) => one.id === itemId);
+  if (!item) return c;
+  const room = Math.max(0, 180 - (item.end - item.start));
+  const more = Math.min(seconds, room);
+  const start = side === "start" ? Math.max(0, item.start - more) : item.start;
+  const end = side === "end" ? Math.min(liveDuration > 0 ? liveDuration : item.end + more, item.end + more) : item.end;
+  if (start === item.start && end === item.end) return c;
+  return updateItem(c, itemId, { start, end, fit: undefined });
+}
+
+/**
+ * A video of one moment (a clip) cut again as a whole: its passages become these pieces (live
+ * seconds), all made out of its first one.
+ */
+export function recutVideo<T extends Pick<Compilation, "sections">>(c: T, pieces: [number, number][]): T {
+  const [first, ...rest] = allItems(c);
+  if (!first || pieces.length === 0) return c;
+  const gone = new Set(rest.map((item) => item.id));
+  const alone = { ...c, sections: c.sections.map((s) => ({ ...s, items: s.items.filter((item) => !gone.has(item.id)) })) };
+  // (its first passage is stretched over all of them first, so that each piece is one of its own)
+  const whole = updateItem(alone, first.id, { start: Math.min(first.start, pieces[0][0]), end: Math.max(first.end, pieces[pieces.length - 1][1]) });
+  return cutItem(whole, first.id, pieces).compilation;
+}
+
 /** A passage's own way in that says "no transition here", where the rest of the video has one */
 export const PLAIN_CUT = "cut";
 

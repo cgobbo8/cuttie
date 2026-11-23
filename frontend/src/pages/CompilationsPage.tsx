@@ -23,6 +23,7 @@ import CompilationCard from "../components/compilation/CompilationCard";
 import LivePicker from "../components/compilation/LivePicker";
 import SourceName from "../components/live/SourceName";
 import ConfirmModal from "../components/ConfirmModal";
+import { useAssistantPlace } from "../lib/AssistantContext";
 import { useToast } from "../components/Toast";
 
 type Standing = "all" | "draft" | "exported";
@@ -38,6 +39,7 @@ type Standing = "all" | "draft" | "exported";
  */
 export default function CompilationsPage() {
   const { t, i18n } = useTranslation();
+  useAssistantPlace({ page: "videos" });
   const toast = useToast();
   const navigate = useNavigate();
   const { channel } = useChannel();

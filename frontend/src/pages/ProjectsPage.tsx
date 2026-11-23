@@ -19,6 +19,7 @@ import { analysisProgress, dayDate, fileSize, hoursMinutes, splitVodTitle } from
 import { projectPath, projectStage, type ProjectStage } from "../lib/projects";
 import ConfirmModal from "../components/ConfirmModal";
 import ProjectRemoveModal from "../components/ProjectRemoveModal";
+import { useAssistantPlace } from "../lib/AssistantContext";
 import { useToast } from "../components/Toast";
 
 type StatusFilter = "" | "in_progress" | "done" | "error";
@@ -168,6 +169,7 @@ function ProjectCard({
 /** Every live analyzed so far, each opening at the step it is at */
 export default function ProjectsPage() {
   const { t, i18n } = useTranslation();
+  useAssistantPlace({ page: "lives" });
   const navigate = useNavigate();
   const toast = useToast();
   const { channel } = useChannel();

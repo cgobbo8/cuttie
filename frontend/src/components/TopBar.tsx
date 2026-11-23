@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router";
-import { Download, KeyRound, LogOut, Scissors, SlidersHorizontal, Sparkles } from "lucide-react";
+import { Download, KeyRound, LogOut, Scissors, SlidersHorizontal } from "lucide-react";
+import AssistantMark from "./assistant/Mark";
 import { useTranslation } from "react-i18next";
 import CreatorSelector from "./CreatorSelector";
 import { useAssistant } from "../lib/AssistantContext";
@@ -108,7 +109,7 @@ export default function TopBar() {
         title={`${t("assistant.title")} (${ASSISTANT_KEYS})`}
         className={`flex items-center gap-2 h-9 pl-2.5 pr-2 rounded-[10px] text-[13.5px] font-[600] transition-colors ${assistant.open ? "bg-accent text-accent-ink" : "bg-accent-soft text-accent hover:bg-accent/25"}`}
       >
-        <Sparkles className="w-4 h-4" strokeWidth={2.2} />
+        <AssistantMark size={22} className={assistant.open ? "is-inverted" : ""} />
         {t("assistant.title")}
         <kbd className={assistant.open ? "bg-black/15 border-black/10 text-accent-ink" : "bg-white/[0.08] border-white/10 text-ink-2"}>{ASSISTANT_KEYS}</kbd>
       </button>

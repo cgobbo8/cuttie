@@ -1971,6 +1971,125 @@ export async function suggestClipCut(
   return liveJson(await postJson(`${BASE}/clips/${jobId}/${encodeURIComponent(filename)}/suggest-cut`, { wish, ...(target ? { target } : {}) }));
 }
 
+// ── The assistant ───────────────────────────────────────
+
+/** A video the assistant shows: what its card draws */
+export interface AssistantVideo {
+  id: string;
+  job: string;
+  name: string;
+  source: "clip" | "sequence" | "compilation";
+  seconds: number;
+  passages: number;
+  /** An idea of the AI nobody built, a video in the making, or one that was exported */
+  state: "idea" | "draft" | "exported";
+  score?: number;
+  pitch?: string;
+  /** One of its passages' clip, for its picture */
+  cover?: string;
+  cover_job?: string;
+}
+export interface AssistantClip {
+  job: string;
+  filename: string;
+  name: string;
+  score: number;
+  /** Where it is in the live, and how long its cut is (seconds) */
+  at: number;
+  length: number;
+  seen: string;
+  tags: string[];
+  state: "kept" | "passed" | null;
+}
+export interface AssistantLive {
+  job?: string;
+  analysed: boolean;
+  title: string;
+  date: string | null;
+  vod?: string;
+  game?: string;
+}
+/** A passage of a live the assistant found: a search's hit, with its live */
+export type AssistantPassage = Partial<LiveHit> & { job: string; start: number; end: number; text: string; id?: string; vod_id?: string | null };
+
+export type AssistantBlock =
+  | { type: "text"; text: string }
+  | { type: "widget"; kind: "videos"; items: AssistantVideo[] }
+  | { type: "widget"; kind: "clips"; items: AssistantClip[] }
+  | { type: "widget"; kind: "lives"; items: AssistantLive[] }
+  | { type: "widget"; kind: "passages"; items: AssistantPassage[] };
+
+/** What the assistant waits for: something the page does (`app`), or the streamer's yes (`approval`) */
+export interface AssistantAction {
+  call: string;
+  name: string;
+  args: Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+  needs: "app" | "approval";
+}
+
+export type AssistantFailure = "credits" | "key" | "unreachable" | "dev" | "nothing_waiting" | "failed";
+
+export interface AssistantMessage {
+  id: string;
+  role: "user" | "assistant";
+  at: string;
+  /** What the streamer said, and where they were in the app */
+  text?: string;
+  where?: string[];
+  reply?: AssistantBlock[];
+  /** What it did to answer, a line each */
+  steps?: string[];
+  cost?: number;
+  action?: AssistantAction | null;
+  failed?: AssistantFailure;
+}
+
+/** Where the streamer is in the app when they speak to the assistant */
+export interface AssistantPlace {
+  page: string;
+  job?: string;
+  title?: string;
+  video?: { id: string; name: string; source: string };
+  clip?: { filename: string; name: string };
+  passage?: { id: string; start: number; end: number; text: string };
+  /** What stands on that page, in a few numbers and words (clips left to sort, ideas that wait, what a video lacks): what it offers to do is read from them */
+  facts?: Record<string, string | number | boolean | null>;
+}
+
+export async function getAssistant(): Promise<{ messages: AssistantMessage[]; busy: boolean }> {
+  return jsonOrThrow(await fetch(`${BASE}/assistant`), "Failed to load the conversation");
+}
+
+/** The assistant is already answering (another request of this conversation is on its way) */
+export class AssistantBusy extends Error {}
+
+/**
+ * One request of the conversation: what the streamer says (`text`), or the answer to what the
+ * assistant waits for (`resume`). Answers once it is done or waits again; `changed`: the lives
+ * its work changed on the app's side.
+ */
+export async function assistantTurn(body: { text?: string; resume?: { call: string; result: unknown }; context: AssistantPlace | null; language: string }): Promise<{ message: AssistantMessage; said?: AssistantMessage; changed: string[] }> {
+  const res = await postJson(`${BASE}/assistant/turn`, body);
+  if (res.status === 409) {
+    const why = (await res.json().catch(() => null))?.error;
+    if (why === "busy") throw new AssistantBusy();
+    throw new Error("nothing_waiting");
+  }
+  return jsonOrThrow(res, "The assistant did not answer");
+}
+
+export async function assistantProgress(): Promise<{ steps: string[]; running: boolean; sub?: LiveSearchStep | null }> {
+  const res = await fetch(`${BASE}/assistant/progress`);
+  return res.ok ? res.json() : { steps: [], running: false };
+}
+
+/** A new conversation: what was said is forgotten */
+export async function resetAssistant(): Promise<void> {
+  const res = await fetch(`${BASE}/assistant`, { method: "DELETE" });
+  if (res.status === 409) throw new AssistantBusy();
+  await jsonOrThrow(res, "Failed to start a new conversation");
+}
+
 // ── Assets ──────────────────────────────────────────────
 
 export interface AssetInfo {

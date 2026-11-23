@@ -13,6 +13,7 @@ import {
 } from "../lib/api";
 import { useChannel } from "../lib/ChannelContext";
 import { useLatestMoments } from "../lib/useLatestMoment";
+import { useAssistantPlace } from "../lib/AssistantContext";
 import { useToast } from "../components/Toast";
 import Storyboard from "../components/Storyboard";
 import TemplatePreview, { useDefaultTemplate } from "../components/TemplatePreview";
@@ -379,6 +380,9 @@ function TemplateCard({ job, best }: { job: JobResponse | null; best: HotPoint |
 export default function HomePage() {
   const { t } = useTranslation();
   const { channel, channelError, refreshChannel } = useChannel();
+  // The latest live, analysed or not: what the assistant offers first
+  const lastLive = channel?.vods.find((vod) => !vod.recording);
+  useAssistantPlace({ page: "home", facts: lastLive ? { last_live: splitVodTitle(lastLive.title).title, last_live_analysed: lastLive.job?.status === "DONE" } : {} });
   const { analyze, busy } = useAnalyze();
   const [jobs, setJobs] = useState<JobSummary[] | null>(null);
 

@@ -217,6 +217,96 @@ body::after {
   backdrop-filter: blur(36px) saturate(170%);
 }
 
+/* A glow of the channel's color at the top of the panel: it is lit from where the assistant speaks */
+.assistant-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 220px;
+  pointer-events: none;
+  background: radial-gradient(120% 100% at 18% 0%, color-mix(in oklab, var(--color-accent) 16%, transparent), transparent 70%);
+}
+
+/* The assistant's mark: a tile of the channel's color set askew, a stretch of sound with a cut across it */
+.assistant-mark {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  --tile: var(--color-accent);
+  background: var(--tile);
+  color: var(--color-accent-ink);
+  transform: rotate(-6deg);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    0 6px 16px -6px var(--color-accent-glow);
+}
+/* (on a surface of the channel's color already: the tile takes its ink) */
+.assistant-mark.is-inverted {
+  --tile: var(--color-accent-ink);
+  color: var(--color-accent);
+  box-shadow: none;
+}
+.assistant-mark-bar {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+/* (working: the bars move as a level meter does) */
+.assistant-mark.is-busy .assistant-mark-bar {
+  animation: assistant-level 0.92s ease-in-out infinite alternate;
+}
+@keyframes assistant-level {
+  0% {
+    transform: scaleY(0.35);
+  }
+  55% {
+    transform: scaleY(1.12);
+  }
+  100% {
+    transform: scaleY(0.6);
+  }
+}
+
+/* What the streamer said to the assistant: a note of the channel's color, its last corner cut */
+.assistant-said {
+  background: color-mix(in oklab, var(--color-accent) 20%, rgba(255, 255, 255, 0.05));
+  border: 1px solid color-mix(in oklab, var(--color-accent) 34%, transparent);
+  border-radius: 14px 14px 4px 14px;
+}
+
+/* Something the assistant can be asked, one tap away */
+.assistant-ask {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 10px 7px 7px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.035);
+  text-align: left;
+  transition:
+    border-color 0.15s,
+    background-color 0.15s,
+    transform 0.15s;
+}
+.assistant-ask:hover {
+  border-color: var(--color-accent-line);
+  background: rgba(255, 255, 255, 0.06);
+}
+.assistant-ask:active {
+  transform: scale(0.985);
+}
+.assistant-ask-icon {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+}
+
 /* Small labels floating over images and video */
 .glass-chip {
   background: rgba(12, 12, 13, 0.62);

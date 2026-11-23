@@ -1,24 +1,19 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Check, Loader2, MessageCircle, Mic, Play, Plus, RotateCcw, Search, Sparkles } from "lucide-react";
+import { Check, Loader2, MessageCircle, Mic, Play, Plus, RotateCcw, Search, Sparkles, X } from "lucide-react";
 import {
   LiveError,
   getLiveSearchProgress,
-  planLiveVideo,
   searchLive,
   type LiveFailure,
   type LiveHit,
   type LiveSearchInfo,
   type LiveSearchStep,
   type TwitchStoryboard,
-  type PlanChange,
-  type VideoPlan,
 } from "../../lib/api";
-import { isNear, liveClock, sameStep, stepText } from "../../lib/compilation";
+import { isNear, liveClock, stepText } from "../../lib/compilation";
 import { frameAt, tileStyle } from "../../lib/storyboard";
 import { useToast } from "../Toast";
-import PlanTalk, { type TalkTurn } from "./PlanTalk";
-import type { VideoSource } from "../../lib/videoSources";
 
 interface Props {
   jobId: string;
@@ -28,8 +23,6 @@ interface Props {
   lives: { job: string; label: string }[];
   /** What can be searched in this live, and what asking the AI costs */
   info: LiveSearchInfo | null;
-  /** What the video is made from (a clip, a sequence, a compilation): the AI builds that */
-  source?: VideoSource;
   /** The result shown in the preview */
   previewed: LiveHit | null;
   /** The compilation already shows this moment */
@@ -37,30 +30,11 @@ interface Props {
   onPreview: (hit: LiveHit) => void;
   /** Add results to the compilation (`query`: the search they came from) */
   onAdd: (hits: LiveHit[], query: string) => void;
-  /** The AI planned a whole video from `brief` (`again`: the same description asked again, the video on screen is the one to replace) */
-  onPlan: (plan: VideoPlan, target: number, brief: string, again?: boolean) => void;
-  /** The video on screen was described to the AI: what was asked first, each change since and its answer (`byAi`: the AI proposed it and wrote that first request itself) */
-  talk?: { brief: string; answer?: string; passages?: number; asks: TalkTurn[]; byAi?: boolean; wrote?: string } | null;
-  /**
-   * The video on screen is one the AI proposed and that is not built yet: what it noticed, the
-   * moments it spotted (where building starts), the length it should have. `auto`: build it
-   * at once (it was opened to be built). `id` tells one proposed video from another.
-   */
-  proposal?: { id: string; pitch: string; tags: string[]; score: number; leads: number[]; target: number; auto: boolean } | null;
-  /** The video as it is now, as the AI is told about it when a change is asked */
-  current?: () => PlanChange["current"];
-  /** The AI changed the video as asked (`ask`) */
-  onChange?: (plan: VideoPlan, ask: string) => void;
-  /** Light up in the video the passages a change added (its place in `talk.asks`) */
-  onReveal?: (turn: number) => void;
   /** The results on screen changed (shown on the live's strip) */
   onResults: (hits: LiveHit[]) => void;
+  /** Shown in a window of its own: what closes it */
+  onClose?: () => void;
 }
-
-type Tab = "search" | "describe";
-const TARGETS = [30, 60, 90, 180];
-/** Longest description of a video the app takes (the API's own limit) */
-const MAX_BRIEF = 4000;
 
 const SOURCE_ICON = { voice: Mic, chat: MessageCircle, ai: Sparkles } as const;
 
@@ -72,73 +46,44 @@ const head = (text: string) => (text.length > AROUND ? `${text.slice(0, text.las
 /** How often the AI is asked what it is doing while its answer is awaited */
 const PROGRESS_EVERY = 1200;
 
-/** Looking for moments in the whole live: by words, by asking the AI, or by describing the whole video */
-export default function SearchPanel({ jobId, storyboards, lives, info, source = "compilation", previewed, isAdded, onPreview, onAdd, onPlan, onResults, talk, proposal = null, current, onChange, onReveal }: Props) {
+/**
+ * Looking for passages in the whole live by hand: the words said or written in the chat (free,
+ * at once), or a question the AI answers by reading, listening and checking each passage.
+ * Building or changing a whole video is asked of the assistant.
+ */
+export default function SearchPanel({ jobId, storyboards, lives, info, previewed, isAdded, onPreview, onAdd, onResults, onClose }: Props) {
   const { t, i18n } = useTranslation();
   const toast = useToast();
-  // « I don't like it when you... »: the AI keeps it for the next videos, and says so
-  const noted = (plan: VideoPlan) => plan.remembered?.forEach((said) => toast.success(t("memory.remembered", { said })));
-  // Describing the video to the AI is the main way in; searching by hand comes second
-  const [tab, setTab] = useState<Tab>("describe");
   const [query, setQuery] = useState("");
   // The live a search by hand looks in (the compilation's own unless another one is chosen)
   const [where, setWhere] = useState(jobId);
   const searched = lives.some((live) => live.job === where) ? where : jobId;
-  const others = lives.filter((live) => live.job !== jobId).map((live) => live.job);
-  const [busy, setBusy] = useState<"words" | "ai" | "plan" | null>(null);
+  const [busy, setBusy] = useState<"words" | "ai" | null>(null);
   const [failure, setFailure] = useState<LiveFailure | null>(null);
   const [results, setResults] = useState<{ hits: LiveHit[]; total: number; query: string; mode: "words" | "ai"; note?: string; cached?: boolean } | null>(null);
-  /** The description whose answer came from the disk (nothing searched): it can be asked again */
-  const [kept, setKept] = useState<{ brief: string; target: number } | null>(null);
-  const [brief, setBrief] = useState("");
-  const [target, setTarget] = useState(90);
   /** What the AI is doing while its answer is awaited */
   const [step, setStep] = useState<LiveSearchStep | null>(null);
-  /** What the AI said of the last video it planned */
-  const [planNote, setPlanNote] = useState("");
-  /** A change asked on the video on screen, and the form of a new video shown anyway */
-  const [request, setRequest] = useState("");
-  const [another, setAnother] = useState(false);
-  const talking = !!talk && !!onChange && !another;
-  /** The change being worked on, and each thing the AI did for it so far */
-  const [pending, setPending] = useState<string | null>(null);
-  const [trail, setTrail] = useState<string[]>([]);
-  /** A video the AI proposed is being built from the request it wrote */
-  const [building, setBuilding] = useState(false);
-  /** A video is being built from its description: watched in the conversation, like a change */
-  const planning = busy === "plan" && pending === null;
-  const inTalk = tab === "describe" && (talking || planning);
 
-  const asking = busy === "ai" || busy === "plan";
+  const asking = busy === "ai";
   useEffect(() => {
     if (!asking) return;
     setStep(null);
-    setTrail([]);
     let stopped = false;
     const ask = async () => {
-      const doing = await getLiveSearchProgress(jobId);
-      if (stopped || !doing) return;
-      setStep(doing);
-      // One line per thing done, in the conversation (a step that counts, « 12/41 », keeps its line)
-      const line = stepText(t, doing);
-      setTrail((lines) => {
-        const last = lines[lines.length - 1];
-        return last === line ? lines : last !== undefined && sameStep(last, line) ? [...lines.slice(0, -1), line] : [...lines, line];
-      });
+      const doing = await getLiveSearchProgress(searched);
+      if (!stopped && doing) setStep(doing);
     };
     const timer = window.setInterval(ask, PROGRESS_EVERY);
     return () => {
       stopped = true;
       window.clearInterval(timer);
     };
-  }, [asking, jobId, t]);
+  }, [asking, searched]);
 
   const dollars = (cost: number) => `${new Intl.NumberFormat(i18n.language, { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(cost)} $`;
   /** A question to the AI costs a fraction of a cent: said as such, never as "0.00 $" */
   const about = (cost?: number | null) => (cost == null ? null : cost < 0.01 ? `< ${dollars(0.01)}` : `≈ ${dollars(cost)}`);
   const aiCost = about(info?.ai_cost);
-  // A video made from several lives costs a little more: about a quarter for each live more (measured: 0.044 $ for two)
-  const planCost = about(info?.plan_cost != null || info?.ai_cost != null ? (info?.plan_cost ?? info?.ai_cost ?? 0) * (1 + 0.25 * (lives.length - 1)) : null);
   /** "Asked before: free" or what it cost */
   const paid = (answer: { cached?: boolean; cost?: number }) =>
     answer.cached ? t("compilation.alreadyAsked") : answer.cost ? (answer.cost < 0.01 ? t("compilation.underCent") : dollars(answer.cost)) : "";
@@ -172,145 +117,20 @@ export default function SearchPanel({ jobId, storyboards, lives, info, source = 
     }
   };
 
-  const plan = async (e: FormEvent) => {
-    e.preventDefault();
-    const asked = brief.trim();
-    if (!asked || busy) return;
-    setBusy("plan");
-    setFailure(null);
-    try {
-      const planned = await planLiveVideo(jobId, asked, target, undefined, others, [], false, source);
-      noted(planned);
-      const count = planned.sections.reduce((sum, s) => sum + s.hits.length, 0);
-      setPlanNote(planned.note ?? "");
-      if (count === 0) {
-        toast.info(t("compilation.planEmpty"));
-        return;
-      }
-      onPlan(planned, target, asked);
-      // Answered from the disk: said in the conversation, where it can be asked again
-      setKept(planned.cached ? { brief: asked, target } : null);
-      setAnother(false);
-      setBrief("");
-      setPlanNote("");
-      toast.success([t("compilation.planned", { count }), paid(planned)].filter(Boolean).join(" · "));
-    } catch (err) {
-      setFailure(err instanceof LiveError ? err.reason : "failed");
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  /** The description on screen asked again on purpose: the AI plans anew, and its video takes the place of the one it had kept */
-  const planAgain = async () => {
-    if (busy || !kept) return;
-    const asked = kept;
-    setBusy("plan");
-    setBuilding(true);
-    setFailure(null);
-    try {
-      const planned = await planLiveVideo(jobId, asked.brief, asked.target, undefined, others, [], true, source);
-      noted(planned);
-      const count = planned.sections.reduce((sum, s) => sum + s.hits.length, 0);
-      if (count === 0) {
-        toast.info(t("compilation.planEmpty"));
-        return;
-      }
-      onPlan(planned, asked.target, asked.brief, true);
-      setKept(null);
-      toast.success([t("compilation.planned", { count }), paid(planned)].filter(Boolean).join(" · "));
-    } catch (err) {
-      setFailure(err instanceof LiveError ? err.reason : "failed");
-    } finally {
-      setBusy(null);
-      setBuilding(false);
-    }
-  };
-
-  /** A video the AI proposed is built from the request it wrote, starting from the moments it had spotted */
-  const build = async () => {
-    if (busy || !talk || !proposal) return;
-    setBusy("plan");
-    setBuilding(true);
-    setFailure(null);
-    try {
-      const planned = await planLiveVideo(jobId, talk.brief, proposal.target, undefined, others, proposal.leads, false, source);
-      noted(planned);
-      const count = planned.sections.reduce((sum, s) => sum + s.hits.length, 0);
-      if (count === 0) {
-        toast.info(t("compilation.planEmpty"));
-        return;
-      }
-      onPlan(planned, proposal.target, talk.brief);
-      setKept(planned.cached ? { brief: talk.brief, target: proposal.target } : null);
-      toast.success([t("compilation.planned", { count }), paid(planned)].filter(Boolean).join(" · "));
-    } catch (err) {
-      setFailure(err instanceof LiveError ? err.reason : "failed");
-    } finally {
-      setBusy(null);
-      setBuilding(false);
-    }
-  };
-  // Opened to be built (from its card): built once the live is known to be readable, once
-  const builtFor = useRef<string | null>(null);
-  const buildRef = useRef(build);
-  buildRef.current = build;
-  useEffect(() => {
-    if (!proposal?.auto || !info?.transcript || builtFor.current === proposal.id) return;
-    builtFor.current = proposal.id;
-    setTab("describe");
-    buildRef.current();
-  }, [proposal?.auto, proposal?.id, info?.transcript]);
-  /** The request the AI wrote, to rewrite before having the video built */
-  const editProposal = () => {
-    if (!talk || !proposal) return;
-    setBrief(talk.brief);
-    setTarget(proposal.target);
-    setAnother(true);
-  };
-
-  /** A change asked on the video the AI planned: it starts from the video as it is and from what was asked before */
-  const change = async () => {
-    const asked = request.trim();
-    if (!asked || busy || !talk || !current || !onChange) return;
-    setBusy("plan");
-    setPending(asked);
-    setRequest("");
-    setFailure(null);
-    try {
-      const planned = await planLiveVideo(jobId, talk.brief, target, { request: asked, current: current(), asks: talk.asks.map((a) => a.ask) }, others, [], false, source);
-      onChange(planned, asked);
-    } catch (err) {
-      setFailure(err instanceof LiveError ? err.reason : "failed");
-      // What was typed is not lost
-      setRequest(asked);
-    } finally {
-      setBusy(null);
-      setPending(null);
-    }
-  };
-
   // "Add all" takes what matches, not what is only close
   const fresh = results?.hits.filter((hit) => !isAdded(hit) && !isNear(hit)) ?? [];
 
   return (
-    <aside
-      aria-label={t("compilation.search")}
-      // A conversation stays in view while the list of passages scrolls beside it
-      className={`glass rounded-[20px] p-3 min-w-0 flex flex-col ${inTalk ? "flex-[1_1_400px] lg:sticky lg:top-[84px] self-start" : "flex-[1_1_400px]"}`}
-    >
-      <div role="tablist" className="seg">
-        {(["describe", "search"] as const).map((key) => (
-          <button key={key} role="tab" aria-selected={tab === key} onClick={() => setTab(key)}>
-            <span className="inline-flex items-center justify-center gap-1.5">
-              {key === "describe" && <Sparkles className="w-3.5 h-3.5" />}
-              {t(`compilation.tab.${key}`)}
-            </span>
+    <aside aria-label={t("compilation.search")} className="glass rounded-[20px] p-3 min-w-0 flex flex-col">
+      <header className="flex items-center gap-2 px-1 pb-1">
+        <Search className="w-4 h-4 text-ink-3" />
+        <h2 className="flex-1 text-[15px] font-[620] text-white">{t("compilation.search")}</h2>
+        {onClose && (
+          <button type="button" onClick={onClose} aria-label={t("common.close")} title={t("common.close")} className="btn btn-ghost btn-icon w-8 h-8 text-ink-3 hover:text-white">
+            <X className="w-4 h-4" />
           </button>
-        ))}
-      </div>
-
-      {tab === "search" ? (
+        )}
+      </header>
         <form
           className="mt-3"
           onSubmit={(e) => {
@@ -355,82 +175,25 @@ export default function SearchPanel({ jobId, storyboards, lives, info, source = 
           </div>
           <p className="mt-2 px-0.5 text-[12px] leading-snug text-ink-3">{t(info && !info.transcript ? "compilation.noTranscript" : "compilation.searchHint")}</p>
         </form>
-      ) : talking || planning ? (
-        <PlanTalk
-          brief={planning && !building ? brief.trim() : talk!.brief}
-          byAi={!!talk?.byAi && (!planning || building)}
-          wrote={talk?.wrote}
-          example={source === "compilation" ? undefined : t(`videos.changeFor.${source}`)}
-          proposal={proposal && !planning ? { pitch: proposal.pitch, tags: proposal.tags, score: proposal.score, cost: planCost, disabled: !info?.transcript || !!busy, onBuild: build, onEdit: editProposal } : null}
-          again={kept && !planning && talk?.brief === kept.brief ? { cost: planCost, disabled: !info?.transcript || !!busy, onAgain: planAgain } : null}
-          answer={planning ? undefined : talk!.answer}
-          passages={planning ? undefined : talk!.passages}
-          planning={planning}
-          turns={planning ? [] : talk!.asks}
-          pending={busy === "plan" ? pending : null}
-          trail={trail}
-          value={request}
-          onValue={setRequest}
-          onSend={change}
-          disabled={!info?.transcript || (!!busy && busy !== "plan")}
-          cost={planCost}
-          onReveal={onReveal}
-          onAnother={() => setAnother(true)}
-          failure={failure ? t(`compilation.failure.${failure}`) : null}
-        />
-      ) : (
-        <form className="mt-3" onSubmit={plan}>
-          <textarea
-            value={brief}
-            onChange={(e) => setBrief(e.target.value)}
-            rows={4}
-            maxLength={MAX_BRIEF}
-            placeholder={t(source === "compilation" ? "compilation.briefPlaceholder" : `compilation.briefFor.${source}`)}
-            aria-label={t("compilation.tab.describe")}
-            className="w-full p-3 rounded-[11px] bg-black/30 border border-white/10 text-[14px] leading-snug text-white outline-none focus:border-accent-line placeholder:text-ink-3 resize-y"
-          />
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <div role="group" aria-label={t("compilation.length")} className="seg flex-1 min-w-[220px]">
-              {TARGETS.map((seconds) => (
-                <button key={seconds} type="button" aria-pressed={target === seconds} onClick={() => setTarget(seconds)}>
-                  {t(`compilation.target.${seconds}`)}
-                </button>
-              ))}
-            </div>
-          </div>
-          <button type="submit" disabled={!brief.trim() || !!busy || !info?.transcript} className="btn btn-primary btn-sm mt-2.5">
-            {busy === "plan" ? <Loader2 className="w-3.5 h-3.5 spinner" /> : <Sparkles className="w-3.5 h-3.5" />}
-            {t("compilation.buildVideo")}
-            {planCost && <span className="mono text-[11.5px] opacity-60">{planCost}</span>}
-          </button>
-          <p className="mt-2 px-0.5 text-[12px] leading-snug text-ink-3">{t(info && !info.transcript ? "compilation.noTranscript" : "compilation.describeHint")}</p>
-          {!!talk && !!onChange && (
-            <button type="button" onClick={() => setAnother(false)} className="btn btn-ghost btn-sm mt-1.5">
-              {t("compilation.changeBack")}
-            </button>
-          )}
-        </form>
-      )}
 
-      {asking && !inTalk && (
+      {asking && (
         <div role="status" aria-live="polite" className="mt-3 flex items-start gap-3 p-3 rounded-[12px] inset animate-fade-in">
           <Loader2 className="w-4 h-4 spinner text-accent flex-none mt-0.5" />
           <div className="min-w-0">
             <p className="text-[13px] leading-snug text-white break-words">{stepText(t, step)}</p>
             <p className="mt-0.5 text-[12px] leading-snug text-ink-3">
-              {t(step?.step === "relistening" ? "compilation.aiRelistening" : step?.step === "hearing" ? "compilation.aiHearing" : busy === "plan" ? "compilation.aiPlanning" : "compilation.aiReading")}
+              {t(step?.step === "relistening" ? "compilation.aiRelistening" : step?.step === "hearing" ? "compilation.aiHearing" : "compilation.aiReading")}
             </p>
           </div>
         </div>
       )}
-      {tab === "describe" && !talking && planNote && !asking && <AiNote label={t("compilation.aiNote")} note={planNote} />}
-      {failure && !(talking && tab === "describe") && !planning && (
+      {failure && (
         <p role="alert" className="mt-3 p-3 rounded-[12px] bg-[rgba(245,177,76,0.10)] border border-[rgba(245,177,76,0.30)] text-[12.5px] leading-snug text-[#f7d9a8]">
           {t(`compilation.failure.${failure}`)}
         </p>
       )}
 
-      {tab === "search" && results && (
+      {results && (
         <div className="mt-3 pt-3 border-t border-white/[0.08] flex-1 min-h-0 flex flex-col">
           {results.note && <AiNote label={t("compilation.aiNote")} note={results.note} className="mb-2.5" />}
           {/* Nothing was searched: the same question had been answered before. One click has the AI search again */}

@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from "react";
 import { useTranslation } from "react-i18next";
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Blend, Check, ScanFace, ChevronRight, Clapperboard, Eye, EyeOff, FolderInput, Layers, Loader2, Music2, Palette, Pause, Play, Plus, Sparkles, Trash2, Type, X, Zap, LayoutTemplate, type LucideIcon } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Blend, Check, ScanFace, ChevronRight, Clapperboard, Eye, EyeOff, FolderInput, Layers, Loader2, Music2, Palette, Pause, Play, Plus, Search, Sparkles, Trash2, Type, X, Zap, LayoutTemplate, type LucideIcon } from "lucide-react";
 import type { Compilation, CompilationItem, CompilationSection, TwitchStoryboard } from "../../lib/api";
 import {
   PLAIN_CUT,
@@ -66,6 +66,8 @@ interface Props {
   onExport: () => void;
   exporting: boolean;
   onDelete: () => void;
+  /** Passages looked for in the live by hand (the passages give their place to the search) */
+  onSearch?: () => void;
   /** A template's name, by key */
   templateName: (key: string) => string;
   /** The AI is looking at the passages to choose their templates */
@@ -203,6 +205,7 @@ export default function CompilationPanel({
   onExport,
   exporting,
   onDelete,
+  onSearch,
   templateName,
   looking,
   looksNote,
@@ -579,17 +582,26 @@ export default function CompilationPanel({
         );
       })}
 
-      {!single && (
-        <button
-          onClick={() => {
-            const { compilation: next, id } = addSection(compilation);
-            onChange(next);
-            onActivate(id);
-          }}
-          className="btn btn-ghost btn-sm self-start"
-        >
-          <Plus className="w-[15px] h-[15px]" /> {t("compilation.addSection")}
-        </button>
+      {(!single || onSearch) && (
+        <div className="flex flex-wrap gap-1.5">
+          {onSearch && (
+            <button onClick={onSearch} className="btn btn-ghost btn-sm">
+              <Search className="w-[15px] h-[15px]" /> {t("compilation.search")}
+            </button>
+          )}
+          {!single && (
+            <button
+              onClick={() => {
+                const { compilation: next, id } = addSection(compilation);
+                onChange(next);
+                onActivate(id);
+              }}
+              className="btn btn-ghost btn-sm"
+            >
+              <Plus className="w-[15px] h-[15px]" /> {t("compilation.addSection")}
+            </button>
+          )}
+        </div>
       )}
 
       {/* What is being dragged follows the pointer */}
@@ -733,7 +745,7 @@ export default function CompilationPanel({
               </LookRow>
               {/* Where the webcam is on this live: found by the analysis, set by hand when it is wrong */}
               {cam && (
-                <LookRow icon={ScanFace} label={t("montage.cam")} value={cam.label} onOpen={cam.onOpen}>
+                <LookRow icon={ScanFace} label={t("montage.cam.label")} value={cam.label} onOpen={cam.onOpen}>
                   <span className="truncate">{cam.label}</span>
                 </LookRow>
               )}

@@ -965,7 +965,8 @@
       "automatic": "Back to automatic framing",
       "cancel": "Cancel",
       "saved": "Cam reframed for this stream",
-      "savedEverywhere": "Cam reframed and kept as the reference"
+      "savedEverywhere": "Cam reframed and kept as the reference",
+      "label": "Webcam"
     },
     "createTemplate": "Create my template",
     "editTemplate": "Edit",
@@ -2215,7 +2216,112 @@
   "assistant": {
     "title": "Assistant",
     "close": "Close the assistant",
-    "empty": "Open a video in Edit: searching the live and asking the AI for a change happen here."
+    "new": "New conversation",
+    "hello": "I see what you are looking at and act for you: analyse a live, find a moment in it, build or rework a video, export.",
+    "placeholder": "Ask for something…",
+    "send": "Send",
+    "busy": "The assistant is already answering, one moment.",
+    "interrupted": "Action interrupted: ask again if you still want it.",
+    "whereHint": "What you are looking at: the assistant works on that, unless you speak of something else.",
+    "page": {
+      "home": "Home",
+      "lives": "Your lives",
+      "live": "Choose",
+      "edit": "Edit",
+      "export": "Export",
+      "videos": "Your videos",
+      "analysis": "Analysis running"
+    },
+    "failed": {
+      "credits": "Your OpenRouter credits have run out: I can't answer.",
+      "key": "Your OpenRouter key is refused: I can't answer.",
+      "settings": "Open the settings",
+      "unreachable": "The analysis engine does not answer. Restart Cuttie.",
+      "dev": "The assistant needs a real model: it is not available with a development command.",
+      "nothing_waiting": "This request no longer waited for an answer.",
+      "failed": "I could not answer. Try again."
+    },
+    "approval": {
+      "analyse": "Analyse this live?",
+      "analyseCost": "About {{cost}} of your OpenRouter credits, twenty minutes or so.",
+      "cost": "About {{cost}} of your OpenRouter credits.",
+      "yes": "Yes, go ahead",
+      "no": "No"
+    },
+    "widget": {
+      "idea": "idea of the AI · {{score}}",
+      "passages_one": "{{count}} passage",
+      "passages_other": "{{count}} passages",
+      "exported": "exported",
+      "edit": "Edit",
+      "open": "Open",
+      "kept": "Kept",
+      "notAnalysed": "not analysed yet",
+      "play": "Play this passage",
+      "stop": "Stop",
+      "add": "Add",
+      "added": "Added",
+      "notAdded": "This passage could not be added.",
+      "noClip": "This passage could not be cut from the live.",
+      "build": "Build",
+      "buildHint": "The AI finds the passages and edits the video, in Edit",
+      "keep": "Keep",
+      "follow": "Follow",
+      "analyse": "Analyse",
+      "exportAll": "Export all {{count}}",
+      "exporting": "Exports started",
+      "addAll": "Add all ({{count}})",
+      "allAdded": "All added"
+    },
+    "suggest": {
+      "leftToExport": "What do I still have to export?",
+      "findIdeas": "Find the best compilations in this live",
+      "bestClips": "Of the {{count}} clips to sort, which ones to keep?",
+      "cutClip": "Cut this clip for me",
+      "tighten": "Tighten this video",
+      "music": "Put on a track that goes with it",
+      "ideasWaiting": "Which video ideas are still waiting?",
+      "buildBest": "Build the best idea of this live",
+      "findMoment": "Find the moments where…",
+      "buildThis": "Build this video",
+      "describe": "Make a video about…",
+      "findAdd": "Add the passages where…",
+      "shorten": "Bring this video down to a minute",
+      "hook": "Open the video on its best moment",
+      "restyle": "For the look, I would like…",
+      "exportThis": "Export this video",
+      "exportAll_one": "Export the video that waits",
+      "exportAll_other": "Export the {{count}} videos that wait",
+      "bestOfAll": "Show me my best-rated videos",
+      "whatsNew": "What is there to do on my latest lives?",
+      "analyseNamed": "Analyse “{{name}}”",
+      "buildNamed": "Build “{{name}}”",
+      "exportThose_one": "Export this video",
+      "exportThose_other": "Export these {{count}} videos",
+      "keepThose": "Keep these clips",
+      "videoOfThose": "Make a video of these passages"
+    },
+    "helloTitle": "What are we doing?",
+    "tagline": "Follows you across the app",
+    "thinking": "Thinking…",
+    "looking": "You are looking at",
+    "fact": {
+      "toSort_one": "{{count}} clip to sort",
+      "toSort_other": "{{count}} clips to sort",
+      "ideas_one": "{{count}} idea of the AI",
+      "ideas_other": "{{count}} ideas of the AI",
+      "kept_one": "{{count}} video kept",
+      "kept_other": "{{count}} videos kept",
+      "passages_one": "{{count}} passage",
+      "passages_other": "{{count}} passages",
+      "noMusic": "no music",
+      "notExported": "not exported yet",
+      "notBuilt": "idea of the AI, not built yet",
+      "toExport_one": "{{count}} video to export",
+      "toExport_other": "{{count}} videos to export",
+      "lastLive": "Latest live: {{name}}",
+      "notAnalysed": "not analysed yet"
+    }
   },
   "sources": {
     "one": {
@@ -2261,7 +2367,19 @@
     "keptVideos": "Videos kept from this live",
     "exported": "Exported",
     "nothingKept": "No video kept yet",
-    "nothingKeptHint": "Keep a clip, a sequence or a compilation of this live: it comes here to be edited.",
-    "emptyVideo": "This video has no passage yet. Describe it to the assistant, or search the live for passages."
+    "nothingKeptHint": "Keep a clip, a sequence or a compilation of this live: it comes here to be edited."
+  },
+  "describe": {
+    "title": {
+      "clip": "Describe the clip",
+      "sequence": "Describe the sequence",
+      "compilation": "Describe the compilation"
+    },
+    "byHand": "Search by hand",
+    "building": "The AI is building the video",
+    "buildingHint": "It reads the live, listens and checks each passage: half a minute or so.",
+    "changing": "The AI is changing the video…",
+    "ideaOf": "Idea of the AI · score {{score}}",
+    "rewrite": "Rewrite the request"
   }
 }

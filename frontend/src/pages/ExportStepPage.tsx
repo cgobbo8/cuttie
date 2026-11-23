@@ -20,6 +20,8 @@ import LiveHeader from "../components/live/LiveHeader";
 import SourceName from "../components/live/SourceName";
 import FreedNotice from "../components/project/FreedNotice";
 import RenderCard from "../components/project/RenderCard";
+import { useAssistantChanged, useAssistantPlace } from "../lib/AssistantContext";
+import { splitVodTitle } from "../lib/format";
 import { useToast } from "../components/Toast";
 
 /** Saved this long after its export, a video was changed since (saving the export itself takes a moment) */
@@ -58,6 +60,8 @@ export default function ExportStepPage() {
       .catch(() => setRenders([]));
   }, []);
   useEffect(load, [load]);
+  // Exports the assistant started: the list is read again
+  useAssistantChanged(jobId, load);
 
   const files = useMemo(() => (renders && jobId ? latestPerClip(renders, jobId) : []), [renders, jobId]);
   // Renders run one at a time: only the furthest along is really rendering
@@ -85,6 +89,8 @@ export default function ExportStepPage() {
   };
   const isPicked = (entry: LiveEntry) => picked[entry.key] ?? ["ready", "changed"].includes(standing(entry));
   const chosen = kept.filter((entry) => isPicked(entry) && !["preparing", "rendering"].includes(standing(entry)));
+  // What « export everything » means to the assistant here
+  useAssistantPlace(jobId && job ? { page: "export", job: jobId, title: splitVodTitle(job.custom_title || job.vod_title).title || undefined, facts: { kept: kept.length, to_export: chosen.length } } : null);
 
   const first = files[0];
   useBackdrop(first && jobId ? clipThumbUrl(jobId, first.clip_filename) : null);

@@ -5,7 +5,7 @@ import i18n from "i18next";
 import "../../lib/i18n";
 import type { CompilationSummary } from "../../lib/api";
 import { TooltipProvider } from "../ui/Tooltip";
-import PlanTalk, { type Proposal } from "./PlanTalk";
+import DescribeVideo from "./DescribeVideo";
 import SuggestionCard from "./SuggestionCard";
 
 const card: CompilationSummary = {
@@ -66,55 +66,45 @@ describe("a video the AI proposed", () => {
     expect(onDismiss).toHaveBeenCalledTimes(1);
   });
 
-  it("opens on the request the AI wrote and on what it noticed, and is built when asked", () => {
-    const proposal: Proposal = { pitch: "« Calme » revient 25 fois.", tags: ["running gag"], score: 84, cost: "≈ 0,04 $", disabled: false, onBuild: vi.fn(), onEdit: vi.fn() };
-    const talk = (more: Partial<Parameters<typeof PlanTalk>[0]> = {}) => (
-      <TooltipProvider>
-        <PlanTalk brief="Fais une vidéo sur le calme." byAi turns={[]} pending={null} trail={[]} value="" onValue={() => {}} onSend={() => {}} disabled={false} cost="≈ 0,04 $" onAnother={() => {}} {...more} />
-      </TooltipProvider>
-    );
-    const view = render(talk({ proposal }));
-    // The first message is the AI's, written in the streamer's place, and says so
-    expect(screen.getByText("Demande écrite par l'IA à ta place")).toBeTruthy();
-    expect(screen.getByText("Fais une vidéo sur le calme.")).toBeTruthy();
-    expect(screen.getByText(/Ce que j'ai remarqué dans ton live/).parentElement!.textContent).toContain("« Calme » revient 25 fois.");
-    expect(screen.getByText(/L'IA cherche les passages et monte la vidéo : ≈ 0,04 \$/)).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: /Construire la vidéo/ }));
-    expect(proposal.onBuild).toHaveBeenCalledTimes(1);
-    fireEvent.click(screen.getByRole("button", { name: "Modifier la demande d'abord" }));
-    expect(proposal.onEdit).toHaveBeenCalledTimes(1);
-    // Nothing to change on a video that does not exist yet
+  it("says what the AI noticed and is built from the request it wrote, or from that request rewritten", () => {
+    const onBuild = vi.fn();
+    const idea = { pitch: "« Calme » revient 25 fois.", tags: ["running gag"], score: 84, brief: "Fais une vidéo sur le calme.", target: 65 };
+    const view = render(<DescribeVideo source="compilation" idea={idea} cost="≈ 0,04 $" working={null} unreadable={false} onBuild={onBuild} onSearch={() => {}} />);
+    expect(screen.getByText("« Calme » revient 25 fois.")).toBeTruthy();
+    expect(screen.getByText("running gag")).toBeTruthy();
+    // Nothing to type: the request is the AI's, with the length it proposed
     expect(screen.queryByRole("textbox")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /Construire la vidéo.*0,04 \$/ }));
+    expect(onBuild).toHaveBeenCalledWith("Fais une vidéo sur le calme.", 65);
+    // Its request can be rewritten first
+    fireEvent.click(screen.getByRole("button", { name: "Modifier la demande" }));
+    const box = screen.getByRole("textbox") as HTMLTextAreaElement;
+    expect(box.value).toBe("Fais une vidéo sur le calme.");
+    fireEvent.change(box, { target: { value: "Seulement les trois meilleurs." } });
+    fireEvent.click(screen.getByRole("button", { name: /Construire la vidéo/ }));
+    expect(onBuild).toHaveBeenLastCalledWith("Seulement les trois meilleurs.", 65);
 
     // Being built: what the AI does shows, the offer is gone
-    view.rerender(talk({ planning: true, trail: ["Lit ce qui se dit vers 1:16:53"] }));
+    view.rerender(<DescribeVideo source="compilation" idea={idea} cost="≈ 0,04 $" working={["Regarde ce que l'analyse a noté", "Lit ce qui se dit vers 1:16:53"]} unreadable={false} onBuild={onBuild} onSearch={() => {}} />);
     expect(screen.queryByRole("button", { name: /Construire la vidéo/ })).toBeNull();
     expect(screen.getByText("Lit ce qui se dit vers 1:16:53")).toBeTruthy();
-    // Built: the conversation goes on like any other, still saying whose idea it was
-    view.rerender(talk({ answer: "Deux parties : le calme, puis la tempête.", passages: 12 }));
-    expect(screen.getByText("Demande écrite par l'IA à ta place")).toBeTruthy();
-    expect(screen.getByRole("textbox")).toBeTruthy();
-    // A video the streamer described says nothing of the kind
-    view.rerender(talk({ byAi: false, answer: "Voilà." }));
-    expect(screen.queryByText("Demande écrite par l'IA à ta place")).toBeNull();
   });
 
-  it("an answer the AI took from a time before can be asked again", () => {
-    const again = { cost: "≈ 0,04 $", disabled: false, onAgain: vi.fn() };
-    const talk = (more: Partial<Parameters<typeof PlanTalk>[0]> = {}) => (
-      <TooltipProvider>
-        <PlanTalk brief="Les moments calmes." answer="Deux parties." passages={12} turns={[]} pending={null} trail={[]} value="" onValue={() => {}} onSend={() => {}} disabled={false} cost="≈ 0,04 $" onAnother={() => {}} {...more} />
-      </TooltipProvider>
-    );
-    const view = render(talk({ again }));
-    // Nothing was searched this time: said under the answer, with what asking again costs
-    expect(screen.getByText(/Réponse reprise d'une fois d'avant/)).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: /Redemander.*0,04 \$/ }));
-    expect(again.onAgain).toHaveBeenCalledTimes(1);
-    // An answer the AI has just searched for, or a video changed since: nothing to ask again
-    view.rerender(talk());
-    expect(screen.queryByRole("button", { name: /Redemander/ })).toBeNull();
-    view.rerender(talk({ again, turns: [{ ask: "ajoute les autres", note: "Fait." }] }));
-    expect(screen.queryByRole("button", { name: /Redemander/ })).toBeNull();
+  it("a video with nothing in it is described where it will play, or its passages looked for by hand", () => {
+    const onBuild = vi.fn();
+    const onSearch = vi.fn();
+    const view = render(<DescribeVideo source="sequence" cost="≈ 0,04 $" working={null} unreadable={false} onBuild={onBuild} onSearch={onSearch} />);
+    const build = screen.getByRole("button", { name: /Construire la vidéo/ }) as HTMLButtonElement;
+    // Nothing described: nothing to build
+    expect(build.disabled).toBe(true);
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "  La mission du yacht, du départ à la fuite.  " } });
+    fireEvent.click(screen.getByRole("button", { name: "1 min 30" }));
+    fireEvent.click(build);
+    expect(onBuild).toHaveBeenCalledWith("La mission du yacht, du départ à la fuite.", 90);
+    fireEvent.click(screen.getByRole("button", { name: "Chercher à la main" }));
+    expect(onSearch).toHaveBeenCalledTimes(1);
+    // A live that can't be read: said, and nothing is built
+    view.rerender(<DescribeVideo source="sequence" cost={null} working={null} unreadable onBuild={onBuild} onSearch={onSearch} />);
+    expect((screen.getByRole("button", { name: /Construire la vidéo/ }) as HTMLButtonElement).disabled).toBe(true);
   });
 });

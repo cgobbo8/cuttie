@@ -965,7 +965,8 @@
       "automatic": "Revenir au cadrage automatique",
       "cancel": "Annuler",
       "saved": "Cam recadrée pour ce live",
-      "savedEverywhere": "Cam recadrée et gardée comme repère"
+      "savedEverywhere": "Cam recadrée et gardée comme repère",
+      "label": "Webcam"
     },
     "createTemplate": "Créer mon modèle",
     "editTemplate": "Modifier",
@@ -2215,7 +2216,112 @@
   "assistant": {
     "title": "Assistant",
     "close": "Fermer l'assistant",
-    "empty": "Ouvre une vidéo dans Monter : chercher dans le live et demander un changement à l'IA se font ici."
+    "new": "Nouvelle conversation",
+    "hello": "Je vois ce que tu regardes et j'agis à ta place : analyser un live, y chercher un moment, construire ou retoucher une vidéo, exporter.",
+    "placeholder": "Demande quelque chose…",
+    "send": "Envoyer",
+    "busy": "L'assistant répond déjà, un instant.",
+    "interrupted": "Action interrompue : redemande-la si tu la veux toujours.",
+    "whereHint": "Ce que tu regardes : c'est là-dessus que l'assistant travaille, sauf si tu lui parles d'autre chose.",
+    "page": {
+      "home": "Accueil",
+      "lives": "Tes lives",
+      "live": "Choisir",
+      "edit": "Monter",
+      "export": "Exporter",
+      "videos": "Tes vidéos",
+      "analysis": "Analyse en cours"
+    },
+    "failed": {
+      "credits": "Tes crédits OpenRouter sont épuisés : je ne peux pas répondre.",
+      "key": "Ta clé OpenRouter est refusée : je ne peux pas répondre.",
+      "settings": "Ouvrir les paramètres",
+      "unreachable": "Le moteur d'analyse ne répond pas. Relance Cuttie.",
+      "dev": "L'assistant a besoin d'un vrai modèle : il n'est pas disponible avec une commande de développement.",
+      "nothing_waiting": "Cette demande n'attendait plus de réponse.",
+      "failed": "Je n'ai pas réussi à répondre. Réessaie."
+    },
+    "approval": {
+      "analyse": "Analyser ce live ?",
+      "analyseCost": "Environ {{cost}} de tes crédits OpenRouter, une vingtaine de minutes.",
+      "cost": "Environ {{cost}} de tes crédits OpenRouter.",
+      "yes": "Oui, vas-y",
+      "no": "Non"
+    },
+    "widget": {
+      "idea": "idée de l'IA · {{score}}",
+      "passages_one": "{{count}} passage",
+      "passages_other": "{{count}} passages",
+      "exported": "exportée",
+      "edit": "Monter",
+      "open": "Ouvrir",
+      "kept": "Gardé",
+      "notAnalysed": "pas encore analysé",
+      "play": "Écouter ce passage",
+      "stop": "Arrêter",
+      "add": "Ajouter",
+      "added": "Ajouté",
+      "notAdded": "Ce passage n'a pas pu être ajouté.",
+      "noClip": "Ce passage n'a pas pu être découpé dans le live.",
+      "build": "Construire",
+      "buildHint": "L'IA cherche les passages et monte la vidéo, dans Monter",
+      "keep": "Garder",
+      "follow": "Suivre",
+      "analyse": "Analyser",
+      "exportAll": "Exporter les {{count}}",
+      "exporting": "Exports lancés",
+      "addAll": "Tout ajouter ({{count}})",
+      "allAdded": "Tout est ajouté"
+    },
+    "suggest": {
+      "leftToExport": "Qu'est-ce qu'il me reste à exporter ?",
+      "findIdeas": "Trouve les meilleures compilations de ce live",
+      "bestClips": "Parmi les {{count}} clips à trier, lesquels garder ?",
+      "cutClip": "Découpe-moi ce clip",
+      "tighten": "Resserre cette vidéo",
+      "music": "Mets une musique qui va avec",
+      "ideasWaiting": "Quelles idées de vidéos attendent encore ?",
+      "buildBest": "Construis la meilleure idée de ce live",
+      "findMoment": "Trouve les moments où…",
+      "buildThis": "Construis cette vidéo",
+      "describe": "Fais une vidéo sur…",
+      "findAdd": "Ajoute les passages où…",
+      "shorten": "Ramène cette vidéo à une minute",
+      "hook": "Ouvre la vidéo sur son meilleur moment",
+      "restyle": "Pour l'habillage, je voudrais…",
+      "exportThis": "Exporte cette vidéo",
+      "exportAll_one": "Exporte la vidéo qui attend",
+      "exportAll_other": "Exporte les {{count}} vidéos qui attendent",
+      "bestOfAll": "Montre-moi mes vidéos les mieux notées",
+      "whatsNew": "Qu'est-ce qu'il y a à faire sur mes derniers lives ?",
+      "analyseNamed": "Analyse « {{name}} »",
+      "buildNamed": "Construis « {{name}} »",
+      "exportThose_one": "Exporte cette vidéo",
+      "exportThose_other": "Exporte ces {{count}} vidéos",
+      "keepThose": "Garde ces clips",
+      "videoOfThose": "Fais une vidéo avec ces passages"
+    },
+    "helloTitle": "On fait quoi ?",
+    "tagline": "Te suit dans toute l'app",
+    "thinking": "Réfléchit…",
+    "looking": "Tu regardes",
+    "fact": {
+      "toSort_one": "{{count}} clip à trier",
+      "toSort_other": "{{count}} clips à trier",
+      "ideas_one": "{{count}} idée de l'IA",
+      "ideas_other": "{{count}} idées de l'IA",
+      "kept_one": "{{count}} vidéo gardée",
+      "kept_other": "{{count}} vidéos gardées",
+      "passages_one": "{{count}} passage",
+      "passages_other": "{{count}} passages",
+      "noMusic": "sans musique",
+      "notExported": "pas encore exportée",
+      "notBuilt": "idée de l'IA, pas encore construite",
+      "toExport_one": "{{count}} vidéo à exporter",
+      "toExport_other": "{{count}} vidéos à exporter",
+      "lastLive": "Dernier live : {{name}}",
+      "notAnalysed": "pas encore analysé"
+    }
   },
   "sources": {
     "one": {
@@ -2261,7 +2367,19 @@
     "keptVideos": "Vidéos gardées de ce live",
     "exported": "Exportée",
     "nothingKept": "Aucune vidéo gardée",
-    "nothingKeptHint": "Garde un clip, une séquence ou une compilation de ce live : il arrive ici pour être monté.",
-    "emptyVideo": "Cette vidéo n'a encore aucun passage. Décris-la à l'assistant, ou cherche des passages dans le live."
+    "nothingKeptHint": "Garde un clip, une séquence ou une compilation de ce live : il arrive ici pour être monté."
+  },
+  "describe": {
+    "title": {
+      "clip": "Décris le clip",
+      "sequence": "Décris la séquence",
+      "compilation": "Décris la compilation"
+    },
+    "byHand": "Chercher à la main",
+    "building": "L'IA construit la vidéo",
+    "buildingHint": "Elle lit le live, écoute et vérifie chaque passage : une trentaine de secondes.",
+    "changing": "L'IA modifie la vidéo…",
+    "ideaOf": "Idée de l'IA · indice {{score}}",
+    "rewrite": "Modifier la demande"
   }
 }

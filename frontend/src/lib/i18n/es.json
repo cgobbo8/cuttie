@@ -965,7 +965,8 @@
       "automatic": "Volver al encuadre automático",
       "cancel": "Cancelar",
       "saved": "Cámara reencuadrada para este directo",
-      "savedEverywhere": "Cámara reencuadrada y guardada como referencia"
+      "savedEverywhere": "Cámara reencuadrada y guardada como referencia",
+      "label": "Cámara"
     },
     "createTemplate": "Crear mi plantilla",
     "editTemplate": "Editar",
@@ -2215,7 +2216,112 @@
   "assistant": {
     "title": "Asistente",
     "close": "Cerrar el asistente",
-    "empty": "Abre un vídeo en Montar: buscar en el directo y pedir un cambio a la IA se hacen aquí."
+    "new": "Nueva conversación",
+    "hello": "Veo lo que estás mirando y actúo por ti: analizar un directo, buscar un momento, montar o retocar un vídeo, exportar.",
+    "placeholder": "Pide algo…",
+    "send": "Enviar",
+    "busy": "El asistente ya está respondiendo, un momento.",
+    "interrupted": "Acción interrumpida: vuelve a pedirla si aún la quieres.",
+    "whereHint": "Lo que estás viendo: el asistente trabaja sobre eso, salvo que le hables de otra cosa.",
+    "page": {
+      "home": "Inicio",
+      "lives": "Tus directos",
+      "live": "Elegir",
+      "edit": "Montar",
+      "export": "Exportar",
+      "videos": "Tus vídeos",
+      "analysis": "Análisis en curso"
+    },
+    "failed": {
+      "credits": "Tus créditos de OpenRouter se han agotado: no puedo responder.",
+      "key": "Tu clave de OpenRouter ha sido rechazada: no puedo responder.",
+      "settings": "Abrir los ajustes",
+      "unreachable": "El motor de análisis no responde. Reinicia Cuttie.",
+      "dev": "El asistente necesita un modelo real: no está disponible con un comando de desarrollo.",
+      "nothing_waiting": "Esta petición ya no esperaba respuesta.",
+      "failed": "No he podido responder. Inténtalo de nuevo."
+    },
+    "approval": {
+      "analyse": "¿Analizar este directo?",
+      "analyseCost": "Unos {{cost}} de tus créditos de OpenRouter, unos veinte minutos.",
+      "cost": "Unos {{cost}} de tus créditos de OpenRouter.",
+      "yes": "Sí, adelante",
+      "no": "No"
+    },
+    "widget": {
+      "idea": "idea de la IA · {{score}}",
+      "passages_one": "{{count}} pasaje",
+      "passages_other": "{{count}} pasajes",
+      "exported": "exportado",
+      "edit": "Montar",
+      "open": "Abrir",
+      "kept": "Guardado",
+      "notAnalysed": "aún sin analizar",
+      "play": "Escuchar este pasaje",
+      "stop": "Parar",
+      "add": "Añadir",
+      "added": "Añadido",
+      "notAdded": "No se ha podido añadir este pasaje.",
+      "noClip": "No se ha podido cortar este pasaje del directo.",
+      "build": "Montar",
+      "buildHint": "La IA busca los pasajes y monta el vídeo, en Montar",
+      "keep": "Guardar",
+      "follow": "Seguir",
+      "analyse": "Analizar",
+      "exportAll": "Exportar los {{count}}",
+      "exporting": "Exportaciones lanzadas",
+      "addAll": "Añadir todo ({{count}})",
+      "allAdded": "Todo añadido"
+    },
+    "suggest": {
+      "leftToExport": "¿Qué me queda por exportar?",
+      "findIdeas": "Encuentra las mejores compilaciones de este directo",
+      "bestClips": "De los {{count}} clips por ordenar, ¿cuáles guardar?",
+      "cutClip": "Córtame este clip",
+      "tighten": "Ajusta este vídeo",
+      "music": "Pon una música que le vaya",
+      "ideasWaiting": "¿Qué ideas de vídeo siguen esperando?",
+      "buildBest": "Monta la mejor idea de este directo",
+      "findMoment": "Encuentra los momentos en que…",
+      "buildThis": "Monta este vídeo",
+      "describe": "Haz un vídeo sobre…",
+      "findAdd": "Añade los pasajes en que…",
+      "shorten": "Deja este vídeo en un minuto",
+      "hook": "Abre el vídeo con el mejor momento",
+      "restyle": "Para el estilo, quiero…",
+      "exportThis": "Exporta este vídeo",
+      "exportAll_one": "Exporta el vídeo que espera",
+      "exportAll_other": "Exporta los {{count}} vídeos que esperan",
+      "bestOfAll": "Enséñame mis vídeos mejor valorados",
+      "whatsNew": "¿Qué hay por hacer en mis últimos directos?",
+      "analyseNamed": "Analiza «{{name}}»",
+      "buildNamed": "Monta «{{name}}»",
+      "exportThose_one": "Exporta este vídeo",
+      "exportThose_other": "Exporta estos {{count}} vídeos",
+      "keepThose": "Guarda estos clips",
+      "videoOfThose": "Haz un vídeo con estos pasajes"
+    },
+    "helloTitle": "¿Qué hacemos?",
+    "tagline": "Te sigue por toda la app",
+    "thinking": "Pensando…",
+    "looking": "Estás viendo",
+    "fact": {
+      "toSort_one": "{{count}} clip por ordenar",
+      "toSort_other": "{{count}} clips por ordenar",
+      "ideas_one": "{{count}} idea de la IA",
+      "ideas_other": "{{count}} ideas de la IA",
+      "kept_one": "{{count}} vídeo guardado",
+      "kept_other": "{{count}} vídeos guardados",
+      "passages_one": "{{count}} pasaje",
+      "passages_other": "{{count}} pasajes",
+      "noMusic": "sin música",
+      "notExported": "aún sin exportar",
+      "notBuilt": "idea de la IA, aún sin montar",
+      "toExport_one": "{{count}} vídeo por exportar",
+      "toExport_other": "{{count}} vídeos por exportar",
+      "lastLive": "Último directo: {{name}}",
+      "notAnalysed": "aún sin analizar"
+    }
   },
   "sources": {
     "one": {
@@ -2261,7 +2367,19 @@
     "keptVideos": "Vídeos guardados de este directo",
     "exported": "Exportado",
     "nothingKept": "Ningún vídeo guardado",
-    "nothingKeptHint": "Guarda un clip, una secuencia o una compilación de este directo: llega aquí para montarlo.",
-    "emptyVideo": "Este vídeo aún no tiene pasajes. Descríbeselo al asistente o busca pasajes en el directo."
+    "nothingKeptHint": "Guarda un clip, una secuencia o una compilación de este directo: llega aquí para montarlo."
+  },
+  "describe": {
+    "title": {
+      "clip": "Describe el clip",
+      "sequence": "Describe la secuencia",
+      "compilation": "Describe la compilación"
+    },
+    "byHand": "Buscar a mano",
+    "building": "La IA está montando el vídeo",
+    "buildingHint": "Lee el directo, escucha y comprueba cada pasaje: medio minuto más o menos.",
+    "changing": "La IA está cambiando el vídeo…",
+    "ideaOf": "Idea de la IA · índice {{score}}",
+    "rewrite": "Cambiar la petición"
   }
 }

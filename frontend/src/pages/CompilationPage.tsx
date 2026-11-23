@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
-import { AssistantSlot, useAssistant } from "../lib/AssistantContext";
+import { useAssistant, useAssistantActions, useAssistantPlace, type AssistantRun } from "../lib/AssistantContext";
+import { applyLook, lookOf } from "../lib/assistantLook";
 import { useTranslation } from "react-i18next";
 import { Player, type PlayerRef } from "@remotion/player";
 import { ArrowLeft, ArrowLeftToLine, ArrowRightToLine, Check, Loader2, Plus, Scissors, Sparkles, Undo2, X } from "lucide-react";
@@ -15,6 +16,7 @@ import {
   getEditEnvironment,
   getJobStatus,
   getLiveSearchInfo,
+  getLiveSearchProgress,
   getStoryboard,
   chooseSound,
   listAllCompilations,
@@ -22,10 +24,12 @@ import {
   listCompilations,
   listRenders,
   LiveError,
+  planLiveVideo,
   saveCompilation,
   setLiveFacecam,
   startMontageRender,
   suggestClipCut,
+  type AssistantPassage,
   type Compilation,
   type CompilationItem,
   type EditEnvironment,
@@ -44,6 +48,7 @@ import { useBackdrop } from "../lib/BackdropContext";
 import { useChannel } from "../lib/ChannelContext";
 import {
   addItems,
+  addSection,
   allItems,
   applyTight,
   applyLooks,
@@ -64,9 +69,11 @@ import {
   planCurrent,
   recutVideo,
   revisedSections,
+  sameStep,
   sectionsFromPlan,
   setVideoTransition,
   splitItem,
+  stepText,
   tightened,
   updateItem,
   withHook,
@@ -101,6 +108,7 @@ import VideoTimeline from "../components/montage/VideoTimeline";
 import AiCutButton from "../components/project/AiCutButton";
 import LivePicker from "../components/compilation/LivePicker";
 import CompilationPanel from "../components/compilation/CompilationPanel";
+import DescribeVideo from "../components/compilation/DescribeVideo";
 import PiecePreview from "../components/compilation/PiecePreview";
 import SearchPanel from "../components/compilation/SearchPanel";
 import ConfirmModal from "../components/ConfirmModal";
@@ -134,7 +142,7 @@ const PLAN_OVER = 1.1;
  * /:jobId/montage — the third step of a live: the montage of the videos kept from it, whatever
  * each is made from (a clip, a sequence, a compilation). One video at a time (?v=<id>), the
  * others a click away in the row above. Its passages on the left, the video in the middle, its
- * look on the right; searching the live and asking the AI happen in the assistant's panel.
+ * look on the right; what is asked of the AI is asked in the assistant's panel, and done here.
  * Everything stays editable: order, cut of each passage, titles, template.
  */
 export default function CompilationPage() {
@@ -161,6 +169,14 @@ export default function CompilationPage() {
   const [addingLive, setAddingLive] = useState(false);
   const [compilations, setCompilations] = useState<Compilation[] | null>(null);
   const [currentId, setCurrentId] = useState<string | null>(null);
+  const currentIdRef = useRef(currentId);
+  currentIdRef.current = currentId;
+  // The live searched by hand for passages (a window of its own)
+  const [searching, setSearching] = useState(false);
+  // The AI is building or changing a video: which one, and what it did so far
+  const [working, setWorking] = useState<{ id: string; lines: string[] } | null>(null);
+  // The video whose plan came from the disk (nothing was searched this time): it can be asked again
+  const [keptPlan, setKeptPlan] = useState<{ id: string; brief: string; target: number; leads: number[] } | null>(null);
   const [activeSection, setActiveSection] = useState("");
   // Each moment's clip, by item id
   const [pieces, setPieces] = useState<Record<string, Piece>>({});
@@ -200,8 +216,6 @@ export default function CompilationPage() {
   const [fresh, setFresh] = useState<{ ids: Set<string>; at: number } | null>(null);
   const [gone, setGone] = useState<{ item: CompilationItem; section: string; index: number }[]>([]);
   const lightTimer = useRef<number | undefined>(undefined);
-  // The passages each change added, by "compilation:turn" (for this visit: lighting them again from the conversation)
-  const addedBy = useRef(new Map<string, string[]>());
   // Where each passage's words are really said (live seconds, null: not found), known once its clip is cut
   const [tight, setTight] = useState<Record<string, [number, number] | null>>({});
   // A described video is brought to its length once its passages are set on their words (their rough times say little)
@@ -308,6 +322,7 @@ export default function CompilationPage() {
   }, [jobId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const compilation = compilations?.find((c) => c.id === currentId) ?? null;
+  const shownVideo = compilation;
   // Measured once a music or an intro is chosen (a few seconds of ffmpeg the first time, then kept with the clips)
   const hasMusic = !!compilation?.music || !!compilation?.intro;
   useEffect(() => {
@@ -324,11 +339,6 @@ export default function CompilationPage() {
   useEffect(() => {
     if (currentId && (search.get("v") !== currentId || search.has("new") || search.has("build") || search.has("c") || search.has("clip") || search.has("kind"))) setSearch({ v: currentId }, { replace: true });
   }, [currentId, search, setSearch]);
-  // A video opened to be built by the AI, or a new one with nothing in it yet: the assistant's panel is where that happens
-  const wantsHelp = !!compilation && (buildFor.current === compilation.id || (allItems(compilation).length === 0 && !compilation.clip));
-  useEffect(() => {
-    if (wantsHelp) assistant.setOpen(true);
-  }, [wantsHelp, compilation?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const compilationsRef = useRef(compilations);
   compilationsRef.current = compilations;
   const liveDuration = job?.vod_duration_seconds ?? 0;
@@ -521,7 +531,7 @@ export default function CompilationPage() {
 
   /** The AI changed the video as asked: what it kept stays as it was, what it added gets its clip */
   const applyChange = (plan: VideoPlan, ask: string) => {
-    if (!compilation) return;
+    if (!compilation) return { error: "no video open" };
     const note = plan.note ?? "";
     // A lasting taste they stated in this request, that the AI noted for their next videos: written under its answer
     const noted = plan.remembered?.length ? { remembered: plan.remembered } : {};
@@ -530,9 +540,8 @@ export default function CompilationPage() {
     if (revised.sections.length === 0 || (revised.added === 0 && revised.removed === 0 && revised.recut.length === 0 && sameOrder(compilation, revised.sections))) {
       change({ ...compilation, asks: [...(compilation.asks ?? []), { ask, note, ...noted }] });
       toast.info(t("compilation.changeNothing"));
-      return;
+      return { changed: false, note };
     }
-    const turn = compilation.asks?.length ?? 0;
     const next = { ...compilation, sections: revised.sections, asks: [...(compilation.asks ?? []), { ask, note, added: revised.added, removed: revised.removed, recut: revised.recut.length, ...noted }] };
     // A change that speaks of the music or the intro: the AI chooses them again with it in mind
     if (/musi|músic|intro|jingle|sound|sonido|bande.son/i.test(ask)) pendingSound.current = { id: compilation.id, asked: ask };
@@ -541,13 +550,12 @@ export default function CompilationPage() {
     // What changed shows in the video: the new passages come in lit, those taken out leave
     // A passage to cut again waits for where its new lines are said: what was found for its old ones is forgotten
     if (revised.recut.length > 0) setTight((prev) => Object.fromEntries(Object.entries(prev).filter(([id]) => !revised.recut.includes(id))));
-    const touched = [...revised.fresh, ...revised.recut];
-    addedBy.current.set(`${compilation.id}:${turn}`, touched);
-    light(touched);
+    light([...revised.fresh, ...revised.recut]);
     setGone(revised.gone);
     window.setTimeout(() => setGone([]), LEAVE_MS);
     ensure(allItems(next));
     toast.success(t("compilation.changeDone", { added: revised.added, removed: revised.removed, recut: revised.recut.length }));
+    return { changed: true, added: revised.added, removed: revised.removed, recut: revised.recut.length, passages: allItems(next).length, parts: next.sections.map((sec) => ({ title: sec.title, passages: sec.items.length })), note };
   };
 
   /** Passages lit in the video for a moment */
@@ -556,21 +564,13 @@ export default function CompilationPage() {
     window.clearTimeout(lightTimer.current);
     lightTimer.current = window.setTimeout(() => setFresh(null), LIT_MS);
   };
-  /** The passages a past change added, lit again (those still in the video) */
-  const reveal = (turn: number) => {
-    if (!compilation) return;
-    const ids = (addedBy.current.get(`${compilation.id}:${turn}`) ?? []).filter((id) => allItems(compilation).some((item) => item.id === id));
-    if (ids.length > 0) light(ids);
-    else toast.info(t("compilation.changeRevealGone"));
-  };
-
   /** `again`: the same description asked again on purpose: the new plan takes the place of the video on screen */
-  const applyPlan = async (plan: VideoPlan, target: number, brief: string, again = false) => {
-    // The same description as before is answered from the disk: said, or the streamer wonders why nothing was searched
-    if (plan.cached) toast.info(t("compilation.planCached"));
-    if (!jobId || !compilation) return;
+  /** `into`: the video the plan is for (the one on screen unless said); answers the video as planned, null when nothing came of it */
+  const applyPlan = async (plan: VideoPlan, target: number, brief: string, again = false, into?: string): Promise<Compilation | null> => {
+    const compilation = into ? (compilationsRef.current?.find((c) => c.id === into) ?? null) : shownVideo;
+    if (!jobId || !compilation) return null;
     const sections = sectionsFromPlan(plan, lengthOf);
-    if (sections.length === 0) return;
+    if (sections.length === 0) return null;
     try {
       let planned: Compilation;
       if (allItems(compilation).length === 0 || again) {
@@ -596,8 +596,10 @@ export default function CompilationPage() {
         setCurrentId(planned.id);
         change(planned);
       }
-      setActiveSection(planned.sections[0].id);
-      setShown(null);
+      if (planned.id === currentIdRef.current || planned.id !== compilation.id) {
+        setActiveSection(planned.sections[0].id);
+        setShown(null);
+      }
       // The description said how the video should look: the AI lays it out once the clips are there
       pendingLooks.current = plan.look?.trim() ? { id: planned.id, wish: plan.look.trim() } : null;
       // ...and chooses its music and its intro from what kind of video it is (the description may ask for some, or for none)
@@ -605,8 +607,10 @@ export default function CompilationPage() {
       // What the AI planned can run over: brought back to the length asked for once each passage has its real length
       setPendingFit({ id: planned.id, target });
       ensure(allItems(planned));
+      return planned;
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t("common.error"));
+      return null;
     }
   };
 
@@ -987,26 +991,288 @@ export default function CompilationPage() {
   const [cutTarget, setCutTarget] = useState<CutTarget>(() => (jobId ? readCutTarget(jobId) : null));
   const [aiCutting, setAiCutting] = useState(false);
   /** A clip's video is cut again by the AI: the parts worth keeping become its passages */
-  const aiCut = async () => {
-    if (!jobId || !compilation?.clip || aiCutting) return;
+  /** (`aim`: the length to aim for, seconds; nothing said: the one set on the button. Answers what was done, as the assistant is told) */
+  const aiCut = async (aim: number | null = cutTarget) => {
+    if (!jobId || !compilation) return { error: "no video open" };
+    if (!compilation.clip) return { error: "this video is not made of a clip: ask for a change of the video instead" };
+    if (aiCutting) return { error: "this clip is already being cut" };
     const id = compilation.id;
     setAiCutting(true);
     try {
-      const { parts, note, origin } = await suggestClipCut(jobId, compilation.clip, { target: cutTarget });
+      const { parts, note, origin } = await suggestClipCut(jobId, compilation.clip, { target: aim });
       const current = compilationsRef.current?.find((c) => c.id === id);
-      if (!current || parts.length === 0 || origin == null) return toast.info(t("project.aiCutSame"));
+      if (!current || parts.length === 0 || origin == null) {
+        toast.info(t("project.aiCutSame"));
+        return { cut: false, why: "nothing to take out: the clip stays as it was" };
+      }
       const next = recutVideo(current, parts.map(([a, b]) => [origin + a, origin + b] as [number, number]));
       change(next);
       setShown(null);
       ensure(allItems(next));
       toast.success(note || t("project.aiCutDone", { count: parts.length }));
+      return { cut: true, video: id, pieces: parts.length, seconds: Math.round(parts.reduce((sum, [a, b]) => sum + b - a, 0) * 10) / 10, note };
     } catch (err) {
       const reason = err instanceof LiveError ? err.reason : "failed";
       toast.error(t(reason === "no_transcript" ? "project.tightenNoWords" : `compilation.failure.${reason}`));
+      return { error: reason === "no_transcript" ? "this clip has no words to cut on" : reason };
     } finally {
       setAiCutting(false);
     }
   };
+
+  /* ── What the AI does on a video: asked here, or from the assistant ── */
+
+  // What it is doing while a video is built or changed, a line each
+  const busyOn = working?.id ?? null;
+  useEffect(() => {
+    if (!jobId || !busyOn) return;
+    let stopped = false;
+    const ask = async () => {
+      const doing = await getLiveSearchProgress(jobId);
+      if (stopped || !doing) return;
+      const line = stepText(t, doing);
+      // (a step that counts, « 12/41 », keeps its line)
+      setWorking((now) => {
+        if (!now || now.id !== busyOn) return now;
+        const last = now.lines[now.lines.length - 1];
+        return last === line ? now : { ...now, lines: last !== undefined && sameStep(last, line) ? [...now.lines.slice(0, -1), line] : [...now.lines, line] };
+      });
+    };
+    const timer = window.setInterval(ask, 1200);
+    return () => {
+      stopped = true;
+      window.clearInterval(timer);
+    };
+  }, [busyOn, jobId, t]);
+
+  /** A video built by the AI from its description (`leads`: moments already spotted for it): parts, passages, then its look */
+  const describe = async (id: string, brief: string, target: number, leads: number[] = [], fresh = false) => {
+    const video = compilationsRef.current?.find((c) => c.id === id);
+    if (!jobId || !video) return { error: "no such video in this live" };
+    if (working) return { error: "a video is already being built" };
+    setWorking({ id, lines: [] });
+    setFailure(null);
+    try {
+      const plan = await planLiveVideo(jobId, brief, target, undefined, video.lives ?? [], leads, fresh, sourceOf(video));
+      // « I don't like it when you... »: the AI keeps it for the next videos, and says so
+      plan.remembered?.forEach((said) => toast.success(t("memory.remembered", { said })));
+      const count = plan.sections.reduce((sum, section) => sum + section.hits.length, 0);
+      if (count === 0) {
+        toast.info(t("compilation.planEmpty"));
+        return { built: false, why: "nothing in the live matches this", note: plan.note ?? "" };
+      }
+      const planned = await actions.current.applyPlan(plan, target, brief, fresh, id);
+      if (!planned) return { error: "the video could not be built" };
+      // Answered from the disk (the same description as a time before): said under the video, where it can be asked again
+      setKeptPlan(plan.cached ? { id: planned.id, brief, target, leads } : null);
+      toast.success(t("compilation.planned", { count }));
+      return { built: true, video: planned.id, name: planned.name, passages: count, parts: planned.sections.map((section) => ({ title: section.title, passages: section.items.length })), note: plan.note ?? "", cost: plan.cost ?? 0 };
+    } catch (err) {
+      const reason = err instanceof LiveError ? err.reason : "failed";
+      setFailure(reason);
+      toast.error(t(`compilation.failure.${reason}`));
+      return { error: reason };
+    } finally {
+      setWorking(null);
+    }
+  };
+
+  /** The video on screen changed by the AI as asked: it starts from the video as it is and from what was asked before */
+  const revise = async (request: string) => {
+    const video = actions.current.compilation;
+    if (!jobId || !video) return { error: "no video open" };
+    if (!request.trim()) return { error: "say what to change" };
+    if (allItems(video).length === 0) return { error: "this video has nothing in it yet: build it first" };
+    if (working) return { error: "a video is already being built" };
+    setWorking({ id: video.id, lines: [] });
+    try {
+      // (a video made by hand was never described: its name stands for what it is)
+      const plan = await planLiveVideo(jobId, video.brief?.trim() || video.name, video.target ?? Math.round(compilationLength(video)), { request, current: planCurrent(video), asks: (video.asks ?? []).map((turn) => turn.ask) }, video.lives ?? [], [], false, sourceOf(video));
+      plan.remembered?.forEach((said) => toast.success(t("memory.remembered", { said })));
+      // (the streamer may have gone to another video meanwhile: the change is for the one it was asked on)
+      if (actions.current.compilation?.id !== video.id) await show(video.id);
+      return { ...actions.current.applyChange(plan, request), cost: plan.cost ?? 0 };
+    } catch (err) {
+      const reason = err instanceof LiveError ? err.reason : "failed";
+      toast.error(t(`compilation.failure.${reason}`));
+      return { error: reason };
+    } finally {
+      setWorking(null);
+    }
+  };
+
+  /** Passages the assistant found, added at the end of a part of the video on screen (`part`: its title; one no part has makes a new part) */
+  const addPassages = (passages: AssistantPassage[], part = "") => {
+    if (!jobId || !compilation) return { error: "no video open" };
+    const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+    let next = compilation;
+    let section = part.trim() ? next.sections.find((one) => same(one.title, part)) : next.sections[next.sections.length - 1];
+    if (!section) {
+      const made = addSection(next, part.trim().slice(0, 60));
+      next = made.compilation;
+      section = next.sections.find((one) => one.id === made.id)!;
+    }
+    // A passage of another live: the video takes from that live too (a compilation only, a few lives at most)
+    const lives = [...(next.lives ?? [])];
+    const refused: string[] = [];
+    const items: CompilationItem[] = [];
+    for (const passage of Array.isArray(passages) ? passages : []) {
+      if (!passage || !Number.isFinite(passage.start) || !Number.isFinite(passage.end) || passage.end <= passage.start) continue;
+      const other = passage.job && passage.job !== jobId ? passage.job : undefined;
+      if (other && !lives.includes(other)) {
+        if (sourceOf(next) !== "compilation" || lives.length >= MAX_OTHER_LIVES || !liveInfo(other)) {
+          refused.push(`${passage.start}: a passage of another live can't go into this video`);
+          continue;
+        }
+        lives.push(other);
+      }
+      const { job: _job, id: _id, vod_id: _vod, ...found } = passage;
+      items.push(draftOf({ sources: ["ai"], before: "", after: "", chat: [], why: "", score: 0, ...found, ...(other ? { job: other } : {}) } as LiveHit));
+    }
+    if (lives.length !== (next.lives ?? []).length) next = { ...next, lives };
+    const { compilation: filled, added } = addItems(next, section.id, items);
+    if (added === 0) return { added: 0, error: items.length > 0 ? "already there" : "no passage to add", ...(refused.length > 0 ? { refused } : {}) };
+    change(filled);
+    setActiveSection(section.id);
+    ensure(allItems(filled));
+    const before = new Set(allItems(compilation).map((item) => item.id));
+    light(allItems(filled).flatMap((item) => (before.has(item.id) ? [] : [item.id])));
+    toast.success(t("compilation.addedCount", { count: added }));
+    return { added, part: section.title, passages: allItems(filled).length, seconds: Math.round(compilationLength(filled)), ...(refused.length > 0 ? { refused } : {}) };
+  };
+
+  /** How the video on screen looks or sounds, changed as the assistant asks (what it names that the app has not is said back) */
+  const setLook = (look: Record<string, string | null> | null | undefined) => {
+    if (!compilation) return { error: "no video open" };
+    const choices = { templates, musics: musics.map((track) => ({ id: track.id, name: track.name })), jingle: kit?.intro };
+    const done = applyLook(compilation, look ?? {}, choices);
+    if (Object.keys(done.set).length > 0) change(done.video);
+    return { set: done.set, ...(Object.keys(done.unknown).length > 0 ? { unknown: done.unknown } : {}), look: lookOf(done.video, choices) };
+  };
+
+  // What the assistant calls after it waited (another video put on screen first): as this page is now
+  const actions = useRef({ compilation, applyPlan, applyChange, aiCut, addPassages, setLook });
+  actions.current = { compilation, applyPlan, applyChange, aiCut, addPassages, setLook };
+
+  // Who waits for a video to be the one on screen
+  const awaited = useRef<{ id: string; done: () => void }[]>([]);
+  useEffect(() => {
+    const id = compilation?.id;
+    if (!id) return;
+    const ready = awaited.current.filter((one) => one.id === id);
+    awaited.current = awaited.current.filter((one) => one.id !== id);
+    ready.forEach((one) => one.done());
+  }, [compilation?.id]);
+  /** A video of this live put on screen (`made`: it was just made, the list does not hold it yet) */
+  const show = (id: string, made = false) =>
+    new Promise<void>((resolve, reject) => {
+      const known = compilationsRef.current?.find((c) => c.id === id);
+      if (known && currentIdRef.current === id) return resolve();
+      if (!known && !made) return reject(new Error("no such video in this live"));
+      const timer = window.setTimeout(() => reject(new Error("the video did not open")), 10_000);
+      awaited.current.push({
+        id,
+        done: () => {
+          window.clearTimeout(timer);
+          resolve();
+        },
+      });
+      setCurrentId(id);
+      setActiveSection(known?.sections[0]?.id ?? "");
+      setShown(null);
+      setResults([]);
+    });
+  /** A clip of the analysis on screen as its video (made the first time) */
+  const showClip = async (filename: string) => {
+    const known = compilationsRef.current?.find((c) => c.clip === filename);
+    if (known) return show(known.id);
+    const video = await openKeptClip(jobId!, filename);
+    remember([video]);
+    setCompilations((prev) => [...(prev ?? []).filter((c) => c.id !== video.id), video]);
+    return show(video.id, true);
+  };
+  /** A video with nothing in it yet, on screen: the one that is, one left empty earlier, or a new one */
+  const blank = async (kind: VideoSource) => {
+    const empty = (c: Compilation) => allItems(c).length === 0 && !c.brief && !c.suggestion && !c.clip && sourceOf(c) === kind;
+    const known = (compilation && empty(compilation) ? compilation : undefined) ?? compilationsRef.current?.find(empty);
+    if (known) {
+      await show(known.id);
+      return known.id;
+    }
+    const video = await createCompilation(jobId!, { name: t(`videos.new.${kind}`), ...(kind !== "compilation" ? { source: kind, target: SOURCE_TARGET[kind], titles: kind !== "clip" } : {}) });
+    setCompilations((prev) => [...(prev ?? []), video]);
+    await show(video.id, true);
+    return video.id;
+  };
+
+  /** What the assistant has this editor do on a video of the live: its answer is what the assistant is told */
+  const assist: AssistantRun = async (name, args) => {
+    try {
+      if (name === "open") {
+        if (typeof args.video === "string") await show(args.video);
+        else if (typeof args.clip === "string") await showClip(args.clip);
+        return { opened: "edit", video: currentIdRef.current };
+      }
+      if (name === "build_video") {
+        const kind: VideoSource = isVideoSource(args.source) ? args.source : "compilation";
+        const id = typeof args.idea === "string" ? args.idea : await blank(kind);
+        if (typeof args.idea === "string") await show(id);
+        const video = compilationsRef.current?.find((c) => c.id === id);
+        const brief = String(args.brief || video?.brief || "").trim();
+        if (!brief) return { error: "say what the video is" };
+        const leads = Array.isArray(args.leads) && args.leads.length > 0 ? args.leads.filter((at: unknown) => typeof at === "number") : (video?.suggestion?.moments ?? []);
+        return await describe(id, brief, Number(args.target) || video?.target || SOURCE_TARGET[kind], leads);
+      }
+      if (name === "cut_clip") {
+        if (typeof args.video === "string") await show(args.video);
+        else if (typeof args.clip === "string") await showClip(args.clip);
+        return await actions.current.aiCut(Number(args.target) || null);
+      }
+      // The rest is about a video that exists
+      if (typeof args.video !== "string") return { error: "no video named" };
+      await show(args.video);
+      if (name === "change_video") return await revise(String(args.request ?? ""));
+      if (name === "add_passages") return actions.current.addPassages(args.passages, typeof args.part === "string" ? args.part : "");
+      if (name === "set_look") return actions.current.setLook(args.look);
+      return { error: `the editor can't do this: ${name}` };
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : "failed" };
+    }
+  };
+  useAssistantActions(jobId && compilations && kit ? jobId : null, assist);
+  // What « this video », « this passage » mean to the assistant
+  const openPassage = shown && compilation && allItems(compilation).find((item) => item.id === shown.id);
+  useAssistantPlace(
+    jobId && job
+      ? {
+          page: "edit",
+          job: jobId,
+          title: splitVodTitle(job.custom_title || job.vod_title).title || undefined,
+          ...(compilation ? { video: { id: compilation.id, name: compilation.name, source: sourceOf(compilation) } } : {}),
+          ...(openPassage ? { passage: { id: openPassage.id, start: openPassage.start, end: openPassage.end, text: (openPassage.text ?? "").slice(0, 200) } } : {}),
+          ...(compilation
+            ? {
+                facts: {
+                  passages: allItems(compilation).length,
+                  seconds: Math.round(compilationLength(compilation)),
+                  music: !!compilation.music,
+                  opening: !compilation.intro ? "none" : compilation.intro.style === "hook" ? "hook" : "intro",
+                  waiting: isWaiting(compilation),
+                  exported: exported.has(compilation.id),
+                },
+              }
+            : {}),
+        }
+      : null,
+  );
+
+  // A video the AI proposed, opened to be built (?build=1): built once, as soon as the live is known
+  useEffect(() => {
+    if (!compilation || buildFor.current !== compilation.id || !info) return;
+    buildFor.current = null;
+    if (!isWaiting(compilation) || !compilation.brief) return;
+    describe(compilation.id, compilation.brief, compilation.target ?? 45, compilation.suggestion?.moments ?? []);
+  }, [compilation?.id, info]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Space plays the whole video, C cuts it where it is, Ctrl / Cmd + Z takes the last cut back
   const keys = useRef({ cutHere, undo });
@@ -1208,6 +1474,10 @@ export default function CompilationPage() {
   };
   // The live's strip: where a compilation takes from (several lives, one more to add), and what a search by hand found
   const showLives = several || canAddLive || results.length > 0;
+  // About what having the AI build a video costs (a little more for each live more it takes from: measured, 0.044 $ for two)
+  const dollars = (cost: number) => `${new Intl.NumberFormat(i18n.language, { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(cost)} $`;
+  const planBase = info?.plan_cost ?? info?.ai_cost ?? null;
+  const planCost = planBase == null ? null : planBase * (1 + 0.25 * (liveIds.length - 1)) < 0.01 ? `< ${dollars(0.01)}` : `≈ ${dollars(planBase * (1 + 0.25 * (liveIds.length - 1)))}`;
   // The same props for the two halves of the video's panel: its passages on the left, its look on the right
   const panel = {
     compilation,
@@ -1237,6 +1507,7 @@ export default function CompilationPage() {
     onExport: exportNow,
     exporting,
     onDelete: () => setToDelete(true),
+    onSearch: () => setSearching(true),
     templateName,
     looking,
     looksNote: looksNote?.id === compilation.id ? looksNote.note : "",
@@ -1335,44 +1606,30 @@ export default function CompilationPage() {
       </section>
       )}
 
-      {/* Searching the live and asking the AI: in the assistant's panel, beside the montage */}
-      <AssistantSlot>
-        <SearchPanel
-          key={compilation.id}
-          jobId={jobId}
-          storyboards={storyboards}
-          lives={liveIds.map((id, n) => ({ job: id, label: several ? `${n + 1} · ${[liveDay(id), liveTitle(id)].filter(Boolean).join(" · ")}` : liveTitle(id) }))}
-          info={info}
-          source={source}
-          previewed={null}
-          isAdded={(hit) => !!itemFor(compilation, draftOf(hit))}
-          onPreview={watch}
-          onAdd={add}
-          onPlan={applyPlan}
-          talk={compilation.brief ? { brief: compilation.brief, answer: compilation.answer, passages: allItems(compilation).length, asks: compilation.asks ?? [], byAi: !!compilation.suggestion || !!compilation.clip, ...(compilation.clip ? { wrote: t("videos.fromAnalysis") } : {}) } : null}
-          proposal={
-            compilation.suggestion && isWaiting(compilation)
-              ? {
-                  id: compilation.id,
-                  pitch: compilation.suggestion.pitch,
-                  tags: compilation.suggestion.tags,
-                  score: compilation.suggestion.score,
-                  leads: compilation.suggestion.moments,
-                  target: compilation.target ?? 45,
-                  auto: buildFor.current === compilation.id,
-                }
-              : null
-          }
-          current={() => planCurrent(compilation)}
-          onChange={applyChange}
-          onReveal={reveal}
-          onResults={setResults}
-        />
-      </AssistantSlot>
-
       {/* The workshop: the video's passages, the video itself, its look */}
       <section className="mt-4 flex flex-wrap gap-[18px] items-start">
-        <CompilationPanel part="passages" {...panel} />
+        {searching ? (
+          // The live searched by hand, where the video's passages are: what is found plays underneath, and is added from here
+          <div className="flex-[1_1_300px] max-w-[400px] max-h-[max(420px,calc(100dvh-400px))] overflow-y-auto rounded-[20px]">
+            <SearchPanel
+              jobId={jobId}
+              storyboards={storyboards}
+              lives={liveIds.map((id, n) => ({ job: id, label: several ? `${n + 1} · ${[liveDay(id), liveTitle(id)].filter(Boolean).join(" · ")}` : liveTitle(id) }))}
+              info={info}
+              previewed={null}
+              isAdded={(hit) => !!itemFor(compilation, draftOf(hit))}
+              onPreview={watch}
+              onAdd={add}
+              onResults={setResults}
+              onClose={() => {
+                setSearching(false);
+                setResults([]);
+              }}
+            />
+          </div>
+        ) : (
+          <CompilationPanel part="passages" {...panel} />
+        )}
 
         <div className="flex-[1_1_280px] min-w-[260px] lg:[@media(min-height:820px)]:sticky lg:[@media(min-height:820px)]:top-[84px] flex flex-col items-center gap-3">
           {items.length > 0 ? (
@@ -1409,6 +1666,23 @@ export default function CompilationPage() {
                   </div>
                 )}
               </div>
+              {/* The AI is changing it: what it does, a line at a time */}
+              {working?.id === compilation.id && (
+                <p role="status" aria-live="polite" className="-mt-1 max-w-full flex items-center gap-2 text-[12px] text-ink-2">
+                  <Loader2 className="flex-none w-3.5 h-3.5 spinner text-accent" />
+                  <span className="truncate">{working.lines[working.lines.length - 1] ?? t("describe.changing")}</span>
+                </p>
+              )}
+              {/* Nothing was searched: the same description had been answered before. One click has the AI plan anew */}
+              {keptPlan?.id === compilation.id && !working && (
+                <p className="-mt-1 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-[12px] text-ink-3">
+                  {t("compilation.keptAnswer")}
+                  <button type="button" onClick={() => describe(compilation.id, keptPlan.brief, keptPlan.target, keptPlan.leads, true)} className="text-ink-2 hover:text-white underline decoration-white/20 underline-offset-2">
+                    {t("compilation.askAgain")}
+                    {planCost && <span className="mono"> {planCost}</span>}
+                  </button>
+                </p>
+              )}
               {preview && (
                 <p className="-mt-1 text-[12px] text-ink-3">
                   {readyItems.length < items.length ? t("compilation.partial", { ready: readyItems.length, total: items.length }) : `${clock(compilationLength(compilation) + openingSeconds(compilation, trackOf(musics, compilation.music?.track)?.bpm))} · ${t("compilation.moments", { count: items.length })}`}
@@ -1416,14 +1690,16 @@ export default function CompilationPage() {
               )}
             </>
           ) : (
-            !shownItem && (
-              <div className="glass rounded-[20px] p-6 w-full text-center">
-                <p className="text-[14px] text-ink-2">{t("live.emptyVideo")}</p>
-                <button onClick={() => assistant.setOpen(true)} className="btn btn-primary btn-sm mt-3">
-                  {t("assistant.title")}
-                </button>
-              </div>
-            )
+            <DescribeVideo
+              key={compilation.id}
+              source={source}
+              idea={compilation.suggestion && isWaiting(compilation) ? { pitch: compilation.suggestion.pitch, tags: compilation.suggestion.tags, score: compilation.suggestion.score, brief: compilation.brief ?? "", target: compilation.target ?? 45 } : null}
+              cost={planCost}
+              working={working?.id === compilation.id ? working.lines : null}
+              unreadable={!!info && !info.transcript}
+              onBuild={(brief, target) => describe(compilation.id, brief, target, compilation.suggestion?.moments ?? [])}
+              onSearch={() => setSearching(true)}
+            />
           )}
         </div>
 
@@ -1461,10 +1737,10 @@ export default function CompilationPage() {
                     setCutTarget(next);
                     saveCutTarget(jobId, next);
                   }}
-                  onCut={aiCut}
+                  onCut={() => aiCut()}
                 />
               ) : (
-                <button onClick={() => assistant.setOpen(true)} title={t("montage.tightenHint")} className="btn btn-glass btn-sm">
+                <button onClick={() => assistant.send(t("assistant.suggest.tighten"))} title={t("montage.tightenHint")} className="btn btn-glass btn-sm">
                   <Sparkles className="w-3.5 h-3.5 text-accent" /> {t("montage.tighten")}
                 </button>
               )}

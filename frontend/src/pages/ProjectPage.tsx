@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { useTranslation } from "react-i18next";
 import { AlertTriangle, ArrowRight, Check, ChevronDown, Loader2, RotateCcw, Upload, X } from "lucide-react";
 import {
@@ -24,6 +24,8 @@ import {
   type TimelineCandidate,
 } from "../lib/api";
 import { MEMORY_READ } from "../lib/aiMemory";
+import { useAssistantChanged, useAssistantPlace } from "../lib/AssistantContext";
+import { splitVodTitle } from "../lib/format";
 import { useBackdrop } from "../lib/BackdropContext";
 import { useChannel } from "../lib/ChannelContext";
 import { useTransmitChannel } from "../lib/TransmitContext";
@@ -37,8 +39,8 @@ import AnalysisView from "../components/project/AnalysisView";
 import LiveHeader from "../components/live/LiveHeader";
 import SourceList from "../components/live/SourceList";
 import VideoDetail from "../components/live/VideoDetail";
-import { keptCount, liveEntries, momentKey, shownEntries, videoMoments, type LiveEntry } from "../lib/liveEntries";
-import type { VideoSource } from "../lib/videoSources";
+import { ideasToSee, keptCount, liveEntries, momentKey, shownEntries, videoMoments, type LiveEntry } from "../lib/liveEntries";
+import { VIDEO_SOURCES, sourceOf, type VideoSource } from "../lib/videoSources";
 import VodTimeline from "../components/project/VodTimeline";
 import MomentPlayer, { type MomentPlayerHandle } from "../components/project/MomentPlayer";
 import MomentDetails from "../components/project/MomentDetails";
@@ -59,6 +61,8 @@ export default function ProjectPage() {
   const toast = useToast();
   const navigate = useNavigate();
   const { jobId } = useParams<{ jobId: string }>();
+  // ?clip=<file> or ?video=<id>: what to show first (a link from the assistant, or from the videos' page)
+  const [search, setSearch] = useSearchParams();
   const { channel } = useChannel();
 
   const [job, setJob] = useState<JobResponse | null>(null);
@@ -151,9 +155,33 @@ export default function ProjectPage() {
   useEffect(() => {
     if (!jobId || moments.length === 0 || openedFor.current === jobId) return;
     openedFor.current = jobId;
+    if (search.has("clip") || search.has("video")) return;
     const first = moments.findIndex((m) => m.state === "todo");
     setSelected(first === -1 ? 0 : first);
-  }, [jobId, moments]);
+  }, [jobId, moments, search]);
+  // ...unless the address names a clip or a video of this live: that one, once it is known
+  const wantsClip = search.get("clip");
+  const wantsVideo = search.get("video");
+  useEffect(() => {
+    if (!wantsClip && !wantsVideo) return;
+    const clip = wantsClip ? moments.findIndex((m) => m.filename === wantsClip) : -1;
+    const video = wantsVideo ? videos.find((one) => one.id === wantsVideo) : undefined;
+    if (clip === -1 && !video) return;
+    if (video) setOpenVideo(video.id);
+    else {
+      setOpenVideo(null);
+      setSelected(clip);
+    }
+    setInteracted(true);
+    setSearch({}, { replace: true });
+  }, [moments, setSearch, videos, wantsClip, wantsVideo]);
+
+  // The assistant changed this live (a clip kept, ideas added): read again
+  useAssistantChanged(jobId, () => {
+    if (!jobId) return;
+    getJobStatus(jobId).then(setJob).catch(() => {});
+    loadVideos();
+  });
 
   // Freed projects point to their exports
   const [exportCount, setExportCount] = useState(0);
@@ -198,6 +226,18 @@ export default function ProjectPage() {
   const shownVideo = openVideo ? entries.sequence.concat(entries.compilation, entries.clip).find((entry) => entry.kind === "video" && entry.video.id === openVideo) : undefined;
   const videoEntry = shownVideo?.kind === "video" ? shownVideo : undefined;
   const selectedKey = videoEntry ? videoEntry.key : current ? momentKey(current.filename) : null;
+  // What « this live », « this clip », « this video » mean to the assistant
+  useAssistantPlace(
+    jobId && job
+      ? {
+          page: job.status === "DONE" ? "live" : "analysis",
+          job: jobId,
+          title: splitVodTitle(job.custom_title || job.vod_title).title || undefined,
+          ...(job.status !== "DONE" ? {} : videoEntry ? { video: { id: videoEntry.video.id, name: videoEntry.video.name, source: sourceOf(videoEntry.video) } } : current ? { clip: { filename: current.filename, name: current.hp.clip_name ?? current.filename } } : {}),
+          ...(job.status === "DONE" ? { facts: { clips: moments.length, to_sort: moments.filter((m) => m.state === "todo").length, kept, ideas: VIDEO_SOURCES.reduce((sum, source) => sum + ideasToSee(entries, source), 0) } } : {}),
+        }
+      : null,
+  );
   const selectEntry = useCallback(
     (entry: LiveEntry) => {
       if (entry.kind === "moment") return select(moments.findIndex((m) => m.filename === entry.moment.filename));

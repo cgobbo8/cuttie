@@ -90,6 +90,8 @@ export interface Jingle {
   gain: number
   /** It fades out from there (seconds of the video: where the first piece starts), over that long */
   fade?: { at: number; for: number }
+  /** How fast it plays (1: as recorded): an intro that follows the music is played faster or slower, and its sound with it */
+  rate?: number
 }
 
 /** A music played under the whole video, its level moving with what plays (see frontend/src/lib/music/mix.ts) */
@@ -138,7 +140,8 @@ export function levelArgs(file: string, out: string, measured: Loudness | null, 
   if (jingle) {
     // A sound longer than its intro doesn't play on over the first words: gone a moment after the video starts
     const fade = jingle.fade ? `atrim=0:${(jingle.fade.at + jingle.fade.for).toFixed(3)},afade=t=out:st=${jingle.fade.at.toFixed(3)}:d=${jingle.fade.for.toFixed(3)},` : ''
-    chains.push(`[${inputs.length / 2}:a:0]aresample=48000,${fade}volume=${jingle.gain.toFixed(3)}[jingle]`)
+    const tempo = jingle.rate && Math.abs(jingle.rate - 1) > 0.005 ? `atempo=${Math.min(2, Math.max(0.5, jingle.rate)).toFixed(4)},` : ''
+    chains.push(`[${inputs.length / 2}:a:0]aresample=48000,${tempo}${fade}volume=${jingle.gain.toFixed(3)}[jingle]`)
     inputs.push('-i', jingle.file)
     mixed.push('[jingle]')
   }

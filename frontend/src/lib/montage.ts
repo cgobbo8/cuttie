@@ -246,6 +246,8 @@ export interface MontageIntro {
   hook?: MontageSegment;
   /** The "hook" intro: the look that frames its moment, by the name of a jingle (absent: the fuse) */
   look?: string;
+  /** A jingle on the video's music: seconds it holds the screen, a few of the track's beats (absent: as it was written) */
+  hold?: number;
 }
 
 /** The music a montage plays in the background, and its level over the video (see lib/music) */
@@ -300,15 +302,15 @@ const chatIn = (chat: ChatMessage[] | undefined, start: number, end: number) => 
 export const framesOf = (seconds: number, fps: number) => Math.max(1, Math.round(seconds * fps));
 
 /** An intro the montage can play: one of the app's, and a hook has its moment */
-export const playsIntro = (intro: { style: string; hook?: { duration: number } } | null | undefined): intro is { style: IntroId; hook?: { duration: number } } =>
+export const playsIntro = <T extends { style: string; hook?: { duration: number } }>(intro: T | null | undefined): intro is T & { style: IntroId } =>
   !!intro && isIntro(intro.style) && (intro.style !== "hook" || !!intro.hook);
 
-/** Frames the intro holds the screen before the first piece (0: no intro): its style's, or as long as a hook's moment */
-export const introHold = (intro: { style: string; hook?: { duration: number } } | null | undefined, fps: number): number =>
-  playsIntro(intro) ? introSpan(intro.style, fps, intro.hook?.duration).hold : 0;
+/** Frames the intro holds the screen before the first piece (0: no intro): its style's, as long as a hook's moment, or as the beats a jingle follows */
+export const introHold = (intro: { style: string; hook?: { duration: number }; hold?: number } | null | undefined, fps: number): number =>
+  playsIntro(intro) ? introSpan(intro.style, fps, intro.hook?.duration ?? intro.hold).hold : 0;
 
 /** Frames of the whole montage, its intro included */
-export function montageFrames(segments: { duration: number }[], fps: number, intro?: { style: string; hook?: { duration: number } } | null): number {
+export function montageFrames(segments: { duration: number }[], fps: number, intro?: { style: string; hook?: { duration: number }; hold?: number } | null): number {
   return introHold(intro, fps) + segments.reduce((sum, s) => sum + framesOf(s.duration, fps), 0);
 }
 

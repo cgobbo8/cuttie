@@ -151,6 +151,11 @@ test.group('Sound of the exports', () => {
     assert.include(graph, '[video][jingle]amix=inputs=2:duration=first:dropout_transition=0:normalize=0,alimiter=limit=0.841:level=false[out]')
     assert.deepEqual(args.slice(args.indexOf('-map'), args.indexOf('-map') + 6), ['-map', '0:v:0', '-map', '[out]', '-c:v', 'copy'])
     assert.notInclude(args, '-af')
+    // An intro that follows the video's music plays a little faster or slower: its sound with it, before it is cut and faded
+    const followed = levelArgs('in.mp4', 'out.mp4', measured, [2], { file: 'synth.mp3', gain: 1, fade: { at: 2, for: 1.1333 }, rate: 56 / 60 })
+    assert.include(followed[followed.indexOf('-filter_complex') + 1], '[1:a:0]aresample=48000,atempo=0.9333,atrim=0:3.133,afade=t=out:st=2.000:d=1.133,volume=1.000[jingle];')
+    // (as recorded: nothing is done to it)
+    assert.notInclude(levelArgs('in.mp4', 'out.mp4', measured, [2], { file: 'synth.mp3', gain: 1, rate: 1 }).join(' '), 'atempo')
     // A video already at the level: the sound is added all the same
     assert.match(levelArgs('in.mp4', 'out.mp4', null, [], { file: 'boom.mp3', gain: 0.8 })[8], /^\[0:a:0\]aresample=48000\[video\];\[1:a:0\]aresample=48000,volume=0\.800\[jingle\]/)
   })

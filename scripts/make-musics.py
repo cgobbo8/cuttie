@@ -5,6 +5,7 @@
     cd backend && uv run python ../scripts/make-musics.py ~/Downloads/cuttie-musics --measure  # and print what is measured
     cd backend && uv run python ../scripts/make-musics.py --listen                             # what the AI hears in each (paid: about 0.001 $ a track)
     cd backend && uv run python ../scripts/make-musics.py --listen --only trap,sneaky          # the same for these tracks only
+    cd backend && uv run python ../scripts/make-musics.py --beats                              # tempo and first beat of each, measured again on the files the app plays
 
 The folder holds the tracks as downloaded; frontend/src/lib/music/catalogue.json says which
 file is which track (and what each one is: its kinds, what it sounds like). `--measure`
@@ -24,28 +25,30 @@ OUT = os.path.join(HERE, "..", "api", "public", "musics")
 
 
 def measure(path: str) -> dict:
-    import librosa
-    import numpy as np
+    """What the app measures of a track of the streamer's own, the same way (backend/app/services/music_library.py)."""
+    sys.path.insert(0, os.path.join(HERE, "..", "backend"))
+    from app.services import music_library
 
-    y, sr = librosa.load(path, sr=22050, mono=True)
-    hop = 512
-    rms = librosa.feature.rms(y=y, frame_length=2048, hop_length=hop)[0]
-    per_second = sr / hop
-    window = int(per_second)
-    # How loud each second-long stretch is: "in full swing" is near the loudest tenth of them
-    energy = np.convolve(rms**2, np.ones(window) / window, mode="valid")
-    full = np.percentile(energy, 90)
-    tempo, beats = librosa.beat.beat_track(y=y, sr=sr, hop_length=hop)
-    beat_times = librosa.frames_to_time(beats, sr=sr, hop_length=hop)
-    onsets = librosa.onset.onset_detect(y=y, sr=sr, hop_length=hop, units="time")
-    if energy[: max(1, int(0.5 * per_second))].mean() >= 0.5 * full:
-        start = max(0.0, float(onsets[0]) - 0.02) if len(onsets) else 0.0
-    else:
-        at = int(np.argmax(energy >= 0.8 * full)) / per_second
-        start = max(0.0, float(beat_times[np.abs(beat_times - at).argmin()]) - 0.02) if len(beat_times) else at
-    printed = subprocess.run(["ffmpeg", "-hide_banner", "-nostats", "-i", path, "-af", "ebur128", "-f", "null", "-"], capture_output=True, text=True).stderr
-    lufs = float(re.findall(r"I:\s+(-?\d+(?:\.\d+)?) LUFS", printed)[-1])
-    return {"seconds": round(len(y) / sr, 1), "bpm": round(float(np.atleast_1d(tempo)[0])), "start": round(start, 2), "lufs": lufs}
+    return music_library.measure(path)
+
+
+def beats(tracks: list[dict]) -> int:
+    """The tempo of each track already in the app and the beat a video starts it on, measured on the file the app
+    plays (an MP3 does not start exactly where its source did) and written back to the catalogue."""
+    with open(CATALOGUE, encoding="utf-8") as f:
+        catalogue = json.load(f)
+    wanted = {track["id"] for track in tracks}
+    for track in catalogue["tracks"]:
+        path = os.path.join(OUT, f"{track['id']}.mp3")
+        if track["id"] not in wanted or not os.path.isfile(path):
+            continue
+        measured = measure(path)
+        print(f"{track['id']:10s} bpm {track['bpm']} -> {measured['bpm']}   start {track['start']} -> {measured['start']}", flush=True)
+        track["bpm"], track["start"] = measured["bpm"], measured["start"]
+    with open(CATALOGUE, "w", encoding="utf-8") as f:
+        json.dump(catalogue, f, ensure_ascii=False, indent=2)
+        f.write("\n")
+    return 0
 
 
 def listen(tracks: list[dict]) -> int:
@@ -77,6 +80,8 @@ def main(argv: list[str]) -> int:
         argv = [arg for i, arg in enumerate(argv) if arg != "--only" and argv[i - 1] != "--only"]
     if "--listen" in argv:
         return listen(tracks)
+    if "--beats" in argv:
+        return beats(tracks)
     if len(argv) < 2:
         print(__doc__)
         return 2

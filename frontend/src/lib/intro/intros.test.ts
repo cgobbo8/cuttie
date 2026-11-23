@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { backOut, between, CLASSIC_JINGLES, DEFAULT_HOOK_LOOK, defaultIntroSound, GTA_JINGLES, hookLook, INTRO_IDS, INTRO_PACKS, INTRO_SOUND_IDS, introFade, introPack, introSeconds, introSound, introSpan, introVolume, isIntro, isIntroSound, isJingle, JINGLE_IDS, NO_SOUND, titleLines } from "./intros";
+import { backOut, beatSeconds, BEATS, between, CLASSIC_JINGLES, DEFAULT_HOOK_LOOK, defaultIntroSound, GTA_JINGLES, hookLook, INTRO_IDS, INTRO_PACKS, INTRO_SOUND_IDS, introFade, introPack, introRate, introSeconds, introSound, introSpan, introVolume, isIntro, isIntroSound, isJingle, JINGLE_IDS, NO_SOUND, titleLines } from "./intros";
 
 describe("the intros of a compilation", () => {
   it("knows its styles and how long each holds the screen, at any frame rate", () => {
@@ -47,6 +47,42 @@ describe("the intros of a compilation", () => {
     expect(hookLook({ look: "neon" })).toBe("neon");
     expect([hookLook({}), hookLook(null), hookLook({ look: "wobble" }), hookLook({ look: "hook" })]).toEqual(["fuse", "fuse", "fuse", "fuse"]);
     expect(DEFAULT_HOOK_LOOK).toBe("fuse");
+  });
+
+  it("follows the music it plays on: a few of its beats, so that the video starts on one", () => {
+    // 120 beats a minute: four beats are two seconds, a length this jingle can have
+    expect(beatSeconds("sunset", 120)).toBe(2);
+    expect(introSpan("sunset", 30, 2)).toEqual({ hold: 60, out: 10 });
+    expect(introSpan("sunset", 60, 2)).toEqual({ hold: 120, out: 20 });
+    // It was written on 56 frames: it plays that much slower, and its sound with it
+    expect(introRate("sunset", 2)).toBeCloseTo(56 / 60);
+    expect(introRate("sunset")).toBe(1);
+    // A slow track: two of its beats; a very fast one: eight
+    expect(beatSeconds("sunset", 72)).toBe(1.667);
+    expect(beatSeconds("sunset", 200)).toBe(2.4);
+    // Whatever the tempo of a track, the jingle lasts 2, 4 or 8 of its beats and is never played far from how it was written
+    for (const id of JINGLE_IDS) {
+      const written = introSpan(id, 30).hold / 30;
+      for (let bpm = 60; bpm <= 200; bpm++) {
+        const seconds = beatSeconds(id, bpm);
+        expect(seconds, `${id} at ${bpm}`).not.toBeNull();
+        expect(BEATS.counts).toContain(Math.round((seconds! * bpm) / 60));
+        expect(seconds! / written).toBeGreaterThanOrEqual(BEATS.fastest - 0.001);
+        expect(seconds! / written).toBeLessThanOrEqual(BEATS.slowest + 0.001);
+      }
+    }
+    // No music, no tempo, a tempo nobody plays at, or a hook (its moment says how long it is): as written
+    expect([beatSeconds("sunset", null), beatSeconds("sunset", undefined), beatSeconds("sunset", 0), beatSeconds("sunset", 900), beatSeconds("hook", 120), beatSeconds("wobble", 120)]).toEqual([null, null, null, null, null, null]);
+    // The video is that much longer, and the jingle's sound fades from where the video starts
+    expect(introSeconds({ style: "sunset" }, 120)).toBe(2);
+    expect(introSeconds({ style: "sunset" })).toBeCloseTo(56 / 30);
+    expect(introSeconds({ style: "sunset" }, null)).toBeCloseTo(56 / 30);
+    expect(introFade("sunset", 30, 2)).toEqual({ from: 60, frames: 10 + 24 });
+    expect(introVolume(60, "sunset", 30, 2)).toBe(1);
+    expect(introVolume(60 + 17, "sunset", 30, 2)).toBeCloseTo(0.5);
+    // A length no jingle can be played at is not followed
+    expect(introSpan("sunset", 30, 4.2)).toEqual({ hold: 56, out: 10 });
+    expect(introRate("sunset", 4.2)).toBe(1);
   });
 
   it("adds its length to the video, and nothing when there is none", () => {

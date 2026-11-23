@@ -415,9 +415,9 @@ export function withHook<T extends Pick<Compilation, "sections" | "intro">>(c: T
   return { ...c, intro: next ? { ...rest, hook: next } : rest };
 }
 
-/** Seconds the video's intro adds: its style's, or what its hook's moment lasts */
-export function openingSeconds(c: Pick<Compilation, "sections" | "intro">): number {
-  if (c.intro?.style !== "hook") return introSeconds(c.intro);
+/** Seconds the video's intro adds: its style's (on a music of this tempo: a few of its beats), or what its hook's moment lasts */
+export function openingSeconds(c: Pick<Compilation, "sections" | "intro">, bpm?: number | null): number {
+  if (c.intro?.style !== "hook") return introSeconds(c.intro, bpm);
   const moment = hookMoment(c);
   return moment ? moment.end - moment.start : 0;
 }

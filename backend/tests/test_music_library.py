@@ -36,14 +36,46 @@ def track(tmp_path, monkeypatch):
     return str(path)
 
 
+def sound(tmp_path, name: str, expression: str, seconds: int) -> str:
+    path = tmp_path / f"{name}.wav"
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", f"aevalsrc='{expression}':s=44100:d={seconds}", str(path)], check=True)
+    return str(path)
+
+
 def test_a_track_is_measured_where_it_gets_going(track):
     measured = music_library.measure(track)
     assert measured["seconds"] == 50.0
-    # In full swing from the tenth second, on a beat: a video starts it there, not in its quiet opening
-    assert 9.0 <= measured["start"] <= 11.0
-    # Its tempo, or twice or half of it: what a beat tracker hears of a click every half second
-    assert measured["bpm"] in range(58, 63) or measured["bpm"] in range(117, 124) or measured["bpm"] in range(236, 246)
+    # In full swing from the tenth second: a video starts it there, a hair before the attack, not in its quiet opening
+    assert 9.9 <= measured["start"] <= 10.02
+    # Its tempo to the hundredth, or twice or half of it: what a beat tracker hears of a click every half second.
+    # An intro played on the track lasts four of its beats: a beat a minute off is 15 ms by the fourth
+    assert min(abs(measured["bpm"] - tempo) for tempo in (60, 120, 240)) < 0.3
     assert -30.0 < measured["lufs"] < -5.0
+
+
+def test_a_track_never_starts_on_a_hit_followed_by_nothing_nor_before_a_break(tmp_path, monkeypatch):
+    monkeypatch.setattr(music_library.paths, "WORK_DIR", str(tmp_path / "work"))
+    # Quiet for 5 s, one loud second, 6 s of near silence, then a click 126 times a minute over a tone to the end:
+    # the loud second is not where the music gets going (a video started there would go quiet after a second)
+    click = "0.6*sin(2*PI*880*t)*lt(mod(t,60/126),0.04)"
+    path = sound(tmp_path, "break", f"if(lt(t,5),0.004*sin(2*PI*220*t),if(lt(t,6),0.5*sin(2*PI*220*t),if(lt(t,12),0.004*sin(2*PI*220*t),0.25*sin(2*PI*220*t)+{click})))", 45)
+    measured = music_library.measure(path)
+    assert 11.9 <= measured["start"] <= 12.02
+    assert min(abs(measured["bpm"] - tempo) for tempo in (63, 126, 252)) < 0.3
+    # A hit, a second of nothing, a hit, a second of nothing... then the music: it does not start on a lone hit
+    hits = "0.7*sin(2*PI*110*t)*lt(mod(t,2),0.25)"
+    path = sound(tmp_path, "hits", f"if(lt(t,10),{hits},0.25*sin(2*PI*220*t)+{click})", 40)
+    assert 9.9 <= music_library.measure(path)["start"] <= 10.02
+
+
+def test_a_track_in_swing_from_its_first_note_starts_on_it(tmp_path, monkeypatch):
+    monkeypatch.setattr(music_library.paths, "WORK_DIR", str(tmp_path / "work"))
+    # Half a second of nothing (as a file often has), then the music at once, a little louder later on
+    click = "0.6*sin(2*PI*880*t)*lt(mod(t,0.5),0.04)"
+    path = sound(tmp_path, "swing", f"if(lt(t,0.5),0,if(lt(t,20),0.2*sin(2*PI*220*t)+{click},0.3*sin(2*PI*220*t)+{click}))", 40)
+    measured = music_library.measure(path)
+    # On its first note, with no silence left before it: how people know a track
+    assert 0.44 <= measured["start"] <= 0.5
 
 
 def test_the_model_hears_two_parts_and_its_answer_is_made_safe(track):

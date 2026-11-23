@@ -205,15 +205,20 @@ export default function MontagePage() {
       if (m.pieces.length <= 1 && !music && !intro) return null;
       const pieces: [number, number][] = m.pieces.length > 1 ? m.pieces : [[m.trim?.[0] ?? 0, m.trim?.[1] ?? m.duration]];
       const cut = buildMontage(pieces.map(([start, end]) => ({ ctx: clipCtx, start, end })), (c) => buildAny(key, c, customs), FPS);
-      // The intro is titled with the clip's own name, written as the template writes its hook
-      const drawn = montageIntro(intro, {
-        title: m.hp.clip_name || clipCtx.hook,
-        name: clipCtx.displayName ?? clipCtx.login ?? "",
-        logo: clipCtx.avatarUrl,
-        colors: clipCtx.colors,
-        font: fontFamily(hookOf(key, clipCtx, customs).font),
-        follow: [t("compilation.intro.followLabel"), t("compilation.intro.followDone")],
-      });
+      // The intro is titled with the clip's own name, written as the template writes its hook; on a music it lasts a few of its beats
+      const drawn = montageIntro(
+        intro,
+        {
+          title: m.hp.clip_name || clipCtx.hook,
+          name: clipCtx.displayName ?? clipCtx.login ?? "",
+          logo: clipCtx.avatarUrl,
+          colors: clipCtx.colors,
+          font: fontFamily(hookOf(key, clipCtx, customs).font),
+          follow: [t("compilation.intro.followLabel"), t("compilation.intro.followDone")],
+        },
+        null,
+        trackOf(tracks, music?.track)?.bpm,
+      );
       if (drawn) cut.intro = drawn;
       if (music) cut.music = montageMusic(cut.segments, pieces.map(([start, end]) => ({ words: clipCtx.words, start, end, said: !!m.hp.llm?.transcript })), music, introOf(cut));
       return cut;

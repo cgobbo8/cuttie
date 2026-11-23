@@ -22,8 +22,9 @@ export interface IntroCardProps {
   font: string;
   /** The channel's follow button, shown next to its name and pressed before the video starts: what it says before and after (none: no button) */
   follow?: [string, string] | null;
-  /** The "hook" intro: its moment plays underneath (a video), so only what frames it is drawn; and the frames it holds the screen for (as long as that moment) */
+  /** The "hook" intro: its moment plays underneath (a video), so only what frames it is drawn */
   over?: boolean;
+  /** The frames it holds the screen for when that isn't its own length: as long as a hook's moment, or as the beats a jingle follows on its music */
   hold?: number;
   /** The "hook" intro: the look that frames its moment, by the name of a jingle (absent: the fuse) */
   look?: string;
@@ -1822,10 +1823,14 @@ const HOOKS: Record<JingleId, (d: Drawn) => ReactNode> = {
  * (no clock of its own): the video gives it Remotion's, the picker its own loop.
  */
 export default function IntroCard({ id, frame, fps, title, name, logo, colors, font, follow = null, over = false, hold: held, look, Img = Plain }: IntroCardProps) {
-  const f = (frame * 30) / fps;
+  const real = (frame * 30) / fps;
   const span = introSpan(id, 30);
-  // (a hook holds the screen for as long as its moment lasts: its caller says how long)
-  const hold = held ? (held * 30) / fps : span.hold;
+  // A hook holds the screen for as long as its moment lasts: its caller says how long. A jingle that follows
+  // a music is played faster or slower up to the frame the video starts on (what lands in it lands on the
+  // beat), and leaves at its own pace: it is drawn on its own clock, as it was written
+  const long = held ? (held * 30) / fps : span.hold;
+  const hold = id === "hook" ? long : span.hold;
+  const f = id === "hook" ? real : real < long ? (real * span.hold) / long : span.hold + (real - long);
   const out = span.out;
   const { lines, size } = titleLines(title || name, font);
   const logoBox = (box: number, style: CSSProperties = {}, square = false) => (

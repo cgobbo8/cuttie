@@ -106,17 +106,44 @@ export const HOOK_MAX = 8;
 /** What a hook lasts when the app cuts it out of a longer moment */
 export const HOOK_SECONDS = 5;
 
-/** How long an intro holds the screen and how long it takes to leave, in frames (`seconds`: what a hook's moment lasts) */
-export function introSpan(id: IntroId, fps: number, seconds?: number): { hold: number; out: number } {
-  const frames = (at30: number) => Math.max(1, Math.round((at30 * fps) / 30));
-  return { hold: id === "hook" && seconds ? Math.max(1, Math.round(seconds * fps)) : frames(SPANS[id].hold), out: frames(SPANS[id].out) };
+/**
+ * A jingle played on a music follows it: it lasts a few of the track's beats, so that the video
+ * starts on a beat. Four when that is a length a jingle can have, else two (a slow track) or
+ * eight (a very fast one); and it is never played more than this much faster or slower than it
+ * was written. The jingles of the GTA pack are written on four counts: what lands in them then
+ * lands on the beat. (The server counts the same way: api/app/services/compilations.ts.)
+ */
+export const BEATS = { counts: [4, 2, 8], fastest: 0.68, slowest: 1.45 };
+/** Seconds a jingle holds the screen as it was written */
+const written = (id: JingleId) => SPANS[id].hold / 30;
+/** A length this jingle can be played at */
+const follows = (id: JingleId, seconds: number) => seconds >= written(id) * BEATS.fastest - 1e-6 && seconds <= written(id) * BEATS.slowest + 1e-6;
+
+/** Seconds a jingle holds the screen on a music of this tempo (null: no music, no tempo, or one no jingle can follow: it plays as written) */
+export function beatSeconds(id: unknown, bpm: number | null | undefined): number | null {
+  if (!isJingle(id) || typeof bpm !== "number" || !(bpm >= 40 && bpm <= 260)) return null;
+  const beats = BEATS.counts.find((count) => follows(id, (count * 60) / bpm));
+  return beats ? Math.round(((beats * 60) / bpm) * 1000) / 1000 : null;
 }
 
-/** Seconds an intro adds to the video (0: no intro, one this app doesn't know, or a hook without its moment) */
-export function introSeconds(intro: IntroChoice | null | undefined): number {
+/** What an intro holds the screen for, when its caller says so: a hook's moment, or the beats a jingle follows (else undefined: as written) */
+const held = (id: IntroId, seconds?: number | null): number | undefined => (!seconds ? undefined : id === "hook" ? seconds : follows(id, seconds) ? seconds : undefined);
+
+/** How long an intro holds the screen and how long it takes to leave, in frames (`seconds`: what a hook's moment lasts, or what a jingle lasts on its music) */
+export function introSpan(id: IntroId, fps: number, seconds?: number | null): { hold: number; out: number } {
+  const frames = (at30: number) => Math.max(1, Math.round((at30 * fps) / 30));
+  const long = held(id, seconds);
+  return { hold: long ? Math.max(1, Math.round(long * fps)) : frames(SPANS[id].hold), out: frames(SPANS[id].out) };
+}
+
+/** How fast a jingle and its sound play when it lasts `seconds` (1: as written) */
+export const introRate = (id: IntroId, seconds?: number | null): number => (id !== "hook" && held(id, seconds) ? written(id) / held(id, seconds)! : 1);
+
+/** Seconds an intro adds to the video (0: no intro, one this app doesn't know, or a hook without its moment). `bpm`: the tempo of the video's music, which a jingle follows */
+export function introSeconds(intro: IntroChoice | null | undefined, bpm?: number | null): number {
   if (!intro || !isIntro(intro.style)) return 0;
   if (intro.style === "hook") return intro.hook ? Math.max(0, intro.hook.end - intro.hook.start) : 0;
-  return SPANS[intro.style].hold / 30;
+  return beatSeconds(intro.style, bpm) ?? SPANS[intro.style].hold / 30;
 }
 
 /** The sound an intro plays, null when it is silent */
@@ -132,14 +159,14 @@ export const defaultIntroSound = (id: IntroId): IntroSoundId | null => SPANS[id]
  * When an intro's sound fades out: from the frame the video starts (`from`), over `frames`
  * frames: a sound longer than its intro doesn't play on over the first words.
  */
-export function introFade(id: IntroId, fps: number): { from: number; frames: number } {
-  const { hold, out } = introSpan(id, fps);
+export function introFade(id: IntroId, fps: number, seconds?: number | null): { from: number; frames: number } {
+  const { hold, out } = introSpan(id, fps, seconds);
   return { from: hold, frames: out + Math.round(0.8 * fps) };
 }
 
 /** How loud the intro's sound is at a frame of the video, 1 to 0 */
-export function introVolume(frame: number, id: IntroId, fps: number): number {
-  const { from, frames } = introFade(id, fps);
+export function introVolume(frame: number, id: IntroId, fps: number, seconds?: number | null): number {
+  const { from, frames } = introFade(id, fps, seconds);
   return clamp01(1 - (frame - from) / frames);
 }
 

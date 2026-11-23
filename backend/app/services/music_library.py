@@ -30,38 +30,143 @@ MAIN_SECONDS = 24.0
 LATER_SECONDS = 14.0
 
 
+def beat_grid(y, sr: int, around: float) -> tuple[float, float] | None:
+    """(when a beat falls near `around`, seconds between two beats there), from a line drawn through the beats
+    that follow. An intro played on the track lasts four of its beats and what lands in it lands on them: a
+    tempo rounded to the beat a minute, or measured over the whole track, is 40 ms off by the fourth beat (seen
+    on a track at 126 measured 129).
+
+    A tracker can hear a track at one tempo or at another, so several readings are tried, and the one the
+    track itself repeats at is kept: how much its sound, moved by one beat, by two and by four, looks like
+    itself. (Twice or half the tempo is no harm here; one and a half times is, and was what "the beats that
+    fall on the most sound" chose on tracks with busy hi-hats.) None: too few beats there, or beats too
+    uneven to draw a line through."""
+    import librosa
+    import numpy as np
+
+    # How the track repeats over the 24 s that follow: its sound against itself, moved by a lag
+    hop = 256
+    envelope = librosa.onset.onset_strength(y=y, sr=sr, hop_length=hop)
+    here = envelope[librosa.time_to_frames(max(0.0, around), sr=sr, hop_length=hop) :][: int(24 * sr / hop)]
+    here = here - here.mean()
+    alike = np.correlate(here, here, mode="full")[len(here) - 1 :]
+    alike = alike / (alike[0] + 1e-9)
+
+    def repeats(period: float) -> float:
+        lag = period * sr / hop
+        low = int(lag)
+        return float(alike[low] + (alike[low + 1] - alike[low]) * (lag - low)) if low + 1 < len(alike) else 0.0
+
+    best: tuple[float, float, float] | None = None
+    for tracker_hop in (256, 512):
+        strength = envelope if tracker_hop == hop else librosa.onset.onset_strength(y=y, sr=sr, hop_length=tracker_hop)
+        for start_bpm in (120, 90, 150):
+            _, beats = librosa.beat.beat_track(onset_envelope=strength, sr=sr, hop_length=tracker_hop, start_bpm=start_bpm)
+            times = librosa.frames_to_time(beats, sr=sr, hop_length=tracker_hop)
+            after = times[times >= around - 0.08][:17]
+            if len(after) < 8:
+                continue
+            k = np.arange(len(after))
+            period, first = np.polyfit(k, after, 1)
+            if float(np.std(after - (first + period * k))) > 0.025 or not 0.2 < period < 1.5:
+                continue
+            # (between readings the track repeats at equally, as happens when it swings in threes, the one nearest to 120 beats a minute: the beat people tap)
+            score = (repeats(period) + 0.5 * repeats(2 * period) + 0.25 * repeats(4 * period)) * float(np.exp(-0.5 * np.log2(60 / period / 120) ** 2))
+            if best is None or score > best[2] + 1e-6:
+                best = (float(first), float(period), score)
+    return (best[0], best[1]) if best else None
+
+
+def best_start(y, sr: int) -> float:
+    """Where a video starts the track: on a clear attack from which the music is loud at once and stays so.
+    The start of a video is what matters most: a track started in a quiet bar, in the tail of a note or just
+    before a break leaves a hole there (seen: a theme started in a second of near silence between two hits; a
+    song started 1.6 s before an 18 s break, because one loud second had been taken for its chorus).
+
+    Every attack of the first 60 % of the track is a candidate, judged on three things: how loud the 0.35 s
+    that follow are (it starts at once), that nothing goes nearly silent in the 2 s that follow (no hole: a hit
+    followed by a bar of rest is not a start), and how loud the 8 s that follow stay (no break). The very
+    first attack is taken when it does at least half as well as the best one: a track that is in swing from
+    its first note starts on it, which is how people know it. Otherwise the earliest attack that does nearly
+    as well as the best."""
+    import librosa
+    import numpy as np
+
+    hop = 512
+    rms = librosa.feature.rms(y=y, frame_length=2048, hop_length=hop)[0]
+    per_second = sr / hop
+    full = float(np.percentile(rms, 90)) + 1e-9
+    sums = np.concatenate([[0.0], np.cumsum(rms)])
+
+    def loud(seconds_from: float, seconds_to: float) -> float:
+        a = min(len(rms) - 1, max(0, int(seconds_from * per_second)))
+        b = min(len(rms), max(a + 1, int(seconds_to * per_second)))
+        return float(sums[b] - sums[a]) / (b - a) / full
+
+    fine = 128
+
+    def foot(at: float) -> float:
+        """Exactly where the sound of an attack starts to rise, looked at closely (every 6 ms). The detector dates
+        an attack at the height of its rise, a few hundredths late, and an attack can take a tenth of a second
+        to come: a start a tenth of a second early is a tenth of a second of nothing at the very start of a
+        video; late, the attack is cut off and what lands in an intro no longer lands on the beat."""
+        low = max(0, int((at - 0.3) * sr))
+        close = librosa.feature.rms(y=y[low : int((at + 0.15) * sr)], frame_length=512, hop_length=fine)[0]
+        if len(close) < 3 or close.max() <= 0:
+            return at
+        # The steepest of the rise, near where the detector heard it; then down to its foot (on the level
+        # smoothed over 30 ms: a rise is never perfectly even, and would be left at its first ripple)
+        near = max(0, int((at - 0.12) * sr - low) // fine)
+        rise = near + int(np.argmax(np.diff(close[near:])))
+        peak = float(close[rise + 1 : rise + 1 + int(0.1 * sr / fine)].max())
+        even = np.convolve(close, np.ones(5) / 5, mode="same")
+        for _ in range(int(0.15 * sr / fine)):
+            if rise == 0 or even[rise] <= 0.12 * peak or even[rise - 1] >= even[rise]:
+                break
+            rise -= 1
+        return low / sr + rise * fine / sr
+
+    scored = []
+    for heard in librosa.onset.onset_detect(y=y, sr=sr, hop_length=hop, units="time"):
+        if heard > len(y) / sr * 0.6:
+            break
+        at = foot(float(heard))
+        at_once = min(1.0, loud(at, at + 0.35))
+        # The quietest third of a second of the two that follow: a hole there is heard as one
+        no_hole = min(1.0, min(loud(at + step / 10, at + step / 10 + 0.3) for step in range(0, 18)) / 0.45)
+        lasting = min(1.0, loud(at, at + 8))
+        scored.append((at, at_once * no_hole * lasting))
+    if not scored:
+        return 0.0
+    top = max(score for _, score in scored)
+    first, first_score = scored[0]
+    at = first if first_score >= 0.5 * top else next(at for at, score in scored if score >= 0.7 * top)
+    # Three hundredths before the attack, never in it
+    return max(0.0, at - 0.03)
+
+
 def measure(path: str) -> dict:
-    """{"seconds", "bpm", "start", "lufs"}: how long the track is, its tempo, where it is in full
-    swing (a video starts it there, on a beat) and how loud it was recorded."""
+    """{"seconds", "bpm", "start", "lufs"}: how long the track is, its tempo where a video starts it (to the
+    hundredth of a beat a minute), where a video starts it (see `best_start`) and how loud it was recorded."""
     import librosa
     import numpy as np
 
     y, sr = librosa.load(path, sr=22050, mono=True)
     if len(y) < sr:
         raise ValueError("this file has less than a second of sound")
-    hop = 512
-    rms = librosa.feature.rms(y=y, frame_length=2048, hop_length=hop)[0]
-    per_second = sr / hop
-    window = max(1, int(per_second))
-    # How loud each second-long stretch is: "in full swing" is near the loudest tenth of them
-    energy = np.convolve(rms**2, np.ones(window) / window, mode="valid")
-    full = float(np.percentile(energy, 90))
-    tempo, beats = librosa.beat.beat_track(y=y, sr=sr, hop_length=hop)
-    beat_times = librosa.frames_to_time(beats, sr=sr, hop_length=hop)
-    onsets = librosa.onset.onset_detect(y=y, sr=sr, hop_length=hop, units="time")
-    if energy[: max(1, int(0.5 * per_second))].mean() >= 0.5 * full:
-        start = max(0.0, float(onsets[0]) - 0.02) if len(onsets) else 0.0
-    else:
-        at = int(np.argmax(energy >= 0.8 * full)) / per_second
-        start = max(0.0, float(beat_times[np.abs(beat_times - at).argmin()]) - 0.02) if len(beat_times) else at
     seconds = len(y) / sr
-    # Never so late that little of the track is left to play
-    if start > seconds * 0.6:
-        start = 0.0
+    start = best_start(y, sr)
+    # The beats from there, measured closely: the tempo a video's intro follows
+    grid = beat_grid(y, sr, start + 0.02)
+    if grid:
+        bpm = round(60 / grid[1], 2)
+    else:
+        tempo, _ = librosa.beat.beat_track(y=y, sr=sr, hop_length=512)
+        bpm = round(float(np.atleast_1d(tempo)[0]))
     printed = subprocess.run(["ffmpeg", "-hide_banner", "-nostats", "-i", path, "-af", "ebur128", "-f", "null", "-"], capture_output=True, text=True, timeout=300).stderr
     found = re.findall(r"I:\s+(-?\d+(?:\.\d+)?) LUFS", printed)
     lufs = float(found[-1]) if found else -14.0
-    return {"seconds": round(seconds, 1), "bpm": round(float(np.atleast_1d(tempo)[0])), "start": round(start, 2), "lufs": max(-40.0, min(0.0, lufs))}
+    return {"seconds": round(seconds, 1), "bpm": bpm, "start": round(start, 2), "lufs": max(-40.0, min(0.0, lufs))}
 
 
 def to_mp3(source: str, target: str) -> None:

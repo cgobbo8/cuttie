@@ -217,29 +217,55 @@ export function parseMusic(raw: any): { track: string; volume?: number } | null 
   return { track: raw.track, ...(Number.isFinite(volume) && volume !== 1 ? { volume: Math.min(2, Math.max(0.3, Math.round(volume * 100) / 100)) } : {}) }
 }
 
+/**
+ * A jingle played on a music follows it: it lasts a few of the track's beats, so that the video
+ * starts on a beat (four, else two of a slow track or eight of a very fast one), and is never
+ * played more than this much faster or slower than it was written. The same numbers as the app's
+ * (frontend/src/lib/intro/intros.ts, kept equal by a test).
+ */
+export const BEATS = { counts: [4, 2, 8], fastest: 0.68, slowest: 1.45 }
+/** A length this jingle can be played at */
+export const followsBeat = (style: unknown, seconds: unknown): seconds is number =>
+  isJingle(style) && typeof seconds === 'number' && seconds >= (INTROS[style][0] / 30) * BEATS.fastest - 1e-6 && seconds <= (INTROS[style][0] / 30) * BEATS.slowest + 1e-6
+
+/** Seconds a jingle holds the screen on a music of this tempo (null: no music, no tempo, or one no jingle can follow: it plays as written) */
+export function beatSeconds(style: unknown, bpm: number | null | undefined): number | null {
+  if (!isJingle(style) || typeof bpm !== 'number' || !(bpm >= 40 && bpm <= 260)) return null
+  const beats = BEATS.counts.find((count) => followsBeat(style, (count * 60) / bpm))
+  return beats ? Math.round(((beats * 60) / bpm) * 1000) / 1000 : null
+}
+
 /** Frames an intro holds the screen before the first piece, at the video's own rate (0: not an intro) */
 export const introFrames = (style: unknown, fps: number): number => (isIntro(style) ? Math.max(1, Math.round((INTROS[style][0] * fps) / 30)) : 0)
 
-/** When an intro's sound fades out, seconds: from where the video starts, for as long as the intro takes to leave and a little more */
-export function introFade(style: unknown): { at: number; for: number } | null {
-  return isIntro(style) ? { at: INTROS[style][0] / 30, for: (INTROS[style][1] + 24) / 30 } : null
+/**
+ * When an intro's sound fades out, seconds: from where the video starts, for as long as the intro
+ * takes to leave and a little more. `hold`: seconds a jingle lasts on its music; `rate`: how fast
+ * its sound then plays (1: as recorded), so that its hits stay on what lands.
+ */
+export function introFade(style: unknown, hold?: number): { at: number; for: number; rate: number } | null {
+  if (!isIntro(style)) return null
+  const written = INTROS[style][0] / 30
+  const at = followsBeat(style, hold) ? hold : written
+  return { at, for: (INTROS[style][1] + 24) / 30, rate: written / at }
 }
 
-/** Seconds an intro adds to the video (a hook: what its moment lasts, nothing while it has none) */
-export function introSeconds(intro: Intro | undefined | null): number {
+/** Seconds an intro adds to the video (a hook: what its moment lasts, nothing while it has none). `bpm`: the tempo of the video's music, which a jingle follows */
+export function introSeconds(intro: Intro | undefined | null, bpm?: number | null): number {
   if (!intro || !isIntro(intro.style)) return 0
   if (intro.style === 'hook') return intro.hook ? Math.max(0, intro.hook.end - intro.hook.start) : 0
-  return INTROS[intro.style][0] / 30
+  return beatSeconds(intro.style, bpm) ?? INTROS[intro.style][0] / 30
 }
 
 /**
  * Frames a montage's intro holds the screen before the first piece, at the video's own rate: its
- * style's, or as long as the moment a hook plays (0: no intro, or a hook without its moment).
+ * style's, as long as the moment a hook plays, or as the beats a jingle follows on the video's
+ * music (0: no intro, or a hook without its moment).
  */
-export function introHoldFrames(intro: { style: string; hook?: { duration: number } } | undefined | null, fps: number): number {
+export function introHoldFrames(intro: { style: string; hook?: { duration: number }; hold?: number } | undefined | null, fps: number): number {
   if (!intro) return 0
   if (intro.style === 'hook') return intro.hook ? Math.max(1, Math.round(intro.hook.duration * fps)) : 0
-  return introFrames(intro.style, fps)
+  return followsBeat(intro.style, intro.hold) ? Math.max(1, Math.round(intro.hold * fps)) : introFrames(intro.style, fps)
 }
 
 const JOB_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
@@ -403,7 +429,7 @@ export function summarizeCompilation(jobId: string, c: Compilation) {
     id: c.id,
     name: c.name,
     // Its intro is part of the video
-    length: Math.round((compilationLength(c) + introSeconds(c.intro)) * 10) / 10,
+    length: Math.round((compilationLength(c) + introSeconds(c.intro, findMusic(c.music?.track)?.bpm)) * 10) / 10,
     passages: items.length,
     parts: c.sections.filter((s) => s.items.length > 0).length,
     described: !!c.brief,

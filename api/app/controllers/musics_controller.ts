@@ -67,7 +67,8 @@ export default class MusicsController {
         file: path.basename(file.clientName || `${id}.mp3`).slice(0, 160),
         genre: described.genre,
         kinds: parseKinds(described.kinds),
-        bpm: Math.round(Number(described.bpm) || 0),
+        // (to the hundredth: an intro played on it lasts four of its beats, and what lands in it lands on them)
+        bpm: Math.round((Number(described.bpm) || 0) * 100) / 100,
         seconds: Number(described.seconds) || 0,
         start: Math.max(0, Number(described.start) || 0),
         lufs: Number.isFinite(described.lufs) ? described.lufs : -14,

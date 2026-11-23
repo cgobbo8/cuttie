@@ -1,5 +1,5 @@
 {
-  "note": "The musics a video can play in the background. `start`: where a track is in full swing (seconds), `lufs`: its loudness as recorded; both measured (scripts/make-musics.py --measure). `kinds`, `genre` and `about` (what the AI reads to choose one) come from a model that listened to each track (scripts/make-musics.py --listen, 15/11/2026).",
+  "note": "The musics a video can play in the background. `start`: where a video starts a track (seconds): on a clear attack from which it is loud at once and stays so; `bpm`: its tempo there, to the hundredth (an intro played on it lasts four of its beats); `lufs`: its loudness as recorded. All measured on the files the app plays (scripts/make-musics.py --beats, --measure). `kinds`, `genre` and `about` (what the AI reads to choose one) come from a model that listened to each track (scripts/make-musics.py --listen, 15/11/2026).",
   "kinds": [
     "funny",
     "skill",
@@ -19,9 +19,9 @@
         "skill",
         "hype"
       ],
-      "bpm": 117,
+      "bpm": 116.03,
       "seconds": 83.9,
-      "start": 5.2,
+      "start": 5.38,
       "lufs": -7.4,
       "about": "Mood: energetic, aggressive. Energy: high. Suits: gaming highlights, fast-paced edits, action montages. Ruins: calm storytelling, slow-motion, or emotional content."
     },
@@ -36,9 +36,9 @@
         "skill",
         "hype"
       ],
-      "bpm": 96,
+      "bpm": 95.99,
       "seconds": 132.6,
-      "start": 9.41,
+      "start": 9.97,
       "lufs": -9.7,
       "about": "Mood: Energetic, confident, and driving. Energy: High. Suits: Gaming highlights, fast-paced action, and hype montages. Ruins: Calm storytelling, emotional scenes, or slow-paced tutorials."
     },
@@ -53,9 +53,9 @@
         "skill",
         "hype"
       ],
-      "bpm": 136,
+      "bpm": 133.74,
       "seconds": 134.6,
-      "start": 14.0,
+      "start": 28.64,
       "lufs": -14.0,
       "about": "Mood: Energetic, aggressive, and fast-paced. Best for: Gaming highlights, action montages, and hype content. It would ruin: Relaxing vlogs, storytelling, or emotional moments."
     },
@@ -70,9 +70,9 @@
         "hype",
         "skill"
       ],
-      "bpm": 100,
+      "bpm": 199.12,
       "seconds": 114.4,
-      "start": 2.53,
+      "start": 2.46,
       "lufs": -7.4,
       "about": "This is an energetic, upbeat hip-hop track with a driving rhythm and modern synth elements. It is perfect for gaming highlights, hype reels, and fast-paced montages. It would ruin slow-paced, emotional, or serious storytelling content."
     },
@@ -87,9 +87,9 @@
         "chill",
         "hype"
       ],
-      "bpm": 89,
+      "bpm": 89.99,
       "seconds": 134.8,
-      "start": 0.12,
+      "start": 1.73,
       "lufs": -9.8,
       "about": "Mood: chill and energetic. Suits: casual talk, highlights, and gaming streams. Avoid: intense horror or slow-paced emotional storytelling."
     },
@@ -104,9 +104,9 @@
         "chill",
         "funny"
       ],
-      "bpm": 89,
+      "bpm": 89.99,
       "seconds": 114.1,
-      "start": 0.05,
+      "start": 5.31,
       "lufs": -7.7,
       "about": "This track features a laid-back hip-hop beat with scratching elements. It's perfect for chill storytelling, funny commentary, or casual vlogs. Avoid using it for high-stakes, serious, or intense action content, as the lighthearted vibe will clash with the mood."
     },
@@ -122,9 +122,9 @@
         "skill",
         "chill"
       ],
-      "bpm": 123,
+      "bpm": 125.99,
       "seconds": 137.4,
-      "start": 16.49,
+      "start": 16.64,
       "lufs": -8.7,
       "about": "Upbeat synthwave with a retro, electronic vibe. Perfect for high-energy highlights, gaming skill showcases, or as background music for commentary. Avoid using it for slow, sad, or overly serious content."
     },
@@ -141,7 +141,7 @@
       ],
       "bpm": 144,
       "seconds": 146.9,
-      "start": 11.36,
+      "start": 11.28,
       "lufs": -9.0,
       "about": "Upbeat, retro chiptune track with a fast tempo. Perfect for funny gaming moments or high-energy highlights. Avoid using it for serious, slow-paced, or emotional content."
     },
@@ -157,9 +157,9 @@
         "hype",
         "skill"
       ],
-      "bpm": 112,
+      "bpm": 112.05,
       "seconds": 112.3,
-      "start": 0.05,
+      "start": 8.89,
       "lufs": -9.0,
       "about": "This upbeat chiptune track features retro synth sounds and a steady, energetic pace. It is perfect for gaming highlights, chill streams, or skill showcases. Its bright, digital texture would clash with serious, dark, or emotional content."
     },
@@ -174,9 +174,9 @@
         "funny",
         "hype"
       ],
-      "bpm": 161,
+      "bpm": 159.89,
       "seconds": 66.4,
-      "start": 2.65,
+      "start": 2.98,
       "lufs": -9.2,
       "about": "Upbeat, retro chiptune track. High energy and playful mood. Best for funny moments, gaming highlights, and fast-paced edits. Avoid using for serious, sad, or slow-paced content."
     },
@@ -191,9 +191,9 @@
         "chill",
         "hype"
       ],
-      "bpm": 108,
+      "bpm": 79.98,
       "seconds": 136.5,
-      "start": 6.62,
+      "start": 13.1,
       "lufs": -7.8,
       "about": "Mood: relaxed, upbeat. Energy: moderate. Suits: chill talk, gaming highlights. Ruins: intense horror, serious news, or high-stakes competitive gameplay."
     },
@@ -208,9 +208,9 @@
         "chill",
         "funny"
       ],
-      "bpm": 92,
+      "bpm": 91.99,
       "seconds": 100.1,
-      "start": 3.95,
+      "start": 5.09,
       "lufs": -9.6,
       "about": "A laid-back, upbeat lofi track with steady drums and bright synths. Ideal for chill commentary, gaming highlights, or vlogs. Its consistent energy makes it a safe background choice, though it might feel too casual for high-stakes, intense, or dark content."
     },
@@ -225,9 +225,9 @@
         "chill",
         "funny"
       ],
-      "bpm": 72,
+      "bpm": 146.01,
       "seconds": 106.0,
-      "start": 0.05,
+      "start": 16.78,
       "lufs": -15.1,
       "about": "Mood: Chill, relaxed, and unobtrusive. Energy: Low. Best for: Background music for talking, storytelling, or casual gaming. Would ruin: High-energy highlights, intense action, or fast-paced montages."
     },
@@ -244,7 +244,7 @@
       ],
       "bpm": 108,
       "seconds": 112.0,
-      "start": 5.99,
+      "start": 8.62,
       "lufs": -18.1,
       "about": "Mood: Suspenseful, mysterious, and calm. Energy: Low. Best for: Building tension in gameplay or as background for storytelling. Avoid using for: High-energy highlights, fast-paced action, or comedic moments."
     },
@@ -259,9 +259,9 @@
         "suspense",
         "chill"
       ],
-      "bpm": 117,
+      "bpm": 117.04,
       "seconds": 102.0,
-      "start": 0.12,
+      "start": 8.79,
       "lufs": -15.1,
       "about": "Mood: Tense, mysterious, and calm. Energy: Low. Best for: Suspenseful moments, storytelling, or background gameplay. Avoid using for: High-energy highlights, fast-paced action, or comedic content."
     },
@@ -276,9 +276,9 @@
         "suspense",
         "chill"
       ],
-      "bpm": 92,
+      "bpm": 114.93,
       "seconds": 106.0,
-      "start": 1.98,
+      "start": 0.59,
       "lufs": -21.6,
       "about": "Mood: Tense, mysterious, and atmospheric. Energy: Low and steady. Best for: Suspenseful moments, slow-build tension, or calm storytelling. Avoid: High-energy gaming highlights, fast-paced action, or comedic content."
     },
@@ -293,9 +293,9 @@
         "suspense",
         "skill"
       ],
-      "bpm": 152,
+      "bpm": 149.99,
       "seconds": 259.2,
-      "start": 1.65,
+      "start": 14.48,
       "lufs": -9.7,
       "about": "Mood: Tense, mysterious. Energy: Moderate, driving. Best for: Suspenseful moments, high-stakes gameplay, or building anticipation. Avoid using for: Lighthearted, comedic, or overly casual content."
     },
@@ -310,9 +310,9 @@
         "hype",
         "skill"
       ],
-      "bpm": 152,
+      "bpm": 149.9,
       "seconds": 128.0,
-      "start": 6.44,
+      "start": 6.37,
       "lufs": -7.9,
       "about": "Mood: Energetic and aggressive. Energy: High. Suits: Gaming highlights, fast-paced montages, and hype reels. Ruins: Relaxing content, storytelling, or slow-paced tutorials."
     },
@@ -327,9 +327,9 @@
         "funny",
         "chill"
       ],
-      "bpm": 129,
+      "bpm": 130.02,
       "seconds": 69.4,
-      "start": 6.97,
+      "start": 21.2,
       "lufs": -16.5,
       "about": "This is a quirky, upbeat comedy track with a light, playful rhythm. It suits funny moments, fails, and casual commentary. It would ruin serious, high-stakes, or intense gameplay highlights."
     },
@@ -344,9 +344,9 @@
         "funny",
         "chill"
       ],
-      "bpm": 117,
+      "bpm": 120.6,
       "seconds": 68.0,
-      "start": 3.56,
+      "start": 7.9,
       "lufs": -13.0,
       "about": "Mood: playful, quirky, lighthearted. Energy: low to medium. Suits: funny moments, casual chatting, light gaming. Ruins: intense action, horror, serious storytelling, high-stakes competitive gameplay."
     }

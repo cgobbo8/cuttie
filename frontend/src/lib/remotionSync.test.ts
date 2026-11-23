@@ -47,6 +47,13 @@ describe("editor and server renderer stay in sync", () => {
     }
   });
 
+  it("makes a jingle follow a music the same way on both sides", () => {
+    // How many beats, and how much faster or slower than written: the app's numbers are the server's
+    const numbers = (file: string) => readFileSync(path.join(root, file), "utf8").match(/export const BEATS = (\{[^}]+\})/)?.[1];
+    expect(numbers("frontend/src/lib/intro/intros.ts")).toBeTruthy();
+    expect(numbers("api/app/services/compilations.ts")).toBe(numbers("frontend/src/lib/intro/intros.ts"));
+  });
+
   it("lets the server store the intros it can draw, with the lengths the video counts", () => {
     const service = readFileSync(path.join(root, "api/app/services/compilations.ts"), "utf-8");
     const stored = [...(service.match(/export const INTROS[^=]*= \{([^}]+)\}/)?.[1] ?? "").matchAll(/(\w+): \[(\d+), (\d+)\]/g)].map((m) => [m[1], Number(m[2]), Number(m[3])]);

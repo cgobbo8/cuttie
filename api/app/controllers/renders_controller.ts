@@ -7,7 +7,7 @@ import db from '@adonisjs/lucid/services/db'
 import { introSoundFile, renderClip, renderMontage, type MontageIntro, type MontagePiece, type PlacedLayer } from '#services/remotion_renderer'
 import { uploadFile, getPresignedDownloadUrl, deleteObject, storagePath } from '#services/storage'
 import { clipDir } from '#services/data_paths'
-import { introFade, introHoldFrames, isIntro, isIntroSound, isJingle, isTransition } from '#services/compilations'
+import { followsBeat, introFade, introHoldFrames, isIntro, isIntroSound, isJingle, isTransition } from '#services/compilations'
 import { enqueueRender } from '#services/render_queue'
 import { levelSound, type Music } from '#services/sound_level'
 import { findMusic, musicFile, parseCurve, trackGain, type MusicCurve } from '#services/musics'
@@ -120,6 +120,8 @@ function parseMontageIntro(raw: unknown): MontageIntro | null | undefined {
   if (intro.style === 'hook' && !hook) return null
   // ...framed by a look this server can draw (none said: the default one)
   if (intro.look !== undefined && !(intro.style === 'hook' && isJingle(intro.look))) return null
+  // A jingle on the video's music lasts a few of its beats: a length that jingle can be played at
+  if (intro.hold !== undefined && !followsBeat(intro.style, intro.hold)) return null
   return {
     style: intro.style,
     title: words(intro.title, 120),
@@ -131,6 +133,7 @@ function parseMontageIntro(raw: unknown): MontageIntro | null | undefined {
     ...(intro.sound ? { sound: intro.sound } : {}),
     ...(hook ? { hook: { clipFilename: hook.clipFilename, from: hook.from, duration: hook.duration, layers: hook.layers, ...(hook.jobId ? { jobId: hook.jobId } : {}) } } : {}),
     ...(intro.look ? { look: intro.look } : {}),
+    ...(intro.hold !== undefined ? { hold: Math.round(intro.hold * 1000) / 1000 } : {}),
   }
 }
 
@@ -500,7 +503,8 @@ async function runRender(opts: {
       montage?.music && track && trackFile && last
         ? { file: trackFile, from: track.start, gain: trackGain(track), curve: montage.music.curve, seconds: (frames + Math.max(1, Math.round(last.duration * fps))) / fps }
         : undefined
-    const levelled = await levelSound(outputPath, cuts, jingle ? { file: jingle, gain: 1, fade: introFade(montage?.intro?.style) ?? undefined } : undefined, music)
+    const fade = introFade(montage?.intro?.style, montage?.intro?.hold)
+    const levelled = await levelSound(outputPath, cuts, jingle ? { file: jingle, gain: 1, fade: fade ?? undefined, rate: fade?.rate } : undefined, music)
     if (levelled) console.log(`[Render] ${outputFilename}: sound brought from ${levelled.from.toFixed(1)} to ${levelled.to.toFixed(1)} LUFS`)
     const sizeMb = levelled ? statSync(outputPath).size / 1024 / 1024 : rendered.sizeMb
 

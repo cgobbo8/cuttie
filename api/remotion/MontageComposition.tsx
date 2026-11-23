@@ -3,7 +3,7 @@ import { AbsoluteFill, Audio, Freeze, Img, Sequence, Series, useCurrentFrame, us
 import type { Layer } from "./editorTypes";
 import { ResolvedLayer } from "./CuttieComposition";
 import IntroCard, { INTRO_W } from "./intro/IntroCard";
-import { between, easeOut, introFade, introSpan, introVolume, isIntro } from "./intro/intros";
+import { between, easeOut, introFade, introRate, introSpan, introVolume, isIntro } from "./intro/intros";
 import { gainAt, type MusicCurve } from "./music/curve";
 import { isTransition, lookStyle, transitionAt } from "./transitions";
 
@@ -37,6 +37,8 @@ export interface MontageIntro {
   gain?: number;
   /** The "hook" intro: the moment of the video it plays first, built like a piece */
   hook?: MontageSegment;
+  /** A jingle on the video's music: seconds it holds the screen, a few of the track's beats (absent: as written) */
+  hold?: number;
   /** The "hook" intro: the look that frames its moment, by the name of a jingle */
   look?: string;
 }
@@ -142,9 +144,9 @@ const Intro: React.FC<{ intro: MontageIntro }> = ({ intro }) => {
           colors={intro.colors}
           font={intro.font}
           follow={intro.follow}
-          // A hook's moment plays underneath, for as long as it lasts
+          // A hook's moment plays underneath, for as long as it lasts; a jingle on a music lasts a few of its beats
           over={!!intro.hook}
-          hold={intro.hook ? framesOf(intro.hook.duration, fps) : undefined}
+          hold={intro.hook ? framesOf(intro.hook.duration, fps) : intro.hold ? introSpan(intro.style, fps, intro.hold).hold : undefined}
           look={intro.look}
           Img={Img}
         />
@@ -162,7 +164,7 @@ const Intro: React.FC<{ intro: MontageIntro }> = ({ intro }) => {
  */
 export const MontageComposition: React.FC<MontageCompositionProps> = ({ segments, overlays, intro, music }) => {
   const { fps } = useVideoConfig();
-  const opening = playsIntro(intro) ? introSpan(intro.style, fps, intro.hook?.duration) : null;
+  const opening = playsIntro(intro) ? introSpan(intro.style, fps, intro.hook?.duration ?? intro.hold) : null;
   return (
     <AbsoluteFill style={{ background: "black", width: 1080, height: 1920 }}>
       <style>{"*, *::before, *::after { box-sizing: border-box; }"}</style>
@@ -191,8 +193,9 @@ export const MontageComposition: React.FC<MontageCompositionProps> = ({ segments
       )}
       {opening && intro?.sound && isIntro(intro.style) && (
         // It fades out as the video starts: a sound longer than its intro doesn't play on over the first words
-        <Sequence durationInFrames={opening.hold + introFade(intro.style, fps).frames} layout="none">
-          <Audio src={intro.sound} volume={(f) => (intro.gain ?? INTRO_VOLUME) * introVolume(f, intro.style as Parameters<typeof introVolume>[1], fps)} />
+        // (a jingle that follows the music plays faster or slower, and its sound with it: its hits stay on what lands)
+        <Sequence durationInFrames={opening.hold + introFade(intro.style, fps, intro.hold).frames} layout="none">
+          <Audio src={intro.sound} playbackRate={introRate(intro.style, intro.hold)} volume={(f) => (intro.gain ?? INTRO_VOLUME) * introVolume(f, intro.style as Parameters<typeof introVolume>[1], fps, intro.hold)} />
         </Sequence>
       )}
       {music?.src && (

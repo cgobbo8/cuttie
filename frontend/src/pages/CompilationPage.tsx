@@ -717,6 +717,8 @@ export default function CompilationPage() {
           follow: [t("compilation.intro.followLabel"), t("compilation.intro.followDone")],
         },
         opener?.segment,
+        // On a music, a jingle lasts a few of its beats: the video starts on one
+        trackOf(musics, all.music?.track)?.bpm,
       );
       if (intro) montage.intro = intro;
       // The music under the video: lower where people talk, more present where the game plays alone
@@ -872,7 +874,7 @@ export default function CompilationPage() {
   const marks = useMemo(() => {
     // The first passage starts once the intro has held the screen, and is clear of it once the intro has left
     const intro = preview?.montage.intro;
-    const leaving = playsIntro(intro) ? introSpan(intro.style, FPS, intro.hook?.duration).out : 0;
+    const leaving = playsIntro(intro) ? introSpan(intro.style, FPS, intro.hook?.duration ?? intro.hold).out : 0;
     let at = introHold(intro, FPS);
     return (preview?.montage.segments ?? []).map((segment, i) => {
       const from = at;
@@ -1233,7 +1235,7 @@ export default function CompilationPage() {
               </div>
               {preview && (
                 <p className="-mt-1 text-[12px] text-ink-3">
-                  {readyItems.length < items.length ? t("compilation.partial", { ready: readyItems.length, total: items.length }) : `${clock(compilationLength(compilation) + openingSeconds(compilation))} · ${t("compilation.moments", { count: items.length })}`}
+                  {readyItems.length < items.length ? t("compilation.partial", { ready: readyItems.length, total: items.length }) : `${clock(compilationLength(compilation) + openingSeconds(compilation, trackOf(musics, compilation.music?.track)?.bpm))} · ${t("compilation.moments", { count: items.length })}`}
                 </p>
               )}
             </>

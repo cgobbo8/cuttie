@@ -294,7 +294,7 @@ export default function CompilationPanel({
   // The track the video plays, when it is one that can be played here
   const track = trackOf(musics, compilation.music?.track);
   // The intro is part of the video: it counts in its length
-  const opening = openingSeconds(compilation);
+  const opening = openingSeconds(compilation, trackOf(musics, compilation.music?.track)?.bpm);
   const total = compilationLength(compilation) + opening;
   const count = allItems(compilation).length;
   // About half a tenth of a cent per passage looked at (measured): said before asking

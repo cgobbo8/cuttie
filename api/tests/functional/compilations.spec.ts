@@ -681,6 +681,11 @@ test.group('Compilations', (group) => {
     // A well-formed one gets as far as the clips, with or without the follow button's two labels
     ;(await client.post(url).loginAs(user).json({ pieces, overlays: [], intro })).assertStatus(404)
     ;(await client.post(url).loginAs(user).json({ pieces, overlays: [], intro: { ...intro, follow: ['Suivre', 'Suivi'] } })).assertStatus(404)
+    // On the video's music a jingle lasts a few of its beats: a length it can be played at, or the export is refused
+    ;(await client.post(url).loginAs(user).json({ pieces, overlays: [], intro: { ...intro, hold: 2 } })).assertStatus(404)
+    for (const hold of [0.4, 9, '2', null]) {
+      ;(await client.post(url).loginAs(user).json({ pieces, overlays: [], intro: { ...intro, hold } })).assertStatus(400)
+    }
     // A hook plays a moment of the video first: without that piece, or with one that isn't a piece, it is no intro
     const hook = { ...intro, style: 'hook', sound: undefined, hook: { clip: 'piece_hookhookab.mp4', from: 4, duration: 4.2, layers: [{ layer, z: 0 }] } }
     for (const bad of [{ ...hook, hook: undefined }, { ...hook, hook: { ...hook.hook, duration: 0 } }, { ...hook, hook: { ...hook.hook, clip: 'notes.txt' } }, { ...hook, hook: { ...hook.hook, job: 'elsewhere' } }]) {

@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from "react";
 import { useTranslation } from "react-i18next";
-import { ArrowDown, ArrowRight, ArrowUp, Blend, Check, ChevronRight, Clapperboard, Eye, EyeOff, FolderInput, Gamepad2, Layers, Loader2, Music2, Palette, Plus, Sparkles, Trash2, Type, X, LayoutTemplate, type LucideIcon } from "lucide-react";
+import { ArrowDown, ArrowRight, ArrowUp, Blend, Check, ChevronRight, Clapperboard, Eye, EyeOff, FolderInput, Gamepad2, Layers, Loader2, Music2, Palette, Plus, Sparkles, Trash2, Type, X, Zap, LayoutTemplate, type LucideIcon } from "lucide-react";
 import type { Compilation, CompilationItem, CompilationSection, TwitchStoryboard } from "../../lib/api";
 import {
   PLAIN_CUT,
@@ -35,6 +35,7 @@ import MusicPicker from "./MusicPicker";
 import TemplateMenu from "../TemplateMenu";
 import { dressAs, UNIVERSES, universeOf } from "../../lib/universes";
 import { HOOK_STYLES, isHookStyle, type HookStyle } from "../../lib/templateSpec";
+import { EFFECT_LEVELS, isEffectLevel } from "../../lib/effects";
 import TransitionPicker from "./TransitionPicker";
 
 interface Props {
@@ -242,7 +243,7 @@ export default function CompilationPanel({
   }, [picked.size]);
 
   // What is open: the list of parts to move the picked passages to, or the transitions (of the video, of the picked ones, of one passage)
-  const [menu, setMenu] = useState<"move" | "video" | "picked" | "intro" | "music" | "template" | "universe" | "titles" | { item: string } | null>(null);
+  const [menu, setMenu] = useState<"move" | "video" | "picked" | "intro" | "music" | "template" | "universe" | "titles" | "effects" | { item: string } | null>(null);
   const partName = (section: CompilationSection, among = compilation.sections) => section.title.trim() || t("compilation.partN", { n: among.indexOf(section) + 1 });
   const moveTo = (sectionId: string | null) => {
     setMenu(null);
@@ -299,6 +300,7 @@ export default function CompilationPanel({
   // The look of a game the video is dressed in (none: the channel's own)
   const universe = universeOf(compilation.universe);
   const titleStyle = isHookStyle(compilation.titleStyle) ? compilation.titleStyle : null;
+  const effects = isEffectLevel(compilation.effects) ? compilation.effects : null;
   // The intro is part of the video: it counts in its length
   const opening = openingSeconds(compilation, trackOf(musics, compilation.music?.track)?.bpm);
   const total = compilationLength(compilation) + opening;
@@ -671,6 +673,30 @@ export default function CompilationPanel({
                   }}
                   onClose={() => setMenu(null)}
                   className="right-0 bottom-full mb-2"
+                />
+              )}
+            </SettingRow>
+            {/* How much the picture moves on what is said: a zoom from one passage to the next, a punch on a line that lands, a shake */}
+            <SettingRow
+              icon={Zap}
+              label={t("compilation.effects.label")}
+              value={t(`compilation.effects.${effects ?? "none"}`)}
+              set={!!effects}
+              open={menu === "effects"}
+              onOpen={() => setMenu(menu === "effects" ? null : "effects")}
+            >
+              {menu === "effects" && (
+                <TemplateMenu
+                  label={t("compilation.effects.label")}
+                  value={effects}
+                  templates={EFFECT_LEVELS.map((level) => ({ key: level, name: t(`compilation.effects.${level}`) }))}
+                  fallback={t("compilation.effects.none")}
+                  onPick={(key) => {
+                    setMenu(null);
+                    const { effects: _before, ...rest } = compilation;
+                    onChange(isEffectLevel(key) ? { ...rest, effects: key } : rest);
+                  }}
+                  onClose={() => setMenu(null)}
                 />
               )}
             </SettingRow>

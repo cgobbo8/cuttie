@@ -255,8 +255,10 @@ test.group('Compilations', (group) => {
       // Only a plain yes hides a title
       { id: 'part0003', title: 'La fin', query: '', items: [], hidden: 'yes' },
     ]
-    const saved = await save({ titles: true, titleStyle: 'vice', sections })
+    const saved = await save({ titles: true, titleStyle: 'vice', effects: 'strong', sections })
     assert.equal(saved.titleStyle, 'vice')
+    // (how much its picture moves on what is said is kept the same way: a level the app knows, or nothing)
+    assert.equal(saved.effects, 'strong')
     assert.deepEqual(saved.sections.map((s: any) => [s.title, s.hidden]), [['Calme', true], ['Ça pète', undefined], ['La fin', undefined]])
     assert.notProperty(saved.sections[1], 'hidden')
     // Read back as saved
@@ -272,6 +274,9 @@ test.group('Compilations', (group) => {
     assert.notProperty(back, 'titleStyle')
     assert.isTrue(back.sections.every((s: any) => !('hidden' in s)))
     assert.notProperty(await save({ titleStyle: 'comic' }), 'titleStyle')
+    assert.notProperty(back, 'effects')
+    assert.notProperty(await save({ effects: 'wild' }), 'effects')
+    assert.equal((await save({ effects: 'light' })).effects, 'light')
   })
 
   test('keeps the intro a video opens with, counts it in its length, and forgets it when it goes', async ({ client, assert }) => {

@@ -91,7 +91,10 @@ test.group('Sound of the exports', () => {
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }
-  }).skip(!hasFfmpeg(), 'ffmpeg is not installed')
+  })
+    .skip(!hasFfmpeg(), 'ffmpeg is not installed')
+    // (several passes of ffmpeg: over the 2 s a unit test has when the machine is busy)
+    .timeout(30_000)
 
   test('the cuts of a montage are smoothed in the same pass', ({ assert }) => {
     assert.isNull(smoothCuts([]))

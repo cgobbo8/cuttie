@@ -27,6 +27,8 @@ import {
   tighten,
   wordsIn,
   type Range,
+  withEffects,
+  renderPieces,
 } from "./montage";
 
 const word = (text: string, start: number, end: number) => ({ word: text, start, end });
@@ -216,6 +218,28 @@ describe("montage for Remotion", () => {
     expect(renderIntro({ ...drawn, style: "hook", hook: moment }, "piece_abc.mp4", "live-2")).toEqual({ ...drawn, style: "hook", hook: { ...moment, clip: "piece_abc.mp4", job: "live-2" } });
     expect(renderIntro({ ...drawn, style: "hook", hook: moment }, "piece_abc.mp4").hook).toEqual({ ...moment, clip: "piece_abc.mp4" });
     expect(renderIntro({ ...drawn, style: "slam", sound: "boom" })).toEqual({ ...drawn, style: "slam", sound: "boom" });
+  });
+
+  it("moves the picture on what is said when the video asks for it, on each piece's own clock", () => {
+    const said = { ...ctx, words: [word("regarde", 6, 6.4), word("le", 6.5, 6.6), word("tigre!", 6.7, 7.3), word("quoi?", 31, 31.4)] };
+    const cuts = [{ ctx: said, start: 5, end: 9 }, { ctx: said, start: 30, end: 34 }];
+    const montage = buildMontage(cuts, build);
+    // No level: the montage as it was
+    expect(withEffects(montage, cuts, null).segments.every((segment) => !("effects" in segment))).toBe(true);
+    const lively = withEffects(montage, cuts, "light");
+    // The first piece punches in where « regarde le tigre! » starts, 1 s into it (said at 6 s of a clip played from 5 s)
+    expect(lively.segments[0].effects).toEqual([{ kind: "punch", at: 0.95, for: 0.8, amount: 1.08 }]);
+    // The second plays a little closer, and punches on its own line
+    expect(lively.segments[1].effects!.map((e) => [e.kind, e.at])).toEqual([["zoom", 0], ["punch", 0.95]]);
+    // Its layers, its place and its length are untouched
+    expect(lively.segments.map(({ effects: _effects, ...rest }) => rest)).toEqual(montage.segments);
+    // A clip's key moments, in its own seconds, take over from the words; one outside the piece is left out
+    const named = withEffects(montage, cuts, "light", [[7.5, 20], undefined]);
+    expect(named.segments[0].effects).toEqual([{ kind: "punch", at: 2.45, for: 0.8, amount: 1.08 }]);
+    // To the renderer, a piece says its effects; chosen again, the level replaces what was placed
+    expect(renderPieces(lively, ["a.mp4", "b.mp4"])[0].effects).toEqual(lively.segments[0].effects);
+    expect(renderPieces(montage, ["a.mp4", "b.mp4"])[0]).not.toHaveProperty("effects");
+    expect(withEffects(lively, cuts, null).segments).toEqual(montage.segments);
   });
 
   it("gives each piece the template's layers on the clip's clock, and lays the hook and widgets once over the whole", () => {

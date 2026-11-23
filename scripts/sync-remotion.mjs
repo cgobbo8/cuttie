@@ -59,6 +59,8 @@ for (const file of readdirSync(from)) {
 }
 
 copyFileSync(path.join(root, "frontend/src/lib/transitions.ts"), path.join(root, "api/remotion/transitions.ts"));
+// What moves a piece's picture while it plays (zoom, punch, shake): the same maths in the preview and the export
+copyFileSync(path.join(root, "frontend/src/lib/effects.ts"), path.join(root, "api/remotion/effects.ts"));
 
 /** Every file of a folder that matches, copied as is */
 function mirror(source, target, keep) {

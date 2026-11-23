@@ -44,7 +44,8 @@ IDEAS_VERSION = "3"
 # Sequences proposed for one live at most, how long one is in the live, how long its video is, how the live is read
 MAX_SEQUENCES = 4
 MIN_SPAN, MAX_SPAN = 120.0, 3600.0
-SEQUENCE_SECONDS = (45.0, 240.0, 120.0)
+# (a short video: over a minute and a half is too long for Instagram, and a Short with a claimed music is blocked past a minute)
+SEQUENCE_SECONDS = (45.0, 90.0, 75.0)
 SEQUENCE_LINE = 30.0
 MIN_BEATS = 4
 
@@ -258,7 +259,8 @@ There are three kinds of videos to make from a live:
 - SEQUENCES: a stretch of the live IN A ROW, from 2 minutes to an hour, where ONE thing goes on from a beginning to an end:
   a mission of the game, a long attempt at something, a situation the streamer creates and keeps going (20 minutes spent
   blocking a bus so a character can't go to work), a story with a setup, an escalation and a payoff. Retold as ONE edited
-  video of 1 to 4 minutes, it must make sense to someone who never saw the live.
+  SHORT video of about a minute (90 seconds at most: it goes on TikTok, Reels and Shorts), it must make sense to someone
+  who never saw the live: only its strongest beats, cut fast.
 
 Find the sequences of this live. For each one:
 - "start", "end": H:MM:SS, where the thing begins and where it is over (include the payoff)
@@ -268,9 +270,9 @@ Find the sequences of this live. For each one:
 - "brief": the request the streamer would have typed to get this video, in the stream's language: what the video tells,
   in order, from the setup to the payoff, what to keep and what to skip, the energy wanted (fast cuts, no dead time).
   End it with the sentence saying between which times of the live it all happens (H:MM:SS).
-- "beats": 5 to 10 moments of it IN ORDER that the edited video must keep, each {{"at": "H:MM:SS", "what": "a few words"}}:
+- "beats": 5 to 8 moments of it IN ORDER that the edited video must keep, each {{"at": "H:MM:SS", "what": "a few words"}}:
   the setup first (one line that says what is going on), the turns, the funniest or most intense instants, the payoff last
-- "seconds": how long the edited video should be, 60 to 240: longer for a long sequence with many turns
+- "seconds": how long the edited video should be, 45 to 90: the longer end only for a sequence with many turns
 - "tags": 2 to 4 short lowercase tags in the stream's language
 - "score": 0-100, how good a video it would make
 

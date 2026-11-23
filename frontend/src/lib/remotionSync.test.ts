@@ -6,6 +6,7 @@ import { MUSIC_KINDS } from "./music/mix";
 import { TRANSITION_IDS } from "./transitions";
 import { UNIVERSES } from "./universes";
 import { HOOK_STYLES } from "./templateSpec";
+import { EFFECT_LEVELS } from "./effects";
 
 /** The server renderer must draw exactly what the editor shows (scripts/sync-remotion.mjs) */
 const root = path.resolve(__dirname, "../../..");
@@ -58,6 +59,14 @@ describe("editor and server renderer stay in sync", () => {
       expect(said?.[3].match(/\w+/g), universe.id).toEqual([...universe.intros]);
       expect(said?.[4].match(/\w+/g), universe.id).toEqual([...universe.titles]);
     }
+  });
+
+  it("moves a piece's picture with the same maths in the preview and in the export, at the same levels", () => {
+    const read = (file: string) => readFileSync(path.join(root, file), "utf8");
+    expect(read("api/remotion/effects.ts")).toBe(read("frontend/src/lib/effects.ts"));
+    expect(read("api/app/services/compilations.ts").match(/export const EFFECT_LEVELS = \[([^\]]+)\]/)?.[1].match(/\w+/g)).toEqual(EFFECT_LEVELS);
+    // (the export's composition applies them as the preview's does)
+    for (const file of ["api/remotion/MontageComposition.tsx", "frontend/src/components/remotion-editor/MontageComposition.tsx"]) expect(read(file), file).toContain("effectAt(segment.effects, frame, fps)");
   });
 
   it("knows the same ways of writing a title on both sides", () => {

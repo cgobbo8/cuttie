@@ -10,6 +10,7 @@ import { tmpdir } from 'node:os'
 import { execSync } from 'node:child_process'
 import path from 'node:path'
 import type { Layer } from '../../remotion/editorTypes.js'
+import type { SegmentEffect } from '../../remotion/effects.js'
 import { getPresignedUrl, uploadFile } from '#services/storage'
 import { BACKGROUND_SIZE, ensureBackground } from '#services/clip_variants'
 import { CLIPS_DIR } from '#services/data_paths'
@@ -373,6 +374,8 @@ export interface MontagePiece {
   layers: PlacedLayer[]
   /** The ready-made transition it comes in with */
   transition?: string
+  /** What moves its picture while it plays (remotion/effects.ts) */
+  effects?: SegmentEffect[]
 }
 
 /** The intro a montage opens with, with all it draws (api/remotion/intro) */
@@ -442,7 +445,9 @@ export async function renderMontage(opts: MontageRenderOptions): Promise<{ sizeM
     return { from, duration, layers: await place(piece.layers, piece.clipFilename, probe, piece.jobId ?? jobId) }
   }
   const segments: { from: number; duration: number; layers: PlacedLayer[]; transition?: string }[] = []
-  for (const piece of opts.pieces) segments.push({ ...(await segmentOf(piece)), ...(piece.transition ? { transition: piece.transition } : {}) })
+  for (const piece of opts.pieces) {
+    segments.push({ ...(await segmentOf(piece)), ...(piece.transition ? { transition: piece.transition } : {}), ...(piece.effects?.length ? { effects: piece.effects } : {}) })
+  }
   const first = opts.pieces[0]
   const overlays = await place(opts.overlays, first.clipFilename, readProbe(first.jobId ?? jobId, first.clipFilename), first.jobId ?? jobId)
   // The intro holds the screen first; its sound is not the renderer's business. A hook plays a moment of the video meanwhile

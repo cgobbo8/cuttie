@@ -5,6 +5,7 @@ import { ResolvedLayer } from "./CuttieComposition";
 import IntroCard, { INTRO_W } from "./intro/IntroCard";
 import { between, easeOut, introFade, introRate, introSpan, introVolume, isIntro } from "./intro/intros";
 import { gainAt, type MusicCurve } from "./music/curve";
+import { effectAt, type SegmentEffect } from "./effects";
 import { isTransition, lookStyle, transitionAt } from "./transitions";
 
 /** A layer and where it stacks among all the template's layers (0 = bottom) */
@@ -20,6 +21,8 @@ export interface MontageSegment {
   layers: PlacedLayer[];
   /** The ready-made transition it comes in with (see transitions.ts) */
   transition?: string;
+  /** What moves its picture while it plays (see effects.ts) */
+  effects?: SegmentEffect[];
 }
 
 /** The intro a montage opens with, with all it draws (see ./intro) */
@@ -94,6 +97,8 @@ const Piece: React.FC<{ segment: MontageSegment; before?: MontageSegment; next?:
   const coming = isTransition(segment.transition) ? transitionAt(segment.transition, frame, fps) : null;
   const going = !coming && isTransition(next?.transition) ? transitionAt(next.transition, frame - framesOf(segment.duration, fps), fps) : null;
   const now = coming ?? going;
+  // What moves its picture while it plays (a transition has the picture to itself)
+  const moved = now ? null : effectAt(segment.effects, frame, fps);
   return (
     <>
       {coming?.held && before && (
@@ -103,7 +108,7 @@ const Piece: React.FC<{ segment: MontageSegment; before?: MontageSegment; next?:
           </Freeze>
         </div>
       )}
-      <div style={now ? { ...FILL, ...lookStyle(now.piece, width) } : BARE}>
+      <div style={now ? { ...FILL, ...lookStyle(now.piece, width) } : moved ? { ...FILL, transform: moved.transform } : BARE}>
         <Layers segment={segment} />
       </div>
       {now && now.flash > 0 && <div style={{ ...FILL, background: "#fff", opacity: now.flash }} />}

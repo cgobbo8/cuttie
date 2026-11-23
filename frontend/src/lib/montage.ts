@@ -10,6 +10,7 @@
  */
 
 import type { ChatMessage, Layer, SubtitleWord } from "./editorTypes";
+import { placeEffects, type EffectLevel, type SegmentEffect } from "./effects";
 import { introSpan, isIntro, type IntroId } from "./intro/intros";
 import type { MusicCurve } from "./music/curve";
 import type { TemplateContext } from "./templates";
@@ -218,6 +219,8 @@ export interface MontageSegment {
   layers: PlacedLayer[];
   /** The ready-made transition it comes in with (see transitions.ts), none: a plain cut */
   transition?: string;
+  /** What moves its picture while it plays (a zoom, a punch on a line, a shake: see effects.ts), none: it plays as it is */
+  effects?: SegmentEffect[];
 }
 
 /** The intro a montage opens with, with all it draws (see lib/intro) */
@@ -355,6 +358,22 @@ export function buildMontage(
   return { segments, overlays: [...overlays, ...extra(total).map((layer, i) => ({ layer, z: top + i }))] };
 }
 
+/**
+ * A montage with its effects at a level (none: as it was): each piece's words, on its own clock, say
+ * where a line lands; `beats[i]`: the instants of piece `i` that someone named (clip seconds).
+ */
+export function withEffects(montage: MontageProps, cuts: MontageCut[], level: EffectLevel | null | undefined, beats: (number[] | undefined)[] = []): MontageProps {
+  const placed = placeEffects(
+    montage.segments.map((segment, i) => ({
+      duration: segment.duration,
+      words: wordsIn(cuts[i]?.ctx.words ?? [], segment.from, segment.from + segment.duration).map((word) => ({ ...word, start: word.start - segment.from, end: word.end - segment.from })),
+      beats: beats[i]?.map((at) => at - segment.from).filter((at) => at >= 0 && at <= segment.duration),
+    })),
+    level,
+  );
+  return { ...montage, segments: montage.segments.map(({ effects: _before, ...segment }, i) => (placed[i].length ? { ...segment, effects: placed[i] } : segment)) };
+}
+
 /** A montage's intro as the renderer takes it: the moment of a "hook" names its clip (`job`: the live it is in when it isn't the export's own) */
 export function renderIntro(intro: MontageIntro, clip?: string, job?: string): Omit<MontageIntro, "hook"> & { hook?: MontageSegment & { clip: string; job?: string } } {
   const { hook, ...rest } = intro;
@@ -366,7 +385,7 @@ export function renderPieces(
   montage: MontageProps,
   clips: string[],
   jobs: (string | undefined)[] = [],
-): { clip: string; from: number; duration: number; layers: PlacedLayer[]; job?: string; transition?: string }[] {
+): { clip: string; from: number; duration: number; layers: PlacedLayer[]; job?: string; transition?: string; effects?: SegmentEffect[] }[] {
   return montage.segments.map((segment, i) => ({
     clip: clips[i],
     from: segment.from,
@@ -374,5 +393,6 @@ export function renderPieces(
     layers: segment.layers,
     ...(jobs[i] ? { job: jobs[i] } : {}),
     ...(segment.transition ? { transition: segment.transition } : {}),
+    ...(segment.effects?.length ? { effects: segment.effects } : {}),
   }));
 }

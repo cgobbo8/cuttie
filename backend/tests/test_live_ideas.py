@@ -268,8 +268,8 @@ def test_reads_the_sequences_a_model_gives_into_ideas():
     assert billiards["moments"] == [1125.0, 1253.0, 1351.0, 1392.0, 1452.0]
     assert (billiards["seconds"], billiards["tags"], billiards["kind"]) == (90, ["billard", "bagarre", "drôle", "romance"], None)
     assert billiards["pitch"] == "Six minutes qui montent d'un cran à chaque coup raté." and billiards["brief"].endswith("du live.")
-    # A long video is asked for, never longer than four minutes
-    assert found[0]["seconds"] == 240
+    # However long the sequence, its video is a short one: a minute and a half at most
+    assert found[0]["seconds"] == 90
     assert live_ideas.clean_sequences(None, 3600.0) == [] and len(live_ideas.clean_sequences([SEQUENCE] * 3, 3600.0)) == 1
 
 

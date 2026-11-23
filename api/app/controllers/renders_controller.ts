@@ -14,6 +14,7 @@ import { findMusic, musicFile, musicFrom, parseCurve, trackGain, type MusicCurve
 import { loadJobSharedData, resolveEditEnv } from '#services/edit_env_resolver'
 import { resolveThemeForClip, type ThemeLayerTemplate } from '#services/theme_resolver'
 import type { Layer } from '../../remotion/editorTypes.js'
+import { cleanEffects } from '../../remotion/effects.js'
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -90,7 +91,9 @@ function parsePieces(raw: unknown): MontagePiece[] | null {
     // The ready-made transition it comes in with: one the renderer knows, or the piece is refused
     const transition = (item as any)?.transition
     if (transition !== undefined && !isTransition(transition)) return null
-    pieces.push({ clipFilename: clip, from, duration, layers, ...(job ? { jobId: job } : {}), ...(transition ? { transition } : {}) })
+    // What moves its picture while it plays: what the renderer knows of it, the rest is dropped
+    const effects = cleanEffects((item as any)?.effects)
+    pieces.push({ clipFilename: clip, from, duration, layers, ...(job ? { jobId: job } : {}), ...(transition ? { transition } : {}), ...(effects.length ? { effects } : {}) })
   }
   return pieces
 }

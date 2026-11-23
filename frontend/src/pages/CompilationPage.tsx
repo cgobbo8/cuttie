@@ -69,7 +69,7 @@ import {
 } from "../lib/compilation";
 import { liveWhen, plainDate } from "../lib/compilationLibrary";
 import { clock, splitVodTitle } from "../lib/format";
-import { buildMontage, framesOf, introHold, montageFrames, playsIntro, renderIntro, renderPieces, type MontageCut, type MontageProps, type MontageSegment } from "../lib/montage";
+import { buildMontage, framesOf, introHold, montageFrames, playsIntro, renderIntro, renderPieces, type MontageCut, type MontageProps, type MontageSegment, withEffects } from "../lib/montage";
 import { evenFrames, tileStyle } from "../lib/storyboard";
 import { isTransition, transitionSpan } from "../lib/transitions";
 import { introSpan, isIntro } from "../lib/intro/intros";
@@ -81,6 +81,7 @@ import { clipTemplateContext } from "../lib/templateContext";
 import { templateGuides } from "../lib/templateGuide";
 import { buildAny, customTemplates, defaultTemplateKey, findCustom, hookOf, isBuiltIn, type TemplateKey } from "../lib/templateKeys";
 import { isHookStyle, titleCard } from "../lib/templateSpec";
+import { isEffectLevel } from "../lib/effects";
 import { TEMPLATE_IDS } from "../lib/templates";
 import MontageComposition from "../components/remotion-editor/MontageComposition";
 import ModeSwitch from "../components/project/ModeSwitch";
@@ -683,6 +684,8 @@ export default function CompilationPage() {
                 })
             : [],
       );
+      // What moves the picture on what is said (a zoom from one passage to the next, a punch on a line that lands), when the video asks for it
+      montage.segments = withEffects(montage, cuts, isEffectLevel(all.effects) ? all.effects : null).segments;
       // A "hook" intro plays a moment of the video first: built like a piece, in that passage's own template, the
       // video's title written on it as the template writes its hook (where it puts it: never on the face)
       const moment = hookMoment(all);

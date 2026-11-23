@@ -1749,6 +1749,8 @@ export interface Compilation {
   asks?: { ask: string; note: string; added?: number; removed?: number; recut?: number; remembered?: string[] }[];
   /** Other lives it takes passages from, besides the one it is kept with (job ids) */
   lives?: string[];
+  /** How much its picture moves on what is said: "light" or "strong" (see lib/effects.ts; absent: it plays plain) */
+  effects?: string;
   /** The look of a game it is dressed in instead of the channel's own (see lib/universes.ts; absent: the channel's) */
   universe?: string;
   /** How its titles are written (the titles of its parts, its hook line): one of the template editor's ways (absent: as its template writes them) */

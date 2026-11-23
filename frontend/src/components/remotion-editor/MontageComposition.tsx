@@ -2,6 +2,7 @@ import { AbsoluteFill, Audio, Freeze, Img, Sequence, Series, useCurrentFrame, us
 import IntroCard, { INTRO_W } from "../../lib/intro/IntroCard";
 import { between, easeOut, introFade, introRate, introSpan, introVolume, isIntro } from "../../lib/intro/intros";
 import { framesOf, playsIntro, type MontageIntro, type MontageProps, type MontageSegment } from "../../lib/montage";
+import { effectAt } from "../../lib/effects";
 import { gainAt } from "../../lib/music/curve";
 import { isTransition, lookStyle, transitionAt } from "../../lib/transitions";
 import { audibleLayerId, LayerBox } from "./CuttieComposition";
@@ -35,6 +36,8 @@ function Piece({ segment, before, next }: { segment: MontageSegment; before?: Mo
   const coming = isTransition(segment.transition) ? transitionAt(segment.transition, frame, fps) : null;
   const going = !coming && isTransition(next?.transition) ? transitionAt(next.transition, frame - framesOf(segment.duration, fps), fps) : null;
   const now = coming ?? going;
+  // What moves its picture while it plays (a transition has the picture to itself)
+  const moved = now ? null : effectAt(segment.effects, frame, fps);
   return (
     <>
       {coming?.held && before && (
@@ -44,7 +47,7 @@ function Piece({ segment, before, next }: { segment: MontageSegment; before?: Mo
           </Freeze>
         </div>
       )}
-      <div style={now ? { ...FILL, ...lookStyle(now.piece, width) } : BARE}>
+      <div style={now ? { ...FILL, ...lookStyle(now.piece, width) } : moved ? { ...FILL, transform: moved.transform } : BARE}>
         <Layers segment={segment} />
       </div>
       {now && now.flash > 0 && <div style={{ ...FILL, background: "#fff", opacity: now.flash }} />}

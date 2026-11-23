@@ -87,6 +87,8 @@ export interface Compilation {
   universe?: string
   /** How its titles are written (the titles of its parts, its hook line): one of the template editor's ways (absent: as its template writes them) */
   titleStyle?: string
+  /** How much its picture moves on what is said: "light" or "strong" (absent: it plays plain) */
+  effects?: string
   created_at: string
   updated_at: string
 }
@@ -99,6 +101,8 @@ export interface Compilation {
 export const UNIVERSES: Record<string, { template: string; look: string; intros: string[]; titles: string[]; plays: RegExp }> = {
   gta: { template: 'gta', look: 'sunset', intros: ['sunset', 'miami', 'wanted', 'cover'], titles: ['viceplate', 'vice'], plays: /grand theft auto|^\s*gta\b/i },
 }
+/** How much a video's picture moves on what is said (frontend/src/lib/effects.ts: EFFECT_LEVELS); absent: it plays plain */
+export const EFFECT_LEVELS = ['light', 'strong']
 /** The ways a title can be written (frontend/src/lib/templateSpec.ts: HOOK_STYLES) */
 export const TITLE_STYLES = ['outline', 'box', 'brand', 'vice', 'viceplate']
 export const isUniverse = (value: unknown): value is string => typeof value === 'string' && Object.hasOwn(UNIVERSES, value)
@@ -397,6 +401,7 @@ export function parseCompilation(raw: any, liveDuration: number, others?: Map<st
     ...(lives.length > 0 ? { lives } : {}),
     ...(isUniverse(raw.universe) ? { universe: raw.universe } : {}),
     ...(TITLE_STYLES.includes(raw.titleStyle) ? { titleStyle: raw.titleStyle } : {}),
+    ...(EFFECT_LEVELS.includes(raw.effects) ? { effects: raw.effects } : {}),
     ...(text(raw.brief, MAX_BRIEF) ? { brief: text(raw.brief, MAX_BRIEF) } : {}),
     // What the AI answered to the description: what it built and why
     ...(text(raw.brief, MAX_BRIEF) && text(raw.answer, 800) ? { answer: text(raw.answer, 800) } : {}),

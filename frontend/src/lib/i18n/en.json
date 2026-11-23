@@ -1533,6 +1533,12 @@
     "titlesHint": "Each section opens with its title",
     "titleHide": "Don't write this title in the video",
     "titleShow": "Write this title in the video",
+    "effects": {
+      "label": "Effects",
+      "none": "None",
+      "light": "Light",
+      "strong": "Strong"
+    },
     "titleStyle": {
       "label": "Title style",
       "template": "As the template"

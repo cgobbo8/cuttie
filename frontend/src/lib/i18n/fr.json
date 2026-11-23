@@ -1533,6 +1533,12 @@
     "titlesHint": "Chaque partie s'ouvre sur son titre",
     "titleHide": "Ne pas écrire ce titre dans la vidéo",
     "titleShow": "Écrire ce titre dans la vidéo",
+    "effects": {
+      "label": "Effets",
+      "none": "Aucun",
+      "light": "Légers",
+      "strong": "Marqués"
+    },
     "titleStyle": {
       "label": "Style des titres",
       "template": "Comme le modèle"

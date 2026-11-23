@@ -18,12 +18,22 @@ const CLIP_FONTS: { family: string; file: string; weight: string }[] = [
   { family: "Geist Variable", file: "Geist-Variable.woff2", weight: "100 900" },
 ];
 
+/** How long one font may take to load before it is tried again, then given up (ms) */
+const FONT_WAIT = 20000;
+
 export function loadClipFonts(): void {
   const handle = delayRender("Loading clip fonts");
+  // A font that never answers no longer holds the render: seen on a real export of 4 min 30, stopped after
+  // ten minutes of waiting for one. Tried twice, then the render goes on without it (its text in a fallback font).
+  const load = (family: string, file: string, weight: string) =>
+    Promise.race([
+      new FontFace(family, `url(${staticFile(`fonts/${file}`)})`, { style: "normal", weight }).load(),
+      new Promise<never>((_resolve, reject) => setTimeout(() => reject(new Error(`${family} did not load in ${FONT_WAIT / 1000} s`)), FONT_WAIT)),
+    ]);
   Promise.all(
     CLIP_FONTS.map(async ({ family, file, weight }) => {
-      const face = new FontFace(family, `url(${staticFile(`fonts/${file}`)})`, { style: "normal", weight });
-      document.fonts.add(await face.load());
+      const face = await load(family, file, weight).catch(() => load(family, file, weight));
+      document.fonts.add(face);
     }),
   )
     .catch((err) => console.error("Clip fonts failed to load", err))

@@ -1533,6 +1533,12 @@
     "titlesHint": "Cada parte se abre con el título",
     "titleHide": "No escribir este título en el vídeo",
     "titleShow": "Escribir este título en el vídeo",
+    "effects": {
+      "label": "Efectos",
+      "none": "Ninguno",
+      "light": "Suaves",
+      "strong": "Marcados"
+    },
     "titleStyle": {
       "label": "Estilo de los títulos",
       "template": "Como el modelo"

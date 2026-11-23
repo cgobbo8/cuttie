@@ -518,8 +518,9 @@ class Searcher:
     `on_step(tool, args)` is told what the search is doing, as it does it."""
 
     def __init__(self, tools: LiveTools | ManyLives, client, model: str, vod_url: str | list[str | None] | None = None, ears_model: str = EARS_MODEL,
-                 on_step=None, max_cost: float = MAX_COST, eyes_model: str = EYES_MODEL) -> None:
-        """`tools`: one live's, or several lives' (`vod_url` is then each live's address, in their order)."""
+                 on_step=None, max_cost: float = MAX_COST, eyes_model: str = EYES_MODEL, max_looks: int = MAX_LOOKS) -> None:
+        """`tools`: one live's, or several lives' (`vod_url` is then each live's address, in their order).
+        `max_looks`: how many times it may look at the live's pictures (more for a work that is about what is seen)."""
         self.tools = tools
         self.many = len(tools.lives) if isinstance(tools, ManyLives) else 0
         self.client = client
@@ -529,6 +530,7 @@ class Searcher:
         self.vod_url = vod_url
         self.on_step = on_step
         self.max_cost = max_cost
+        self.max_looks = max_looks
         # Where each live's sound is read from, once asked (None: it can't be)
         self._audio_urls: dict[int, str | None] = {}
         # ...and its image, in a small rendition
@@ -545,6 +547,9 @@ class Searcher:
         for spec, model in ((LISTEN_SPEC, self.ears_model), (LOOK_SPEC, self.eyes_model)):
             if not any(urls) or not model:
                 continue
+            if spec is LOOK_SPEC and self.max_looks != MAX_LOOKS:
+                spec = copy.deepcopy(spec)
+                spec["description"] = spec["description"].replace(f"{MAX_LOOKS} looks at most", f"{self.max_looks} looks at most")
             if self.many:
                 spec = copy.deepcopy(spec)
                 spec["parameters"]["properties"]["live"] = {"type": "integer", "description": f"Which live: 1 to {self.many}"}
@@ -631,7 +636,7 @@ class Searcher:
 
     def look(self, start, end=None, question: str = "", live=None) -> dict:
         """What is on screen at a moment of the live: three images of it, told by the model that sees."""
-        if self.run.looks >= MAX_LOOKS:
+        if self.run.looks >= self.max_looks:
             return {"error": "no looks left: decide with what you have"}
         tools, which = self.tools, 0
         if isinstance(tools, ManyLives):

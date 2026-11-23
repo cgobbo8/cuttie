@@ -55,7 +55,7 @@ MAX_WHISPER_WORKERS = 12  # Parallel Whisper calls
 KEEP_TOP_N = 20  # How many candidates to keep after LLM scoring
 KEEP_NORMAL_FOR_LLM = 50  # Top N non-clip candidates that get full LLM analysis (from 100 scored)
 PRESORT_SLOTS = 15  # Of those, kept for the moments the AI found reading the whole live
-WATCH_SLOTS = 8  # And for the moments it found looking where little is said (see watching.py)
+WATCH_SLOTS = 10  # And for the moments it found looking where little is said (see watching.py)
 
 # Keywords that indicate the streamer wants a clip
 CLIP_KEYWORDS = [
@@ -1174,7 +1174,10 @@ def analyze_candidates(
         try:
             from app.services import sound_index
 
-            watched = watching.watch(vod_transcript, sound_index.load(job_id), chat_messages or [], chat_lag or 5.0, vod_duration, direct_url, vod_meta.get("game"))
+            watched = watching.watch(
+                vod_transcript, sound_index.load(job_id), chat_messages or [], chat_lag or 5.0, vod_duration, direct_url, vod_meta.get("game"),
+                job_id=job_id, vod_url=vod_url,
+            )
         except Exception as e:
             stop_if_fatal(e)
             logger.warning(f"[{job_id[:8]}] Watching unavailable, moments found by sound, chat and reading only: {e}")

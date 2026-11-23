@@ -41,6 +41,26 @@ def test_a_short_stunned_line_after_the_streamer_said_little_is_a_lead():
     assert [lead.at for lead in watching.find_leads(said((50.0, "No puede ser"), (200.0, "Oh my god")), None, [], 5.0, 400.0)] == [50.0, 200.0]
 
 
+def test_words_nobody_says_calmly_and_reactions_said_again_are_leads_whatever_is_said_around():
+    transcript = said(
+        # A cutscene that never stops talking, then the streamer: a long line, after many words
+        (100.0, "You think you can walk in here and take what is mine after everything we did for you and your family"),
+        (104.0, "Oh what the fuck, y'a un tigre et un singe, à le very bad trip"),
+        # The game talks again, and the streamer reacts three times in a row
+        (500.0, "We had a deal and you broke it so now you are going to pay for every single thing you took"),
+        (503.0, "Oh, what ?"),
+        (506.0, "Oh, what ?"),
+        (510.0, "Quoi ?"),
+        # One short line in the middle of talk, said once: he was talking, not watching
+        (900.0, "Donc là on va prendre la voiture et on file au port avant qu'ils arrivent tous"),
+        (904.0, "Quoi ?"),
+    )
+    leads = watching.find_leads(transcript, None, [], 5.0, 1200.0)
+    assert sorted((lead.at, lead.signs) for lead in leads) == [(104.0, ["stunned"]), (510.0, ["stunned"])]
+    # (the reaction said again is one lead, at its strongest sign; the words of disbelief are the strongest sign there is)
+    assert max(leads, key=lambda lead: lead.strength).at == 104.0
+
+
 def test_a_loud_sound_of_the_game_is_a_lead_stronger_with_few_words_on_it():
     index = sounds(900, crash={120: 0.8}, gunfire={400: 0.8, 401: 0.7}, explosion={700: 0.2})
     transcript = said((398.0, "Vas-y tire tire tire il est derrière la caisse à gauche je le vois plus"))
@@ -73,9 +93,9 @@ def test_reactions_and_sounds_of_the_game_are_looked_at_in_turn_when_there_are_t
     index = sounds(3000, gunfire={60 * n: 0.9 for n in range(1, 40)}, crash={2800: 0.9})
     transcript = said((2500.0, "Oh putain !"), (2802.0, "Wow."), (2900.0, "C'est quoi ça ?"))
     leads = watching.find_leads(transcript, index, [], 5.0, 3000.0, limit=6)
-    # What two kinds of signs agree on first, then a reaction and a sound in turn: the shots don't take every place
-    assert [lead.signs for lead in leads] == [["sound", "stunned"], ["stunned"], ["sound"], ["stunned"], ["sound"], ["sound"]]
-    assert leads[0].at == 2800.0 and {leads[1].at, leads[3].at} == {2500.0, 2900.0}
+    # What two kinds of signs agree on first, then two reactions for a sound: the shots don't take every place
+    assert [lead.signs for lead in leads] == [["sound", "stunned"], ["stunned"], ["stunned"], ["sound"], ["sound"], ["sound"]]
+    assert leads[0].at == 2800.0 and {leads[1].at, leads[2].at} == {2500.0, 2900.0}
     # The less was said before a short line, the more the streamer was watching
     quiet, less_quiet = watching.find_leads(said((100.0, "Wow."), (500.0, "je vais voir ce qu'il y a derrière la porte"), (504.0, "Oh non")), None, [], 5.0, 900.0)
     assert (quiet.at, less_quiet.at) == (100.0, 504.0) and quiet.strength > less_quiet.strength
@@ -87,9 +107,9 @@ def test_the_chat_writing_all_at_once_is_a_lead_and_the_leads_are_capped():
     leads = watching.find_leads(None, None, quiet + burst, 5.0, 1800.0)
     assert len(leads) == 1 and leads[0].signs == ["chat"]
     assert leads[0].at == 900.0  # where the stream was when the chat started reacting (it writes 5 s late)
-    many = said(*[(100.0 * i, "Oh non") for i in range(1, 80)])
-    assert len(watching.find_leads(many, None, [], 5.0, 9000.0)) == watching.MAX_LEADS
-    assert len(watching.find_leads(many, None, [], 5.0, 9000.0, limit=5)) == 5
+    many = said(*[(100.0 * i, "Oh non") for i in range(1, 130)])
+    assert len(watching.find_leads(many, None, [], 5.0, 14000.0)) == watching.MAX_LEADS
+    assert len(watching.find_leads(many, None, [], 5.0, 14000.0, limit=5)) == 5
 
 
 class FakeEyes:
@@ -207,6 +227,102 @@ def test_watch_looks_at_the_leads_and_returns_the_scenes(caplog):
     assert watching.watch(said((10.0, "Bonjour à tous")), None, [], 5.0, 100.0, "https://live", client=eyes, fetch=fetch) == []
     assert watching.watch(transcript, None, [], 5.0, 2000.0, "", client=eyes, fetch=fetch) == []
     assert eyes.calls == []
+
+
+class FakeSearcher:
+    """Stands for the AI that searches a live with tools."""
+
+    made: list["FakeSearcher"] = []
+    moments: list[dict] = []
+    fail: Exception | None = None
+
+    def __init__(self, tools, client, model, **options):
+        self.tools, self.options, self.asked = tools, options, None
+        FakeSearcher.made.append(self)
+
+    def search(self, request):
+        self.asked = request
+        if FakeSearcher.fail:
+            raise FakeSearcher.fail
+        return SimpleNamespace(moments=FakeSearcher.moments, looks=12, cost=0.007, steps=4)
+
+
+@pytest.fixture
+def searcher(monkeypatch):
+    from app.services import live_agent, live_tools
+
+    FakeSearcher.made, FakeSearcher.moments, FakeSearcher.fail = [], [], None
+    monkeypatch.setattr(live_agent, "Searcher", FakeSearcher)
+    transcript = said((13407.0, "Oh what the fuck, y'a un tigre et un singe"))
+    monkeypatch.setattr(live_tools, "load_cached", lambda job_id: transcript if job_id == "job-x" else None)
+    monkeypatch.setattr(live_tools.live_search, "read_chat", lambda job_id: [])
+    monkeypatch.setattr(live_tools.sound_index, "load", lambda job_id: None)
+    return FakeSearcher
+
+
+def test_the_searching_ai_is_asked_for_the_scenes_and_its_answer_read(searcher, caplog):
+    searcher.moments = [
+        {"start": "3:43:27.0", "end": "3:43:34.5", "quote": "« Oh what the fuck, y'a un tigre et un singe »", "why": "Un tigre blanc  et un singe\nau milieu d'une fête.", "score": 78},
+        {"start": "1:18:50.3", "end": "1:18:58.1", "quote": "Oh, what ?", "why": "Une cinématique de garage, rien d'absurde.", "score": 48},  # only close: left out
+        {"start": "nope", "why": "x", "score": 90},
+        {"start": "0:10:00", "why": "", "score": 90},
+        {"start": "4:59:59", "why": "à la toute fin", "score": "95"},
+    ]
+    chat = [{"timestamp": 10.0, "text": "???", "author": "a"}]
+    with caplog.at_level("INFO"):
+        found = watching.scout("job-x", chat, 5.0, 15000.0, "https://www.twitch.tv/videos/1", client=object())
+    assert [(s.at, s.watch, s.signs) for s in found] == [(13407.0, 78, ["agent"]), (14999.0, 95, ["agent"])]
+    assert found[0].seen == "Un tigre blanc et un singe au milieu d'une fête. (said then: « Oh what the fuck, y'a un tigre et un singe »)"
+    assert "the searching AI looked at 12 places" in caplog.text and "2 scenes" in caplog.text
+    # It is asked for what is seen, over the whole live, with more looks than a search has and its own ceiling
+    asked = searcher.made[0]
+    assert "ON SCREEN" in asked.asked and "at least twelve different places" in asked.asked
+    assert (asked.options["max_looks"], asked.options["max_cost"], asked.options["vod_url"]) == (16, 0.03, "https://www.twitch.tv/videos/1")
+    # (the chat the analysis holds, before it is written next to the clips)
+    assert asked.tools.chat == chat
+    # No transcript of this live in the worker: nothing is asked
+    assert watching.scout("another", [], 5.0, 100.0, "https://www.twitch.tv/videos/1", client=object()) == []
+    assert len(searcher.made) == 1
+
+
+def test_a_search_that_may_look_more_says_so_to_the_model(searcher, monkeypatch):
+    from app.services import live_agent
+
+    monkeypatch.undo()  # the real Searcher
+    tools = SimpleNamespace(specs=lambda: [], lives=[])
+    usual = live_agent.Searcher(tools, None, "m", vod_url="https://www.twitch.tv/videos/1")
+    more = live_agent.Searcher(tools, None, "m", vod_url="https://www.twitch.tv/videos/1", max_looks=16)
+    said_of = lambda s: next(spec["description"] for spec in s.specs() if spec["name"] == "look")  # noqa: E731
+    assert "8 looks at most" in said_of(usual) and "16 looks at most" in said_of(more)
+    assert "8 looks at most" in live_agent.LOOK_SPEC["description"]  # (the shared one is left as it is)
+    more.run.looks = 15
+    assert more.max_looks == 16 and usual.max_looks == live_agent.MAX_LOOKS
+
+
+def test_watch_puts_together_what_the_leads_and_the_searching_ai_found(searcher, caplog):
+    transcript = said((900.0, "Oh non !"), (2000.0, "Wow."))
+    eyes = FakeEyes(answers=[{"n": 1, "seen": "dies in a propeller", "watch": 85, "text": "MORT"}, {"n": 2, "seen": "a truck in a shop window", "watch": 60}])
+    fetch = lambda url, times: ["data:1", "data:2", "data:3"]  # noqa: E731
+    searcher.moments = [
+        {"start": "3:43:27", "why": "Un tigre blanc au milieu d'une fête.", "score": 78},
+        {"start": "0:33:10", "why": "Un camion traverse la vitrine.", "score": 90},  # the scene a lead found too, 10 s away
+    ]
+    kept = watching.watch(transcript, None, [], 5.0, 15000.0, "https://live.m3u8", "GTA", client=eyes, fetch=fetch, job_id="job-x", vod_url="https://www.twitch.tv/videos/1")
+    # One place per scene, the higher of its two ratings, the most worth watching first
+    assert [(s.at, s.watch, s.signs) for s in kept] == [(1990.0, 90, ["agent"]), (900.0, 85, ["stunned"]), (13407.0, 78, ["agent"])]
+    # The searching AI failing leaves what the leads found; a provider refusing for good stops everything
+    searcher.fail = TimeoutError("slow")
+    with caplog.at_level("WARNING"):
+        alone = watching.watch(transcript, None, [], 5.0, 15000.0, "https://live.m3u8", client=eyes, fetch=fetch, job_id="job-x", vod_url="https://www.twitch.tv/videos/1")
+    assert [s.at for s in alone] == [900.0, 2000.0] and "the searching AI could not look for scenes" in caplog.text
+    from app.services.provider_errors import ProviderUnavailable
+
+    class NoCredits(Exception):
+        status_code = 402
+
+    searcher.fail = NoCredits("Insufficient credits")
+    with pytest.raises(ProviderUnavailable):
+        watching.watch(transcript, None, [], 5.0, 15000.0, "https://live.m3u8", client=eyes, fetch=fetch, job_id="job-x", vod_url="https://www.twitch.tv/videos/1")
 
 
 def test_keeps_places_for_the_moments_found_by_looking():

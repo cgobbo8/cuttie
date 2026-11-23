@@ -17,8 +17,13 @@ Two steps:
    on screen, the streamer's face, the words written on the screen (the subtitles of a cutscene,
    a message: it reads them on a 480p picture) and how much the scene is worth watching.
 
-`watch` does both and returns the leads worth watching, the strongest first. The analysis gives
-them places among the moments its multimodal model rates (see llm_analyzer), with what was seen.
+3. `scout`: the AI that searches a live with tools (live_agent) is asked for the same scenes. It
+   goes from the words (it tries many wordings of surprise in the stream's language), reads around
+   them and looks at the pictures of the places it chose. It finds scenes the leads miss (a
+   long line, a cutscene whose dialogue counts as talk) and misses those nobody names.
+
+`watch` does all three and returns the scenes worth watching, the strongest first. The analysis
+gives them places among the moments its multimodal model rates (see llm_analyzer), with what was seen.
 
 Measured on a real live (GTA 6 story mode, 4 h 10, 23/11/2026, two passes for 0.029 $ in all):
 0.00033 $ a lead. Scenes it brought out, checked by eye on the pictures: the character walks out
@@ -26,6 +31,10 @@ of a seaplane into its propeller (rated 65 then 85), walks in on a couple (60), 
 first time while the streamer laughs (65 then 60), a character frozen in a T in the middle of the
 road during a fight (40 then 85). Rated as high and not clips: a chase at sunset, shots from a
 helicopter. Its rating moves from one pass to the next, and it rates low: 85 was its highest.
+The searching AI on the same live (two tries, 0.004 and 0.007 $, 27 and 56 s): a white tiger at a
+party (« oh what the fuck, y'a un tigre et un singe »), a backflip on a jet-ski that fails, the
+first death; never the propeller, the couple nor the frozen character. Of the 7 scenes known in
+that live, the leads found 4 and the AI 3 others: each alone misses about half.
 """
 
 from __future__ import annotations
@@ -40,15 +49,20 @@ from app.services.vod_transcript import VodTranscript
 
 logger = logging.getLogger(__name__)
 
-# How many leads are looked at (a third of a thousandth of a dollar each: 2.4 cents at most), and how many per call
-MAX_LEADS = 72
+# How many leads are looked at (a third of a thousandth of a dollar each: 3.2 cents at most), and how many per call
+MAX_LEADS = 96
 PER_CALL = 6
 # Where the three pictures are taken around a lead: the scene comes before the reaction
 OFFSETS = (-5.0, -1.0, 3.0)
 # From how much a lead is worth a place among the rated moments (the model rates low: 65 was its
 # highest on the live it was tried on), and how many get one
 WATCH_FLOOR = 55
-MAX_PICKS = 8
+MAX_PICKS = 10
+# The searching AI asked for the same scenes: how many places it may look at, what it may cost at most,
+# and from which of its scores a moment is kept (it scores 80+ what matches exactly, 50-79 what is softer)
+SCOUT_LOOKS = 16
+SCOUT_MAX_COST = 0.03
+SCOUT_FLOOR = 60
 # The window of a moment found by looking: the scene, a little of what leads to it, the reaction
 BEFORE, AFTER = 25.0, 20.0
 
@@ -76,6 +90,16 @@ STUNNED = re.compile(
     r"\bquoi\s*\??$|qu[ée] es eso|no puede ser|madre m[íi]a|\bjoder\b|\bhostia\b|dios m[íi]o",
     re.I,
 )
+# Said by someone who can't believe what they see: a sign whatever the length of the line and what was said before
+# (« oh what the fuck, y'a un tigre et un singe » is 13 words, after a cutscene that never stops talking)
+STRONG = re.compile(
+    r"what the (fuck|hell|heck)|\bwtf\b|oh my god|\bomg\b|no way|c'est quoi ce (bordel|d[ée]lire|truc)|j'hallucine|je r[êe]ve|"
+    r"no puede ser|madre m[íi]a|qu[ée] (co[ñn]o|mierda)|pero qu[ée]",
+    re.I,
+)
+LONG_LINE = 25
+# Short stunned lines said again within this many seconds: they keep reacting
+AGAIN = 10.0
 
 
 @dataclass
@@ -136,21 +160,30 @@ def find_leads(transcript: VodTranscript | None, sounds, chat: list[dict], lag: 
                     if _words_between(lines, at - 6, at + 4) <= QUIET_WORDS:
                         signs.append((at, kind, score + 0.2))
 
-    # A short stunned line after little was said
+    # A short stunned line after little was said, or said again right after another one (they keep reacting, whatever
+    # is said around: in a game that talks all the time, its dialogue counts as words), or words nobody says calmly
+    last_short = -1e9
     for start, _end, text in lines:
-        if len(text.split()) <= SHORT_LINE and STUNNED.search(text):
+        count = len(text.split())
+        if count <= SHORT_LINE and STUNNED.search(text):
             before = _words_between(lines, start - QUIET_SECONDS, start - 0.5)
-            if before <= QUIET_WORDS:
+            if start - last_short <= AGAIN:
+                signs.append((start, "stunned", 0.85))
+            elif before <= QUIET_WORDS:
                 # (the less was said before it, the more they were watching)
                 signs.append((start, "stunned", 0.6 + 0.3 * (1 - before / QUIET_WORDS)))
+            last_short = start
+        if count <= LONG_LINE and STRONG.search(text):
+            signs.append((start, "stunned", 0.9))
 
     # The chat writing all at once (a small chat never does: nothing then)
     if chat:
         from app.services import live_search
 
         for peak in live_search.chat_peaks(chat, lag, duration):
-            # (a peak starts a few seconds before what the chat reacts to: the lead is that instant on the stream)
-            signs.append((float(peak["start"]) + live_search.CHAT_BEFORE, "chat", 0.8))
+            # (a peak starts a few seconds before what the chat reacts to: the lead is that instant on the stream;
+            # four messages of a small chat say less than forty of a big one)
+            signs.append((float(peak["start"]) + live_search.CHAT_BEFORE, "chat", 0.55 + min(0.35, float(peak.get("messages") or 0) / 40)))
 
     # Signs that fall together are one lead, at its strongest sign (the reaction follows the scene:
     # of two as strong, the later). Two kinds of signs agreeing count for more than either.
@@ -168,16 +201,17 @@ def find_leads(transcript: VodTranscript | None, sounds, chat: list[dict], lag: 
         at = min(max(0.0, strongest[0]), max(0.0, duration - 1.0)) if duration else strongest[0]
         said = " / ".join(text for s, _e, text in lines if at - 12 <= s <= at + 10)[:220]
         leads.append(Lead(at=round(at, 1), signs=kinds, said=said, strength=round(strongest[2] + 0.5 * (len(kinds) - 1), 2)))
-    # Too many to look at them all: those two kinds of signs agree on first, then a reaction and a sound of the
-    # game in turn, the strongest of each first. (By strength alone the shots of a shooting game, 0.9 each, took
-    # every place: the scene of a live it was tried on was a short line said after 8 words, left out.)
+    # Too many to look at them all: those two kinds of signs agree on first, then two reactions for a sound of the
+    # game, the strongest of each first. (By strength alone the shots of a shooting game, 0.9 each, took every
+    # place: the scene of a live it was tried on was a short line said after 8 words, left out. On that live the
+    # reactions brought out four scenes, the sounds one.)
     leads.sort(key=lambda lead: -lead.strength)
     agreed = [lead for lead in leads if len(lead.signs) > 1]
     reactions = [lead for lead in leads if len(lead.signs) == 1 and lead.signs[0] != "sound"]
     heard = [lead for lead in leads if lead.signs == ["sound"]]
     chosen = agreed[:limit]
     for i in range(max(len(reactions), len(heard))):
-        chosen += reactions[i:i + 1] + heard[i:i + 1]
+        chosen += reactions[2 * i:2 * i + 2] + heard[i:i + 1]
     return chosen[:limit]
 
 
@@ -289,19 +323,81 @@ def window(moment: Seen, duration: float) -> tuple[float, float]:
     return max(0.0, moment.at - BEFORE), min(duration, end) if duration else end
 
 
-def watch(transcript: VodTranscript | None, sounds, chat: list[dict], lag: float, duration: float, video_url: str, game: str | None = None, client=None, fetch=None) -> list[Seen]:
-    """The moments of the live worth watching where little is said, the strongest first."""
-    leads = find_leads(transcript, sounds, chat, lag, duration)
-    if not leads or not video_url:
+SCOUT_REQUEST = (
+    "EVERY moment of this live where what happens ON SCREEN is crazy, absurd, shocking or very funny to look at while the streamer "
+    "hardly reacts: they stay speechless, only say a few words of disbelief, or laugh without saying anything. A stupid death, a bug, "
+    "an accident, an unlikely scene of the game. What counts is what is seen, not what is said. Go through the whole live, from its "
+    "start to its end: try many ways of saying it, in the language of the stream and in English (at least eight different searches of "
+    "words: what people blurt out when they can't believe their eyes, when something dies, breaks or goes wrong, when they tell others "
+    "to look), the sounds (crashes, explosions, screams), the laughter, and check at least twelve different places with `look` before "
+    "answering. Give all those worth watching, not only the best three; score each on what the pictures show."
+)
+
+
+def scout(job_id: str, chat: list[dict], lag: float, duration: float, vod_url: str, client=None) -> list[Seen]:
+    """The scenes the AI that searches a live finds when asked for them (see live_agent): where each starts,
+    what it says of it, its score. Needs the live's transcript in the worker (job_id) and the live still on Twitch."""
+    from app.services import live_agent
+    from app.services.live_tools import LiveTools
+
+    tools = LiveTools(job_id, duration=duration, chat_lag=lag)
+    if tools.transcript is None:
         return []
+    if chat and not tools.chat:
+        tools.chat = chat  # (the analysis has it before it is written next to the clips)
+    if client is None:
+        from app.services.openai_client import get_openrouter_client
+
+        client = get_openrouter_client()
     t0 = time.time()
-    seen, cost = look(leads, video_url, game, client=client, fetch=fetch)
-    kept = picks(seen)
+    searcher = live_agent.Searcher(tools, client, live_agent.SEARCH_MODEL, vod_url=vod_url, max_cost=SCOUT_MAX_COST, max_looks=SCOUT_LOOKS)
+    run = searcher.search(SCOUT_REQUEST)
+    found: list[Seen] = []
+    for moment in run.moments:
+        at = live_agent.parse_hms(moment.get("start"))
+        try:
+            score = int(float(moment.get("score") or 0))
+        except (TypeError, ValueError):
+            continue
+        why = " ".join(str(moment.get("why") or "").split())
+        if at is None or score < SCOUT_FLOOR or not why:
+            continue
+        quote = " ".join(str(moment.get("quote") or "").split())
+        found.append(Seen(at=round(min(at, max(0.0, duration - 1.0)) if duration else at, 1), seen=(why + (f" (said then: {quote})" if quote else ""))[:400], watch=min(100, score), signs=["agent"]))
     logger.info(
-        f"Watching: {len(leads)} leads, {len(seen)} looked at in {time.time() - t0:.0f} s for ~{cost:.4f} $, {len(kept)} worth watching"
-        + (": " + "; ".join(f"{_clock(s.at)} ({s.watch}) {s.seen[:70]}" for s in kept) if kept else "")
+        f"Watching: the searching AI looked at {run.looks} places in {time.time() - t0:.0f} s for ~{run.cost:.4f} $ ({run.steps} steps), {len(found)} scenes"
+        + (": " + "; ".join(f"{_clock(s.at)} ({s.watch}) {s.seen[:70]}" for s in found) if found else "")
     )
-    return kept
+    return found
+
+
+def watch(
+    transcript: VodTranscript | None, sounds, chat: list[dict], lag: float, duration: float, video_url: str, game: str | None = None,
+    client=None, fetch=None, job_id: str | None = None, vod_url: str | None = None,
+) -> list[Seen]:
+    """The moments of the live worth watching where little is said, the strongest first: those the leads bring
+    out, and those the searching AI finds (`job_id`, `vod_url`: the live as the worker knows it, for that AI)."""
+    seen: list[Seen] = []
+    leads = find_leads(transcript, sounds, chat, lag, duration)
+    if leads and video_url:
+        t0 = time.time()
+        seen, cost = look(leads, video_url, game, client=client, fetch=fetch)
+        kept = picks(seen)
+        logger.info(
+            f"Watching: {len(leads)} leads, {len(seen)} looked at in {time.time() - t0:.0f} s for ~{cost:.4f} $, {len(kept)} worth watching"
+            + (": " + "; ".join(f"{_clock(s.at)} ({s.watch}) {s.seen[:70]}" for s in kept) if kept else "")
+        )
+    found: list[Seen] = []
+    if job_id and vod_url:
+        from app.services.provider_errors import stop_if_fatal
+
+        try:
+            found = scout(job_id, chat, lag, duration, vod_url, client=client)
+        except Exception as e:
+            stop_if_fatal(e)
+            logger.warning(f"Watching: the searching AI could not look for scenes: {type(e).__name__}: {e}")
+    # (the same scene found both ways takes one place: the higher of its two ratings)
+    return picks(seen + found)
 
 
 def told(moment: Seen, at_second: float | None = None) -> str:

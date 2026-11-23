@@ -138,6 +138,8 @@ export interface Suggestion {
   score: number
   /** The moments it spotted for it (live seconds): where the video is built from */
   moments: number[]
+  /** A sequence (a stretch of the live in a row, retold as one video): where it starts and ends, live seconds */
+  span?: [number, number]
 }
 
 /** A video the AI proposed that nobody has had built yet: no passage, no answer */
@@ -477,7 +479,7 @@ export function summarizeCompilation(jobId: string, c: Compilation) {
     described: !!c.brief,
     // Proposed by the AI: what it saw (how many moments, not which), and whether the video still waits to be built
     suggestion: c.suggestion
-      ? { pitch: c.suggestion.pitch, tags: c.suggestion.tags, kind: c.suggestion.kind ?? null, score: c.suggestion.score, moments: c.suggestion.moments.length }
+      ? { pitch: c.suggestion.pitch, tags: c.suggestion.tags, kind: c.suggestion.kind ?? null, score: c.suggestion.score, moments: c.suggestion.moments.length, ...(c.suggestion.span ? { span: c.suggestion.span } : {}) }
       : null,
     waiting: isWaiting(c),
     target: c.target,

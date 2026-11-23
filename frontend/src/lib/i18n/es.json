@@ -1947,6 +1947,8 @@
   },
   "suggestions": {
     "badge": "Idea de la IA",
+    "sequence": "Secuencia",
+    "aboutSequence": "{{span}} seguidos en el directo (en {{at}}) · vídeo de unos {{length}}",
     "section": "Propuestas por la IA",
     "virality": "Índice de viralidad",
     "viralityHint": "De 0 a 100: las posibilidades del vídeo en formato corto, según lo que la IA encontró en el directo. Una estimación, no una promesa.",

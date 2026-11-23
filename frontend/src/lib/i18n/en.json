@@ -1947,6 +1947,8 @@
   },
   "suggestions": {
     "badge": "AI idea",
+    "sequence": "Sequence",
+    "aboutSequence": "{{span}} in a row in the live (at {{at}}) · a video of about {{length}}",
     "section": "Proposed by the AI",
     "virality": "Virality index",
     "viralityHint": "From 0 to 100: the video's chances as a short, from what the AI found in the live. An estimate, not a promise.",

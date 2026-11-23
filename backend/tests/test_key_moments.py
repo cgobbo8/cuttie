@@ -2,6 +2,9 @@
 
 import json
 import types
+from types import SimpleNamespace
+
+import pytest
 
 from app.models.schemas import HotPoint, KeyMoment, LlmAnalysis, SignalBreakdown
 from app.services import llm_analyzer, pipeline
@@ -156,3 +159,32 @@ def test_the_title_holds_the_end_back_and_the_cut_starts_on_the_subject():
     assert "Usually 30 to 75 s" in prompt and "15-45" not in prompt
     # Something found or explained about the game is clip material even said calmly
     assert "a secret or an easter egg met by chance" in prompt
+
+
+def test_the_context_of_the_live_is_asked_again_once_when_its_answer_is_not_json(monkeypatch):
+    from app.models.schemas import HotPoint, SignalBreakdown
+
+    good = json.dumps({"vod_context": {"summary": "Une soirée à Miami.", "language": "fr"}, "segment_scores": [{"index": 0, "content_score": 0.7}]})
+    answers = ['{"vod_context": {"summary": "Une soirée, }', good]
+    asked: list[dict] = []
+
+    class Client:
+        base_url = SimpleNamespace(host="openrouter.ai")
+
+        def __init__(self):
+            self.chat = SimpleNamespace(completions=SimpleNamespace(create=self.create))
+
+        def create(self, **kwargs):
+            asked.append(kwargs)
+            return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=answers[min(len(asked), len(answers)) - 1]), finish_reason="stop")])
+
+    monkeypatch.setattr(llm_analyzer, "get_openrouter_client", lambda: Client())
+    hot = [HotPoint(timestamp_seconds=30.0, timestamp_display="0:00:30", score=0.5, signals=SignalBreakdown())]
+    context, scores = llm_analyzer.gather_vod_context("job-x", {0: ("on y va", 1.0, 0.0, [], [])}, hot, {"title": "Miami"})
+    assert len(asked) == 2 and context.summary == "Une soirée à Miami." and scores == {0: 0.7}
+    # Not JSON twice: given up, as before (the analysis goes on without the context)
+    asked.clear()
+    answers[1] = "pas du JSON"
+    with pytest.raises(json.JSONDecodeError):
+        llm_analyzer.gather_vod_context("job-x", {0: ("on y va", 1.0, 0.0, [], [])}, hot, {"title": "Miami"})
+    assert len(asked) == 2

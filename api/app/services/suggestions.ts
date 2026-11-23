@@ -66,6 +66,8 @@ export function proposed(ideas: LiveIdea[], known: Set<string>, room: number, in
     if (!key || seen.has(key) || !name || !brief || !Number.isFinite(score)) continue
     seen.add(key)
     const seconds = Number(idea.seconds)
+    // A sequence: the stretch of the live it retells
+    const span = Array.isArray(idea.span) && idea.span.length === 2 && idea.span.every((at) => Number.isFinite(at) && at >= 0) && idea.span[1] > idea.span[0] ? ([idea.span[0], idea.span[1]] as [number, number]) : null
     made.push({
       id: newId(),
       name,
@@ -83,6 +85,7 @@ export function proposed(ideas: LiveIdea[], known: Set<string>, room: number, in
         ...(isMusicKind(idea.kind) ? { kind: idea.kind } : {}),
         score: Math.round(Math.min(100, Math.max(0, score))),
         moments: (Array.isArray(idea.moments) ? idea.moments : []).filter((at): at is number => Number.isFinite(at) && at >= 0).slice(0, 40),
+        ...(span ? { span } : {}),
       },
       created_at: now,
       updated_at: now,

@@ -354,6 +354,8 @@ export interface LiveIdea {
   score: number
   /** The moments spotted for it, live seconds */
   moments: number[]
+  /** A sequence (a stretch of the live in a row, retold as one video): where it starts and ends, live seconds */
+  span?: [number, number]
 }
 
 /** The compilations worth making from a live, found by the AI on its own (kept on the worker's disk: asked again, it costs nothing) */

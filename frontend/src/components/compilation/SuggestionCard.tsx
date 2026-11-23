@@ -81,7 +81,7 @@ export default function SuggestionCard({ jobId, compilation: c, fallback, busy =
       <Link to={to} aria-label={t("suggestions.buildNamed", { name: c.name })} className="relative flex-1 flex flex-col gap-2.5 p-4 pb-3">
         <div className="flex items-start justify-between gap-3">
           <span className="chip chip-accent h-[24px] px-2 text-[11.5px]">
-            <Sparkles className="w-3 h-3" /> {t("suggestions.badge")}
+            <Sparkles className="w-3 h-3" /> {t(idea.span ? "suggestions.sequence" : "suggestions.badge")}
           </span>
           <Virality score={idea.score} />
         </div>
@@ -96,7 +96,12 @@ export default function SuggestionCard({ jobId, compilation: c, fallback, busy =
             ))}
           </ul>
         )}
-        <p className="mt-auto pt-1 text-[12px] text-ink-3">{t("suggestions.about", { length: clock(c.target ?? 45), count: idea.moments })}</p>
+        <p className="mt-auto pt-1 text-[12px] text-ink-3">
+          {idea.span
+            ? // A sequence: how long it runs in the live, and the video made of it
+              t("suggestions.aboutSequence", { span: clock(idea.span[1] - idea.span[0]), at: clock(idea.span[0]), length: clock(c.target ?? 120) })
+            : t("suggestions.about", { length: clock(c.target ?? 45), count: idea.moments })}
+        </p>
       </Link>
 
       <div className="relative px-4 pb-4 flex items-center gap-1.5">

@@ -140,6 +140,9 @@ def test_what_is_said_twenty_times_is_not_left_out(monkeypatch):
     assert live_agent.Searcher(tools, stubborn, "m").suggest().steps == 2
 
 
+REAL_FIND = live_ideas.find_sequences
+
+
 def _live(monkeypatch, tmp_path, steps):
     tools = _tools(monkeypatch)
     monkeypatch.setattr(live_ideas, "load_cached", lambda job_id: tools.transcript)
@@ -149,6 +152,8 @@ def _live(monkeypatch, tmp_path, steps):
     monkeypatch.setattr(sound_index, "transcript_dir", lambda job_id: str(tmp_path / job_id))
     model = FakeModel(steps)
     monkeypatch.setattr(openai_client, "get_openrouter_client", lambda: model)
+    # (the sequences are read apart, by a call of their own: none in these lives unless a test gives some)
+    monkeypatch.setattr(live_ideas, "find_sequences", lambda transcript, meta, duration, most=live_ideas.MAX_SEQUENCES: ([], 0.0))
     return model
 
 
@@ -227,3 +232,68 @@ def test_looking_goes_to_the_model_that_sees(monkeypatch):
     assert "can't be reached" in gone.look("0:01:00")["error"]
     # A live with no address has neither ears nor eyes
     assert not {"look", "listen"} & {spec["name"] for spec in live_agent.Searcher(tools, FakeModel([]), "m").specs()}
+
+
+SEQUENCE = {
+    "start": "0:18:15",
+    "end": "0:24:42",
+    "title": "Billard, claques et romance",
+    "story": "Une partie de billard pour régler un différend tourne à l'humiliation, puis à la bagarre.",
+    "pitch": "Six minutes qui montent d'un cran à chaque coup raté.",
+    "brief": "Raconte la partie de billard contre Mathias dans l'ordre : le défi, les coups ratés, la tension, les claques, la fuite. Coupes rapides. Tout se passe entre 0:18:15 et 0:24:42 du live.",
+    "beats": [{"at": "0:18:45", "what": "le défi"}, {"at": "0:20:53", "what": "il rate tout"}, "0:22:31", {"at": "0:23:12", "what": "les claques"}, {"at": "0:24:12", "what": "la fuite"}, {"at": "1:10:00", "what": "ailleurs"}],
+    "seconds": 90,
+    "tags": ["Billard", "#bagarre", "drôle", "romance", "en trop"],
+    "score": 88,
+}
+
+
+def test_reads_the_sequences_a_model_gives_into_ideas():
+    found = live_ideas.clean_sequences(
+        [
+            SEQUENCE,
+            {**SEQUENCE, "title": "La même, moins bien", "start": "0:19:00", "end": "0:24:00", "score": 60},  # over the same stretch
+            {**SEQUENCE, "title": "Trop courte", "start": "1:00:00", "end": "1:01:00", "beats": ["1:00:10", "1:00:20", "1:00:30", "1:00:40"]},
+            {**SEQUENCE, "title": "Sans temps forts", "start": "2:00:00", "end": "2:20:00", "beats": ["2:01:00"]},
+            {**SEQUENCE, "title": "Faible", "start": "3:00:00", "end": "3:20:00", "beats": ["3:01:00", "3:02:00", "3:03:00", "3:04:00"], "score": 30},
+            {**SEQUENCE, "title": "Sans demande", "brief": "", "start": "4:00:00", "end": "4:10:00"},
+            {**SEQUENCE, "title": "Une mission entière", "start": "3:16:32", "end": "4:07:15", "beats": ["3:17:34", "3:24:32", "3:43:26", "3:56:46", "4:06:14"], "seconds": 900, "score": 95},
+            "nonsense",
+        ],
+        duration=5 * 3600.0,
+    )
+    assert [(idea["title"], idea["span"], idea["score"]) for idea in found] == [("Une mission entière", [11792.0, 14835.0], 95), ("Billard, claques et romance", [1095.0, 1482.0], 88)]
+    billiards = found[1]
+    # Its beats inside it, in order, are the moments the video is built from; one outside the stretch is left out
+    assert billiards["moments"] == [1125.0, 1253.0, 1351.0, 1392.0, 1452.0]
+    assert (billiards["seconds"], billiards["tags"], billiards["kind"]) == (90, ["billard", "bagarre", "drôle", "romance"], None)
+    assert billiards["pitch"] == "Six minutes qui montent d'un cran à chaque coup raté." and billiards["brief"].endswith("du live.")
+    # A long video is asked for, never longer than four minutes
+    assert found[0]["seconds"] == 240
+    assert live_ideas.clean_sequences(None, 3600.0) == [] and len(live_ideas.clean_sequences([SEQUENCE] * 3, 3600.0)) == 1
+
+
+def test_asks_for_stretches_in_a_row_and_proposes_them_with_the_compilations(monkeypatch, tmp_path):
+    from app.services import memory
+
+    model = _live(monkeypatch, tmp_path, [[("suggest", {"ideas": [IDEA], "note": "Un running gag."})]])
+    asked: list[str] = []
+
+    def ask(prompt, max_tokens):
+        asked.append(prompt)
+        return {"sequences": [{**SEQUENCE, "start": "0:01:00", "end": "0:06:00", "beats": ["0:01:10", "0:02:00", "0:03:00", "0:05:30"]}]}, 0.004, "openai/gpt-6-luna"
+
+    monkeypatch.setattr(memory, "_ask", ask)
+    monkeypatch.setattr(live_ideas, "find_sequences", REAL_FIND)
+    found = live_ideas.suggest_videos("job", {"streamer": "Maurice", "game": "Grand Theft Auto VI", "title": "Maurice de retour à Miami"}, 600.0)
+    # The compilation and the sequence, the best first; what both cost
+    assert [(idea["title"], "span" in idea) for idea in found["ideas"]] == [("Billard, claques et romance", True), ("Qu'est-ce que c'est calme", False)]
+    assert found["ideas"][0]["span"] == [60.0, 360.0] and found["cost"] == 0.005
+    # The whole transcript is read, told what a sequence is and what it is not
+    assert len(asked) == 1 and "SEQUENCES: a stretch of the live IN A ROW" in asked[0] and "Grand Theft Auto VI" in asked[0] and "[0:01:40]" in asked[0]
+    # The reading failing leaves the compilations
+    monkeypatch.setenv("CUTTIE_APP_VERSION", "0.3.0")
+    model.steps = [[("suggest", {"ideas": [IDEA], "note": "Un running gag."})]]
+    monkeypatch.setattr(memory, "_ask", lambda prompt, max_tokens: (_ for _ in ()).throw(TimeoutError("slow")))
+    alone = live_ideas.suggest_videos("job", {}, 600.0)
+    assert [idea["title"] for idea in alone["ideas"]] == ["Qu'est-ce que c'est calme"]

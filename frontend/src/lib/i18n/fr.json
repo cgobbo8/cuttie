@@ -1947,6 +1947,8 @@
   },
   "suggestions": {
     "badge": "Idée de l'IA",
+    "sequence": "Séquence",
+    "aboutSequence": "{{span}} d'affilée dans le live (à {{at}}) · vidéo d'environ {{length}}",
     "section": "Proposées par l'IA",
     "virality": "Indice de viralité",
     "viralityHint": "De 0 à 100 : les chances de la vidéo en format court, d'après ce que l'IA a trouvé dans le live. Une estimation, pas une promesse.",

@@ -98,6 +98,16 @@ test.group('Compilations proposed by the AI', (group) => {
     assert.deepEqual(calm.suggestion, { key: 'aaaaaaaaaaaa', pitch: idea('x').pitch, tags: ['running gag', 'gta rp'], kind: 'funny', score: 84, moments: [2421, 4414, 11430] })
     // Opens with the intro the streamer prefers, like any new compilation
     assert.deepEqual(calm.intro, { style: 'slam' })
+    // A sequence (a stretch of the live in a row) says where it is in the live; a stretch that makes no sense is not kept
+    const [mission, broken] = proposed(
+      [idea('111111111111', { title: 'Le yacht et les cochons', seconds: 180, span: [11792, 14835] }), idea('222222222222', { title: 'À l\'envers', span: [500, 100] })],
+      new Set(),
+      5
+    )
+    assert.deepEqual(mission.suggestion?.span, [11792, 14835])
+    assert.equal(mission.target, 180)
+    assert.notProperty(broken.suggestion, 'span')
+    assert.notProperty(calm.suggestion, 'span')
     assert.match(calm.id, /^[a-z0-9]{10}$/)
     assert.notEqual(calm.id, tiger.id)
     // What makes no sense is brought back to what does

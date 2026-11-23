@@ -1771,6 +1771,8 @@ export interface CompilationSuggestion {
   score: number;
   /** The moments it spotted for it (live seconds): where the video is built from */
   moments: number[];
+  /** A sequence (a stretch of the live in a row, retold as one video): where it starts and ends, live seconds */
+  span?: [number, number];
 }
 
 /** What the AI looking through a live for videos to propose gave */
@@ -1848,7 +1850,7 @@ export interface CompilationSummary {
   /** Built by describing it to the AI */
   described: boolean;
   /** Proposed by the AI: what it saw in the live (how many moments), null when the streamer made it */
-  suggestion?: { pitch: string; tags: string[]; kind: string | null; score: number; moments: number } | null;
+  suggestion?: { pitch: string; tags: string[]; kind: string | null; score: number; moments: number; span?: [number, number] | null } | null;
   /** Proposed and not built yet: opening it builds it */
   waiting?: boolean;
   /** Length aimed for, seconds */

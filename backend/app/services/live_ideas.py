@@ -10,6 +10,15 @@ shows the idea, and builds the video from that request when the streamer opens i
 
 Finding the ideas is cheap (a search with tools); building a video is what costs,
 and only happens for the ideas the streamer opens.
+
+Sequences are the other kind of video proposed here. A clip is one moment of about a
+minute, a compilation puts together things scattered over the whole live; a sequence
+is a stretch of the live in a row, from two minutes to an hour, where one thing goes
+on from a beginning to an end (a mission of the game, a situation the streamer keeps
+going, a long attempt), to be retold as one edited video. `find_sequences` reads the
+whole transcript once and gives each sequence with its beats in order; it becomes an
+idea like the others (its beats are the moments the video is built from, `span` says
+where it is in the live).
 """
 
 import hashlib
@@ -31,7 +40,13 @@ MIN_SECONDS, MAX_SECONDS, USUAL_SECONDS = 20.0, 120.0, 45.0
 # The kinds of video (the ones the musics are sorted by)
 KINDS = ("funny", "skill", "suspense", "chill", "hype")
 # Changes when the instructions do: ideas kept on disk under the old ones are looked for again
-IDEAS_VERSION = "2"
+IDEAS_VERSION = "3"
+# Sequences proposed for one live at most, how long one is in the live, how long its video is, how the live is read
+MAX_SEQUENCES = 4
+MIN_SPAN, MAX_SPAN = 120.0, 3600.0
+SEQUENCE_SECONDS = (45.0, 240.0, 120.0)
+SEQUENCE_LINE = 30.0
+MIN_BEATS = 4
 
 # ── What is said again and again ─────────────────────────────────────────────
 
@@ -231,6 +246,112 @@ Propose {most} videos at most, the best first, none when the live has nothing th
 Everything the streamer reads (title, brief, pitch, tags, note) is in the stream's language."""
 
 
+def sequences_prompt(lines: list[str], meta: dict, most: int = MAX_SEQUENCES) -> str:
+    from app.services import memory, notes
+
+    return f"""You are the editor of a Twitch streamer's short and mid-length videos. Below is the full transcript of one live stream
+(game: {meta.get("game") or "?"}, title: "{meta.get("title") or ""}"), one line per ~{SEQUENCE_LINE:.0f} seconds, each starting with its time.
+
+There are three kinds of videos to make from a live:
+- clips: one moment of about a minute (found elsewhere, not your job here);
+- compilations: things scattered over the whole live put together (a phrase said fifteen times; not your job here);
+- SEQUENCES: a stretch of the live IN A ROW, from 2 minutes to an hour, where ONE thing goes on from a beginning to an end:
+  a mission of the game, a long attempt at something, a situation the streamer creates and keeps going (20 minutes spent
+  blocking a bus so a character can't go to work), a story with a setup, an escalation and a payoff. Retold as ONE edited
+  video of 1 to 4 minutes, it must make sense to someone who never saw the live.
+
+Find the sequences of this live. For each one:
+- "start", "end": H:MM:SS, where the thing begins and where it is over (include the payoff)
+- "title": what a viewer would call it, in the stream's language; a hook, not a label, and never « best of »
+- "story": 2 or 3 sentences: how it starts, how it escalates, how it ends
+- "pitch": ONE sentence said to the streamer: why this stretch makes a video, in the stream's language
+- "brief": the request the streamer would have typed to get this video, in the stream's language: what the video tells,
+  in order, from the setup to the payoff, what to keep and what to skip, the energy wanted (fast cuts, no dead time).
+  End it with the sentence saying between which times of the live it all happens (H:MM:SS).
+- "beats": 5 to 10 moments of it IN ORDER that the edited video must keep, each {{"at": "H:MM:SS", "what": "a few words"}}:
+  the setup first (one line that says what is going on), the turns, the funniest or most intense instants, the payoff last
+- "seconds": how long the edited video should be, 60 to 240: longer for a long sequence with many turns
+- "tags": 2 to 4 short lowercase tags in the stream's language
+- "score": 0-100, how good a video it would make
+
+Give at most {most}, the best first; leave out stretches where nothing builds (routine play, idle talk): none is a fine
+answer. A sequence can hold moments that are also clips.
+Answer with JSON only: {{"sequences": [...]}}{notes.block(meta.get("game"))}{memory.block()}
+
+TRANSCRIPT
+{chr(10).join(lines)}"""
+
+
+def clean_sequences(raw, duration: float, most: int = MAX_SEQUENCES) -> list[dict]:
+    """The sequences a model gave, as ideas the app keeps: checked, bounded, the best first. One with no request
+    to build it from, too short or too long in the live, with too few beats inside it or a low score is dropped."""
+    found: list[dict] = []
+    for item in raw if isinstance(raw, list) else []:
+        if not isinstance(item, dict):
+            continue
+        title = " ".join(str(item.get("title") or "").split())[:80]
+        brief = " ".join(str(item.get("brief") or "").split())[:1200]
+        start, end = parse_hms(item.get("start")), parse_hms(item.get("end"))
+        if not title or len(brief) < 20 or start is None or end is None:
+            continue
+        start, end = max(0.0, start), min(duration, end) if duration else end
+        if not MIN_SPAN <= end - start <= MAX_SPAN:
+            continue
+        try:
+            score = round(max(0.0, min(100.0, float(item.get("score")))))
+        except (TypeError, ValueError):
+            score = 0
+        beats: list[float] = []
+        for beat in item.get("beats") if isinstance(item.get("beats"), list) else []:
+            at = parse_hms(beat.get("at") if isinstance(beat, dict) else beat)
+            if at is not None and start - 1 <= at <= end + 1 and all(abs(at - other) > 2.0 for other in beats):
+                beats.append(round(at, 1))
+        if score < MIN_SCORE or len(beats) < MIN_BEATS:
+            continue
+        # (two sequences over the same stretch: the better one)
+        if any(min(end, other["span"][1]) - max(start, other["span"][0]) > 0.5 * min(end - start, other["span"][1] - other["span"][0]) for other in found):
+            continue
+        low, high, usual = SEQUENCE_SECONDS
+        try:
+            seconds = max(low, min(high, float(item.get("seconds"))))
+        except (TypeError, ValueError):
+            seconds = usual
+        tags: list[str] = []
+        for tag in item.get("tags") if isinstance(item.get("tags"), list) else []:
+            tag = " ".join(str(tag).split()).strip("#").lower()[:24]
+            if tag and tag not in tags:
+                tags.append(tag)
+        found.append({
+            "key": idea_key(title, brief),
+            "title": title,
+            "brief": brief,
+            "seconds": round(seconds),
+            "pitch": " ".join(str(item.get("pitch") or item.get("story") or "").split())[:280],
+            "tags": tags[:4],
+            "kind": None,
+            "score": score,
+            "moments": sorted(beats)[:40],
+            # Where it is in the live: what makes it a sequence
+            "span": [round(start, 1), round(end, 1)],
+        })
+    found.sort(key=lambda idea: -idea["score"])
+    return found[:most]
+
+
+def find_sequences(transcript: VodTranscript, meta: dict, duration: float, most: int = MAX_SEQUENCES) -> tuple[list[dict], float]:
+    """The sequences of a live, as ideas: (ideas, dollars). One reading of the whole transcript."""
+    from app.services import memory
+    from app.services.presort import transcript_lines
+
+    data, cost, by = memory._ask(sequences_prompt(transcript_lines(transcript, SEQUENCE_LINE), meta, most), 6000)
+    found = clean_sequences(data.get("sequences"), duration, most)
+    logger.info(
+        f"AI sequences: {len(found)} found with {by} (~{cost:.4f} $): "
+        + ", ".join(f"« {idea['title']} » {hms(idea['span'][0])}-{hms(idea['span'][1])} ({idea['score']})" for idea in found)
+    )
+    return found, cost
+
+
 def suggest_videos(
     job_id: str, meta: dict, duration: float, energy: list[float] | None = None, lag: float = 5.0,
     url: str | None = None, moments: list[dict] | None = None, most: int = MAX_IDEAS,
@@ -267,9 +388,19 @@ def suggest_videos(
         )
         result = {"ideas": clean_ideas(run.ideas, duration, most), "note": run.note}
         model, seconds = run.model, run.seconds
+    # The sequences of the live, proposed with the compilations (failing, the compilations alone are proposed)
+    try:
+        found, more = find_sequences(transcript, meta, duration)
+        result["ideas"] = sorted([*result["ideas"], *found], key=lambda idea: -idea["score"])
+        cost += more
+    except Exception as e:
+        from app.services.provider_errors import stop_if_fatal
+
+        stop_if_fatal(e)
+        logger.warning(f"[{job_id[:8]}] AI sequences not found: {type(e).__name__}: {e}")
     live_search._keep(path, result)
     logger.info(
-        f"[{job_id[:8]}] AI ideas: {len(result['ideas'])} compilations proposed with {model} (~{cost:.4f} $, {seconds:.0f} s): "
-        + ", ".join(f"« {idea['title']} » {idea['score']}" for idea in result["ideas"])
+        f"[{job_id[:8]}] AI ideas: {len(result['ideas'])} videos proposed with {model} (~{cost:.4f} $, {seconds:.0f} s): "
+        + ", ".join(f"« {idea['title']} » {idea['score']}" + (" (sequence)" if idea.get("span") else "") for idea in result["ideas"])
     )
     return {**result, "cached": False, "cost": round(cost, 4)}

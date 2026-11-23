@@ -16,6 +16,24 @@ const card: CompilationSummary = {
   waiting: true, target: 65,
 };
 
+describe("a sequence the AI proposed", () => {
+  it("says it is a stretch of the live in a row, how long it runs there and the video made of it", async () => {
+    cleanup();
+    await i18n.changeLanguage("fr");
+    const mission: CompilationSummary = { ...card, id: "seq1234567", name: "Le yacht et les cochons", target: 180, suggestion: { ...card.suggestion!, moments: 8, span: [11792, 14835] } };
+    render(
+      <TooltipProvider>
+        <MemoryRouter>
+          <SuggestionCard jobId="live" compilation={mission} fallback={null} onDismiss={() => {}} />
+        </MemoryRouter>
+      </TooltipProvider>,
+    );
+    expect(screen.getByText("Séquence")).toBeTruthy();
+    expect(screen.queryByText("Idée de l'IA")).toBeNull();
+    expect(screen.getByText("50:43 d'affilée dans le live (à 3:16:32) · vidéo d'environ 3:00")).toBeTruthy();
+  });
+});
+
 describe("a video the AI proposed", () => {
   beforeEach(async () => {
     cleanup();
@@ -34,6 +52,7 @@ describe("a video the AI proposed", () => {
       </TooltipProvider>,
     );
     expect(screen.getByText("Idée de l'IA")).toBeTruthy();
+    expect(screen.queryByText("Séquence")).toBeNull();
     expect(screen.getByRole("heading", { name: "La malédiction du calme" })).toBeTruthy();
     expect(screen.getByText(/revient 25 fois/)).toBeTruthy();
     expect(screen.getAllByRole("listitem").map((tag) => tag.textContent)).toEqual(["running gag", "gta rp"]);

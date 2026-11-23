@@ -953,21 +953,27 @@ def gather_vod_context(
     if not is_openrouter:
         kwargs["response_format"] = {"type": "json_object"}
 
-    response = client.chat.completions.create(**kwargs)
+    # Asked again once when the answer is not JSON: without it the whole analysis went on with no context of
+    # the live and no content score at all (seen on a real analysis: one stray character in 10,000)
+    data: dict = {}
+    for attempt in (1, 2):
+        response = client.chat.completions.create(**kwargs)
 
-    content = response.choices[0].message.content or ""
-    content = content.strip()
-    if content.startswith("```"):
-        content = content.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
+        content = response.choices[0].message.content or ""
+        content = content.strip()
+        if content.startswith("```"):
+            content = content.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
 
-    try:
-        data = json.loads(content)
-    except json.JSONDecodeError:
-        logger.error(
-            f"[{job_id[:8]}] VOD context: invalid JSON (finish_reason={response.choices[0].finish_reason}, "
-            f"{len(content)} chars)"
-        )
-        raise
+        try:
+            data = json.loads(content)
+            break
+        except json.JSONDecodeError:
+            logger.error(
+                f"[{job_id[:8]}] VOD context: invalid JSON (finish_reason={response.choices[0].finish_reason}, "
+                f"{len(content)} chars), {'asked again' if attempt == 1 else 'given up'}"
+            )
+            if attempt == 2:
+                raise
 
     # Parse VOD context
     raw_ctx = data.get("vod_context", {})

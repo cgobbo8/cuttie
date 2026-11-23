@@ -164,6 +164,25 @@ class MemoryRequest(BaseModel):
     fresh: bool = False
 
 
+class AssistantResume(BaseModel):
+    """What the app (or the streamer) answers to the action a conversation is waiting on."""
+
+    call: str
+    result: dict | list | str | bool | None = None
+
+
+class AssistantRequest(BaseModel):
+    """One request of a conversation with the assistant: what the streamer says, or an action's answer."""
+
+    # The conversation (kept between requests, and from one page to the next)
+    thread: str
+    text: str | None = None
+    resume: AssistantResume | None = None
+    # Where the streamer is in the app: {"page", "job", "video": {"id", ...}, "clip": {"filename", ...}, ...}
+    context: dict = {}
+    language: str = "fr"
+
+
 class LivePiece(BaseModel):
     id: str
     # Where the piece sits in the live, seconds
@@ -579,6 +598,59 @@ def live_memory(job_id: str, req: MemoryRequest) -> dict:
         return memory.note_live(_check_job_id(job_id), req.meta, req.duration, req.moments[:400], req.context, fresh=req.fresh)
     except Exception as e:
         raise _ai_errors(e) from e
+
+
+_THREAD_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+
+
+def _check_thread(thread: str) -> str:
+    if not _THREAD_RE.match(thread or ""):
+        raise HTTPException(status_code=400, detail="invalid thread")
+    return thread
+
+
+@app.post("/assistant/turn", dependencies=[Depends(require_secret)])
+def assistant_turn(req: AssistantRequest) -> dict:
+    """One request of a conversation with the assistant. It runs until the assistant is done ("done") or hands
+    an action to the app or a question to the streamer ("action"): the next request then brings the answer
+    (`resume`). 409 "busy": this conversation is still answering; 409 "nothing_waiting": the answer is for an
+    action nobody waits on any more; 501: no model that calls tools (a development command stands for it)."""
+    from app.services import assistant
+
+    thread = _check_thread(req.thread)
+    try:
+        return assistant.turn(thread, req.text, req.resume.model_dump() if req.resume else None, req.context, req.language)
+    except assistant.NothingAsked as e:
+        raise HTTPException(status_code=400, detail="nothing was asked") from e
+    except assistant.Busy as e:
+        raise HTTPException(status_code=409, detail="busy: this conversation is already answering") from e
+    except assistant.NothingWaiting as e:
+        raise HTTPException(status_code=409, detail="nothing_waiting: no action is waiting for this answer") from e
+    except assistant.NotAvailable as e:
+        raise HTTPException(status_code=501, detail=str(e)) from e
+    except Exception as e:
+        raise _ai_errors(e) from e
+
+
+@app.get("/assistant/progress", dependencies=[Depends(require_secret)])
+def assistant_progress(thread: str) -> dict:
+    """What the assistant is doing right now for a conversation (shown while the app waits for its answer)."""
+    from app.services import assistant
+
+    return assistant.progress(_check_thread(thread))
+
+
+@app.delete("/assistant/thread", dependencies=[Depends(require_secret)])
+def assistant_forget(thread: str) -> dict:
+    """A conversation forgotten: the next request with this name starts a new one."""
+    from app.services import assistant
+
+    _check_thread(thread)
+    try:
+        assistant.forget(thread)
+    except assistant.Busy as e:
+        raise HTTPException(status_code=409, detail="busy: this conversation is already answering") from e
+    return {"success": True}
 
 
 @app.post("/clips/{job_id}/pieces", dependencies=[Depends(require_secret)])

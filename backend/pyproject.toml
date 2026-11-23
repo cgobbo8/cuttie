@@ -3,12 +3,13 @@ name = "cuttie-backend"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.135.2",
     "librosa>=0.11.0",
     "numpy>=2.2.6",
-    "openai>=2.29.0",
+    # (langchain-openai needs 2.45; kept under 3: the worker is written against the 2.x client)
+    "openai>=2.45.0,<3",
     "python-dotenv>=1.2.2",
     "requests>=2.32.0",
     "python-multipart>=0.0.22",
@@ -25,6 +26,9 @@ dependencies = [
     "ultralytics>=8.4.33",
     "faster-whisper>=1.1",
     "mlx-whisper>=0.4 ; platform_machine == 'arm64' and sys_platform == 'darwin'",
+    "deepagents>=0.7.41",
+    "langchain-openai>=1.8.5",
+    "langgraph-checkpoint-sqlite>=3.1.3",
 ]
 
 [dependency-groups]

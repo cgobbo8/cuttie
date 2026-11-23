@@ -115,6 +115,7 @@ export interface ApiDefinition {
     pieces: typeof routes['compilations.pieces']
     index: typeof routes['compilations.index']
     store: typeof routes['compilations.store']
+    fromClip: typeof routes['compilations.from_clip']
     update: typeof routes['compilations.update']
     destroy: typeof routes['compilations.destroy']
     duplicate: typeof routes['compilations.duplicate']

@@ -486,6 +486,12 @@ const routes = {
     tokens: [{"old":"/api/jobs/:id/compilations","type":0,"val":"api","end":""},{"old":"/api/jobs/:id/compilations","type":0,"val":"jobs","end":""},{"old":"/api/jobs/:id/compilations","type":1,"val":"id","end":""},{"old":"/api/jobs/:id/compilations","type":0,"val":"compilations","end":""}],
     types: placeholder as Registry['compilations.store']['types'],
   },
+  'compilations.from_clip': {
+    methods: ["POST"],
+    pattern: '/api/jobs/:id/compilations/from-clip',
+    tokens: [{"old":"/api/jobs/:id/compilations/from-clip","type":0,"val":"api","end":""},{"old":"/api/jobs/:id/compilations/from-clip","type":0,"val":"jobs","end":""},{"old":"/api/jobs/:id/compilations/from-clip","type":1,"val":"id","end":""},{"old":"/api/jobs/:id/compilations/from-clip","type":0,"val":"compilations","end":""},{"old":"/api/jobs/:id/compilations/from-clip","type":0,"val":"from-clip","end":""}],
+    types: placeholder as Registry['compilations.from_clip']['types'],
+  },
   'compilations.update': {
     methods: ["PUT"],
     pattern: '/api/jobs/:id/compilations/:compId',

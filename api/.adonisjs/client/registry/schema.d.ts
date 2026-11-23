@@ -967,6 +967,18 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/compilations_controller').default['store']>>>
     }
   }
+  'compilations.from_clip': {
+    methods: ["POST"]
+    pattern: '/api/jobs/:id/compilations/from-clip'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { id: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/compilations_controller').default['fromClip']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/compilations_controller').default['fromClip']>>>
+    }
+  }
   'compilations.update': {
     methods: ["PUT"]
     pattern: '/api/jobs/:id/compilations/:compId'

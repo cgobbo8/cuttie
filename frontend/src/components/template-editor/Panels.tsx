@@ -5,6 +5,7 @@ import { Circle, Eye, EyeOff, Play, Plus, RotateCcw, Trash2 } from "lucide-react
 import type { BrandColors } from "../../lib/api";
 import { FONTS, type FontId } from "../../lib/fonts";
 import {
+  hookFontFor,
   BRAND_COLOR_REFS,
   enterOf,
   exitOf,
@@ -17,7 +18,6 @@ import {
   type ExitId,
   type ChatSpec,
   type FrameStyle,
-  type HookStyle,
   type SpecWidget,
   type TemplateSpec,
   type WidgetShow,
@@ -392,16 +392,6 @@ export function ChatPanel({
   );
 }
 
-/** Fonts made for sentences on a box (the others are display caps, for outlined text) */
-const SENTENCE_FONTS: FontId[] = ["poppins", "montserrat", "geist", "archivo"];
-
-/** A font that suits the hook style: display caps outlined, a sentence font on a box */
-function hookFont(style: HookStyle, font: FontId): FontId {
-  if (style === "vice") return "rammetto";
-  if (style === "outline") return font === "geist" || font === "poppins" ? "anton" : font;
-  return SENTENCE_FONTS.includes(font) ? font : "poppins";
-}
-
 type HookUntil = "short" | "half" | "all";
 
 export function HookPanel({ value, onChange, onReset }: { value: TemplateSpec["hook"]; onChange: (v: TemplateSpec["hook"], done?: boolean) => void; onReset: () => void }) {
@@ -420,12 +410,13 @@ export function HookPanel({ value, onChange, onReset }: { value: TemplateSpec["h
         <Seg
           label={t("templateEditor.hookStyle")}
           value={value.style}
-          onChange={(style) => onChange({ ...value, style, font: hookFont(style, value.font) }, true)}
+          onChange={(style) => onChange({ ...value, style, font: hookFontFor(style, value.font) }, true)}
           options={[
             { value: "outline", label: t("templateEditor.hookOutline") },
             { value: "box", label: t("templateEditor.hookBox") },
             { value: "brand", label: t("templateEditor.hookBrand") },
             { value: "vice", label: t("templateEditor.hookVice") },
+            { value: "viceplate", label: t("templateEditor.hookVicePlate") },
           ]}
         />
       </Row>

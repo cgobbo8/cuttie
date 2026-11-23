@@ -1349,7 +1349,8 @@
     "usagePlaceholder": "Ej.: para mis fails, el juego en grande y mi cámara en pequeño.",
     "usageHint": "La IA lee esta frase, además del lugar de cada elemento, cuando elige la plantilla de un trozo. Si la dejas vacía, se redacta al guardar.",
     "usageFailed": "La IA no ha podido redactar la descripción. Vuelve a intentarlo o escríbela tú.",
-    "hookVice": "GTA"
+    "hookVice": "GTA",
+    "hookVicePlate": "GTA con marco"
   },
   "widgets": {
     "channel-pill": {
@@ -1419,6 +1420,22 @@
     "gta-mission": {
       "name": "Misión superada",
       "desc": "Un sello amarillo al final del clip: para una victoria"
+    },
+    "gta-plate": {
+      "name": "Marco GTA",
+      "desc": "Una placa negra inclinada con borde blanco, como el título de una carátula"
+    },
+    "gta-tag": {
+      "name": "Etiqueta GTA",
+      "desc": "Tu logo y tu canal en una placa negra inclinada"
+    },
+    "gta-frame": {
+      "name": "Cuadro GTA",
+      "desc": "Un cuadro de atardecer para poner bajo tu cámara o el juego"
+    },
+    "gta-sky": {
+      "name": "Fondo Vice City",
+      "desc": "Un atardecer, palmeras y hoteles detrás de todo"
     }
   },
   "freed": {
@@ -1512,6 +1529,12 @@
     "fit": "Ajustar a {{length}}",
     "titles": "Títulos de las partes",
     "titlesHint": "Cada parte se abre con el título",
+    "titleHide": "No escribir este título en el vídeo",
+    "titleShow": "Escribir este título en el vídeo",
+    "titleStyle": {
+      "label": "Estilo de los títulos",
+      "template": "Como el modelo"
+    },
     "hookPlaceholder": "Gancho del vídeo",
     "template": "Plantilla",
     "defaultTemplate": "Plantilla por defecto",

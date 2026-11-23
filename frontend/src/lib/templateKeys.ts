@@ -5,8 +5,8 @@
 import type { BrandKit } from "./api";
 import type { Layer } from "./editorTypes";
 import { HAS_HOOK, NEEDS_WEBCAM, TEMPLATE_IDS, type TemplateContext, type TemplateId } from "./templates";
-import { buildFromSpec, type TemplateSpec } from "./templateSpec";
-import { buildTemplate, builtInSpec, upgradeTemplate } from "./builtinTemplates";
+import { buildFromSpec, restyled, type HookStyle, type TemplateSpec } from "./templateSpec";
+import { builtInSpec, specFor, upgradeTemplate } from "./builtinTemplates";
 
 export type TemplateKey = string;
 
@@ -34,9 +34,10 @@ export function baseOf(key: TemplateKey, customs: TemplateSpec[]): TemplateId {
   return findCustom(key, customs)?.base ?? (isBuiltIn(key) ? key : "signature");
 }
 
-export function buildAny(key: TemplateKey, ctx: TemplateContext, customs: TemplateSpec[]): Layer[] {
-  const custom = findCustom(key, customs);
-  return custom ? buildFromSpec(custom, ctx) : buildTemplate(baseOf(key, customs), ctx);
+/** The layers of a template for a clip. `titles`: how the video writes its titles, when it says so (else as the template does) */
+export function buildAny(key: TemplateKey, ctx: TemplateContext, customs: TemplateSpec[], titles?: HookStyle | null): Layer[] {
+  const spec = findCustom(key, customs) ?? specFor(baseOf(key, customs), ctx);
+  return buildFromSpec(titles ? { ...spec, hook: restyled(spec.hook, titles) } : spec, ctx);
 }
 
 /** The template shows a hook line (Montage's hook input only applies then) */
@@ -51,7 +52,7 @@ export function needsWebcam(key: TemplateKey, customs: TemplateSpec[]): boolean 
 }
 
 /** How a template writes its hook line and where (section titles of a compilation are written the same) */
-export function hookOf(key: TemplateKey, ctx: TemplateContext, customs: TemplateSpec[]): TemplateSpec["hook"] {
+export function hookOf(key: TemplateKey, ctx: TemplateContext, customs: TemplateSpec[], titles?: HookStyle | null): TemplateSpec["hook"] {
   const custom = findCustom(key, customs);
-  return (custom ?? builtInSpec(baseOf(key, customs), { hasCam: !!ctx.facecam, subtitleStyle: ctx.subtitleStyle })).hook;
+  return restyled((custom ?? builtInSpec(baseOf(key, customs), { hasCam: !!ctx.facecam, camWidth: ctx.facecam?.w, subtitleStyle: ctx.subtitleStyle })).hook, titles);
 }

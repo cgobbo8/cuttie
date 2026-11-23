@@ -111,7 +111,7 @@ export interface SpecWidget {
 /** How a widget is timed when added: its kit timing, the whole clip for the progress bar, to the end for the corner logo */
 export function defaultShow(kind: WidgetKind, timing: WidgetTimingKind): WidgetShow {
   // What follows the whole clip is there from its first frame to its last; a word a mission ends on, for its last seconds
-  if (kind === "progress-bar" || kind === "gta-wanted" || kind === "gta-seam") return { in: 0, inFrom: "start", out: null, outFrom: "end" };
+  if (kind === "progress-bar" || kind === "gta-wanted" || kind === "gta-seam" || kind === "gta-frame" || kind === "gta-sky") return { in: 0, inFrom: "start", out: null, outFrom: "end" };
   if (kind === "gta-wasted" || kind === "gta-mission") return { in: 2.5, inFrom: "end", out: null, outFrom: "end" };
   if (kind === "corner-logo") return { in: 0.5, inFrom: "start", out: null, outFrom: "end" };
   return SHOW_PRESETS[timing];
@@ -226,8 +226,34 @@ export function restack(spec: TemplateSpec, key: string, to: "up" | "down" | "fr
   return order;
 }
 
-/** ("vice": the GTA pack's lettering, heavy small letters with a black outline) */
-export type HookStyle = "outline" | "box" | "brand" | "vice";
+/** ("vice": the GTA pack's lettering, heavy small letters with a black outline; "viceplate": the same letters in the pack's box, a leaning black plate) */
+export type HookStyle = "outline" | "box" | "brand" | "vice" | "viceplate";
+
+export const HOOK_STYLES: HookStyle[] = ["outline", "box", "brand", "vice", "viceplate"];
+export const isHookStyle = (value: unknown): value is HookStyle => typeof value === "string" && (HOOK_STYLES as string[]).includes(value);
+
+/** Fonts made for sentences on a box (the others are display letters, for outlined text) */
+const SENTENCE_FONTS: FontId[] = ["poppins", "montserrat", "geist", "archivo"];
+
+/** A font that suits a way of writing a title: display letters outlined, a sentence font on a box, the pack's own for the pack's */
+export function hookFontFor(style: HookStyle, font: FontId): FontId {
+  if (style === "vice" || style === "viceplate") return "rammetto";
+  if (style === "outline") return font === "geist" || font === "poppins" ? "anton" : font;
+  return SENTENCE_FONTS.includes(font) ? font : "poppins";
+}
+
+/**
+ * A title written another way than its template writes it (a video chooses how its titles look): at the
+ * same place, in the font and at the size that way of writing takes. Nothing said: as the template does.
+ */
+export function restyled<T extends TemplateSpec["hook"]>(hook: T, style: HookStyle | null | undefined): T {
+  if (!style || style === hook.style) return hook;
+  const size = style === "outline" ? Math.max(hook.size, 64) : style === "vice" ? Math.min(Math.max(hook.size, 60), 72) : Math.min(hook.size, style === "viceplate" ? 60 : 56);
+  return { ...hook, style, font: hookFontFor(style, hook.font), size };
+}
+
+/** How far the pack's title box is tilted, degrees: a title is never set straight on a cover */
+const PLATE_TILT = -2;
 
 export const BRAND_COLOR_REFS = ["white", "accent", "highlight", "dark", "light"] as const;
 
@@ -322,20 +348,33 @@ export function hookLeavesAt(h: TemplateSpec["hook"], startAt: number, endAt: nu
 function hookLayers(ctx: TemplateContext, h: TemplateSpec["hook"]): Layer[] {
   const t = toTransform(h.box);
   const layers: Layer[] = [];
+  const plate = h.style === "viceplate";
+  const vice = h.style === "vice" || plate;
   const boxed = h.style === "box" || h.style === "brand";
   if (h.style === "box") layers.push(shape("Fond de l'accroche", t, "#FFFFFF", 1, 30, "soft"));
   if (h.style === "brand") layers.push(shape("Fond de l'accroche", t, ctx.colors.accent, 0.94, 26, "soft"));
-  const textLayer = base("Accroche", "text", boxed ? { x: t.x + 30, y: t.y + 10, width: t.width - 60, height: t.height - 20 } : t);
+  if (plate) {
+    // The pack's own box is drawn by a widget of the kit (it cannot be said as a plain shape): it goes and comes with the title
+    const under = base("Fond de l'accroche", "widget", { ...t, rotation: PLATE_TILT });
+    under.widget = { widgetId: "gta-plate", props: { appearAt: ctx.startAt } };
+    layers.push(under);
+  }
+  const textLayer = base(
+    "Accroche",
+    "text",
+    boxed ? { x: t.x + 30, y: t.y + 10, width: t.width - 60, height: t.height - 20 } : plate ? { x: t.x + 64, y: t.y + 14, width: t.width - 128, height: t.height - 28, rotation: PLATE_TILT } : t,
+  );
   textLayer.text = {
     // (the GTA pack writes in small letters, as the title of that game is)
-    content: h.style === "vice" ? ctx.hook.toLowerCase() : ctx.hook,
+    content: vice ? ctx.hook.toLowerCase() : ctx.hook,
     fontFamily: `"${fontFamily(h.font)}", system-ui, sans-serif`,
     fontSize: Math.round(h.size),
     color: h.style === "box" ? "#0C0C0E" : h.style === "brand" ? inkOn(ctx.colors.accent) : "#FFFFFF",
     fontWeight: "bold",
     textAlign: "center",
     uppercase: h.style === "outline",
-    lineHeight: boxed ? 1.18 : h.style === "vice" ? 1.0 : 1.08,
+    lineHeight: boxed ? 1.18 : vice ? 1.0 : 1.08,
+    // (on its plate the title is white on black: no outline needed)
     ...(h.style === "outline" || h.style === "vice" ? { stroke: true } : {}),
   };
   layers.push(textLayer);

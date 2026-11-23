@@ -80,6 +80,10 @@ const WIDGET_KINDS = [
   'gta-seam',
   'gta-wasted',
   'gta-mission',
+  'gta-plate',
+  'gta-tag',
+  'gta-frame',
+  'gta-sky',
 ]
 const COLOR_REFS = ['white', 'accent', 'highlight', 'dark', 'light']
 const ENTER_IDS = ['pop', 'bounce', 'elastic', 'drop', 'rise', 'slideLeft', 'slideRight', 'zoom', 'fade', 'none']
@@ -166,7 +170,7 @@ function parseSpec(item: Json): TemplateSpec {
     hook: {
       visible: bool(hook.visible),
       box: box(hook.box),
-      style: oneOf(hook.style, ['outline', 'box', 'brand', 'vice']),
+      style: oneOf(hook.style, ['outline', 'box', 'brand', 'vice', 'viceplate']),
       font: oneOf(hook.font, FONT_IDS),
       size: num(hook.size, 20, 240),
       ...(hook.until !== undefined ? { until: hookUntil(hook.until) } : {}),

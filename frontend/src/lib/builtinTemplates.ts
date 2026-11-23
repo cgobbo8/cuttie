@@ -120,13 +120,35 @@ const GTA: Layout = {
   cam: { box: { x: 0, y: 0, w: 1080, h: 750 }, frame: frame(0) },
   game: { box: { x: 0, y: 770, w: 1080, h: 1150 }, frame: frame(0) },
   subtitles: { box: { x: 150, y: 640, w: 780, h: 240 }, font: "rammetto", size: 74, uppercase: false, words: 3, stroke: true },
-  // Titles go on the game, never on the face
+  // Titles go on the game, never on the face: in the pack's own box, a leaning black plate with a white edge
   // (held 5 s: the titles of the best live clips stay 5 to 7 s, or the whole video)
-  hook: { box: { x: 90, y: 900, w: 900, h: 200 }, style: "vice", font: "rammetto", size: 70, until: 5 },
-  brand: { kind: "channel-pill", box: { x: 40, y: 218, w: 480, h: 64 }, enter: "pop", exit: "shrink" },
+  hook: { box: { x: 110, y: 890, w: 860, h: 190 }, style: "viceplate", font: "rammetto", size: 60, until: 5 },
+  // The channel, signed as the pack signs it
+  brand: { kind: "gta-tag", box: { x: 36, y: 208, w: 540, h: 84 }, enter: "slideLeft", exit: "slideLeft" },
   extras: [allAlong("w-seam", "gta-seam", { x: 0, y: 742, w: 1080, h: 34 }, "none"), allAlong("w-wanted", "gta-wanted", { x: 600, y: 218, w: 420, h: 66 }, "slideRight")],
   // The seam covers the join of the two pictures; the words go over it
   order: ["cam", "game", "widget:w-seam", "chat", "subtitles", "hook"],
+};
+
+/*
+ * The same look when the webcam is small in the stream (enlarged to the full width it would be soft): the
+ * webcam and the game as two framed panels in front of an evening in Vice City, the title in its plate
+ * astride them. Chosen by itself from the webcam's width (`layoutFor`).
+ */
+const GTA_CARDS: Layout = {
+  ...GTA,
+  cam: { box: { x: 232, y: 314, w: 616, h: 476 }, frame: frame(0) },
+  game: { box: { x: 52, y: 892, w: 976, h: 549 }, frame: frame(0) },
+  subtitles: { ...GTA.subtitles, box: { x: 150, y: 1250, w: 780, h: 170 }, size: 64 },
+  hook: { ...GTA.hook, box: { x: 110, y: 770, w: 860, h: 170 }, size: 56 },
+  extras: [
+    allAlong("w-sky", "gta-sky", { x: 0, y: 0, w: 1080, h: 1920 }, "none"),
+    allAlong("w-frame-cam", "gta-frame", { x: 210, y: 292, w: 660, h: 520 }, "none"),
+    allAlong("w-frame-game", "gta-frame", { x: 30, y: 870, w: 1020, h: 593 }, "none"),
+    allAlong("w-wanted", "gta-wanted", { x: 600, y: 218, w: 420, h: 66 }, "slideRight"),
+  ],
+  // The sky behind everything, each frame under its picture
+  order: ["widget:w-sky", "widget:w-frame-cam", "cam", "widget:w-frame-game", "game", "chat", "subtitles", "hook"],
 };
 
 /*
@@ -227,7 +249,7 @@ const WITHOUT_CAM: Partial<Record<TemplateId, Layout>> = {
     cam: null,
     game: { box: { x: 0, y: 0, w: 1080, h: 1920 }, frame: frame(0) },
     subtitles: { ...GTA.subtitles, box: { x: 150, y: 1060, w: 780, h: 240 } },
-    hook: { ...GTA.hook, box: { x: 90, y: 310, w: 900, h: 220 } },
+    hook: { ...GTA.hook, box: { x: 110, y: 320, w: 860, h: 190 } },
     extras: [allAlong("w-wanted", "gta-wanted", { x: 600, y: 218, w: 420, h: 66 }, "slideRight")],
   },
   // The game card moves up, the hook line above it like a title
@@ -249,8 +271,10 @@ const WITHOUT_CAM: Partial<Record<TemplateId, Layout>> = {
 };
 
 /** A layout for this clip: the stacked ones fall back on "Sans cam" with their own lettering */
-function layoutFor(id: TemplateId, hasCam: boolean): Layout {
+function layoutFor(id: TemplateId, hasCam: boolean, camWidth = 0): Layout {
   const l = LAYOUTS[id];
+  // The GTA layout with a small webcam: two framed panels instead of the webcam enlarged to the full width
+  if (id === "gta" && hasCam && camWidth > 0 && camWidth * 2 < 1080) return GTA_CARDS;
   if (hasCam || !l.cam) return l;
   const own = WITHOUT_CAM[id];
   if (own) return own;
@@ -264,6 +288,8 @@ const SPARE_CAM = { box: { x: 230, y: 210, w: 620, h: 560 }, frame: frame(48, 6,
 export interface BuiltInOptions {
   /** The clip has a webcam (layouts built around it move things around without one) */
   hasCam?: boolean;
+  /** How wide that webcam is in the stream's picture, clip pixels (a small one is not enlarged to the full width) */
+  camWidth?: number;
   subtitleStyle?: SubtitleStyle;
   /** The channel's widgets: shown or not, and when */
   widget?: { enabled: boolean; timing: WidgetTimingKind };
@@ -296,7 +322,7 @@ function subtitlesSpec(s: Subtitles, style: SubtitleStyle): TemplateSpec["subtit
 
 /** One of the 7 layouts as an element template */
 export function builtInSpec(id: TemplateId, o: BuiltInOptions = {}): TemplateSpec {
-  const l = layoutFor(id, o.hasCam !== false);
+  const l = layoutFor(id, o.hasCam !== false, o.camWidth);
   const widget = o.widget ?? { enabled: true, timing: "start" };
   const widgets: SpecWidget[] = [];
   if (widget.enabled && l.brand) {
@@ -338,15 +364,18 @@ export function builtInSpec(id: TemplateId, o: BuiltInOptions = {}): TemplateSpe
 
 /** The layers of one of the 7 layouts for a clip */
 export function buildTemplate(id: TemplateId, ctx: TemplateContext, look?: TemplateLook): Layer[] {
-  return buildFromSpec(
-    builtInSpec(id, {
-      hasCam: !!ctx.facecam,
-      subtitleStyle: ctx.subtitleStyle,
-      widget: { enabled: ctx.widget.enabled && !!ctx.login, timing: ctx.widget.timing },
-      look,
-    }),
-    ctx,
-  );
+  return buildFromSpec(specFor(id, ctx, look), ctx);
+}
+
+/** One of the layouts as it is for this clip (its webcam or none, the channel's subtitles and widgets) */
+export function specFor(id: TemplateId, ctx: TemplateContext, look?: TemplateLook): TemplateSpec {
+  return builtInSpec(id, {
+    hasCam: !!ctx.facecam,
+    camWidth: ctx.facecam?.w,
+    subtitleStyle: ctx.subtitleStyle,
+    widget: { enabled: ctx.widget.enabled && !!ctx.login, timing: ctx.widget.timing },
+    look,
+  });
 }
 
 /** A layout to start a template of one's own from (the editor) */

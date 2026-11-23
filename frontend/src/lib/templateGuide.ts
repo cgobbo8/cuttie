@@ -36,7 +36,7 @@ export const BUILTIN_USES: Record<TemplateId, string> = {
   accroche:
     "The whole stream picture between two black bands, like a film, with the title above for the whole video: when the entire screen matters (interface, things to read, wide shots) or to give a moment a story-telling feel.",
   sanscam: "Only the game: when nobody is in the webcam, or when the face adds nothing to the moment.",
-  gta: "The look of Grand Theft Auto for a live on that game: the face cam big on top of the game with a strip of sunset on the seam (the game alone when nobody is in the cam), the title and the subtitles in heavy small letters with a black outline, six stars that light up as the video plays. For any moment of a GTA live; not for another game unless the streamer asks for it.",
+  gta: "The look of Grand Theft Auto for a live on that game: the face cam big on top of the game with a strip of sunset on the seam (two framed panels in front of a Vice City sunset when the cam is small in the stream, the game alone when nobody is in it), the title in a leaning black plate, the subtitles in heavy small letters with a black outline, the channel on a GTA tag, six stars that light up as the video plays. For any moment of a GTA live; not for another game unless the streamer asks for it.",
 };
 
 const FONT_NAMES: Record<string, string> = {
@@ -71,6 +71,10 @@ const WIDGET_NAMES: Record<string, string> = {
   "gta-seam": "a strip of sunset colours between the webcam and the game",
   "gta-wasted": "the picture going grey with a red WASTED stamped across it (for a fail, a death, a plan gone wrong)",
   "gta-mission": "a yellow script « Mission réussie » stamped across the picture (for a win, a clutch, a plan that worked)",
+  "gta-plate": "a leaning black plate with a white edge and a strip of sunset under it, like the box of a game's title on its cover",
+  "gta-tag": "the channel signed the GTA way: its logo ringed in white and black, its address on a leaning black plate",
+  "gta-frame": "a frame round a picture: a line of sunset between two black ones, with a hard shadow",
+  "gta-sky": "an evening in Vice City as a backdrop: a sunset sky, a low sun, hotels and two palms",
 };
 
 const ENTER_WORDS: Record<string, string> = {
@@ -184,7 +188,7 @@ export function describeSpec(spec: TemplateSpec): string {
   lines.push(`Captions (what is said, word by word): ${subsWhere}; ${letters}; ${subs.words ?? 4} words at a time, ${spoken}${subs.pop ? ", the spoken word pops bigger" : ""}.`);
 
   if (spec.hook.visible) {
-    const style = { outline: "white letters with a black outline", box: "dark text on a white box", brand: "white text on a box in the channel's main color", vice: "heavy white small letters with a black outline, like a GTA title" }[spec.hook.style];
+    const style = { outline: "white letters with a black outline", box: "dark text on a white box", brand: "white text on a box in the channel's main color", vice: "heavy white small letters with a black outline, like a GTA title", viceplate: "heavy white small letters on a leaning black plate with a white edge, like a GTA title in its box" }[spec.hook.style];
     const until = spec.hook.until === null ? "for the whole video" : spec.hook.until === "half" ? "for the first half" : `for the first ${round(spec.hook.until ?? 3.5)} s`;
     lines.push(`Hook line (the video's title, on the first frame): ${placeOf(spec.hook.box)}; ${style}, ${FONT_NAMES[spec.hook.font] ?? spec.hook.font}, ${Math.round(spec.hook.size)} px; on screen ${until}, then it bounces away.`);
   } else {

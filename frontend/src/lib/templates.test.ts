@@ -94,17 +94,27 @@ describe("templates", () => {
 
   it("keeps what belongs to the GTA layout when the channel's widgets are off or no channel is set", () => {
     const kinds = (layers: ReturnType<typeof buildTemplate>) => layers.filter((l) => l.type === "widget").map((l) => l.widget?.widgetId);
-    // With the channel's widgets: its pill, the strip of sunset on the seam, the stars that follow the clip
-    expect(kinds(buildTemplate("gta", ctx))).toEqual(["gta-seam", "channel-pill", "gta-wanted"]);
-    // Without them (switched off, or a streamer who set no channel): the seam and the stars are the layout itself, they stay
-    expect(kinds(buildTemplate("gta", { ...ctx, widget: { enabled: false, timing: "start" } }))).toEqual(["gta-seam", "gta-wanted"]);
-    expect(kinds(buildTemplate("gta", { ...ctx, login: null }))).toEqual(["gta-seam", "gta-wanted"]);
+    // A webcam wide enough to fill the frame's width: on top of the game. The strip of sunset on the seam, the
+    // title's plate, the channel on its GTA tag, the stars that follow the clip
+    const wide = { ...ctx, facecam: { x: 1220, y: 0, w: 700, h: 446 } };
+    expect(kinds(buildTemplate("gta", wide))).toEqual(["gta-seam", "gta-plate", "gta-tag", "gta-wanted"]);
+    // Without the channel's widgets (switched off, or a streamer who set no channel): what is the layout itself stays
+    expect(kinds(buildTemplate("gta", { ...wide, widget: { enabled: false, timing: "start" } }))).toEqual(["gta-seam", "gta-plate", "gta-wanted"]);
+    expect(kinds(buildTemplate("gta", { ...wide, login: null }))).toEqual(["gta-seam", "gta-plate", "gta-wanted"]);
+    // A small webcam (enlarged to the full width it would be soft): two framed panels in front of an evening in Vice City
+    expect(kinds(buildTemplate("gta", ctx))).toEqual(["gta-sky", "gta-frame", "gta-frame", "gta-plate", "gta-tag", "gta-wanted"]);
+    const cam = buildTemplate("gta", ctx).find((l) => l.type === "facecam")!;
+    expect(cam.transform.width).toBeLessThan(700);
     // Nobody in the webcam: the game alone, no seam to cover
-    expect(kinds(buildTemplate("gta", { ...ctx, facecam: null, login: null }))).toEqual(["gta-wanted"]);
+    expect(kinds(buildTemplate("gta", { ...ctx, facecam: null, login: null }))).toEqual(["gta-plate", "gta-wanted"]);
     // A follow button says the channel: it goes with its widgets
     expect(kinds(buildTemplate("empile", { ...ctx, widget: { enabled: false, timing: "start" } }))).toEqual([]);
-    // Its title is written in small letters, as the title of that game is
-    expect(buildTemplate("gta", { ...ctx, hook: "Il braque la BANQUE" }).find((l) => l.name === "Accroche")?.text?.content).toBe("il braque la banque");
+    // Its title is written in small letters, as the title of that game is, on its plate, both tilted alike
+    const title = buildTemplate("gta", { ...wide, hook: "Il braque la BANQUE" });
+    expect(title.find((l) => l.name === "Accroche")?.text?.content).toBe("il braque la banque");
+    expect(title.find((l) => l.name === "Accroche")?.transform.rotation).toBe(title.find((l) => l.widget?.widgetId === "gta-plate")?.transform.rotation);
+    // No title, no plate
+    expect(kinds(buildTemplate("gta", { ...wide, hook: " " }))).toEqual(["gta-seam", "gta-tag", "gta-wanted"]);
   });
 
   it("suggests a template from what happens in the moment", () => {

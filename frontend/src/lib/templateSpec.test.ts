@@ -55,6 +55,57 @@ describe("section titles of a compilation", () => {
       ["scaleOut", 33.2],
     ]);
   });
+
+  it("can be written another way than the template does: the video's own title style", async () => {
+    const { titleCard, restyled, HOOK_STYLES, isHookStyle } = await import("./templateSpec");
+    const { buildAny, hookOf } = await import("./templateKeys");
+    const hook = specFromLayout("signature").hook;
+    // Nothing chosen, or the template's own way: the template's hook, untouched
+    expect(restyled(hook, null)).toBe(hook);
+    expect(restyled(hook, hook.style)).toBe(hook);
+    expect(HOOK_STYLES.every(isHookStyle)).toBe(true);
+    expect(["", "neon", null, undefined, 3].some(isHookStyle)).toBe(false);
+
+    // The GTA pack's box: at the template's place, in the pack's letters, on the pack's plate (a widget), both tilted alike
+    const plate = restyled(hook, "viceplate");
+    expect(plate).toMatchObject({ box: hook.box, style: "viceplate", font: "rammetto", visible: hook.visible, until: hook.until });
+    expect(plate.size).toBeLessThanOrEqual(60);
+    const card = titleCard(ctx, plate, "C'est CALME", 0, 2.2, "s1");
+    expect(card.map((l) => [l.id, l.type, l.widget?.widgetId])).toEqual([
+      ["tpl-section-s1-bg", "widget", "gta-plate"],
+      ["tpl-section-s1", "text", undefined],
+    ]);
+    expect(card[1].text).toMatchObject({ content: "c'est calme", uppercase: false });
+    expect(card[1].text!.fontFamily).toContain("Rammetto One");
+    expect(card[0].transform.rotation).toBe(card[1].transform.rotation);
+    expect(card[0].transform.rotation).not.toBe(0);
+    // (the text stays inside its plate)
+    expect(card[1].transform.x).toBeGreaterThan(card[0].transform.x);
+    expect(card[1].transform.x + card[1].transform.width).toBeLessThan(card[0].transform.x + card[0].transform.width);
+
+    // Outlined letters want display letters and room; a box wants a sentence font
+    expect(restyled(specFromLayout("signature").hook, "outline")).toMatchObject({ style: "outline", font: "anton" });
+    expect(restyled(hook, "outline").size).toBeGreaterThanOrEqual(64);
+    const boxed = restyled(specFromLayout("plein").hook, "box");
+    expect(boxed.style).toBe("box");
+    expect(["poppins", "montserrat", "geist", "archivo"]).toContain(boxed.font);
+    expect(boxed.size).toBeLessThanOrEqual(56);
+
+    // A whole template built with it: its hook line is written that way, the rest is the template's
+    const usual = buildAny("plein", ctx, []);
+    const styled = buildAny("plein", ctx, [], "viceplate");
+    expect(styled.find((l) => l.name === "Accroche")!.text!.content).toBe(ctx.hook.toLowerCase());
+    expect(styled.some((l) => l.widget?.widgetId === "gta-plate")).toBe(true);
+    expect(usual.some((l) => l.widget?.widgetId === "gta-plate")).toBe(false);
+    const rest = (layers: typeof usual) => layers.filter((l) => !l.name.includes("ccroche")).map((l) => [l.name, l.transform]);
+    expect(rest(styled)).toEqual(rest(usual));
+    expect(buildAny("plein", ctx, [], null).map((l) => l.name)).toEqual(usual.map((l) => l.name));
+    // A template of the streamer's own takes it too
+    const mine = { ...specFromLayout("signature"), id: "t-mine", name: "Le mien" };
+    expect(hookOf("t-mine", ctx, [mine]).style).toBe("brand");
+    expect(hookOf("t-mine", ctx, [mine], "vice")).toMatchObject({ style: "vice", font: "rammetto", box: mine.hook.box });
+    expect(buildAny("t-mine", ctx, [mine], "vice").find((l) => l.name === "Accroche")!.text).toMatchObject({ content: ctx.hook.toLowerCase(), stroke: true });
+  });
 });
 
 describe("element templates", () => {
@@ -117,7 +168,9 @@ describe("element templates", () => {
   it("draws a layout the same way as the built-in template", async () => {
     const { TEMPLATE_IDS } = await import("./templates");
     const shape = (layers: ReturnType<typeof buildTemplate>) => layers.map((l) => [l.name, l.transform]);
-    for (const id of TEMPLATE_IDS) expect(shape(buildFromSpec(specFromLayout(id), ctx)), id).toEqual(shape(buildTemplate(id, ctx)));
+    // (the GTA layout draws a small webcam as a framed panel: a template started from it is the layout as it is with a wide one)
+    const wide = { ...ctx, facecam: { x: 1220, y: 0, w: 700, h: 446 } };
+    for (const id of TEMPLATE_IDS) expect(shape(buildFromSpec(specFromLayout(id), id === "gta" ? wide : ctx)), id).toEqual(shape(buildTemplate(id, id === "gta" ? wide : ctx)));
   });
 
   it("shows the Twitch chat in Discussion RP, as bubbles, and keeps it hidden elsewhere", () => {
@@ -352,9 +405,9 @@ describe("what the apps cover", () => {
     const { coveredBy } = await import("./templateSpec");
     const { KIT_WIDGETS } = await import("../components/editor/widgets/kit");
     // A logo, a live badge, a lower third, a sticker and the corner logo sit on a side on purpose
-    const onASide = ["logo", "live-badge", "lower-third", "clip-sticker", "corner-logo", "gta-wanted"];
-    // The word a mission ends on is stamped over the whole picture (the word itself across its middle, clear of the apps)
-    const overEverything = ["gta-wasted", "gta-mission"];
+    const onASide = ["logo", "live-badge", "lower-third", "clip-sticker", "corner-logo", "gta-wanted", "gta-tag"];
+    // The word a mission ends on is stamped over the whole picture (the word itself across its middle, clear of the apps), and a backdrop is behind all of it
+    const overEverything = ["gta-wasted", "gta-mission", "gta-sky"];
     for (const w of KIT_WIDGETS) {
       if (overEverything.includes(w.id)) {
         expect(w.box, w.id).toEqual({ x: 0, y: 0, w: 1080, h: 1920 });
@@ -407,8 +460,9 @@ describe("what the apps cover", () => {
     const { TEMPLATE_IDS } = await import("./templates");
     for (const id of TEMPLATE_IDS) {
       for (const facecam of [ctx.facecam, null]) {
-        // The game (and its seam) may run under the apps' interface, the rest may not
-        const layers = buildTemplate(id, { ...ctx, facecam }).filter((l) => !l.name.startsWith("Jeu") && !l.locked && l.name !== "Assombrir");
+        // The game (and its seam), a backdrop and the frames of the pictures may run under the apps' interface, the rest may not
+        const decor = (l: { widget?: { widgetId: string } }) => ["gta-sky", "gta-frame"].includes(l.widget?.widgetId ?? "");
+        const layers = buildTemplate(id, { ...ctx, facecam }).filter((l) => !l.name.startsWith("Jeu") && !l.locked && l.name !== "Assombrir" && !decor(l));
         for (const l of layers) {
           const t = l.transform;
           const zones = coveredBy({ x: t.x, y: t.y, w: t.width, h: t.height });

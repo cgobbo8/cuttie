@@ -11,7 +11,7 @@ import CornerLogo from "./CornerLogo";
 import FollowBanner from "./FollowBanner";
 import FollowButton from "./FollowButton";
 import FollowerCount from "./FollowerCount";
-import { GtaMission, GtaSeam, GtaWanted, GtaWasted } from "./gta";
+import { GtaFrame, GtaMission, GtaPlate, GtaSeam, GtaSky, GtaTag, GtaWanted, GtaWasted } from "./gta";
 import Handle from "./Handle";
 import LiveBadge from "./LiveBadge";
 import Logo from "./Logo";
@@ -36,7 +36,11 @@ export type KitWidgetId =
   | "gta-wanted"
   | "gta-seam"
   | "gta-wasted"
-  | "gta-mission";
+  | "gta-mission"
+  | "gta-plate"
+  | "gta-tag"
+  | "gta-frame"
+  | "gta-sky";
 
 export type KitEnter = "bounceIn" | "scaleIn" | "fadeIn" | "slideInBottom" | "slideInLeft" | "slideInRight";
 
@@ -70,10 +74,14 @@ export const KIT_WIDGETS: KitWidget[] = [
   { id: "gta-seam", box: { x: 0, y: 728, w: 1080, h: 30 }, timing: "always", enter: null, fields: [], Component: GtaSeam },
   { id: "gta-wasted", box: { x: 0, y: 0, w: 1080, h: 1920 }, timing: "end", enter: null, fields: ["text"], Component: GtaWasted },
   { id: "gta-mission", box: { x: 0, y: 0, w: 1080, h: 1920 }, timing: "end", enter: null, fields: ["text"], Component: GtaMission },
+  { id: "gta-plate", box: { x: 110, y: 900, w: 860, h: 160 }, timing: "start", enter: "bounceIn", fields: [], Component: GtaPlate },
+  { id: "gta-tag", box: { x: 50, y: 214, w: 520, h: 74 }, timing: "start", enter: "slideInLeft", fields: [], Component: GtaTag },
+  { id: "gta-frame", box: { x: 210, y: 300, w: 660, h: 540 }, timing: "always", enter: null, fields: [], Component: GtaFrame },
+  { id: "gta-sky", box: { x: 0, y: 0, w: 1080, h: 1920 }, timing: "always", enter: null, fields: [], Component: GtaSky },
 ];
 
 /** The widgets of a pack, by its name: shown together in the editor */
-export const WIDGET_PACKS: Record<string, KitWidgetId[]> = { gta: ["gta-wanted", "gta-seam", "gta-wasted", "gta-mission"] };
+export const WIDGET_PACKS: Record<string, KitWidgetId[]> = { gta: ["gta-wanted", "gta-seam", "gta-wasted", "gta-mission", "gta-plate", "gta-tag", "gta-frame", "gta-sky"] };
 
 export const KIT_COMPONENTS: Record<string, FC<KitWidgetProps>> = Object.fromEntries(KIT_WIDGETS.map((w) => [w.id, w.Component]));
 

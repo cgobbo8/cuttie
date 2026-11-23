@@ -1349,7 +1349,8 @@
     "usagePlaceholder": "E.g.: for my fails, the game big and my cam small.",
     "usageHint": "The AI reads this sentence, along with where each element sits, when it picks the template of a passage. Left empty, it is written when you save.",
     "usageFailed": "The AI could not write the description. Try again, or write it yourself.",
-    "hookVice": "GTA"
+    "hookVice": "GTA",
+    "hookVicePlate": "GTA box"
   },
   "widgets": {
     "channel-pill": {
@@ -1419,6 +1420,22 @@
     "gta-mission": {
       "name": "Mission passed",
       "desc": "A yellow stamp at the end of the clip: for a win"
+    },
+    "gta-plate": {
+      "name": "GTA box",
+      "desc": "A leaning black plate with a white edge, like a title on a game cover"
+    },
+    "gta-tag": {
+      "name": "GTA tag",
+      "desc": "Your logo and your channel on a leaning black plate"
+    },
+    "gta-frame": {
+      "name": "GTA frame",
+      "desc": "A sunset frame to slide under your cam or the game"
+    },
+    "gta-sky": {
+      "name": "Vice City backdrop",
+      "desc": "A sunset, palms and hotels behind everything"
     }
   },
   "freed": {
@@ -1512,6 +1529,12 @@
     "fit": "Fit to {{length}}",
     "titles": "Part titles",
     "titlesHint": "Each section opens with its title",
+    "titleHide": "Don't write this title in the video",
+    "titleShow": "Write this title in the video",
+    "titleStyle": {
+      "label": "Title style",
+      "template": "As the template"
+    },
     "hookPlaceholder": "Hook line of the video",
     "template": "Template",
     "defaultTemplate": "Default template",

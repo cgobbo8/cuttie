@@ -146,9 +146,12 @@ def test_shows_three_pictures_of_each_lead_a_few_leads_per_call():
     assert sum(part["type"] == "image_url" for part in first) == 18
     assert "Grand Theft Auto VI" in first[0]["text"]
     assert "Moment 1 (at 0:01:40). Said around it: ligne 1" in [part.get("text") for part in first]
-    # Each answer goes back to its lead, numbered across the calls
+    # Each answer goes back to its lead; each call numbers its moments from 1 (numbered across the calls, the
+    # model answered "1, 2..." again in the later ones and those leads were never looked at)
     assert [(s.at, s.seen, s.watch, s.text, s.face) for s in seen][:2] == [(100.0, "scene 1", 41, "MORT", "laughing"), (200.0, "scene 2", 42, "MORT", "laughing")]
-    assert seen[-1].at == 800.0 and seen[-1].signs == ["stunned"]
+    second = [part["text"] for part in eyes.calls[1]["messages"][0]["content"] if part["type"] == "text"][1:]
+    assert [text.split(".")[0] for text in second] == ["Moment 1 (at 0:11:40)", "Moment 2 (at 0:13:20)"]
+    assert [(s.at, s.seen) for s in seen[-2:]] == [(700.0, "scene 1"), (800.0, "scene 2")] and seen[-1].signs == ["stunned"]
 
 
 def test_a_lead_whose_pictures_cannot_be_fetched_and_an_answer_that_makes_no_sense_are_left_out(caplog):

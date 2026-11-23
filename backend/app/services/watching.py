@@ -256,7 +256,9 @@ def look(leads: list[Lead], video_url: str, game: str | None = None, client=None
         # (the pictures of a call fetched together: one lead after the other took 2 s each)
         with ThreadPoolExecutor(max_workers=PER_CALL) as pool:
             pictures = list(pool.map(lambda lead: fetch(video_url, [max(0.0, lead.at + offset) for offset in OFFSETS]), group))
-        for n, (lead, frames) in enumerate(zip(group, pictures), first + 1):
+        # (numbered from 1 in each call: numbered across the calls, the model answered "1 to 6" again for
+        # moments 31 to 42 and its answers went to no lead, a quarter of the leads of a real analysis)
+        for n, (lead, frames) in enumerate(zip(group, pictures), 1):
             if len(frames) < 2:
                 continue  # this part of the live could not be fetched
             shown[n] = lead
@@ -283,8 +285,8 @@ def look(leads: list[Lead], video_url: str, game: str | None = None, client=None
         except Exception:
             answers = []
         if not answers:
-            # (tried for real with half the room to answer: 2 calls of 8 came back unreadable, 12 leads never looked at, and nothing said so)
             logger.warning(f"Watching: the answer about {len(shown)} leads could not be read (finish: {getattr(response.choices[0], 'finish_reason', '?')})")
+        before = len(seen)
         for answer in answers if isinstance(answers, list) else []:
             if not isinstance(answer, dict):
                 continue
@@ -303,6 +305,9 @@ def look(leads: list[Lead], video_url: str, game: str | None = None, client=None
                 watch=max(0, min(100, watch)),
                 signs=lead.signs,
             ))
+            shown.pop(int(answer.get("n")), None)  # (answered once)
+        if answers and len(seen) - before < len(group) - sum(len(frames) < 2 for frames in pictures):
+            logger.warning(f"Watching: {len(shown)} of the leads shown got no answer")
     return seen, cost
 
 

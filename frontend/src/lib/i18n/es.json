@@ -32,7 +32,7 @@
   "sidebar": {
     "newProject": "Nuevo proyecto",
     "dashboard": "Dashboard",
-    "projects": "Proyectos",
+    "projects": "Directos",
     "games": "Juegos",
     "creators": "Creadores",
     "exports": "Exportaciones",
@@ -2162,5 +2162,10 @@
       "clip": "Ej.: «corta el principio», «guarda también lo que pasa justo después». Intro para enviar.",
       "sequence": "Ej.: «acorta la parte del medio», «añade el final de la misión». Intro para enviar."
     }
+  },
+  "assistant": {
+    "title": "Asistente",
+    "close": "Cerrar el asistente",
+    "empty": "Abre un vídeo en Montar: buscar en el directo y pedir un cambio a la IA se hacen aquí."
   }
 }

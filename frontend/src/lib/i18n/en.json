@@ -32,7 +32,7 @@
   "sidebar": {
     "newProject": "New project",
     "dashboard": "Dashboard",
-    "projects": "Projects",
+    "projects": "Lives",
     "games": "Games",
     "creators": "Creators",
     "exports": "Exports",
@@ -2162,5 +2162,10 @@
       "clip": "E.g. “cut the beginning”, “also keep what happens right after”. Enter to send.",
       "sequence": "E.g. “shorten the middle part”, “add the end of the mission”. Enter to send."
     }
+  },
+  "assistant": {
+    "title": "Assistant",
+    "close": "Close the assistant",
+    "empty": "Open a video in Edit: searching the live and asking the AI for a change happen here."
   }
 }

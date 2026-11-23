@@ -1,17 +1,19 @@
 import { useEffect } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router";
-import { Download, KeyRound, LogOut, Scissors, SlidersHorizontal } from "lucide-react";
+import { Download, KeyRound, LogOut, Scissors, SlidersHorizontal, Sparkles } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import CreatorSelector from "./CreatorSelector";
+import { useAssistant } from "../lib/AssistantContext";
 import { useAuth } from "../lib/AuthContext";
 import { useChannel } from "../lib/ChannelContext";
 import { useCreatorWorkspace } from "../lib/CreatorWorkspaceContext";
 import { useSettings } from "../lib/SettingsContext";
 import { checkForUpdateSoon, updatePending, useUpdateState } from "../lib/desktop";
 
+/** A live and its steps (choose, edit, export) */
 const JOB_PATH = /^\/[0-9a-f]{8}-[0-9a-f]{4}-/;
-/** A live's compilations and the editor of one */
-const COMPILATION_PATH = /^\/[0-9a-f-]{36}\/compilations?(\/|$)/;
+/** The keys that open the assistant, as this machine writes them */
+const ASSISTANT_KEYS = typeof navigator !== "undefined" && /mac/i.test(navigator.platform) ? "⌘J" : "Ctrl J";
 
 function NavItem({ to, label, active }: { to: string; label: string; active: boolean }) {
   return (
@@ -40,14 +42,15 @@ export default function TopBar() {
   // Desktop app: single local streamer — no account, workspaces or admin pages
   const isLocalApp = appInfo?.mode === "local" && appInfo.auto_login;
   const update = useUpdateState();
+  const assistant = useAssistant();
 
   useEffect(() => checkForUpdateSoon(), []);
 
   const items = [
     { to: "/", label: t("sidebar.home"), active: pathname === "/" },
-    { to: "/projects", label: t("sidebar.projects"), active: pathname.startsWith("/projects") || (JOB_PATH.test(pathname) && !COMPILATION_PATH.test(pathname)) },
-    { to: "/compilations", label: t("sidebar.compilations"), active: pathname.startsWith("/compilations") || COMPILATION_PATH.test(pathname) },
-    { to: "/exports", label: t("sidebar.exports"), active: pathname.startsWith("/exports") },
+    // A live and everything made from it; then every video kept, whatever its live (their exported files are with them)
+    { to: "/projects", label: t("sidebar.projects"), active: pathname.startsWith("/projects") || JOB_PATH.test(pathname) },
+    { to: "/compilations", label: t("sidebar.compilations"), active: pathname.startsWith("/compilations") || pathname.startsWith("/exports") },
     { to: "/chaine", label: t("sidebar.channel"), active: pathname.startsWith("/chaine") },
     ...(!isLocalApp
       ? [
@@ -59,7 +62,11 @@ export default function TopBar() {
   ];
 
   return (
-    <header className="fixed top-4 inset-x-6 z-40 glass-bar rounded-[16px] min-h-14 flex flex-wrap items-center gap-3 pl-3 pr-2 py-1">
+    <header
+      // (the assistant, open, takes its width off the page: the bar stops where the page does)
+      style={{ right: "calc(1.5rem + var(--assistant-w, 0px))" }}
+      className="fixed top-4 left-6 z-40 glass-bar rounded-[16px] min-h-14 flex flex-wrap items-center gap-3 pl-3 pr-2 py-1 transition-[right] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]"
+    >
       <Link to="/" className="flex items-center gap-2.5">
         <span className="w-7 h-7 rounded-[8px] bg-ink grid place-items-center">
           <Scissors className="w-[15px] h-[15px] text-ground" strokeWidth={2.4} />
@@ -94,6 +101,17 @@ export default function TopBar() {
           <CreatorSelector />
         </div>
       )}
+
+      <button
+        onClick={assistant.toggle}
+        aria-pressed={assistant.open}
+        title={`${t("assistant.title")} (${ASSISTANT_KEYS})`}
+        className={`flex items-center gap-2 h-9 pl-2.5 pr-2 rounded-[10px] text-[13.5px] font-[600] transition-colors ${assistant.open ? "bg-accent text-accent-ink" : "bg-accent-soft text-accent hover:bg-accent/25"}`}
+      >
+        <Sparkles className="w-4 h-4" strokeWidth={2.2} />
+        {t("assistant.title")}
+        <kbd className={assistant.open ? "bg-black/15 border-black/10 text-accent-ink" : "bg-white/[0.08] border-white/10 text-ink-2"}>{ASSISTANT_KEYS}</kbd>
+      </button>
 
       <NavLink
         to="/settings"

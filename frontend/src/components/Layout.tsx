@@ -1,14 +1,25 @@
 import { useEffect } from "react";
 import { Outlet, useLocation } from "react-router";
+import AssistantPanel from "./AssistantPanel";
 import NoteProposals from "./NoteProposals";
 import TopBar from "./TopBar";
+import { ASSISTANT_WIDTH, AssistantProvider, useAssistant } from "../lib/AssistantContext";
 import { AppBackdrop } from "../lib/BackdropContext";
 
 /** Pages that lay out their own full-width hero under the floating top bar */
 const FULL_BLEED = new Set(["/", "/chaine"]);
 
 export default function Layout() {
+  return (
+    <AssistantProvider>
+      <Shell />
+    </AssistantProvider>
+  );
+}
+
+function Shell() {
   const { pathname } = useLocation();
+  const { open } = useAssistant();
 
   // A new page starts at the top (the router keeps the previous page's scroll)
   useEffect(() => {
@@ -19,7 +30,8 @@ export default function Layout() {
     <div className="relative min-h-dvh">
       <AppBackdrop />
       <TopBar />
-      <div className="relative z-[1]">
+      {/* The assistant, open, takes its width off the page: the two are side by side */}
+      <div className="relative z-[1] transition-[padding] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]" style={{ paddingRight: open ? ASSISTANT_WIDTH : 0 }}>
         {FULL_BLEED.has(pathname) ? (
           <Outlet />
         ) : (
@@ -28,6 +40,7 @@ export default function Layout() {
           </main>
         )}
       </div>
+      <AssistantPanel />
       {/* A note of the streamer's that their lives contradict: the AI asks before anything changes */}
       <NoteProposals />
     </div>

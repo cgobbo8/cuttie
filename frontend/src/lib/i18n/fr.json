@@ -32,7 +32,7 @@
   "sidebar": {
     "newProject": "Nouveau projet",
     "dashboard": "Dashboard",
-    "projects": "Projets",
+    "projects": "Lives",
     "games": "Jeux",
     "creators": "Créateurs",
     "exports": "Exports",
@@ -2162,5 +2162,10 @@
       "clip": "Ex. : « coupe le début », « garde aussi ce qui se passe juste après ». Entrée pour envoyer.",
       "sequence": "Ex. : « raccourcis le passage du milieu », « ajoute la fin de la mission ». Entrée pour envoyer."
     }
+  },
+  "assistant": {
+    "title": "Assistant",
+    "close": "Fermer l'assistant",
+    "empty": "Ouvre une vidéo dans Monter : chercher dans le live et demander un changement à l'IA se font ici."
   }
 }

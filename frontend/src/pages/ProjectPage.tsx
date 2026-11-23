@@ -9,17 +9,12 @@ import {
   getStoryboard,
   listCompilations,
   saveCompilation,
-  extendClip,
-  ExtendError,
-  getClipWords,
   getJobChat,
   getJobStatus,
-  LiveError,
   listRenders,
   mapSSEHotPoint,
   renameClip,
   retryJob,
-  suggestClipCut,
   updateSelection,
   type ClipChatLine,
   type ClipSelection,
@@ -27,14 +22,12 @@ import {
   type TwitchStoryboard,
   type JobResponse,
   type TimelineCandidate,
-  type TranscriptWord,
 } from "../lib/api";
 import { MEMORY_READ } from "../lib/aiMemory";
 import { useBackdrop } from "../lib/BackdropContext";
 import { useChannel } from "../lib/ChannelContext";
 import { useTransmitChannel } from "../lib/TransmitContext";
 import { buildMoments, nextTodo, type MomentState } from "../lib/moments";
-import { GROW_ORDER, readCutTarget, saveCutTarget, tooShortFor, type CutTarget } from "../lib/cutTarget";
 import type { Range } from "../lib/montage";
 import { useToast } from "../components/Toast";
 import ConfirmModal from "../components/ConfirmModal";
@@ -48,7 +41,6 @@ import { keptCount, liveEntries, momentKey, shownEntries, videoMoments, type Liv
 import type { VideoSource } from "../lib/videoSources";
 import VodTimeline from "../components/project/VodTimeline";
 import MomentPlayer, { type MomentPlayerHandle } from "../components/project/MomentPlayer";
-import AiCutButton from "../components/project/AiCutButton";
 import MomentDetails from "../components/project/MomentDetails";
 import FreedNotice from "../components/project/FreedNotice";
 import { latestPerClip } from "../lib/renders";
@@ -192,23 +184,6 @@ export default function ProjectPage() {
   }, [liveVodId]);
 
   const current = moments[Math.min(selected, moments.length - 1)];
-  // The clip on screen, for what answers later (the AI's montage)
-  const playing = useRef<string | null>(null);
-  playing.current = current?.filename ?? null;
-
-  // The words said in the clip on screen: cuts land between them, silences can be taken out
-  const [clipWords, setClipWords] = useState<Record<string, TranscriptWord[]>>({});
-  const wordsKey = current ? `${current.filename}@${current.start}-${current.end}` : null;
-  useEffect(() => {
-    if (!jobId || !current || !wordsKey || clipWords[wordsKey]) return;
-    let cancelled = false;
-    getClipWords(jobId, current.filename).then((words) => !cancelled && setClipWords((prev) => ({ ...prev, [wordsKey]: words })));
-    return () => {
-      cancelled = true;
-    };
-  }, [jobId, wordsKey]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const trimmedByUser = !!current?.suggested && !!current?.trimmedByUser;
   const vodId = vodIdOf(job?.url ?? null);
   const vodThumb = channel?.vods.find((v) => v.id === vodId)?.thumbnail_url ?? null;
   useBackdrop(current && jobId ? clipThumbUrl(jobId, current.filename, { version: `${current.start}-${current.end}` }) : vodThumb);
@@ -270,28 +245,6 @@ export default function ProjectPage() {
     }
   };
 
-  // 30 s more on one side of a clip's cut; its file grows from the live when needed
-  const extendMoment = useCallback(
-    async (filename: string, side: "start" | "end") => {
-      if (!jobId) return;
-      try {
-        await extendClip(jobId, filename, side);
-        setJob(await getJobStatus(jobId));
-        toast.success(t(side === "start" ? "project.extendedStart" : "project.extendedEnd"));
-      } catch (err) {
-        const reason = err instanceof ExtendError ? err.reason : "other";
-        toast.error(
-          reason === "edge"
-            ? t(side === "start" ? "project.extendEdgeStart" : "project.extendEdgeEnd")
-            : reason === "unreachable" || !(err instanceof Error)
-              ? t("project.extendFailed")
-              : err.message,
-        );
-      }
-    },
-    [jobId, t, toast],
-  );
-
   const saveChoice = useCallback(
     async (filename: string, patch: { state?: ClipSelection["state"] | null; trim?: [number, number] | null; segments?: Range[] | null }) => {
       if (!jobId) return;
@@ -326,57 +279,6 @@ export default function ProjectPage() {
     [jobId, t, toast],
   );
 
-  /** The cut of a clip: one piece is a trim, several are played one after the other, null is the whole clip */
-  const saveCut = useCallback(
-    (filename: string, pieces: Range[] | null) => saveChoice(filename, !pieces ? { trim: null } : pieces.length > 1 ? { segments: pieces } : { trim: pieces[0] }),
-    [saveChoice],
-  );
-
-  // The length the AI's montage aims for, kept for this project (null: left to the AI)
-  const [cutTarget, setCutTarget] = useState<CutTarget>(() => (jobId ? readCutTarget(jobId) : null));
-  useEffect(() => setCutTarget(jobId ? readCutTarget(jobId) : null), [jobId]);
-  const chooseCutTarget = (target: CutTarget) => {
-    setCutTarget(target);
-    if (jobId) saveCutTarget(jobId, target);
-  };
-
-  // The AI's montage of the clip on screen: the parts worth keeping, shown as pieces (and taken back with Undo)
-  const [aiCutting, setAiCutting] = useState<string | null>(null);
-  const aiCut = async () => {
-    if (!jobId || !current || aiCutting) return;
-    const filename = current.filename;
-    setAiCutting(filename);
-    try {
-      // A clip that holds less of the live than the length aimed for grows first, 30 s at a time
-      // (the « + 30 s » of its strip: its words, its cam and its pictures follow), then the AI cuts
-      let length = current.duration;
-      if (tooShortFor(length, cutTarget)) toast.info(t("project.aiCutGrowing"));
-      for (const side of GROW_ORDER) {
-        if (!tooShortFor(length, cutTarget)) break;
-        try {
-          await extendClip(jobId, filename, side);
-        } catch (err) {
-          // The live starts or ends there: the other side. The live is gone: with what the clip holds
-          if (err instanceof ExtendError && err.reason === "edge") continue;
-          break;
-        }
-        const grown = await getJobStatus(jobId);
-        setJob(grown);
-        length = buildMoments(grown.hot_points ?? [], grown.selection ?? {}).find((m) => m.filename === filename)?.duration ?? length;
-      }
-      const { parts, note } = await suggestClipCut(jobId, filename, { target: cutTarget });
-      // The streamer moved on to another clip meanwhile: nothing to show there
-      if (playing.current !== filename) return;
-      if (parts.length === 0 || !playerRef.current?.setCut(parts)) toast.info(t("project.aiCutSame"));
-      else toast.success(note || t("project.aiCutDone", { count: parts.length }));
-    } catch (err) {
-      const reason = err instanceof LiveError ? err.reason : "failed";
-      toast.error(t(reason === "no_transcript" ? "project.tightenNoWords" : `compilation.failure.${reason}`));
-    } finally {
-      setAiCutting(null);
-    }
-  };
-
   const decide = useCallback(
     (state: Exclude<MomentState, "todo">) => {
       if (!current) return;
@@ -393,19 +295,12 @@ export default function ProjectPage() {
     [current, moments, saveChoice, selected],
   );
 
-  // Keyboard: Space play, G keep, X pass, arrows to move
+  // Keyboard: Space plays, G keeps, X passes, the arrows move through the list
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (isTyping(e.target) || e.altKey || moments.length === 0) return;
       const key = e.key.toLowerCase();
-      // Ctrl / Cmd + Z takes the last change of the cut back
-      if (e.metaKey || e.ctrlKey) {
-        if (key === "z" && !e.shiftKey) {
-          e.preventDefault();
-          playerRef.current?.undo();
-        }
-        return;
-      }
+      if (e.metaKey || e.ctrlKey) return;
       // The arrows go through the whole list, whatever the section
       const move = (by: 1 | -1) => {
         e.preventDefault();
@@ -428,7 +323,6 @@ export default function ProjectPage() {
         playerRef.current?.toggle();
       } else if (key === "g") decide("kept");
       else if (key === "x") decide("passed");
-      else if (key === "c") playerRef.current?.cut();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -603,21 +497,10 @@ export default function ProjectPage() {
                 categoryLabel={categoryLabel(current.hp.llm?.category)}
                 autoPlay={interacted}
                 chat={clipChat[current.filename]}
-                words={wordsKey ? clipWords[wordsKey] : undefined}
-                onExtend={(side) => extendMoment(current.filename, side)}
-                onPiecesChange={(pieces) => saveCut(current.filename, pieces)}
+                // To watch and decide: its cut is made in the montage, where the tools are
+                review
+                onPiecesChange={() => {}}
                 cutLabel={current.suggested && !current.trimmedByUser ? t("project.cutAdvised") : undefined}
-                tools={
-                  // Everything the AI does to the cut in one control: it cuts, its menu says how long and takes the advised cut back
-                  <AiCutButton
-                    busy={aiCutting === current.filename}
-                    disabled={!!aiCutting || !wordsKey || !clipWords[wordsKey]?.length}
-                    target={cutTarget}
-                    onTarget={chooseCutTarget}
-                    onCut={aiCut}
-                    onReset={trimmedByUser ? () => saveChoice(current.filename, { trim: null }) : undefined}
-                  />
-                }
               >
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-2.5 px-1.5 pt-3 pb-1.5">
                   {/* Only what the streamer has to know before deciding: this moment is one they already have */}
@@ -639,6 +522,12 @@ export default function ProjectPage() {
                       {current.state === "kept" ? t("project.kept") : t("project.keep")}
                       <kbd>G</kbd>
                     </button>
+                    {/* Kept: it is a video, its montage a click away */}
+                    {current.state === "kept" && (
+                      <Link to={`/${jobId}/montage?clip=${encodeURIComponent(current.filename)}`} className="btn btn-lg btn-glass">
+                        {t("project.step.edit")} <ArrowRight className="w-[15px] h-[15px]" strokeWidth={2.4} />
+                      </Link>
+                    )}
                   </div>
                 </div>
               </MomentPlayer>

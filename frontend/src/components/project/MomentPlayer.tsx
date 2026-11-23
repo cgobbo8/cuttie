@@ -69,6 +69,11 @@ interface Props {
   cutLabel?: string;
   /** Decision row, under the trim bar */
   children?: ReactNode;
+  /**
+   * To watch and decide only: the clip plays its cut, nothing here changes it (the cut is made in
+   * the montage, where its tools are). Without it the strip and the cut tools are shown.
+   */
+  review?: boolean;
 }
 
 const FILMSTRIP_FRAMES = 10;
@@ -82,7 +87,7 @@ const FRESH_MS = 1100;
 const CUT_HINT_KEY = "cuttie_cut_hint";
 
 const MomentPlayer = forwardRef<MomentPlayerHandle, Props>(function MomentPlayer(
-  { jobId, moment, categoryLabel, autoPlay, onPiecesChange, chat, words, onExtend, tools, cutLabel, children },
+  { jobId, moment, categoryLabel, autoPlay, onPiecesChange, chat, words, onExtend, tools, cutLabel, children, review = false },
   ref,
 ) {
   const { t } = useTranslation();
@@ -484,143 +489,153 @@ const MomentPlayer = forwardRef<MomentPlayerHandle, Props>(function MomentPlayer
         </div>
       </div>
 
-      {/* The cut: drag the handles of a piece; click or drag elsewhere to move through the clip; + for 30 s more */}
-      <div className="group/trim flex items-center gap-3 px-1.5 pt-3 pb-1">
-        <div className="relative w-[92px] flex-none">
-          <div className="text-[11.5px] text-ink-3">{t("project.start")}</div>
-          <div className="mono text-[13px] font-medium text-white">{clock(first[0])}</div>
-          {plus("start")}
-        </div>
-        <div
-          ref={stripRef}
-          className="relative flex-1 h-[52px] rounded-[9px] overflow-hidden bg-black select-none cursor-pointer touch-none"
-          onPointerDown={(e) => dragRatio(e, stripRef.current!, (r) => seek(r * duration))}
-        >
-          <div className="absolute inset-0 flex">
-            {Array.from({ length: FILMSTRIP_FRAMES }, (_, i) => (
-              <img
-                key={i}
-                src={clipThumbUrl(jobId, moment.filename, { time: ((i + 0.5) * moment.duration) / FILMSTRIP_FRAMES, version })}
-                alt=""
-                draggable={false}
-                className="flex-1 min-w-0 h-full object-cover"
-              />
-            ))}
-          </div>
-          {/* What is cut out, darkened */}
-          {gaps.map(([a, b], i) => (
-            <div key={`gap-${i}`} className={`absolute inset-y-0 bg-black/70 ${gliding}`} style={{ left: pct(a), width: pct(b - a) }} />
-          ))}
-          {pieces.map(([a, b], i) => (
-            <div
-              key={`piece-${i}`}
-              data-fresh={fresh.includes(i) || undefined}
-              className={`group/piece piece absolute inset-y-0 border-y-2 border-accent ${gliding}`}
-              style={{ left: pct(a), width: pct(b - a) }}
-            >
-              {pieces.length > 1 && (
-                <Tooltip content={t("project.removePiece")}>
-                  <button
-                    type="button"
-                    aria-label={t("project.removePiece")}
-                    onPointerDown={(e) => e.stopPropagation()}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      change(removePiece(piecesRef.current, i));
-                    }}
-                    className="piece-remove absolute top-1 left-1/2 -translate-x-1/2"
-                  >
-                    <X className="w-3 h-3" strokeWidth={2.6} />
-                  </button>
-                </Tooltip>
-              )}
-            </div>
-          ))}
-          {extending && <div className="extend-glow absolute inset-y-0 w-1/4 pointer-events-none" data-side={extending} />}
-          {keys.map((k) => (
-            <span
-              key={`${k.time}-${k.label}`}
-              className="absolute top-0 w-1.5 h-1.5 -ml-[3px] rounded-b-full bg-accent pointer-events-none"
-              style={{ left: pct(Math.min(k.time, duration)) }}
-            />
-          ))}
-          {chatColumns.map((column, i) => (
-            <span
-              key={`${moment.filename}-${column.t}`}
-              title={column.lines.map((m) => `${m.author} : ${m.text}`).join("\n")}
-              className="chat-stack"
-              style={{ left: pct(Math.min(column.t, duration)), "--d": `${Math.min(i * 35, 700)}ms` } as CSSProperties}
-            >
-              {column.lines.slice(0, CHAT_STACK_MAX).map((_, k) => (
-                <span key={k} />
-              ))}
-            </span>
-          ))}
-          <span className="absolute inset-y-0 w-0.5 -ml-px bg-white shadow-[0_0_6px_rgba(0,0,0,0.6)] pointer-events-none" style={{ left: pct(current) }}>
-            <span className="absolute -top-px left-1/2 -translate-x-1/2 w-2.5 h-2.5 rounded-full bg-white" />
-          </span>
-          {pieces.flatMap(([a, b], i) =>
-            (["start", "end"] as const).map((side) => (
-              <span
-                key={`${i}-${side}`}
-                role="slider"
-                aria-label={side === "start" ? t("project.trimStart") : t("project.trimEnd")}
-                aria-valuemin={0}
-                aria-valuemax={Math.round(duration)}
-                aria-valuenow={Math.round(side === "start" ? a : b)}
-                tabIndex={0}
-                onPointerDown={(e) => dragEdge(e, i, side)}
-                onKeyDown={(e) => {
-                  if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
-                  e.preventDefault();
-                  e.stopPropagation();
-                  const step = e.key === "ArrowLeft" ? -1 : 1;
-                  const list = piecesRef.current;
-                  if (!list[i]) return;
-                  change(moveEdge(list, i, side, (side === "start" ? list[i][0] : list[i][1]) + step, duration, list.length === 1 ? MIN_TRIM : MIN_PIECE));
-                }}
-                // Several pieces: slim handles, the frames stay visible between them
-                className={`absolute inset-y-0 ${pieces.length > 1 ? "w-[7px] rounded-[3px]" : "w-3 rounded-[4px]"} bg-accent shadow-[0_0_0_1px_rgba(11,11,12,0.7)] cursor-ew-resize grid place-items-center ${side === "start" ? "" : "-translate-x-full"} ${gliding}`}
-                style={{ left: pct(side === "start" ? a : b) }}
-              >
-                <span className={`${pieces.length > 1 ? "w-px h-3" : "w-0.5 h-4"} rounded-full bg-accent-ink/60`} />
-              </span>
-            )),
-          )}
-        </div>
-        <div className="relative w-[92px] flex-none text-right">
-          <div className="text-[11.5px] text-ink-3">{t("project.end")}</div>
-          <div className="mono text-[13px] font-medium text-white">{clock(last[1])}</div>
-          {plus("end")}
-        </div>
-      </div>
-
-      {/* Cutting tools on one line: what cuts on its own first, then by hand (at the playhead, on the silences); what the cut makes in the end */}
-      <div className="flex flex-wrap items-center gap-x-1 gap-y-1.5 px-1.5 pt-1.5">
-        {tools}
-        {tools && <span aria-hidden className="mx-1.5 w-px h-4 bg-white/10" />}
-        <Tooltip content={t(inPiece ? "project.cutHereHint" : "project.keepHereHint")}>
-          <button type="button" onClick={cut} className={`btn btn-ghost btn-sm h-7 px-2 ${tools ? "" : "-ml-2"}`}>
-            {inPiece ? <Scissors className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" strokeWidth={2.4} />}
-            {t(inPiece ? "project.cutHere" : "project.keepHere")}
-            <kbd className="bg-white/[0.08] border-white/10 text-ink-2">C</kbd>
-          </button>
-        </Tooltip>
-        <Tooltip content={t(words?.length ? "project.tightenHint" : "project.tightenNoWords")}>
-          <button type="button" onClick={tightenUp} disabled={!words?.length} className="btn btn-ghost btn-sm h-7 px-2">
-            <AudioLines className="w-3.5 h-3.5" /> {t("project.tighten")}
-          </button>
-        </Tooltip>
-        {undoCount > 0 && (
-          <button type="button" onClick={undo} className="btn btn-ghost btn-sm h-7 px-2">
-            <Undo2 className="w-3.5 h-3.5" /> {t("project.undo")}
-          </button>
-        )}
-        <span className="ml-auto pl-2 text-[12.5px] text-ink-3 whitespace-nowrap">
+      {review ? (
+        // What plays: the cut advised (or the streamer's own), and how long it makes
+        <p className="px-1.5 pt-2.5 text-[12.5px] text-ink-3">
           {pieces.length > 1 ? <>{t("project.pieces", { count: pieces.length })} · </> : cutLabel ? <>{cutLabel} · </> : null}
           <span className="mono text-ink-2">{clock(total)}</span>
-        </span>
-      </div>
+        </p>
+      ) : (
+        <>
+        {/* The cut: drag the handles of a piece; click or drag elsewhere to move through the clip; + for 30 s more */}
+        <div className="group/trim flex items-center gap-3 px-1.5 pt-3 pb-1">
+          <div className="relative w-[92px] flex-none">
+            <div className="text-[11.5px] text-ink-3">{t("project.start")}</div>
+            <div className="mono text-[13px] font-medium text-white">{clock(first[0])}</div>
+            {plus("start")}
+          </div>
+          <div
+            ref={stripRef}
+            className="relative flex-1 h-[52px] rounded-[9px] overflow-hidden bg-black select-none cursor-pointer touch-none"
+            onPointerDown={(e) => dragRatio(e, stripRef.current!, (r) => seek(r * duration))}
+          >
+            <div className="absolute inset-0 flex">
+              {Array.from({ length: FILMSTRIP_FRAMES }, (_, i) => (
+                <img
+                  key={i}
+                  src={clipThumbUrl(jobId, moment.filename, { time: ((i + 0.5) * moment.duration) / FILMSTRIP_FRAMES, version })}
+                  alt=""
+                  draggable={false}
+                  className="flex-1 min-w-0 h-full object-cover"
+                />
+              ))}
+            </div>
+            {/* What is cut out, darkened */}
+            {gaps.map(([a, b], i) => (
+              <div key={`gap-${i}`} className={`absolute inset-y-0 bg-black/70 ${gliding}`} style={{ left: pct(a), width: pct(b - a) }} />
+            ))}
+            {pieces.map(([a, b], i) => (
+              <div
+                key={`piece-${i}`}
+                data-fresh={fresh.includes(i) || undefined}
+                className={`group/piece piece absolute inset-y-0 border-y-2 border-accent ${gliding}`}
+                style={{ left: pct(a), width: pct(b - a) }}
+              >
+                {pieces.length > 1 && (
+                  <Tooltip content={t("project.removePiece")}>
+                    <button
+                      type="button"
+                      aria-label={t("project.removePiece")}
+                      onPointerDown={(e) => e.stopPropagation()}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        change(removePiece(piecesRef.current, i));
+                      }}
+                      className="piece-remove absolute top-1 left-1/2 -translate-x-1/2"
+                    >
+                      <X className="w-3 h-3" strokeWidth={2.6} />
+                    </button>
+                  </Tooltip>
+                )}
+              </div>
+            ))}
+            {extending && <div className="extend-glow absolute inset-y-0 w-1/4 pointer-events-none" data-side={extending} />}
+            {keys.map((k) => (
+              <span
+                key={`${k.time}-${k.label}`}
+                className="absolute top-0 w-1.5 h-1.5 -ml-[3px] rounded-b-full bg-accent pointer-events-none"
+                style={{ left: pct(Math.min(k.time, duration)) }}
+              />
+            ))}
+            {chatColumns.map((column, i) => (
+              <span
+                key={`${moment.filename}-${column.t}`}
+                title={column.lines.map((m) => `${m.author} : ${m.text}`).join("\n")}
+                className="chat-stack"
+                style={{ left: pct(Math.min(column.t, duration)), "--d": `${Math.min(i * 35, 700)}ms` } as CSSProperties}
+              >
+                {column.lines.slice(0, CHAT_STACK_MAX).map((_, k) => (
+                  <span key={k} />
+                ))}
+              </span>
+            ))}
+            <span className="absolute inset-y-0 w-0.5 -ml-px bg-white shadow-[0_0_6px_rgba(0,0,0,0.6)] pointer-events-none" style={{ left: pct(current) }}>
+              <span className="absolute -top-px left-1/2 -translate-x-1/2 w-2.5 h-2.5 rounded-full bg-white" />
+            </span>
+            {pieces.flatMap(([a, b], i) =>
+              (["start", "end"] as const).map((side) => (
+                <span
+                  key={`${i}-${side}`}
+                  role="slider"
+                  aria-label={side === "start" ? t("project.trimStart") : t("project.trimEnd")}
+                  aria-valuemin={0}
+                  aria-valuemax={Math.round(duration)}
+                  aria-valuenow={Math.round(side === "start" ? a : b)}
+                  tabIndex={0}
+                  onPointerDown={(e) => dragEdge(e, i, side)}
+                  onKeyDown={(e) => {
+                    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const step = e.key === "ArrowLeft" ? -1 : 1;
+                    const list = piecesRef.current;
+                    if (!list[i]) return;
+                    change(moveEdge(list, i, side, (side === "start" ? list[i][0] : list[i][1]) + step, duration, list.length === 1 ? MIN_TRIM : MIN_PIECE));
+                  }}
+                  // Several pieces: slim handles, the frames stay visible between them
+                  className={`absolute inset-y-0 ${pieces.length > 1 ? "w-[7px] rounded-[3px]" : "w-3 rounded-[4px]"} bg-accent shadow-[0_0_0_1px_rgba(11,11,12,0.7)] cursor-ew-resize grid place-items-center ${side === "start" ? "" : "-translate-x-full"} ${gliding}`}
+                  style={{ left: pct(side === "start" ? a : b) }}
+                >
+                  <span className={`${pieces.length > 1 ? "w-px h-3" : "w-0.5 h-4"} rounded-full bg-accent-ink/60`} />
+                </span>
+              )),
+            )}
+          </div>
+          <div className="relative w-[92px] flex-none text-right">
+            <div className="text-[11.5px] text-ink-3">{t("project.end")}</div>
+            <div className="mono text-[13px] font-medium text-white">{clock(last[1])}</div>
+            {plus("end")}
+          </div>
+        </div>
+
+        {/* Cutting tools on one line: what cuts on its own first, then by hand (at the playhead, on the silences); what the cut makes in the end */}
+        <div className="flex flex-wrap items-center gap-x-1 gap-y-1.5 px-1.5 pt-1.5">
+          {tools}
+          {tools && <span aria-hidden className="mx-1.5 w-px h-4 bg-white/10" />}
+          <Tooltip content={t(inPiece ? "project.cutHereHint" : "project.keepHereHint")}>
+            <button type="button" onClick={cut} className={`btn btn-ghost btn-sm h-7 px-2 ${tools ? "" : "-ml-2"}`}>
+              {inPiece ? <Scissors className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" strokeWidth={2.4} />}
+              {t(inPiece ? "project.cutHere" : "project.keepHere")}
+              <kbd className="bg-white/[0.08] border-white/10 text-ink-2">C</kbd>
+            </button>
+          </Tooltip>
+          <Tooltip content={t(words?.length ? "project.tightenHint" : "project.tightenNoWords")}>
+            <button type="button" onClick={tightenUp} disabled={!words?.length} className="btn btn-ghost btn-sm h-7 px-2">
+              <AudioLines className="w-3.5 h-3.5" /> {t("project.tighten")}
+            </button>
+          </Tooltip>
+          {undoCount > 0 && (
+            <button type="button" onClick={undo} className="btn btn-ghost btn-sm h-7 px-2">
+              <Undo2 className="w-3.5 h-3.5" /> {t("project.undo")}
+            </button>
+          )}
+          <span className="ml-auto pl-2 text-[12.5px] text-ink-3 whitespace-nowrap">
+            {pieces.length > 1 ? <>{t("project.pieces", { count: pieces.length })} · </> : cutLabel ? <>{cutLabel} · </> : null}
+            <span className="mono text-ink-2">{clock(total)}</span>
+          </span>
+        </div>
+        </>
+      )}
 
       {children}
     </article>

@@ -49,6 +49,10 @@ class LlmAnalysis(BaseModel):
     key_moments: list[KeyMoment] = []  # Vision-based timeline of key moments
     narrative: str = ""  # Full narrative combining transcript + vision
     hook: str = ""  # on-screen hook line for the first seconds of the short
+    # What the clip holds, for whoever looks for clips later without watching them (the AI that searches the live
+    # or builds a video): a few words to find it by, and what is on screen said plainly (the summary is a title)
+    tags: list[str] = []
+    seen: str = ""
     # Tightest standalone cut suggested by the LLM, clip seconds (the clip keeps its margins)
     cut_start: float | None = None
     cut_end: float | None = None

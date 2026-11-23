@@ -37,7 +37,8 @@ SPECS: list[dict] = [
     {
         "name": "best_moments",
         "description": f"The {MAX_BEST} moments the first analysis rated the best in the whole live (it weighed the sound and the chat, then an AI watched and "
-        "listened to each one), the best first: time, score (0-100), kind, name, what happens when it is known, and whether a clip of it exists. "
+        "listened to each one), the best first: time, score (0-100), kind, name, its title (`what`), what is on screen said plainly (`seen`) and a few "
+        "tags when they are known, and whether a clip of it exists. "
         "Use it for requests about the best, funniest or strongest moments, and to learn what happens in the live besides what is said: "
         "a fight, a fail, a chase are named here even when nobody says the word.",
         "parameters": {"type": "object", "properties": {}},
@@ -193,12 +194,16 @@ class LiveTools:
                 known.add(round(float(hp.timestamp_seconds)))
             score = moment.get("score", hp.final_score if hp is not None else None)
             what = moment.get("what") or (hp.llm.summary if hp is not None and hp.llm else "")
+            seen = moment.get("seen") or (getattr(hp.llm, "seen", "") if hp is not None and hp.llm else "")
+            tags = moment.get("tags") or (getattr(hp.llm, "tags", []) if hp is not None and hp.llm else [])
             rows.append((float(score or 0.0), t, {
                 "at": hms(t),
                 "score": round(100 * float(score)) if score is not None else None,
                 "kind": moment.get("category") or (hp.llm.category if hp is not None and hp.llm else None),
                 "name": moment.get("name") or (hp.clip_name if hp is not None else None),
                 **({"what": _short(str(what), 90)} if what else {}),
+                **({"seen": _short(str(seen), 160)} if seen else {}),
+                **({"tags": [str(tag) for tag in tags][:6]} if isinstance(tags, list) and tags else {}),
                 "clip": moment.get("state") in ("kept", "clip") or bool(hp is not None and hp.clip_filename),
                 **({"asked_for_on_stream": True} if moment.get("state") == "clip" else {}),
             }))
@@ -212,6 +217,8 @@ class LiveTools:
                 "kind": hp.llm.category if hp.llm else None,
                 "name": hp.clip_name,
                 **({"what": _short(hp.llm.summary, 90)} if hp.llm and hp.llm.summary else {}),
+                **({"seen": _short(hp.llm.seen, 160)} if hp.llm and getattr(hp.llm, "seen", "") else {}),
+                **({"tags": list(hp.llm.tags)[:6]} if hp.llm and getattr(hp.llm, "tags", None) else {}),
                 "clip": bool(hp.clip_filename),
             }))
         rows.sort(key=lambda r: (-r[0], r[1]))

@@ -161,6 +161,16 @@ def test_the_moments_the_analysis_rated_are_all_there(monkeypatch):
     monkeypatch.setattr(tools, "moments", [])
     alone = tools.call("best_moments", {})
     assert [m["name"] for m in alone["moments"]] == ["Tigre", "Fusillade"] and alone["moments"][1]["what"] == "Ça tire devant l'hôpital."
+    # What each moment holds, when the analysis said it: what is on screen and the words to find it by,
+    # from the app's list (dropped moments too) or from the clip the worker kept
+    clipped[0].llm.seen, clipped[0].llm.tags = "Deux médecins reculent devant un tigre dans le couloir de l'hôpital.", ["tigre", "panique", "drôle"]
+    monkeypatch.setattr(tools, "moments", [{"t": 300, "state": "kept", "score": 0.86, "name": "Tigre"}, {"t": 520.0, "state": "dropped", "score": 0.31, "name": "Commande", "seen": "Il commande dix menus au comptoir.", "tags": ["commande", "absurde"]}])
+    told = tools.call("best_moments", {})["moments"]
+    assert (told[0]["seen"], told[0]["tags"]) == ("Deux médecins reculent devant un tigre dans le couloir de l'hôpital.", ["tigre", "panique", "drôle"])
+    assert (told[2]["seen"], told[2]["tags"]) == ("Il commande dix menus au comptoir.", ["commande", "absurde"])
+    assert "seen" not in told[1] and "tags" not in told[1]  # the other clip: analysed before tags existed
+    monkeypatch.setattr(tools, "moments", [])
+    assert tools.call("best_moments", {})["moments"][0]["tags"] == ["tigre", "panique", "drôle"]
     # No analysis left in the worker: nothing, not a crash
     monkeypatch.setattr(db, "get_job", lambda job_id: None)
     assert tools.call("best_moments", {}) == {"found": 0, "moments": []}

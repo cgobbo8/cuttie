@@ -831,6 +831,7 @@
       "audio_events": "No se pudieron detectar las risas y los gritos de este directo (el modelo de audio no se descargó): los momentos vienen del chat, la voz y la IA. Vuelve a lanzar el análisis más tarde para tenerlos."
     },
     "timelineChat": "Chat",
+    "tags": "Etiquetas del clip",
     "origin": {
       "reading": "La IA lo detectó leyendo todo lo que se dijo durante el directo.",
       "watching": "La IA lo encontró mirando la imagen, donde se habla poco.",

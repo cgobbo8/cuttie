@@ -100,6 +100,27 @@ def test_reads_the_suggested_cut_the_hook_and_clip_requests(monkeypatch):
     answer.update(cut={"start": 10, "end": 12}, clip_request="maybe")
     llm, _ = llm_analyzer._call_unified_llm([], "prompt", None, duration=65.0)
     assert llm.cut_start is None and llm.clip_request is None
+    # (an answer from before tags existed, or without them: none, not a crash)
+    assert (llm.tags, llm.seen) == ([], "")
+
+
+def test_reads_what_the_clip_holds_for_whoever_looks_for_clips_later(monkeypatch):
+    answer = {
+        "clip_name": "Mort Dans L Helice",
+        "virality_score": 0.8,
+        "summary": "Il sort de l'avion et le regrette aussitôt",
+        "seen": "  Le personnage sort d'un hydravion à quai,\n marche dans l'hélice et meurt : l'écran affiche « MORT ».  ",
+        "tags": ["Mort", "#hydravion", "drôle", "mort", "", None, 7, {"x": 1}, "  hélice  ", "absurde", "fail", "en trop"],
+    }
+    monkeypatch.setattr(llm_analyzer, "get_openrouter_client", lambda: _FakeClient(json.dumps(answer)))
+    llm, _ = llm_analyzer._call_unified_llm([], "prompt", None, duration=65.0)
+    # What is on screen, said plainly, on one line; the tags made alike, each once, 6 at most
+    assert llm.seen == "Le personnage sort d'un hydravion à quai, marche dans l'hélice et meurt : l'écran affiche « MORT »."
+    assert llm.tags == ["mort", "hydravion", "drôle", "7", "hélice", "absurde"]
+    assert llm_analyzer._tags("mort") == [] and llm_analyzer._tags(None) == []
+    # The model is asked for both, apart from the title
+    prompt = llm_analyzer._build_unified_prompt(transcript="[0.0] Oh non !", speech_rate=0.5, score=0.4, timestamp_display="3:13:11", vod_meta={})
+    assert '- "seen": ONE plain sentence' in prompt and '- "tags": 3 to 6 short lowercase tags' in prompt
 
 
 def test_asks_whether_clip_is_a_request_and_lines_chat_up():

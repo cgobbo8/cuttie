@@ -47,3 +47,12 @@ def test_candidate_entry():
     assert timeline.candidate(dropped, "dropped")["state"] == "dropped" and len(timeline.candidate(dropped, "dropped")["what"]) == 140
     pending = SimpleNamespace(timestamp_seconds=12.0, final_score=None, clip_name="", llm=None)
     assert timeline.candidate(pending, "pending") == {"t": 12.0, "state": "pending"}
+    # What the clip holds, said plainly, and the words to find it by: kept for whoever looks for clips later
+    told = SimpleNamespace(
+        timestamp_seconds=11591.0,
+        final_score=0.8,
+        clip_name="Mort Dans L Helice",
+        llm=SimpleNamespace(category="fail", summary="Il sort de l'avion et le regrette", seen="Le personnage marche dans l'hélice d'un hydravion et meurt. " * 6, tags=["mort", "hydravion", "drôle"]),
+    )
+    entry = timeline.candidate(told, "kept")
+    assert entry["tags"] == ["mort", "hydravion", "drôle"] and len(entry["seen"]) == 200 and entry["seen"].startswith("Le personnage marche")

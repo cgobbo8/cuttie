@@ -66,4 +66,9 @@ def candidate(hp, state: str) -> dict:
     if hp.llm and getattr(hp.llm, "summary", None):
         # What happens there, in a sentence: the AI searching the live later reads it (dropped moments included)
         entry["what"] = " ".join(hp.llm.summary.split())[:140]
+    # What it holds, said plainly, and the words to find it by (the summary is a title)
+    if hp.llm and getattr(hp.llm, "seen", None):
+        entry["seen"] = hp.llm.seen[:200]
+    if hp.llm and getattr(hp.llm, "tags", None):
+        entry["tags"] = list(hp.llm.tags)[:6]
     return entry

@@ -73,7 +73,17 @@ export default function MomentDetails({ jobId, moment, onRename, onSeek, onDelet
             </button>
           </div>
         )}
-        {moment.hp.llm?.summary && <p className="mt-1.5 text-[14px] leading-relaxed text-ink-2 max-w-[62ch]">{moment.hp.llm.summary}</p>}
+        {moment.hp.llm?.summary && (
+          // (hovered: what is on screen, said plainly)
+          <p title={moment.hp.llm.seen || undefined} className="mt-1.5 text-[14px] leading-relaxed text-ink-2 max-w-[62ch]">
+            {moment.hp.llm.summary}
+          </p>
+        )}
+        {(moment.hp.llm?.tags?.length ?? 0) > 0 && (
+          <p aria-label={t("project.tags")} className="mt-1 mono text-[12px] text-ink-3 max-w-[62ch]">
+            {moment.hp.llm!.tags!.join(" · ")}
+          </p>
+        )}
         {(moment.hp.llm?.key_moments?.length ?? 0) > 0 && (
           <div className="mt-3.5 flex flex-wrap gap-1.5">
             {moment.hp.llm!.key_moments.map((k) => (

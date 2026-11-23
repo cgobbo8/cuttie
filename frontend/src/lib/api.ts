@@ -415,6 +415,9 @@ export interface LlmAnalysis {
   narrative: string;
   /** On-screen hook line for the first seconds of the short */
   hook?: string;
+  /** A few words the clip can be found by (what happens, who is in it, the tone), and what is on screen said plainly */
+  tags?: string[];
+  seen?: string;
   /** Tightest standalone cut suggested by the AI, clip seconds (the clip keeps its margins) */
   cut_start?: number | null;
   cut_end?: number | null;

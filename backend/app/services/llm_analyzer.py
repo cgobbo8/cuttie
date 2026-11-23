@@ -583,9 +583,21 @@ Return a single JSON object:
   - "description": 1 sentence describing what happens visually (include HUD info if relevant)
 - "narrative": fluid story of the clip (3-5 sentences), driven by what you HEAR in the audio, using visuals only for gameplay context{game_narrative}. In French.
 - "hook": the line written on the picture from its very first frame: the video's title, what makes someone scrolling stay. {HOOK_RULE} In French.
+- "seen": ONE plain sentence saying what is on screen and what happens, for an editor who will pick clips without watching them: the facts, not a title (who does what, where, how it ends), with the words written on screen when they matter (a subtitle, a message, a sign). In French.
+- "tags": 3 to 6 short lowercase tags to find this clip by later, in French: what happens ("mort", "accident", "bug", "cinématique", "poursuite", "fusillade", "victoire"), who or what is in it (a character's name, "police", "hélicoptère"), and the tone ("drôle", "absurde", "tendu"). One or two words each, no "#".
 - "cut": {{"start": float, "end": float}} — the cut{window_text} that works as a standalone short, in seconds on the same clock as the transcript. {CUT_RULE}{chr(10) + '- "clip_request": true or false (see above).' if clip_keyword_at is not None else ""}
 
 JSON only, no markdown."""
+
+
+def _tags(raw) -> list[str]:
+    """A clip's tags as the model gave them, made alike: lowercase, no "#", each once, 6 at most."""
+    tags: list[str] = []
+    for tag in raw if isinstance(raw, list) else []:
+        tag = " ".join(str(tag).replace("#", " ").lower().split())[:30] if isinstance(tag, (str, int, float)) else ""
+        if tag and tag not in tags:
+            tags.append(tag)
+    return tags[:6]
 
 
 def _encode_audio_b64(path: str) -> str | None:
@@ -711,6 +723,8 @@ def _call_unified_llm(
         narrative=data.get("narrative", ""),
         key_moments=key_moments,
         hook=str(data.get("hook", "") or "").strip()[:80],
+        tags=_tags(data.get("tags")),
+        seen=" ".join(str(data.get("seen") or "").split())[:240],
         cut_start=cut_start,
         cut_end=cut_end,
         clip_request=clip_request if isinstance(clip_request, bool) else None,

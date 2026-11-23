@@ -29,7 +29,7 @@ export default function CompilationCard({ jobId, compilation: c, madeFrom = [], 
   const [name, setName] = useState(c.name);
   const status = compilationStatus(c);
   const cover = c.cover ? clipThumbUrl(c.cover_job ?? jobId, c.cover, { width: 480 }) : fallback;
-  const to = `/${jobId}/compilation?c=${c.id}`;
+  const to = `/${jobId}/montage?v=${c.id}`;
 
   const act = (e: MouseEvent, action: () => void) => {
     e.preventDefault();

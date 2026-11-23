@@ -1022,7 +1022,18 @@
     "download": "Télécharger",
     "play": "Lire le clip",
     "empty": "Rien à exporter pour l'instant.",
-    "toEdit": "Aller au montage"
+    "toEdit": "Aller au montage",
+    "preparing": "Préparation…",
+    "readyToExport": "Prête",
+    "levelled": "son mis au niveau des réseaux",
+    "exportCount_one": "Exporter {{count}} vidéo",
+    "exportCount_other": "Exporter {{count}} vidéos",
+    "started_one": "{{count}} export lancé",
+    "started_other": "{{count}} exports lancés, à la suite",
+    "someFailed_one": "{{count}} vidéo n'a pas pu être exportée",
+    "someFailed_other": "{{count}} vidéos n'ont pas pu être exportées",
+    "files": "Exports de ce live",
+    "nothingKeptHint": "Garde un clip, une séquence ou une compilation de ce live : il s'exporte d'ici."
   },
   "analysis": {
     "title": {
@@ -2183,7 +2194,23 @@
     "changeFor": {
       "clip": "Ex. : « coupe le début », « garde aussi ce qui se passe juste après ». Entrée pour envoyer.",
       "sequence": "Ex. : « raccourcis le passage du milieu », « ajoute la fin de la mission ». Entrée pour envoyer."
-    }
+    },
+    "keptAll": "Tout ce que tu as gardé, tous lives confondus.",
+    "ideasInLives_one": "{{count}} idée de l'IA t'attend dans tes lives",
+    "ideasInLives_other": "{{count}} idées de l'IA t'attendent dans tes lives",
+    "files": "Fichiers exportés",
+    "newVideo": "Nouvelle vidéo",
+    "all": "Toutes",
+    "standing": {
+      "label": "Où en est la vidéo",
+      "all": "Toutes",
+      "draft": "En cours",
+      "exported": "Exportées"
+    },
+    "noneKept": "Rien de gardé ici",
+    "noneKeptHint": "Ouvre un live : ce que tu y gardes (clips, séquences, compilations) arrive ici.",
+    "pickLiveHint": "Un live : tu choisis ce que tu en gardes. Plusieurs : une compilation qui prend dans tous.",
+    "openLive": "Ouvrir ce live"
   },
   "assistant": {
     "title": "Assistant",

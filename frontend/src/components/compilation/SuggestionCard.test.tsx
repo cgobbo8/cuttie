@@ -4,7 +4,6 @@ import { MemoryRouter } from "react-router";
 import i18n from "i18next";
 import "../../lib/i18n";
 import type { CompilationSummary } from "../../lib/api";
-import ModeSwitch from "../project/ModeSwitch";
 import { TooltipProvider } from "../ui/Tooltip";
 import PlanTalk, { type Proposal } from "./PlanTalk";
 import SuggestionCard from "./SuggestionCard";
@@ -61,7 +60,7 @@ describe("a video the AI proposed", () => {
     expect(screen.getByText("Vidéo d'environ 1:05 · 12 moments repérés")).toBeTruthy();
     // Opening it builds it: the button says what that costs, and goes where the building starts
     const build = screen.getByRole("link", { name: /Construire la vidéo.*0,04 \$/ });
-    expect(build.getAttribute("href")).toBe("/live/compilation?c=comp123456&build=1");
+    expect(build.getAttribute("href")).toBe("/live/montage?v=comp123456&build=1");
     // Not interested: asked to its page, the link is not followed
     fireEvent.click(screen.getByRole("button", { name: "Écarter cette idée" }));
     expect(onDismiss).toHaveBeenCalledTimes(1);
@@ -117,23 +116,5 @@ describe("a video the AI proposed", () => {
     expect(screen.queryByRole("button", { name: /Redemander/ })).toBeNull();
     view.rerender(talk({ again, turns: [{ ask: "ajoute les autres", note: "Fait." }] }));
     expect(screen.queryByRole("button", { name: /Redemander/ })).toBeNull();
-  });
-
-  it("is counted next to Compilations in a project", () => {
-    const view = render(
-      <MemoryRouter>
-        <ModeSwitch jobId="live" current="clip" suggested={4} />
-      </MemoryRouter>,
-    );
-    const link = screen.getByRole("link", { name: /Compilations/ });
-    expect(link.textContent).toContain("4");
-    expect(screen.getByLabelText("4 compilations proposées par l'IA à découvrir")).toBeTruthy();
-    // None waiting: no badge
-    view.rerender(
-      <MemoryRouter>
-        <ModeSwitch jobId="live" current="clip" suggested={0} />
-      </MemoryRouter>,
-    );
-    expect(screen.queryByLabelText(/proposées par l'IA/)).toBeNull();
   });
 });

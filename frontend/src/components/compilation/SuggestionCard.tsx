@@ -67,7 +67,7 @@ export default function SuggestionCard({ jobId, compilation: c, fallback, busy =
   const idea = c.suggestion;
   if (!idea) return null;
   // Opening it from here builds it at once: the button says what that costs
-  const to = `/${jobId}/compilation?c=${c.id}&build=1`;
+  const to = `/${jobId}/montage?v=${c.id}&build=1`;
   const dismiss = (e: MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();

@@ -29,6 +29,7 @@ import {
   type TimelineCandidate,
   type TranscriptWord,
 } from "../lib/api";
+import { MEMORY_READ } from "../lib/aiMemory";
 import { useBackdrop } from "../lib/BackdropContext";
 import { useChannel } from "../lib/ChannelContext";
 import { useTransmitChannel } from "../lib/TransmitContext";
@@ -101,7 +102,12 @@ export default function ProjectPage() {
   // Live updates while the analysis runs
   useTransmitChannel(jobId ? `jobs/${jobId}` : null, (raw: unknown) => {
     const data = raw as Record<string, any>;
-    // The AI looked through the live once analysed: it proposes compilations (counted next to "Compilations")
+    // The AI has just read the live into its memory: it may have a correction to propose for a note (NoteProposals)
+    if (data.type === "memory") {
+      window.dispatchEvent(new Event(MEMORY_READ));
+      return;
+    }
+    // The AI looked through the live once analysed: the videos it proposes join the list
     if (data.type === "suggestions") {
       if (data.count > 0) toast.success(t("suggestions.toast", { count: data.count }));
       loadVideos();

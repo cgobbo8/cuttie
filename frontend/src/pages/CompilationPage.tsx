@@ -22,23 +22,24 @@ import {
   listCompilations,
   listRenders,
   LiveError,
-  openClipVideo,
   saveCompilation,
+  setLiveFacecam,
   startMontageRender,
   suggestClipCut,
   type Compilation,
   type CompilationItem,
   type EditEnvironment,
+  type FacecamRect,
   type JobResponse,
   type LiveCompilations,
   type LiveFailure,
   type LiveHit,
   type LiveSearchInfo,
-  type PieceState,
   type TranscriptWord,
   type TwitchStoryboard,
   type VideoPlan,
 } from "../lib/api";
+import { openKeptClip } from "../lib/clipVideo";
 import { useBackdrop } from "../lib/BackdropContext";
 import { useChannel } from "../lib/ChannelContext";
 import {
@@ -54,15 +55,12 @@ import {
   extendItem,
   fitToTarget,
   hookMoment,
-  hookStart,
   itemFor,
   itemFromHit,
   looksCount,
   openingSeconds,
   PLAIN_CUT,
   removeItem,
-  sectionStarts,
-  transitionsOf,
   planCurrent,
   recutVideo,
   revisedSections,
@@ -75,28 +73,29 @@ import {
 } from "../lib/compilation";
 import { liveWhen, plainDate } from "../lib/compilationLibrary";
 import { clock, splitVodTitle } from "../lib/format";
-import { buildMontage, framesOf, introHold, montageFrames, playsIntro, renderIntro, renderPieces, snapToWords, tighten, wordsIn, type MontageCut, type MontageProps, type MontageSegment, withEffects } from "../lib/montage";
+import { framesOf, introHold, montageFrames, playsIntro, snapToWords, tighten, wordsIn } from "../lib/montage";
 import { readCutTarget, saveCutTarget, type CutTarget } from "../lib/cutTarget";
 import { evenFrames, tileStyle } from "../lib/storyboard";
 import { isTransition, transitionSpan } from "../lib/transitions";
 import { introSpan, isIntro } from "../lib/intro/intros";
 import { trackOf, useMusics } from "../lib/music/library";
-import { introOf, montageIntro, montageMusic, playable, type SoundPiece } from "../lib/music/sound";
+import { playable } from "../lib/music/sound";
 import { fontFamily } from "../lib/fonts";
 import type { HookMenu, IntroBrand } from "../components/compilation/IntroPicker";
 import { clipTemplateContext } from "../lib/templateContext";
 import { templateGuides } from "../lib/templateGuide";
 import { buildAny, customTemplates, defaultTemplateKey, findCustom, hookOf, isBuiltIn, type TemplateKey } from "../lib/templateKeys";
 import { isHookStyle, titleCard } from "../lib/templateSpec";
-import { isEffectLevel } from "../lib/effects";
 import { SOURCE_TARGET, VIDEO_SOURCES, isVideoSource, sourceOf, type VideoSource } from "../lib/videoSources";
 import { keptCount, liveEntries } from "../lib/liveEntries";
+import { FPS, TITLE_SECONDS, buildVideo, covers, pieceVersion, renderRequest, type Piece } from "../lib/videoBuild";
 import { buildMoments } from "../lib/moments";
 import { TEMPLATE_IDS } from "../lib/templates";
 import MontageComposition from "../components/remotion-editor/MontageComposition";
 import { isWaiting } from "../lib/suggestions";
 import LiveHeader from "../components/live/LiveHeader";
 import VideoRail from "../components/live/VideoRail";
+import CamSheet from "../components/montage/CamSheet";
 import TemplateSketch from "../components/montage/TemplateSketch";
 import VideoTimeline from "../components/montage/VideoTimeline";
 import AiCutButton from "../components/project/AiCutButton";
@@ -107,11 +106,8 @@ import SearchPanel from "../components/compilation/SearchPanel";
 import ConfirmModal from "../components/ConfirmModal";
 import { useToast } from "../components/Toast";
 
-const FPS = 30;
 /** Clips cut from the live at once */
 const CUT_BATCH = 4;
-/** A section's title stays this long on screen, seconds (less in a short section) */
-const TITLE_SECONDS = 2.2;
 const SAVE_DELAY = 500;
 /** How many changes of a video's passages can be taken back */
 const UNDO_STEPS = 40;
@@ -119,8 +115,6 @@ const STRIP_TILES = 24;
 
 const hitKey = (hit: LiveHit) => `${hit.job ?? ""}:${hit.start}-${hit.end}`;
 
-/** A passage's clip, and the live it is in (a compilation may take passages from several) */
-type Piece = PieceState & { job: string };
 /** Other lives one compilation can take passages from */
 const MAX_OTHER_LIVES = 4;
 
@@ -135,12 +129,6 @@ const sameOrder = (c: Pick<Compilation, "sections">, sections: Compilation["sect
 /** How far over the length asked a described video may run before passages are taken out of it */
 const PLAN_OVER = 1.1;
 
-/** The item's clip is there and covers the moment as it is now */
-function covers<P extends PieceState>(piece: P | undefined, item: CompilationItem): piece is P & { file_start: number; file_end: number } {
-  return !!piece?.ready && piece.file_start != null && piece.file_end != null && piece.file_start <= item.start + 0.05 && piece.file_end >= item.end - 0.05;
-}
-
-const pieceVersion = (piece: PieceState) => `${piece.file}@${piece.file_start}-${piece.file_end}`;
 
 /**
  * /:jobId/montage — the third step of a live: the montage of the videos kept from it, whatever
@@ -156,8 +144,10 @@ export default function CompilationPage() {
   const { jobId } = useParams<{ jobId: string }>();
   // ?v=<id>: the video to open (none: the first one kept); ?clip=<file>: a kept clip, as its video; ?new=1&kind=…: a new one
   const [search, setSearch] = useSearchParams();
-  const { kit, channel } = useChannel();
+  const { kit, channel, reloadKit } = useChannel();
   const assistant = useAssistant();
+  // The live's webcam framing, open to be set by hand
+  const [camSheet, setCamSheet] = useState(false);
   // The clip whose video is being made (a kept clip opened for the first time)
   const [openingClip, setOpeningClip] = useState<string | null>(null);
   // The videos of this live whose last export is finished
@@ -285,7 +275,7 @@ export default function CompilationPage() {
           const withClip = async (filename: string) => {
             const known = list.find((c) => c.clip === filename);
             if (known) return { list, open: known.id };
-            const made = await openClipVideo(jobId, filename);
+            const made = await openKeptClip(jobId, filename);
             return { list: [...list, made], open: made.id };
           };
           if (wantsClip) return withClip(wantsClip);
@@ -647,7 +637,7 @@ export default function CompilationPage() {
     if (known) return openVideo(known.id);
     setOpeningClip(filename);
     try {
-      const made = await openClipVideo(jobId, filename);
+      const made = await openKeptClip(jobId, filename);
       remember([made]);
       setCompilations((prev) => [...(prev ?? []).filter((c) => c.id !== made.id), made]);
       setCurrentId(made.id);
@@ -700,128 +690,9 @@ export default function CompilationPage() {
 
   /** What Remotion plays for these items (all with their clip and its data), null when something is missing */
   const build = useCallback(
-    (
-      source: Compilation,
-      states: Record<string, Piece>,
-      known: Record<string, EditEnvironment>,
-      all: Compilation = source,
-    ): { montage: MontageProps; files: string[]; jobs: (string | undefined)[]; ids: string[]; opener?: { file: string; job?: string } } | null => {
-      if (!kit || !jobId) return null;
-      const items = allItems(source);
-      // How each passage comes in (`all`: the whole video, when only what is ready of it is built)
-      const transitions = transitionsOf(all);
-      const cuts: MontageCut[] = [];
-      const files: string[] = [];
-      // The live each clip is in, when it isn't this one
-      const jobs: (string | undefined)[] = [];
-      // Each passage in its own template when it has one, else the video's
-      const keys = items.map((item) => (item.template && (isBuiltIn(item.template) || findCustom(item.template, customs)) ? item.template : templateKey));
-      // How the video writes its titles, when it says so (else each template writes them its own way)
-      const written = isHookStyle(all.titleStyle) ? all.titleStyle : null;
-      for (const item of items) {
-        const piece = states[item.id];
-        const env = piece && known[pieceVersion(piece)];
-        if (!covers(piece, item) || !env) return null;
-        const ctx = clipTemplateContext({
-          jobId: piece.job,
-          filename: piece.file,
-          env,
-          kit,
-          login: channel?.login ?? kit.twitch_login,
-          avatarUrl: channel?.avatar_url ?? null,
-          facecam: env.facecam,
-          startAt: 0,
-          endAt: 1,
-          // With titles, each section's title is the hook of its part
-          hook: source.titles ? "" : source.hook.trim() || source.name,
-        });
-        cuts.push({
-          ctx: { ...ctx, displayName: channel?.display_name ?? null, followers: channel?.followers ?? null, game: job?.vod_game ?? null },
-          start: item.start - piece.file_start,
-          end: item.end - piece.file_start,
-          transition: transitions[item.id],
-        });
-        files.push(piece.file);
-        jobs.push(piece.job !== jobId ? piece.job : undefined);
-      }
-      if (cuts.length === 0) return null;
-      // Where each part starts in the list of passages
-      const firstOf = new Map<string, number>();
-      let before = 0;
-      for (const s of source.sections) {
-        if (s.items.length > 0) firstOf.set(s.id, before);
-        before += s.items.length;
-      }
-      const montage = buildMontage(
-        cuts,
-        (c, index) => buildAny(index >= 0 ? keys[index] : templateKey, c, customs, written),
-        FPS,
-        (total) =>
-          source.titles
-            ? sectionStarts(source)
-                // (a part whose title is hidden keeps it in the list, not in the video)
-                .filter((s) => s.title.trim() && !s.hidden)
-                .flatMap((s) => {
-                  // A part's title is written as the template of its first passage writes its hook, where it puts it
-                  const index = firstOf.get(s.id) ?? 0;
-                  const ctx = cuts[index].ctx;
-                  return titleCard(ctx, hookOf(keys[index], ctx, customs, written), s.title.trim(), s.at, Math.min(total, s.at + Math.min(TITLE_SECONDS, s.length * 0.7)), s.id);
-                })
-            : [],
-      );
-      // What moves the picture on what is said (a zoom from one passage to the next, a punch on a line that lands), when the video asks for it
-      montage.segments = withEffects(montage, cuts, isEffectLevel(all.effects) ? all.effects : null).segments;
-      // A "hook" intro plays a moment of the video first: built like a piece, in that passage's own template, the
-      // video's title written on it as the template writes its hook (where it puts it: never on the face)
-      const moment = hookMoment(all);
-      const hookAt = moment ? items.findIndex((item) => item.id === moment.item.id) : -1;
-      let opener: { segment: MontageSegment; file: string; job?: string; sound: SoundPiece } | null = null;
-      const hookPiece = moment ? states[moment.item.id] : undefined;
-      if (moment && hookAt >= 0 && covers(hookPiece, moment.item)) {
-        const piece = hookPiece;
-        const { ctx, start: floor } = cuts[hookAt];
-        const raw = moment.start - piece.file_start;
-        // Cut out of a longer passage by the app: it starts on a word, not inside one
-        const start = moment.auto && raw > floor + 0.05 ? hookStart(ctx.words, raw, floor) : raw;
-        const end = moment.end - piece.file_start;
-        const [segment] = buildMontage([{ ctx, start, end }], (c) => buildAny(keys[hookAt], c, customs, written), FPS).segments;
-        const top = Math.max(0, ...segment.layers.map((p) => p.z)) + 1;
-        // (there on the very first picture, the video's cover, and until the cut to the video: no entrance, no exit of its own)
-        const cover = titleCard(ctx, hookOf(keys[hookAt], ctx, customs, written), all.intro?.title?.trim() || all.name, 0, segment.from + segment.duration + 1, "hook");
-        opener = {
-          segment: { ...segment, layers: [...segment.layers, ...cover.map((layer, i) => ({ layer, z: top + i }))] },
-          file: piece.file,
-          ...(piece.job !== jobId ? { job: piece.job } : {}),
-          sound: { words: ctx.words, start, end, said: !!moment.item.text.trim() },
-        };
-      }
-      // What the video opens with: a jingle (the channel's logo and colours, its title written as the video's titles are), or its hook
-      const first = cuts[0].ctx;
-      const intro = montageIntro(
-        all.intro,
-        {
-          title: all.name,
-          name: first.displayName ?? first.login ?? "",
-          logo: first.avatarUrl,
-          colors: first.colors,
-          font: fontFamily(hookOf(templateKey, first, customs, written).font),
-          follow: [t("compilation.intro.followLabel"), t("compilation.intro.followDone")],
-        },
-        opener?.segment,
-        // On a music, a jingle lasts a few of its beats: the video starts on one
-        trackOf(musics, all.music?.track)?.bpm,
-      );
-      if (intro) montage.intro = intro;
-      // The music under the video: lower where people talk, more present where the game plays alone
-      const track = trackOf(musics, all.music?.track);
-      if (track && all.music) {
-        // A clip that was never transcribed has no words: what is said in it counts as talk, not as silence
-        const pieces = cuts.map((cut, i) => ({ words: cut.ctx.words, start: cut.start, end: cut.end, said: !!items[i].text.trim() }));
-        montage.music = montageMusic(montage.segments, pieces, all.music, introOf(montage), intro?.hook && opener ? { seconds: intro.hook.duration, piece: opener.sound } : undefined, track);
-      }
-      return { montage, files, jobs, ids: items.map((item) => item.id), ...(intro?.hook && opener ? { opener: { file: opener.file, job: opener.job } } : {}) };
-    },
-    [channel, customs, job, jobId, kit, musics, t, templateKey],
+    (source: Compilation, states: Record<string, Piece>, known: Record<string, EditEnvironment>, all: Compilation = source) =>
+      kit && jobId ? buildVideo({ jobId, kit, channel: channel ?? null, customs, game: job?.vod_game ?? null, musics, t }, source, states, known, all) : null,
+    [channel, customs, job?.vod_game, jobId, kit, musics, t],
   );
 
   // What the intro picker draws its sketches with
@@ -1029,11 +900,7 @@ export default function CompilationPage() {
       if (!built) throw new Error(t("montage.exportFailed"));
       // Saved as it is exported
       await saveCompilation(jobId, compilation);
-      await startMontageRender(
-        jobId,
-        { key: `comp_${compilation.id}.mp4`, name: compilation.name, pieces: renderPieces(built.montage, built.files, built.jobs), overlays: built.montage.overlays, ...(built.montage.intro ? { intro: renderIntro(built.montage.intro, built.opener?.file, built.opener?.job) } : {}), ...(built.montage.music ? { music: built.montage.music } : {}) },
-        { width: 1080, height: 1920, fps: FPS },
-      );
+      await startMontageRender(jobId, renderRequest(built, compilation), { width: 1080, height: 1920, fps: FPS });
       navigate(`/${jobId}/export`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t("montage.exportFailed"));
@@ -1261,6 +1128,24 @@ export default function CompilationPage() {
     const ctx = clipTemplateContext({ jobId: piece.job, filename: piece.file, env, kit, login: channel?.login ?? kit.twitch_login, avatarUrl: channel?.avatar_url ?? null, facecam: env.facecam, startAt: 0, endAt: 1, hook: compilation.hook.trim() || compilation.name });
     return { ctx: { ...ctx, words: [], displayName: channel?.display_name ?? null, followers: channel?.followers ?? null, game: job?.vod_game ?? null }, frame: clipThumbUrl(piece.job, piece.file) };
   }, [channel, compilation?.hook, compilation?.name, envs, firstReady, job?.vod_game, jobId, kit, pieces]); // eslint-disable-line react-hooks/exhaustive-deps
+  // This live's webcam as the analysis placed it (or as it was set by hand), read from the first clip that is ready
+  const camPiece = firstReady ? pieces[firstReady.id] : undefined;
+  const camEnv = camPiece && camPiece.job === jobId ? envs[pieceVersion(camPiece)] : undefined;
+  const saveLiveCam = async (facecam: FacecamRect | false | null, remember: boolean) => {
+    if (!jobId) return;
+    try {
+      await setLiveFacecam(jobId, facecam, remember);
+      // Every clip of the live takes the new framing
+      envsRef.current = {};
+      setEnvs({});
+      setCamSheet(false);
+      if (remember) await reloadKit();
+      toast.success(t(remember ? "montage.cam.savedEverywhere" : "montage.cam.saved"));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t("brand.saveError"));
+    }
+  };
+
   const sketch = useCallback(
     (key: string | null, width: number) => {
       if (!sketchOn) return null;
@@ -1364,6 +1249,12 @@ export default function CompilationPage() {
     freshAt: fresh?.at,
     gone,
     sketch,
+    cam: camEnv
+      ? {
+          label: t(!camEnv.cam?.rect ? "montage.cam.none" : camEnv.cam.source === "live" ? "montage.cam.manual" : camEnv.cam.moved ? "montage.cam.moved" : camEnv.cam.source === "brand" ? "montage.cam.usual" : "montage.cam.found"),
+          onOpen: () => setCamSheet(true),
+        }
+      : undefined,
   };
 
   return (
@@ -1654,6 +1545,17 @@ export default function CompilationPage() {
         </section>
       )}
 
+      {camSheet && camEnv && camPiece && (
+        <CamSheet
+          frameUrl={clipThumbUrl(camPiece.job, camPiece.file, { width: 1280 })}
+          clipW={camEnv.clip_width}
+          clipH={camEnv.clip_height}
+          initial={camEnv.cam?.rect ?? null}
+          manual={camEnv.cam?.source === "live"}
+          onSave={saveLiveCam}
+          onClose={() => setCamSheet(false)}
+        />
+      )}
       <ConfirmModal
         open={toDelete}
         title={t("compilation.deleteTitle")}

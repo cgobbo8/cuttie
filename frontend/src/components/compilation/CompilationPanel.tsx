@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from "react";
 import { useTranslation } from "react-i18next";
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Blend, Check, ChevronRight, Clapperboard, Eye, EyeOff, FolderInput, Layers, Loader2, Music2, Palette, Pause, Play, Plus, Sparkles, Trash2, Type, X, Zap, LayoutTemplate, type LucideIcon } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Blend, Check, ScanFace, ChevronRight, Clapperboard, Eye, EyeOff, FolderInput, Layers, Loader2, Music2, Palette, Pause, Play, Plus, Sparkles, Trash2, Type, X, Zap, LayoutTemplate, type LucideIcon } from "lucide-react";
 import type { Compilation, CompilationItem, CompilationSection, TwitchStoryboard } from "../../lib/api";
 import {
   PLAIN_CUT,
@@ -97,6 +97,8 @@ interface Props {
   sounding?: boolean;
   soundNote?: string;
   onSound?: () => void;
+  /** The live's webcam: where it is said to be (in words), and its framing opened to be set by hand */
+  cam?: { label: string; onOpen: () => void };
   /** A template drawn small on a picture of the video (null: the channel's own), `width` pixels wide: for the looks and the template picker */
   sketch?: (key: string | null, width: number) => ReactNode;
 }
@@ -220,6 +222,7 @@ export default function CompilationPanel({
   soundNote = "",
   onSound,
   sketch,
+  cam,
 }: Props) {
   const { playing: heard, toggle: listen } = useListen();
   const { t, i18n } = useTranslation();
@@ -728,6 +731,12 @@ export default function CompilationPanel({
                 <span className="flex-none w-[18px] h-[32px] rounded-[4px] overflow-hidden bg-white/[0.06]">{sketch?.(compilation.template ?? null, 18)}</span>
                 <span className="truncate">{compilation.template ? templateName(compilation.template) : t("compilation.defaultTemplate")}</span>
               </LookRow>
+              {/* Where the webcam is on this live: found by the analysis, set by hand when it is wrong */}
+              {cam && (
+                <LookRow icon={ScanFace} label={t("montage.cam")} value={cam.label} onOpen={cam.onOpen}>
+                  <span className="truncate">{cam.label}</span>
+                </LookRow>
+              )}
             </LookGroup>
 
             <LookGroup label={t("compilation.dress.group.text")}>

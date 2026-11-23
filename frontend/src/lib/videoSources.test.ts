@@ -1,8 +1,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { waitingBySource } from "./suggestions";
-import { SOURCE_TARGET, VIDEO_SOURCES, isVideoSource, sourceOf, sourcePath } from "./videoSources";
+import { SOURCE_TARGET, VIDEO_SOURCES, isVideoSource, sourceOf } from "./videoSources";
 
 describe("what a video is made from", () => {
   it("is one of three sources, the same on the server", () => {
@@ -25,30 +24,9 @@ describe("what a video is made from", () => {
     expect(sourceOf(null)).toBe("compilation");
   });
 
-  it("gives each source its place in a live and the length its videos aim for", () => {
-    expect(sourcePath("job-1", "clip")).toBe("/job-1/compilations?kind=clip");
-    expect(sourcePath("job-1", "compilation")).toBe("/job-1/compilations?kind=compilation");
+  it("gives each source the length its videos aim for", () => {
     // A clip is a moment, a sequence a short story, never over a minute and a half (too long for the platforms)
     expect(SOURCE_TARGET.clip).toBeLessThan(SOURCE_TARGET.sequence);
     expect(Math.max(...Object.values(SOURCE_TARGET))).toBeLessThanOrEqual(90);
-  });
-
-  it("counts the ideas that wait on the source they are of", () => {
-    const idea = (more: object) => ({ suggestion: {}, sections: [{ items: [] }], ...more });
-    expect(
-      waitingBySource([
-        idea({ suggestion: { span: [0, 600] } }),
-        idea({ source: "sequence" }),
-        idea({}),
-        // Built (an answer, passages), or made by hand: no longer waiting
-        idea({ answer: "Voilà la vidéo." }),
-        idea({ sections: [{ items: [{}] }] }),
-        { sections: [{ items: [] }] },
-        // A card of the library says it itself
-        { waiting: true, source: "compilation" },
-        { waiting: false, suggestion: { span: [0, 60] } },
-      ]),
-    ).toEqual({ sequence: 2, compilation: 2 });
-    expect(waitingBySource([])).toEqual({});
   });
 });

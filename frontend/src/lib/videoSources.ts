@@ -17,6 +17,3 @@ export const sourceOf = (video: { source?: string | null; suggestion?: { span?: 
 
 /** The length a new video aims for when nothing is said (seconds): a clip is a moment, a sequence a short story */
 export const SOURCE_TARGET: Record<VideoSource, number> = { clip: 45, sequence: 75, compilation: 90 };
-
-/** Where a live's videos of one source are listed */
-export const sourcePath = (jobId: string, source: VideoSource) => `/${jobId}/compilations?kind=${source}`;

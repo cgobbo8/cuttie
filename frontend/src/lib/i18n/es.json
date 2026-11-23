@@ -1022,7 +1022,18 @@
     "download": "Descargar",
     "play": "Ver el clip",
     "empty": "Nada que exportar todavía.",
-    "toEdit": "Ir al montaje"
+    "toEdit": "Ir al montaje",
+    "preparing": "Preparando…",
+    "readyToExport": "Lista",
+    "levelled": "sonido al nivel de las redes",
+    "exportCount_one": "Exportar {{count}} vídeo",
+    "exportCount_other": "Exportar {{count}} vídeos",
+    "started_one": "{{count}} exportación en marcha",
+    "started_other": "{{count}} exportaciones en marcha, una tras otra",
+    "someFailed_one": "{{count}} vídeo no se pudo exportar",
+    "someFailed_other": "{{count}} vídeos no se pudieron exportar",
+    "files": "Exportaciones de este directo",
+    "nothingKeptHint": "Guarda un clip, una secuencia o una compilación de este directo: se exporta desde aquí."
   },
   "analysis": {
     "title": {
@@ -2183,7 +2194,23 @@
     "changeFor": {
       "clip": "Ej.: «corta el principio», «guarda también lo que pasa justo después». Intro para enviar.",
       "sequence": "Ej.: «acorta la parte del medio», «añade el final de la misión». Intro para enviar."
-    }
+    },
+    "keptAll": "Todo lo que guardaste, de todos los directos.",
+    "ideasInLives_one": "{{count}} idea de la IA te espera en tus directos",
+    "ideasInLives_other": "{{count}} ideas de la IA te esperan en tus directos",
+    "files": "Archivos exportados",
+    "newVideo": "Nuevo vídeo",
+    "all": "Todos",
+    "standing": {
+      "label": "Estado del vídeo",
+      "all": "Todos",
+      "draft": "En curso",
+      "exported": "Exportados"
+    },
+    "noneKept": "Nada guardado aquí",
+    "noneKeptHint": "Abre un directo: lo que guardes allí (clips, secuencias, compilaciones) llega aquí.",
+    "pickLiveHint": "Un directo: eliges qué guardar. Varios: una compilación que toma de todos.",
+    "openLive": "Abrir este directo"
   },
   "assistant": {
     "title": "Asistente",

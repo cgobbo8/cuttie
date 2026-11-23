@@ -1022,7 +1022,18 @@
     "download": "Download",
     "play": "Play the clip",
     "empty": "Nothing to export yet.",
-    "toEdit": "Go to editing"
+    "toEdit": "Go to editing",
+    "preparing": "Getting ready…",
+    "readyToExport": "Ready",
+    "levelled": "sound levelled for social networks",
+    "exportCount_one": "Export {{count}} video",
+    "exportCount_other": "Export {{count}} videos",
+    "started_one": "{{count}} export started",
+    "started_other": "{{count}} exports started, one after the other",
+    "someFailed_one": "{{count}} video could not be exported",
+    "someFailed_other": "{{count}} videos could not be exported",
+    "files": "Exports of this live",
+    "nothingKeptHint": "Keep a clip, a sequence or a compilation of this live: it is exported from here."
   },
   "analysis": {
     "title": {
@@ -2183,7 +2194,23 @@
     "changeFor": {
       "clip": "E.g. “cut the beginning”, “also keep what happens right after”. Enter to send.",
       "sequence": "E.g. “shorten the middle part”, “add the end of the mission”. Enter to send."
-    }
+    },
+    "keptAll": "Everything you kept, whatever the live.",
+    "ideasInLives_one": "{{count}} idea from the AI is waiting in your lives",
+    "ideasInLives_other": "{{count}} ideas from the AI are waiting in your lives",
+    "files": "Exported files",
+    "newVideo": "New video",
+    "all": "All",
+    "standing": {
+      "label": "Where the video stands",
+      "all": "All",
+      "draft": "In progress",
+      "exported": "Exported"
+    },
+    "noneKept": "Nothing kept here",
+    "noneKeptHint": "Open a live: what you keep there (clips, sequences, compilations) comes here.",
+    "pickLiveHint": "One live: you choose what to keep from it. Several: a compilation that takes from all of them.",
+    "openLive": "Open this live"
   },
   "assistant": {
     "title": "Assistant",

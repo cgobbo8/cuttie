@@ -2167,5 +2167,52 @@
     "title": "Asistente",
     "close": "Cerrar el asistente",
     "empty": "Abre un vídeo en Montar: buscar en el directo y pedir un cambio a la IA se hacen aquí."
+  },
+  "sources": {
+    "one": {
+      "clip": "Clip",
+      "sequence": "Secuencia",
+      "compilation": "Compilación"
+    },
+    "tip": {
+      "clip": "Un momento del directo, de cerca de un minuto. El análisis encuentra unos veinte.",
+      "sequence": "Un tramo seguido (una misión, una historia de 2 minutos a 1 hora) contado en un vídeo de un minuto.",
+      "compilation": "Momentos de todo el directo, o de varios directos, reunidos en torno a una misma idea."
+    },
+    "add": {
+      "clip": "Añadir un clip",
+      "sequence": "Añadir una secuencia",
+      "compilation": "Añadir una compilación"
+    }
+  },
+  "live": {
+    "more": "Ver los otros {{count}}",
+    "less": "Ver menos",
+    "ideasToSee_one": "{{count}} idea de la IA por ver",
+    "ideasToSee_other": "{{count}} ideas de la IA por ver",
+    "videosKept_one": "vídeo guardado",
+    "videosKept_other": "vídeos guardados",
+    "importFile": "Añadir un archivo de vídeo tuyo",
+    "keptChip": "Guardado",
+    "passedIdea": "Descartada",
+    "sub": {
+      "sequence": "{{minutes}} min seguidos del directo",
+      "compilation_one": "{{count}} momento visto",
+      "compilation_other": "{{count}} momentos vistos",
+      "built_one": "{{count}} pasaje",
+      "built_other": "{{count}} pasajes"
+    },
+    "idea": {
+      "sequence": "{{minutes}} min seguidos del directo, de {{from}} a {{to}}",
+      "compilation_one": "{{count}} momento tomado del directo",
+      "compilation_other": "{{count}} momentos tomados de todo el directo",
+      "makes": "→ un vídeo de unos {{length}}",
+      "unbuilt": "Una idea de la IA: nada construido, nada pagado."
+    },
+    "keptVideos": "Vídeos guardados de este directo",
+    "exported": "Exportado",
+    "nothingKept": "Ningún vídeo guardado",
+    "nothingKeptHint": "Guarda un clip, una secuencia o una compilación de este directo: llega aquí para montarlo.",
+    "emptyVideo": "Este vídeo aún no tiene pasajes. Descríbeselo al asistente o busca pasajes en el directo."
   }
 }

@@ -10,7 +10,7 @@
  * it edits and exports like any clip.
  */
 
-import { copyFileSync, existsSync, readdirSync, rmSync, statSync } from 'node:fs'
+import { copyFileSync, existsSync, readdirSync, rmSync, statSync, linkSync } from 'node:fs'
 import path from 'node:path'
 import { dropClipCaches, readClipMeta } from '#services/clip_extend'
 import { clipDir } from '#services/data_paths'
@@ -97,6 +97,8 @@ export interface Compilation {
   source?: VideoSource
   /** The clip of the analysis it was opened from (a clip video only) */
   clip?: string
+  /** An idea of the AI the streamer passed on: it stays in the live's list, dimmed, and can be taken back */
+  passed?: boolean
   created_at: string
   updated_at: string
 }
@@ -418,6 +420,7 @@ export function parseCompilation(raw: any, liveDuration: number, others?: Map<st
     ...(EFFECT_LEVELS.includes(raw.effects) ? { effects: raw.effects } : {}),
     ...(isVideoSource(raw.source) && raw.source !== 'compilation' ? { source: raw.source } : {}),
     ...(typeof raw.clip === 'string' && /^[\w.-]{1,120}\.mp4$/.test(raw.clip) ? { clip: raw.clip } : {}),
+    ...(raw.passed === true ? { passed: true } : {}),
     ...(text(raw.brief, MAX_BRIEF) ? { brief: text(raw.brief, MAX_BRIEF) } : {}),
     // What the AI answered to the description: what it built and why
     ...(text(raw.brief, MAX_BRIEF) && text(raw.answer, 800) ? { answer: text(raw.answer, 800) } : {}),
@@ -477,6 +480,23 @@ export function describeCompilations(jobId: string, compilations: Compilation[])
 const PIECE_FILES = ['.mp4', '_meta.json', '_probe.json', '_words.json']
 
 /**
+ * The same file under another name. The picture is linked, not copied: it takes no more room on the
+ * disk, and a clip that is cut again is written beside and put in its place, so what is linked to the
+ * old one keeps it. Copied where links can't be made (another disk).
+ */
+function sameFile(source: string, target: string, link: boolean): void {
+  rmSync(target, { force: true })
+  if (link) {
+    try {
+      return linkSync(source, target)
+    } catch {
+      // (no links here: a copy)
+    }
+  }
+  copyFileSync(source, target)
+}
+
+/**
  * A clip of the analysis as a piece of its own (its file and what goes with it, copied): the video opened
  * from that clip plays at once, without the live being fetched again. False when the clip is not there.
  */
@@ -487,9 +507,25 @@ export function clipAsPiece(jobId: string, clipFilename: string, to: string): bo
   if (!existsSync(path.join(dir, `${base}.mp4`))) return false
   for (const suffix of PIECE_FILES) {
     const source = path.join(dir, `${base}${suffix}`)
-    if (existsSync(source)) copyFileSync(source, path.join(dir, `piece_${to}${suffix}`))
+    if (existsSync(source)) sameFile(source, path.join(dir, `piece_${to}${suffix}`), suffix === '.mp4')
   }
   return true
+}
+
+/**
+ * A passage made out of another one (cut in two, its silences taken out) plays the same file: the piece
+ * `to` becomes that of `from` when it covers the moment. False when it does not (it is then cut from the live).
+ */
+export function pieceLike(jobId: string, from: string, to: string, moment: { start: number; end: number }): boolean {
+  if (!isPieceId(from) || !isPieceId(to) || from === to) return false
+  // (the moment may carry an id of its own: the piece asked about is named last)
+  if (!pieceState(jobId, { start: moment.start, end: moment.end, id: from }).ready) return false
+  const dir = clipDir(jobId)
+  for (const suffix of PIECE_FILES) {
+    const source = path.join(dir, `piece_${from}${suffix}`)
+    if (existsSync(source)) sameFile(source, path.join(dir, `piece_${to}${suffix}`), suffix === '.mp4')
+  }
+  return pieceState(jobId, { start: moment.start, end: moment.end, id: to }).ready
 }
 
 /** A piece's clip and sidecars under another id (a duplicated compilation has clips of its own) */
@@ -520,6 +556,7 @@ export function summarizeCompilation(jobId: string, c: Compilation) {
       ? { pitch: c.suggestion.pitch, tags: c.suggestion.tags, kind: c.suggestion.kind ?? null, score: c.suggestion.score, moments: c.suggestion.moments.length, ...(c.suggestion.span ? { span: c.suggestion.span } : {}) }
       : null,
     waiting: isWaiting(c),
+    passed: c.passed === true,
     target: c.target,
     cover: cover ? pieceFile(cover.id) : null,
     // The live that clip is in, the live it is kept with (where it opens, is saved, exported),

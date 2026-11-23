@@ -1,10 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { useTranslation } from "react-i18next";
-import { AlertTriangle, ArrowLeft, ArrowRight, Check, ChevronDown, Loader2, RotateCcw, Upload, X } from "lucide-react";
+import { AlertTriangle, ArrowRight, Check, ChevronDown, Loader2, RotateCcw, Upload, X } from "lucide-react";
 import {
   clipThumbUrl,
   deleteClip,
+  deleteCompilation,
+  getStoryboard,
+  listCompilations,
+  saveCompilation,
   extendClip,
   ExtendError,
   getClipWords,
@@ -19,6 +23,8 @@ import {
   updateSelection,
   type ClipChatLine,
   type ClipSelection,
+  type Compilation,
+  type TwitchStoryboard,
   type JobResponse,
   type TimelineCandidate,
   type TranscriptWord,
@@ -26,22 +32,23 @@ import {
 import { useBackdrop } from "../lib/BackdropContext";
 import { useChannel } from "../lib/ChannelContext";
 import { useTransmitChannel } from "../lib/TransmitContext";
-import { buildMoments, countStates, nextTodo, type MomentState } from "../lib/moments";
+import { buildMoments, nextTodo, type MomentState } from "../lib/moments";
 import { GROW_ORDER, readCutTarget, saveCutTarget, tooShortFor, type CutTarget } from "../lib/cutTarget";
 import type { Range } from "../lib/montage";
-import { hoursMinutes, shortDate, splitVodTitle } from "../lib/format";
 import { useToast } from "../components/Toast";
 import ConfirmModal from "../components/ConfirmModal";
 import ProviderFix, { providerNotice } from "../components/ProviderFix";
 import ImportClipModal from "../components/ImportClipModal";
 import AnalysisView from "../components/project/AnalysisView";
-import ModeSwitch from "../components/project/ModeSwitch";
-import Stepper from "../components/project/Stepper";
+import LiveHeader from "../components/live/LiveHeader";
+import SourceList from "../components/live/SourceList";
+import VideoDetail from "../components/live/VideoDetail";
+import { keptCount, liveEntries, momentKey, shownEntries, videoMoments, type LiveEntry } from "../lib/liveEntries";
+import type { VideoSource } from "../lib/videoSources";
 import VodTimeline from "../components/project/VodTimeline";
 import MomentPlayer, { type MomentPlayerHandle } from "../components/project/MomentPlayer";
 import AiCutButton from "../components/project/AiCutButton";
 import MomentDetails from "../components/project/MomentDetails";
-import MomentList from "../components/project/MomentList";
 import FreedNotice from "../components/project/FreedNotice";
 import { latestPerClip } from "../lib/renders";
 
@@ -55,7 +62,7 @@ function isTyping(target: EventTarget | null): boolean {
 }
 
 export default function ProjectPage() {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const toast = useToast();
   const navigate = useNavigate();
   const { jobId } = useParams<{ jobId: string }>();
@@ -68,6 +75,17 @@ export default function ProjectPage() {
   const [importing, setImporting] = useState(false);
   const [contextOpen, setContextOpen] = useState(false);
   const playerRef = useRef<MomentPlayerHandle>(null);
+  // The live's sequences and compilations (ideas of the AI and videos made), beside its clips
+  const [videos, setVideos] = useState<Compilation[]>([]);
+  // The sequence or compilation on screen (its id); none: the clip selected is
+  const [openVideo, setOpenVideo] = useState<string | null>(null);
+  const [openSections, setOpenSections] = useState<Partial<Record<VideoSource, boolean>>>({});
+  const [storyboard, setStoryboard] = useState<TwitchStoryboard | null>(null);
+  const [videoBusy, setVideoBusy] = useState(false);
+  const [videoToDelete, setVideoToDelete] = useState<Compilation | null>(null);
+  const loadVideos = useCallback(() => {
+    if (jobId) listCompilations(jobId).then(setVideos).catch(() => {});
+  }, [jobId]);
 
   useEffect(() => {
     if (!jobId) return;
@@ -86,6 +104,7 @@ export default function ProjectPage() {
     // The AI looked through the live once analysed: it proposes compilations (counted next to "Compilations")
     if (data.type === "suggestions") {
       if (data.count > 0) toast.success(t("suggestions.toast", { count: data.count }));
+      loadVideos();
       setJob((prev) => (prev ? { ...prev, suggested: data.suggested ?? prev.suggested } : prev));
       return;
     }
@@ -125,7 +144,9 @@ export default function ProjectPage() {
   });
 
   const moments = useMemo(() => buildMoments(job?.hot_points ?? [], job?.selection ?? {}), [job]);
-  const counts = countStates(moments);
+  // One list for everything the live gives: clips, sequences, compilations
+  const entries = useMemo(() => liveEntries(moments, videos), [moments, videos]);
+  const kept = keptCount(entries);
 
   // Open on the first moment still to sort
   const openedFor = useRef<string | null>(null);
@@ -152,7 +173,17 @@ export default function ProjectPage() {
   useEffect(() => {
     if (!jobId || !done) return;
     getJobChat(jobId).then(setClipChat).catch(() => setClipChat({}));
-  }, [jobId, done]);
+    loadVideos();
+  }, [jobId, done, loadVideos]);
+  const liveVodId = vodIdOf(job?.url ?? null);
+  useEffect(() => {
+    if (!liveVodId) return;
+    let cancelled = false;
+    getStoryboard(liveVodId).then((frames) => !cancelled && setStoryboard(frames)).catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [liveVodId]);
 
   const current = moments[Math.min(selected, moments.length - 1)];
   // The clip on screen, for what answers later (the AI's montage)
@@ -178,8 +209,60 @@ export default function ProjectPage() {
 
   const select = useCallback((index: number) => {
     setInteracted(true);
+    setOpenVideo(null);
     setSelected(index);
   }, []);
+
+  // What is on screen: a sequence or a compilation, else the clip selected
+  const shownVideo = openVideo ? entries.sequence.concat(entries.compilation, entries.clip).find((entry) => entry.kind === "video" && entry.video.id === openVideo) : undefined;
+  const videoEntry = shownVideo?.kind === "video" ? shownVideo : undefined;
+  const selectedKey = videoEntry ? videoEntry.key : current ? momentKey(current.filename) : null;
+  const selectEntry = useCallback(
+    (entry: LiveEntry) => {
+      if (entry.kind === "moment") return select(moments.findIndex((m) => m.filename === entry.moment.filename));
+      setOpenVideo(entry.video.id);
+    },
+    [moments, select],
+  );
+  // A live without clips (they were never cut, or all deleted): its first sequence or compilation is on screen
+  useEffect(() => {
+    if (moments.length > 0 || openVideo) return;
+    const first = [...entries.sequence, ...entries.compilation].find((entry) => entry.kind === "video");
+    if (first?.kind === "video") setOpenVideo(first.video.id);
+  }, [entries, moments.length, openVideo]);
+
+  /** An idea of the AI is kept by having it built: on to its montage, where it is */
+  const keepIdea = useCallback((video: Compilation) => navigate(`/${jobId}/montage?v=${video.id}&build=1`), [jobId, navigate]);
+  /** ...or passed on (and taken back): it stays in the list, dimmed */
+  const passIdea = useCallback(
+    async (video: Compilation) => {
+      if (!jobId) return;
+      const { passed: was, ...rest } = video;
+      setVideoBusy(true);
+      try {
+        const saved = await saveCompilation(jobId, was ? rest : { ...rest, passed: true });
+        setVideos((prev) => prev.map((other) => (other.id === saved.id ? saved : other)));
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : t("brand.saveError"));
+      } finally {
+        setVideoBusy(false);
+      }
+    },
+    [jobId, t, toast],
+  );
+  const confirmVideoDelete = async () => {
+    const gone = videoToDelete;
+    setVideoToDelete(null);
+    if (!jobId || !gone) return;
+    try {
+      await deleteCompilation(jobId, gone.id);
+      setVideos((prev) => prev.filter((other) => other.id !== gone.id));
+      setOpenVideo(null);
+      toast.success(t("compilation.deleted"));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t("common.error"));
+    }
+  };
 
   // 30 s more on one side of a clip's cut; its file grows from the live when needed
   const extendMoment = useCallback(
@@ -317,6 +400,22 @@ export default function ProjectPage() {
         }
         return;
       }
+      // The arrows go through the whole list, whatever the section
+      const move = (by: 1 | -1) => {
+        e.preventDefault();
+        const order = shownEntries(entries, openSections, selectedKey);
+        const next = order[order.findIndex((entry) => entry.key === selectedKey) + by];
+        if (next) selectEntry(next);
+      };
+      if (key === "arrowdown" || key === "arrowright") return move(1);
+      if (key === "arrowup" || key === "arrowleft") return move(-1);
+      // A sequence or a compilation on screen: an idea is kept (built) or passed on
+      if (videoEntry) {
+        if (!videoEntry.idea) return;
+        if (key === "g") keepIdea(videoEntry.video);
+        else if (key === "x") passIdea(videoEntry.video);
+        return;
+      }
       if (key === " ") {
         e.preventDefault();
         setInteracted(true);
@@ -324,17 +423,10 @@ export default function ProjectPage() {
       } else if (key === "g") decide("kept");
       else if (key === "x") decide("passed");
       else if (key === "c") playerRef.current?.cut();
-      else if (key === "arrowdown" || key === "arrowright") {
-        e.preventDefault();
-        select(Math.min(moments.length - 1, selected + 1));
-      } else if (key === "arrowup" || key === "arrowleft") {
-        e.preventDefault();
-        select(Math.max(0, selected - 1));
-      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [decide, moments.length, select, selected]);
+  }, [decide, entries, keepIdea, moments.length, openSections, passIdea, selectEntry, selectedKey, videoEntry]);
 
   const rename = async (name: string) => {
     if (!jobId || !current) return;
@@ -370,58 +462,32 @@ export default function ProjectPage() {
     );
   }
 
-  const { tag, title } = splitVodTitle(job.custom_title || job.vod_title);
   const processing = job.status !== "DONE" && job.status !== "ERROR";
   // Stopped because the AI provider refuses every call (no credits, refused key)
   const stopped = job.status === "ERROR" ? providerNotice(job.notices) : undefined;
   const categoryLabel = (category: string | undefined) => (category ? t(`categories.${category}`, { defaultValue: category }) : null);
   const freed = !!job.clips_freed_at;
-  const stepLinks = { analyze: `/${jobId}`, choose: `/${jobId}`, edit: `/${jobId}/montage`, export: freed ? `/${jobId}/export` : `/${jobId}/montage` };
+  // What the strip of the live shows besides the clips: each sequence's stretch, the moments of the compilation on screen
+  const spans = entries.sequence.flatMap((entry) => (entry.kind === "video" && entry.video.suggestion?.span ? [{ key: entry.key, start: entry.video.suggestion.span[0], end: entry.video.suggestion.span[1], name: entry.video.name, state: entry.state }] : []));
+  const ticks = videoEntry && !videoEntry.video.suggestion?.span ? videoMoments(videoEntry.video, 40) : [];
+  const shownAt = videoEntry ? (videoEntry.video.suggestion?.span ? (videoEntry.video.suggestion.span[0] + videoEntry.video.suggestion.span[1]) / 2 : (ticks[0] ?? null)) : null;
 
   return (
     <div className="animate-fade-in">
-      {/* Header */}
-      <header className="flex flex-wrap items-end justify-between gap-5">
-        <div className="min-w-0">
-          <Link to="/" className="btn btn-ghost btn-sm -ml-2 h-7 px-2">
-            <ArrowLeft className="w-4 h-4" /> {t("sidebar.home")}
-          </Link>
-          <div className="mt-2 flex items-center gap-2.5 flex-wrap">
-            <h1 className="text-[32px] leading-[1.1] tracking-[-0.03em] font-[650] text-white">{title}</h1>
-          </div>
-          <div className="mt-2 flex flex-wrap items-center gap-2 text-[13.5px] text-ink-2">
-            {job.stream_date && <span>{shortDate(job.stream_date, i18n.language)}</span>}
-            {job.vod_duration_seconds ? (
-              <>
-                <span aria-hidden className="opacity-50">·</span>
-                <span className="tabular-nums">{hoursMinutes(job.vod_duration_seconds)}</span>
-              </>
-            ) : null}
-            {job.vod_game && (
-              <>
-                <span aria-hidden className="opacity-50">·</span>
-                <span>{job.vod_game}</span>
-              </>
-            )}
-            {tag && <span className="chip chip-neutral h-[22px] font-[550]">{tag}</span>}
-            {job.vod_context?.summary && (
-              <button onClick={() => setContextOpen((o) => !o)} className="btn btn-ghost btn-sm h-7 px-2" aria-expanded={contextOpen}>
-                {t("project.liveSummary")}
-                <ChevronDown className={`w-3.5 h-3.5 transition-transform ${contextOpen ? "rotate-180" : ""}`} />
-              </button>
-            )}
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {!processing && job.status === "DONE" && <ModeSwitch jobId={jobId} current="clip" suggested={job.suggested} />}
-        <Stepper
-          current={processing ? "analyze" : "choose"}
-          links={stepLinks}
-          locked={processing ? ["choose", "edit", "export"] : freed ? ["edit"] : counts.kept === 0 ? ["edit", "export"] : []}
-          detail={processing ? undefined : t("project.keptCount", { count: counts.kept })}
-        />
-        </div>
-      </header>
+      <LiveHeader
+        job={job}
+        step="choose"
+        kept={kept}
+        processing={processing}
+        extra={
+          job.vod_context?.summary && (
+            <button onClick={() => setContextOpen((o) => !o)} className="btn btn-ghost btn-sm h-7 px-2" aria-expanded={contextOpen}>
+              {t("project.liveSummary")}
+              <ChevronDown className={`w-3.5 h-3.5 transition-transform ${contextOpen ? "rotate-180" : ""}`} />
+            </button>
+          )
+        }
+      />
 
       {contextOpen && job.vod_context && (
         <div className="mt-4 glass rounded-[16px] p-5 max-w-[860px] animate-fade-in">
@@ -487,22 +553,43 @@ export default function ProjectPage() {
         </div>
       )}
 
-      {!processing && !freed && moments.length > 0 && current && (
+      {!processing && (freed ? videos.length > 0 : moments.length > 0 || videos.length > 0) && (
         <>
           <section className="mt-5">
             <VodTimeline
               vodId={vodId}
-              durationSeconds={job.vod_duration_seconds ?? Math.max(...moments.map((m) => m.end))}
-              moments={moments}
-              selected={selected}
+              durationSeconds={job.vod_duration_seconds ?? Math.max(1, ...moments.map((m) => m.end))}
+              moments={freed ? [] : moments}
+              selected={videoEntry ? -1 : selected}
               onSelect={select}
               chat={job.timeline?.chat}
               chatDuration={job.timeline?.duration}
+              spans={spans}
+              selectedSpan={videoEntry?.key ?? null}
+              onSelectSpan={(key) => {
+                const entry = entries.sequence.find((one) => one.key === key);
+                if (entry) selectEntry(entry);
+              }}
+              ticks={ticks}
+              label={videoEntry && shownAt != null ? { at: shownAt, text: videoEntry.video.name } : null}
             />
           </section>
 
           <section className="mt-[18px] flex flex-wrap gap-[18px] items-start">
-            <div className="flex-[1_1_680px] min-w-0 flex flex-col gap-4">
+            <div className="flex-[1_1_640px] min-w-0 flex flex-col gap-4">
+              {videoEntry ? (
+                <VideoDetail
+                  jobId={jobId}
+                  entry={videoEntry}
+                  storyboard={storyboard}
+                  busy={videoBusy}
+                  onKeep={() => keepIdea(videoEntry.video)}
+                  onPass={() => passIdea(videoEntry.video)}
+                  onOpen={() => navigate(`/${jobId}/montage?v=${videoEntry.video.id}`)}
+                  onRemove={() => setVideoToDelete(videoEntry.video)}
+                />
+              ) : current && !freed ? (
+              <>
               <MomentPlayer
                 ref={playerRef}
                 jobId={jobId}
@@ -560,32 +647,41 @@ export default function ProjectPage() {
                 }}
                 onDelete={() => setToDelete(current.filename)}
               />
+              </>
+              ) : null}
             </div>
 
-            <div className="flex-[0_1_400px] min-w-0 lg:sticky lg:top-[96px]">
-              <MomentList
+            <div className="flex-[0_1_410px] min-w-[300px] lg:sticky lg:top-[96px]">
+              <SourceList
                 jobId={jobId}
-                moments={moments}
-                selected={selected}
-                onSelect={select}
+                entries={freed ? { ...entries, clip: entries.clip.filter((entry) => entry.kind === "video") } : entries}
+                selected={selectedKey}
+                onSelect={selectEntry}
+                open={openSections}
+                onToggle={(source) => setOpenSections((prev) => ({ ...prev, [source]: !prev[source] }))}
+                // A new one starts in its montage, where it is described to the AI or put together by hand
+                onAdd={(source) => navigate(`/${jobId}/montage?new=1&kind=${source}`)}
+                storyboard={storyboard}
                 categoryLabel={categoryLabel}
-                footer={
-                  <div className="mt-3 pt-3.5 border-t border-white/[0.08] flex flex-col gap-3">
-                    <button onClick={() => setImporting(true)} className="btn btn-ghost btn-sm self-start">
-                      <Upload className="w-[15px] h-[15px]" /> {t("importClip.addClip")}
+                clipAction={
+                  !freed && (
+                    <button onClick={() => setImporting(true)} aria-label={t("importClip.addClip")} title={t("live.importFile")} className="btn btn-ghost btn-icon w-7 h-7 text-ink-3 hover:text-white">
+                      <Upload className="w-[15px] h-[15px]" />
                     </button>
-                    <div className="flex items-center justify-between gap-2.5">
-                      <span className="text-[13px] text-ink-2">
-                        <span className="mono font-semibold text-white">{counts.kept}</span> {t("project.clipsKept", { count: counts.kept })}
-                      </span>
-                      {counts.kept > 0 ? (
-                        <Link to={`/${jobId}/montage`} className="btn btn-primary">
-                          {t("project.toEdit")} <ArrowRight className="w-[15px] h-[15px]" strokeWidth={2.2} />
-                        </Link>
-                      ) : (
-                        <span className="text-[12.5px] text-ink-3">{t("project.keepToContinue")}</span>
-                      )}
-                    </div>
+                  )
+                }
+                footer={
+                  <div className="mt-2 pt-3 border-t border-white/[0.08] flex items-center justify-between gap-2.5 px-1">
+                    <span className="text-[13px] text-ink-2">
+                      <span className="mono font-semibold text-white">{kept}</span> {t("live.videosKept", { count: kept })}
+                    </span>
+                    {kept > 0 ? (
+                      <Link to={`/${jobId}/montage`} className="btn btn-primary">
+                        {t("project.step.edit")} <ArrowRight className="w-[15px] h-[15px]" strokeWidth={2.2} />
+                      </Link>
+                    ) : (
+                      <span className="text-[12.5px] text-ink-3">{t("project.keepToContinue")}</span>
+                    )}
                   </div>
                 }
               />
@@ -600,6 +696,13 @@ export default function ProjectPage() {
         message={t("hotPoints.deleteClipMessage")}
         onConfirm={confirmDelete}
         onCancel={() => setToDelete(null)}
+      />
+      <ConfirmModal
+        open={!!videoToDelete}
+        title={t("compilation.deleteTitle")}
+        message={t("compilations.deleteMessage", { name: videoToDelete?.name ?? "" })}
+        onConfirm={confirmVideoDelete}
+        onCancel={() => setVideoToDelete(null)}
       />
       <ImportClipModal
         jobId={jobId}

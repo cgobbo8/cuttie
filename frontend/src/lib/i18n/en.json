@@ -2167,5 +2167,52 @@
     "title": "Assistant",
     "close": "Close the assistant",
     "empty": "Open a video in Edit: searching the live and asking the AI for a change happen here."
+  },
+  "sources": {
+    "one": {
+      "clip": "Clip",
+      "sequence": "Sequence",
+      "compilation": "Compilation"
+    },
+    "tip": {
+      "clip": "One moment of the live, about a minute long. The analysis finds around twenty.",
+      "sequence": "A stretch in a row (a mission, a story of 2 minutes to an hour) told as a one-minute video.",
+      "compilation": "Moments from all over the live, or from several lives, brought together around one idea."
+    },
+    "add": {
+      "clip": "Add a clip",
+      "sequence": "Add a sequence",
+      "compilation": "Add a compilation"
+    }
+  },
+  "live": {
+    "more": "See the other {{count}}",
+    "less": "See fewer",
+    "ideasToSee_one": "{{count}} idea from the AI to look at",
+    "ideasToSee_other": "{{count}} ideas from the AI to look at",
+    "videosKept_one": "video kept",
+    "videosKept_other": "videos kept",
+    "importFile": "Add a video file of your own",
+    "keptChip": "Kept",
+    "passedIdea": "Passed",
+    "sub": {
+      "sequence": "{{minutes}} min in a row in the live",
+      "compilation_one": "{{count}} moment spotted",
+      "compilation_other": "{{count}} moments spotted",
+      "built_one": "{{count}} passage",
+      "built_other": "{{count}} passages"
+    },
+    "idea": {
+      "sequence": "{{minutes}} min in a row in the live, from {{from}} to {{to}}",
+      "compilation_one": "{{count}} moment taken from the live",
+      "compilation_other": "{{count}} moments taken from all over the live",
+      "makes": "→ a video of about {{length}}",
+      "unbuilt": "An idea from the AI: nothing is built, nothing is paid."
+    },
+    "keptVideos": "Videos kept from this live",
+    "exported": "Exported",
+    "nothingKept": "No video kept yet",
+    "nothingKeptHint": "Keep a clip, a sequence or a compilation of this live: it comes here to be edited.",
+    "emptyVideo": "This video has no passage yet. Describe it to the assistant, or search the live for passages."
   }
 }

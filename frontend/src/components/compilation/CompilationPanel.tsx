@@ -40,6 +40,11 @@ import type { VideoSource } from "../../lib/videoSources";
 import TransitionPicker from "./TransitionPicker";
 
 interface Props {
+  /**
+   * What of the video this panel shows: its passages (name, parts, passages, length), or its look
+   * (how it is dressed, and its export). Nothing said: both, one under the other.
+   */
+  part?: "passages" | "look";
   compilation: Compilation;
   /** Each live's preview frames, by job id; `home`: the live the compilation is kept with */
   storyboards: Record<string, TwitchStoryboard>;
@@ -179,6 +184,7 @@ function withGone(section: CompilationSection, gone: Props["gone"]): (Compilatio
 
 /** The compilation being built: its sections, their moments in playing order, its length and look */
 export default function CompilationPanel({
+  part,
   compilation,
   storyboards,
   home,
@@ -328,9 +334,17 @@ export default function CompilationPanel({
   const iconButton = "btn btn-ghost btn-icon w-7 h-7 text-ink-3 hover:text-white disabled:opacity-25";
   const miniButton = "btn btn-ghost btn-icon btn-mini text-ink-2 hover:text-white disabled:opacity-25";
   const own = ownTransitions(compilation);
+  const passages = part !== "look";
+  const look = part !== "passages";
 
   return (
-    <aside ref={list} aria-label={t("compilation.title")} className="glass rounded-[20px] p-3 flex-[1_1_360px] min-w-0 flex flex-col gap-2.5">
+    <aside
+      ref={list}
+      aria-label={t(part === "look" ? "compilation.dress.label" : "compilation.title")}
+      className={`glass rounded-[20px] p-3 min-w-0 flex flex-col gap-2.5 ${part === "passages" ? "flex-[1_1_300px] max-w-[400px]" : part === "look" ? "flex-[1_1_340px] max-w-[420px]" : "flex-[1_1_360px]"}`}
+    >
+      {passages && (
+      <>
       <div className="flex items-center gap-1.5">
         <input
           value={compilation.name}
@@ -538,9 +552,8 @@ export default function CompilationPanel({
         </div>
       )}
 
-      <div className="mt-1 pt-3 border-t border-white/[0.08] flex flex-col gap-3">
-        {/* Length: what it makes, what is aimed for */}
-        <div>
+      {/* Length: what it makes, what is aimed for */}
+        <div className="mt-1 pt-3 border-t border-white/[0.08]">
           <div className="flex items-baseline justify-between gap-2">
             <span className="text-[13px] text-ink-2">
               <span className={`mono font-semibold ${over ? "text-[#F5B14C]" : "text-white"}`}>{clock(total)}</span> · {t("compilation.moments", { count })}
@@ -559,6 +572,11 @@ export default function CompilationPanel({
             ))}
           </div>
         </div>
+      </>
+      )}
+
+      {look && (
+      <div className={`flex flex-col gap-3 ${part === "look" ? "" : "pt-3 border-t border-white/[0.08]"}`}>
 
         {/* How the video looks and sounds. Every setting is the same row: what it is, what it is set to, its picker a click away */}
         <div>
@@ -811,6 +829,7 @@ export default function CompilationPanel({
           )}
         </div>
       </div>
+      )}
     </aside>
   );
 }

@@ -1,7 +1,7 @@
 import { test } from '@japa/runner'
 import testUtils from '@adonisjs/core/services/test_utils'
 import { randomUUID } from 'node:crypto'
-import { existsSync, mkdirSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import path from 'node:path'
@@ -351,6 +351,61 @@ test.group('Compilations', (group) => {
     assert.notProperty(old, 'universe.x')
     ;(await open('nope.mp4')).assertStatus(404)
     ;(await open('../../etc/passwd')).assertStatus(404)
+  })
+
+  test('keeping a clip makes it a video: its pieces become passages that play the clip\'s own file', async ({ client, assert }) => {
+    const { user, job, dir } = await setup()
+    job.vodDurationSeconds = 15000
+    job.hotPoints = [{ clip_filename: 'yacht.mp4', clip_name: 'Le Yacht', clip_start: 12000, clip_end: 12090, timestamp_seconds: 12040, final_score: 0.7, llm: { summary: 'Une fête', cut_start: 10, cut_end: 50 } }] as any
+    // The streamer cut it in three pieces in « Choisir » (clip seconds)
+    job.selection = { 'yacht.mp4': { trim: [4, 70], segments: [[4, 12], [20, 33.5], [60, 70]] } } as any
+    await job.save()
+    for (const suffix of ['.mp4', '_probe.json', '_words.json']) writeFileSync(path.join(dir, `yacht${suffix}`), suffix === '.mp4' ? 'video' : '[]')
+    writeFileSync(path.join(dir, 'yacht_meta.json'), JSON.stringify({ vod_start: 12000, vod_end: 12090, settled: true }))
+
+    const made = await client.post(`/api/jobs/${job.id}/compilations/from-clip`).loginAs(user).json({ clip: 'yacht.mp4' })
+    made.assertStatus(201)
+    const items = (made.body() as any).compilation.sections[0].items
+    assert.deepEqual(items.map((i: any) => [i.start, i.end, i.ready]), [[12004, 12012, true], [12020, 12033.5, true], [12060, 12070, true]])
+    assert.lengthOf(new Set(items.map((i: any) => i.id)), 3)
+    // One file on the disk under three names: no room taken twice
+    const inodes = items.map((i: any) => statSync(path.join(dir, `piece_${i.id}.mp4`)).ino)
+    assert.lengthOf(new Set([...inodes, statSync(path.join(dir, 'yacht.mp4')).ino]), 1)
+    // ...and the clip is kept
+    await job.refresh()
+    assert.equal((job.selection as any)['yacht.mp4'].state, 'kept')
+    assert.deepEqual((job.selection as any)['yacht.mp4'].segments, [[4, 12], [20, 33.5], [60, 70]])
+
+    // A passage cut in two in the editor: the second half plays the same file, nothing is asked to the engine
+    const half = await client.post(`/api/jobs/${job.id}/pieces`).loginAs(user).json({ pieces: [{ id: 'secondhalf1', start: 12026, end: 12033.5, like: items[1].id }] })
+    half.assertStatus(200)
+    assert.deepInclude((half.body() as any).pieces[0], { id: 'secondhalf1', ready: true, file_start: 12000, file_end: 12090 })
+    // ...but not when that file does not hold the moment: it is the engine's to cut (none answers in tests)
+    ;(await client.post(`/api/jobs/${job.id}/pieces`).loginAs(user).json({ pieces: [{ id: 'elsewhere12', start: 13000, end: 13004, like: items[1].id }] })).assertStatus(503)
+  })
+
+  test('an idea of the AI can be passed on and taken back; passed, it no longer waits', async ({ client, assert }) => {
+    const { user, job } = await setup()
+    const now = new Date().toISOString()
+    const idea = (id: string) => ({ id, name: `Idée ${id}`, sections: [{ id: `${id}s`, title: '', query: '', items: [] }], template: null, titles: true, hook: '', target: 45, brief: 'Les fois où…', suggestion: { key: id, pitch: 'Vu', tags: [], score: 70, moments: [10, 20, 30] }, created_at: now, updated_at: now })
+    job.compilations = [idea('idea000001'), idea('idea000002')] as any
+    await job.save()
+    const count = async () => ((await client.get(`/api/jobs/${job.id}/suggestions`).loginAs(user)).body() as any).suggested
+    assert.equal(await count(), 2)
+
+    const save = (body: Record<string, unknown>) => client.put(`/api/jobs/${job.id}/compilations/idea000001`).loginAs(user).json({ ...idea('idea000001'), ...body })
+    const passed = (await save({ passed: true })).body() as any
+    assert.isTrue(passed.compilation.passed)
+    // (the idea itself is the server's: it stays as proposed)
+    assert.equal(passed.compilation.suggestion.score, 70)
+    assert.equal(await count(), 1)
+    const library = ((await client.get('/api/compilations').loginAs(user)).body() as any).lives.find((one: any) => one.job_id === job.id)
+    assert.deepEqual(library.compilations.map((c: any) => [c.id, c.passed, c.waiting]), [['idea000001', true, true], ['idea000002', false, true]])
+
+    // Taken back: the field goes
+    const back = (await save({})).body() as any
+    assert.notProperty(back.compilation, 'passed')
+    assert.equal(await count(), 2)
   })
 
   test('keeps the intro a video opens with, counts it in its length, and forgets it when it goes', async ({ client, assert }) => {

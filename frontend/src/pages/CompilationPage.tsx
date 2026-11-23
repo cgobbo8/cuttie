@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
+import { AssistantSlot, useAssistant } from "../lib/AssistantContext";
 import { useTranslation } from "react-i18next";
 import { Player, type PlayerRef } from "@remotion/player";
-import { ArrowLeft, Check, CircleQuestionMark, Loader2, Plus, X } from "lucide-react";
+import { ArrowLeft, Check, Loader2, Plus, X } from "lucide-react";
 import {
   chooseLooks,
   clipThumbUrl,
@@ -19,9 +20,10 @@ import {
   listAllCompilations,
   liveLoudness,
   listCompilations,
+  listRenders,
   LiveError,
+  openClipVideo,
   saveCompilation,
-  setGuideSeen,
   startMontageRender,
   type Compilation,
   type CompilationItem,
@@ -38,7 +40,6 @@ import {
 } from "../lib/api";
 import { useBackdrop } from "../lib/BackdropContext";
 import { useChannel } from "../lib/ChannelContext";
-import { useSettings } from "../lib/SettingsContext";
 import {
   addItems,
   allItems,
@@ -82,13 +83,15 @@ import { templateGuides } from "../lib/templateGuide";
 import { buildAny, customTemplates, defaultTemplateKey, findCustom, hookOf, isBuiltIn, type TemplateKey } from "../lib/templateKeys";
 import { isHookStyle, titleCard } from "../lib/templateSpec";
 import { isEffectLevel } from "../lib/effects";
-import { SOURCE_TARGET, isVideoSource, sourceOf, sourcePath, type VideoSource } from "../lib/videoSources";
+import { SOURCE_TARGET, VIDEO_SOURCES, isVideoSource, sourceOf, type VideoSource } from "../lib/videoSources";
+import { keptCount, liveEntries } from "../lib/liveEntries";
+import { buildMoments } from "../lib/moments";
 import { TEMPLATE_IDS } from "../lib/templates";
 import MontageComposition from "../components/remotion-editor/MontageComposition";
-import ModeSwitch from "../components/project/ModeSwitch";
-import { isWaiting, waitingBySource } from "../lib/suggestions";
+import { isWaiting } from "../lib/suggestions";
+import LiveHeader from "../components/live/LiveHeader";
+import VideoRail from "../components/live/VideoRail";
 import LivePicker from "../components/compilation/LivePicker";
-import CompilationGuide from "../components/compilation/CompilationGuide";
 import CompilationPanel from "../components/compilation/CompilationPanel";
 import PiecePreview from "../components/compilation/PiecePreview";
 import SearchPanel from "../components/compilation/SearchPanel";
@@ -129,32 +132,25 @@ function covers<P extends PieceState>(piece: P | undefined, item: CompilationIte
 const pieceVersion = (piece: PieceState) => `${piece.file}@${piece.file_start}-${piece.file_end}`;
 
 /**
- * /:jobId/compilation — a video made of pieces of the whole live: search it
- * (words said or written in the chat, or by asking the AI), pick moments into
- * sections, or describe the video and let the AI plan it. Everything stays
- * editable: order, cut of each moment, titles, template.
+ * /:jobId/montage — the third step of a live: the montage of the videos kept from it, whatever
+ * each is made from (a clip, a sequence, a compilation). One video at a time (?v=<id>), the
+ * others a click away in the row above. Its passages on the left, the video in the middle, its
+ * look on the right; searching the live and asking the AI happen in the assistant's panel.
+ * Everything stays editable: order, cut of each passage, titles, template.
  */
 export default function CompilationPage() {
   const { t, i18n } = useTranslation();
   const toast = useToast();
   const navigate = useNavigate();
   const { jobId } = useParams<{ jobId: string }>();
-  // ?c=<id>: the compilation to open; ?new=1: a new one (from the library)
+  // ?v=<id>: the video to open (none: the first one kept); ?clip=<file>: a kept clip, as its video; ?new=1&kind=…: a new one
   const [search, setSearch] = useSearchParams();
   const { kit, channel } = useChannel();
-  const { settings, refresh: refreshSettings } = useSettings();
-
-  // The screen explains itself on the first visit; "how it works" shows it again
-  const [guide, setGuide] = useState(false);
-  const guideSeen = settings?.guides_seen?.includes("compilation");
-  useEffect(() => {
-    if (settings && !guideSeen) setGuide(true);
-  }, [settings, guideSeen]);
-  const closeGuide = useCallback(() => {
-    setGuide(false);
-    // Remembered with the app's settings: seen once, on this computer, for good
-    if (!guideSeen) setGuideSeen("compilation").then(refreshSettings, () => {});
-  }, [guideSeen, refreshSettings]);
+  const assistant = useAssistant();
+  // The clip whose video is being made (a kept clip opened for the first time)
+  const [openingClip, setOpeningClip] = useState<string | null>(null);
+  // The videos of this live whose last export is finished
+  const [exported, setExported] = useState<Set<string>>(new Set());
 
   const [job, setJob] = useState<JobResponse | null>(null);
   const [info, setInfo] = useState<LiveSearchInfo | null>(null);
@@ -179,9 +175,6 @@ export default function CompilationPage() {
   onItemRef.current = onItem;
   const [videoPlaying, setVideoPlaying] = useState(false);
   const [hush, setHush] = useState(0);
-  // How tall the open passage is: the whole video takes what is left of the window above it
-  const [pieceHeight, setPieceHeight] = useState(0);
-  const pieceBox = useRef<HTMLDivElement>(null);
   const [results, setResults] = useState<LiveHit[]>([]);
   const [envs, setEnvs] = useState<Record<string, EditEnvironment>>({});
   const envsRef = useRef(envs);
@@ -219,7 +212,7 @@ export default function CompilationPage() {
 
   // The proposed video this visit was opened to build (see ?build=1), built once
   const buildFor = useRef<string | null>(null);
-  const loaded = useRef<{ job: string; all: Promise<Compilation[]> } | null>(null);
+  const loaded = useRef<{ job: string; all: Promise<{ list: Compilation[]; open: string | null }> } | null>(null);
   const remember = useCallback(
     (list: Compilation[]) => {
       const states: Record<string, Piece> = {};
@@ -234,7 +227,8 @@ export default function CompilationPage() {
   useEffect(() => {
     if (!jobId) return;
     let cancelled = false;
-    getJobStatus(jobId)
+    const live = getJobStatus(jobId);
+    live
       .then((j) => {
         if (cancelled) return;
         setJob(j);
@@ -244,46 +238,69 @@ export default function CompilationPage() {
       .catch(() => !cancelled && navigate("/"));
     getLiveSearchInfo(jobId).then((i) => !cancelled && setInfo(i)).catch(() => {});
     listAllCompilations().then((lives) => !cancelled && setLibrary(lives)).catch(() => {});
+    listRenders()
+      .then((renders) => !cancelled && setExported(new Set(renders.filter((r) => r.job_id === jobId && r.status === "done").flatMap((r) => /^comp_([a-z0-9]+)\.mp4$/.exec(r.clip_filename)?.[1] ?? []))))
+      .catch(() => {});
     // ?lives=a,b: a new compilation that takes passages from these lives too (picked in the library)
     const wantsLives = (search.get("lives") ?? "").split(",").filter((id) => id && id !== jobId).slice(0, MAX_OTHER_LIVES);
-    // Asked once per live, even when this runs twice (development): a new compilation is created once
+    // Asked once per live, even when this runs twice (development): a new video is created once
     const wantsNew = search.get("new") === "1";
     // ?kind=clip|sequence: what the new video is made from (nothing said: a compilation)
     const wantsKind: VideoSource = isVideoSource(search.get("kind")) ? (search.get("kind") as VideoSource) : "compilation";
-    // ?build=1: a video the AI proposed, opened from its card to be built
-    if (search.get("build") === "1" && search.get("c")) buildFor.current = search.get("c");
+    const wantsVideo = search.get("v") ?? search.get("c");
+    const wantsClip = search.get("clip");
+    // ?build=1: a video the AI proposed, opened to be built
+    if (search.get("build") === "1" && wantsVideo) buildFor.current = wantsVideo;
     if (loaded.current?.job !== jobId) {
       loaded.current = {
         job: jobId,
-        // The first visit opens on an empty compilation
         all: listCompilations(jobId).then(async (list) => {
-          // A new one is asked for: the empty one left from last time does, rather than piling them up
-          const blank = list.find((c) => allItems(c).length === 0 && !c.brief && !c.suggestion && sourceOf(c) === wantsKind);
-          if (wantsNew && blank) {
-            const same = (blank.lives ?? []).join() === wantsLives.join();
-            const { lives: _before, ...rest } = blank;
-            return [...list.filter((c) => c !== blank), same ? blank : await saveCompilation(jobId, { ...rest, ...(wantsLives.length > 0 ? { lives: wantsLives } : {}) })];
+          if (wantsNew) {
+            // A new one is asked for: the empty one left from last time does, rather than piling them up
+            const blank = list.find((c) => allItems(c).length === 0 && !c.brief && !c.suggestion && sourceOf(c) === wantsKind);
+            if (blank) {
+              const same = (blank.lives ?? []).join() === wantsLives.join();
+              const { lives: _before, ...rest } = blank;
+              const kept = same ? blank : await saveCompilation(jobId, { ...rest, ...(wantsLives.length > 0 ? { lives: wantsLives } : {}) });
+              return { list: [...list.filter((c) => c !== blank), kept], open: kept.id };
+            }
+            const made = await createCompilation(jobId, {
+              name: t(`videos.new.${wantsKind}`),
+              ...(wantsKind === "compilation" && wantsLives.length > 0 ? { lives: wantsLives } : {}),
+              ...(wantsKind !== "compilation" ? { source: wantsKind, target: SOURCE_TARGET[wantsKind], titles: wantsKind !== "clip" } : {}),
+            });
+            return { list: [...list, made], open: made.id };
           }
-          const draft = {
-            name: t(`videos.new.${wantsNew ? wantsKind : "compilation"}`),
-            ...(wantsNew && wantsKind === "compilation" && wantsLives.length > 0 ? { lives: wantsLives } : {}),
-            ...(wantsNew && wantsKind !== "compilation" ? { source: wantsKind, target: SOURCE_TARGET[wantsKind], titles: wantsKind !== "clip" } : {}),
+          const withClip = async (filename: string) => {
+            const known = list.find((c) => c.clip === filename);
+            if (known) return { list, open: known.id };
+            const made = await openClipVideo(jobId, filename);
+            return { list: [...list, made], open: made.id };
           };
-          return list.length === 0 || wantsNew ? [...list, await createCompilation(jobId, draft)] : list;
+          if (wantsClip) return withClip(wantsClip);
+          if (wantsVideo && list.some((c) => c.id === wantsVideo)) return { list, open: wantsVideo };
+          // Nothing named: the first video kept from this live (a kept clip gets its video when it opens)
+          const j = await live;
+          const entries = liveEntries(buildMoments(j.hot_points ?? [], j.selection ?? {}), list);
+          const first = VIDEO_SOURCES.flatMap((source) => entries[source]).find((entry) => entry.state === "kept");
+          if (!first) return { list, open: null };
+          return first.kind === "video" ? { list, open: first.video.id } : withClip(first.moment.filename);
         }),
       };
     }
     loaded.current.all
-      .then((all) => {
+      .then(({ list, open }) => {
         if (cancelled) return;
-        // No compilation named: the last one of the streamer's own, rather than an idea of the AI nobody opened
-        const opened = (!wantsNew && all.find((c) => c.id === search.get("c"))) || [...all].reverse().find((c) => !isWaiting(c)) || all[all.length - 1];
-        remember(all);
-        setCompilations(all);
-        setCurrentId(opened.id);
-        setActiveSection(opened.sections[0]?.id ?? "");
+        remember(list);
+        setCompilations(list);
+        setCurrentId(open);
+        setActiveSection(list.find((c) => c.id === open)?.sections[0]?.id ?? "");
       })
-      .catch((err) => !cancelled && toast.error(err instanceof Error ? err.message : t("common.error")));
+      .catch((err) => {
+        if (cancelled) return;
+        toast.error(err instanceof Error ? err.message : t("common.error"));
+        setCompilations((prev) => prev ?? []);
+      });
     return () => {
       cancelled = true;
     };
@@ -302,10 +319,15 @@ export default function CompilationPage() {
       stale = true;
     };
   }, [jobId, hasMusic]);
-  // The address names the compilation on screen: a reload, or coming back from an export, opens it again
+  // The address names the video on screen: a reload, or coming back from an export, opens it again
   useEffect(() => {
-    if (currentId && (search.get("c") !== currentId || search.has("new") || search.has("build"))) setSearch({ c: currentId }, { replace: true });
+    if (currentId && (search.get("v") !== currentId || search.has("new") || search.has("build") || search.has("c") || search.has("clip") || search.has("kind"))) setSearch({ v: currentId }, { replace: true });
   }, [currentId, search, setSearch]);
+  // A video opened to be built by the AI, or a new one with nothing in it yet: the assistant's panel is where that happens
+  const wantsHelp = !!compilation && (buildFor.current === compilation.id || (allItems(compilation).length === 0 && !compilation.clip));
+  useEffect(() => {
+    if (wantsHelp) assistant.setOpen(true);
+  }, [wantsHelp, compilation?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const compilationsRef = useRef(compilations);
   compilationsRef.current = compilations;
   const liveDuration = job?.vod_duration_seconds ?? 0;
@@ -584,11 +606,38 @@ export default function CompilationPage() {
     ensure([moved]);
   };
 
-  const startNew = async () => {
+  /** Another video of this live on screen (what was being cut for the one before goes on in the background) */
+  const openVideo = (id: string) => {
+    const next = compilations?.find((c) => c.id === id);
+    if (!next || id === currentId) return;
+    setCurrentId(id);
+    setActiveSection(next.sections[0]?.id ?? "");
+    setShown(null);
+    setResults([]);
+  };
+  /** A kept clip opened for the first time: it becomes a video like the others */
+  const openClip = async (filename: string) => {
+    if (!jobId || openingClip) return;
+    const known = compilations?.find((c) => c.clip === filename);
+    if (known) return openVideo(known.id);
+    setOpeningClip(filename);
+    try {
+      const made = await openClipVideo(jobId, filename);
+      remember([made]);
+      setCompilations((prev) => [...(prev ?? []).filter((c) => c.id !== made.id), made]);
+      setCurrentId(made.id);
+      setActiveSection(made.sections[0]?.id ?? "");
+      setShown(null);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t("common.error"));
+    } finally {
+      setOpeningClip(null);
+    }
+  };
+
+  const startNew = async (kind: VideoSource = sourceOf(compilation)) => {
     if (!jobId) return;
     try {
-      // Another video of the same source as the one on screen
-      const kind = sourceOf(compilation);
       const created = await createCompilation(jobId, { name: t(`videos.new.${kind}`), ...(kind !== "compilation" ? { source: kind, target: SOURCE_TARGET[kind], titles: kind !== "clip" } : {}) });
       setCompilations((prev) => [...(prev ?? []), created]);
       setCurrentId(created.id);
@@ -607,8 +656,8 @@ export default function CompilationPage() {
       latest.current.delete(compilation.id);
       await deleteCompilation(jobId, compilation.id);
       toast.success(t("compilation.deleted"));
-      // Back to the live's compilations
-      navigate(`/${jobId}/compilations`);
+      // Back to what the live gives
+      navigate(`/${jobId}`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t("common.error"));
     }
@@ -942,16 +991,6 @@ export default function CompilationPage() {
     if (mark && player) player.seekTo(player.isPlaying() ? mark.from : mark.clear);
   };
 
-  // The open passage's height, as it is drawn
-  useEffect(() => {
-    const box = pieceBox.current;
-    if (!box || typeof ResizeObserver === "undefined") return setPieceHeight(0);
-    const watch = new ResizeObserver(() => setPieceHeight(box.offsetHeight));
-    watch.observe(box);
-    setPieceHeight(box.offsetHeight);
-    return () => watch.disconnect();
-  }, [shown?.id]);
-
   const exportNow = async () => {
     if (!jobId || !compilation || exporting) return;
     setExporting(true);
@@ -1064,10 +1103,33 @@ export default function CompilationPage() {
   const firstReady = readyItems[0];
   useBackdrop(jobId && firstReady ? clipThumbUrl(pieces[firstReady.id].job, pieces[firstReady.id].file) : null);
 
-  if (!jobId || !job || !compilations || !compilation || !kit) {
+  // What is kept from this live, by source: the row above the montage
+  const liveMoments = useMemo(() => buildMoments(job?.hot_points ?? [], job?.selection ?? {}), [job]);
+  const entries = useMemo(() => liveEntries(liveMoments, compilations ?? []), [liveMoments, compilations]);
+  // (a kept clip counts once, opened as a video or not; the video on screen counts even while it is being built)
+  const kept = Math.max(keptCount(entries), compilation ? 1 : 0);
+
+  if (!jobId || !job || !compilations || !kit) {
     return (
       <div className="flex justify-center py-24">
         <Loader2 className="w-5 h-5 animate-spin text-ink-3" />
+      </div>
+    );
+  }
+  const rail = <VideoRail jobId={jobId} entries={entries} videos={compilations} current={compilation} onOpenVideo={openVideo} onOpenClip={openClip} onAdd={(kind) => startNew(kind)} opening={openingClip} exported={exported} />;
+  // Nothing kept from this live yet: there is nothing to edit
+  if (!compilation) {
+    return (
+      <div className="animate-fade-in">
+        <LiveHeader job={job} step="edit" kept={0} />
+        {rail}
+        <section className="mt-8 glass rounded-[20px] p-7 max-w-[560px]">
+          <h2 className="text-[17px] font-[600] text-white">{t("live.nothingKept")}</h2>
+          <p className="mt-1.5 text-[13.5px] leading-relaxed text-ink-2">{t("live.nothingKeptHint")}</p>
+          <Link to={`/${jobId}`} className="btn btn-primary btn-sm mt-4">
+            <ArrowLeft className="w-4 h-4" /> {t("project.step.choose")}
+          </Link>
+        </section>
       </div>
     );
   }
@@ -1092,27 +1154,54 @@ export default function CompilationPage() {
     const { lives: _before, ...rest } = compilation;
     change({ ...rest, ...(left.length > 0 ? { lives: left } : {}) });
   };
+  // The live's strip: where a compilation takes from (several lives, one more to add), and what a search by hand found
+  const showLives = several || canAddLive || results.length > 0;
+  // The same props for the two halves of the video's panel: its passages on the left, its look on the right
+  const panel = {
+    compilation,
+    storyboards,
+    home: jobId,
+    source,
+    liveNumbers: several ? Object.fromEntries(liveIds.map((id, n) => [id, n + 1])) : undefined,
+    activeSection,
+    selectedItem: shownItem?.id ?? null,
+    playing: preview ? onItem : null,
+    onEdit: openEditor,
+    editing,
+    brand,
+    hook: hookMenu,
+    musics,
+    favourites: kit?.musics,
+    cutting,
+    templates,
+    onActivate: setActiveSection,
+    // A passage clicked: the whole video goes to it, and it opens underneath to be cut
+    onSelect: (item: CompilationItem) => {
+      setShown(item);
+      ensure([item]);
+      jumpTo(item.id);
+    },
+    onChange: change,
+    onExport: exportNow,
+    exporting,
+    onDelete: () => setToDelete(true),
+    templateName,
+    looking,
+    looksNote: looksNote?.id === compilation.id ? looksNote.note : "",
+    sounding,
+    soundNote: soundNote?.id === compilation.id ? soundNote.note : "",
+    onSound: () => soundByAi(compilation),
+    onLooks: () => chooseByAi(compilation),
+    onSameLook: () => change(clearLooks(compilation)),
+    fresh: fresh?.ids,
+    freshAt: fresh?.at,
+    gone,
+  };
 
   return (
     <div className="animate-fade-in">
-      <header className="flex flex-wrap items-end justify-between gap-5">
-        <div className="min-w-0">
-          <Link to={sourcePath(jobId, source)} className="btn btn-ghost btn-sm -ml-2 h-7 px-2">
-            <ArrowLeft className="w-4 h-4" /> {t(`project.mode.${source}`)}
-          </Link>
-          <h1 className="mt-2 text-[32px] leading-[1.1] tracking-[-0.03em] font-[650] text-white truncate">{compilation.name || t("compilation.title")}</h1>
-          <p className="mt-2 text-[13.5px] text-ink-2 max-w-[62ch]">{t(`videos.about.${source}`)}</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-1.5">
-          <button onClick={() => setGuide(true)} className="btn btn-ghost btn-sm">
-            <CircleQuestionMark className="w-[15px] h-[15px]" /> {t("compilation.guide.open")}
-          </button>
-          <button onClick={startNew} className="btn btn-glass btn-sm">
-            <Plus className="w-[15px] h-[15px]" /> {t(`videos.new.${source}`)}
-          </button>
-          <ModeSwitch jobId={jobId} current={source} suggested={waitingBySource(compilations ?? [])} />
-        </div>
-      </header>
+      <LiveHeader job={job} step="edit" kept={kept} />
+      {rail}
 
       {failure === "live_gone" && (
         <p role="alert" className="mt-4 p-3.5 pl-4 rounded-[14px] max-w-[860px] bg-[rgba(245,177,76,0.10)] border border-[rgba(245,177,76,0.30)] text-[12.5px] leading-snug text-[#f7d9a8]">
@@ -1121,7 +1210,8 @@ export default function CompilationPage() {
       )}
 
       {/* Each live it takes from: what the search found there, what the compilation takes */}
-      <section className="mt-5 glass rounded-[16px] px-3 pt-2.5 pb-2">
+      {showLives && (
+      <section className="mt-4 glass rounded-[16px] px-3 pt-2.5 pb-2">
         <div className="flex flex-col gap-2.5">
           {liveIds.map((live, n) => {
             const frames = storyboards[live];
@@ -1184,10 +1274,12 @@ export default function CompilationPage() {
           {!several && <span className={`mono ${canAddLive ? "" : "ml-auto"}`}>{clock(liveDuration)}</span>}
         </div>
       </section>
+      )}
 
-      {/* While a conversation with the AI is open, it and the preview stay in view beside the list */}
-      <section className="group/row mt-[18px] flex flex-wrap gap-[18px] items-start">
+      {/* Searching the live and asking the AI: in the assistant's panel, beside the montage */}
+      <AssistantSlot>
         <SearchPanel
+          key={compilation.id}
           jobId={jobId}
           storyboards={storyboards}
           lives={liveIds.map((id, n) => ({ job: id, label: several ? `${n + 1} · ${[liveDay(id), liveTitle(id)].filter(Boolean).join(" · ")}` : liveTitle(id) }))}
@@ -1217,16 +1309,19 @@ export default function CompilationPage() {
           onReveal={reveal}
           onResults={setResults}
         />
+      </AssistantSlot>
 
-        {/* Stage: the whole video in its template, and under it the passage open to be cut */}
-        <div className="flex-[1_1_380px] lg:[@media(min-height:820px)]:sticky lg:[@media(min-height:820px)]:top-[84px] min-w-0 flex flex-col items-center gap-3">
-          {items.length > 0 && (
+      {/* The workshop: the video's passages, the video itself, its look */}
+      <section className="mt-4 flex flex-wrap gap-[18px] items-start">
+        <CompilationPanel part="passages" {...panel} />
+
+        <div className="flex-[1_1_280px] min-w-[260px] lg:[@media(min-height:820px)]:sticky lg:[@media(min-height:820px)]:top-[84px] flex flex-col items-center gap-3">
+          {items.length > 0 ? (
             <>
               <div
                 aria-label={t("compilation.wholeVideo")}
-                className="relative max-w-full aspect-[9/16] rounded-[24px] overflow-hidden border border-white/[0.14] shadow-[0_50px_100px_-40px_rgba(0,0,0,0.9)] bg-black transition-[height] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
-                // As tall as the window leaves it above the open passage, never tiny
-                style={{ height: shownItem ? `clamp(300px, calc(100dvh - ${pieceHeight + 152}px), 604px)` : "clamp(360px, calc(100dvh - 150px), 604px)" }}
+                className="relative max-w-full aspect-[9/16] rounded-[24px] overflow-hidden border border-white/[0.14] shadow-[0_50px_100px_-40px_rgba(0,0,0,0.9)] bg-black"
+                style={{ height: "clamp(360px, calc(100dvh - 300px), 604px)" }}
               >
                 {preview ? (
                   <Player
@@ -1260,113 +1355,75 @@ export default function CompilationPage() {
                 </p>
               )}
             </>
-          )}
-
-          {shownItem ? (
-            <div ref={pieceBox} className="relative glass-strong rounded-[20px] p-2.5 w-full">
-              <PiecePreview
-                jobId={shownItem.job ?? jobId}
-                item={shownItem}
-                piece={shownReady}
-                cutting={cutting.has(shownItem.id)}
-                words={wordsKey ? words[wordsKey] : undefined}
-                onChange={(start, end) => recut(shownItem, start, end)}
-                // A passage of the compilation can be shown in a template of its own
-                templates={inCompilation ? templates : undefined}
-                template={shownItem.template ?? null}
-                videoTemplate={templateName(templateKey)}
-                onTemplate={(key) => change(updateItem(compilation, shownItem.id, { template: key }))}
-                // One sound at a time: it does not start over the whole video, and stops when that one plays
-                autoPlay={!videoPlaying}
-                hush={hush}
-                onPlay={() => playerRef.current?.pause()}
-              />
-              <div className="flex items-start gap-3 px-1.5 pt-3 pb-1">
-                <p className="flex-1 min-w-0 text-[13px] leading-snug text-ink-2">
-                  {shownItem.text || shownItem.why}
-                  {shownItem.text && shownItem.why && <span className="block mt-1 text-[12px] text-accent">{shownItem.why}</span>}
-                </p>
-                {inCompilation ? (
-                  <button onClick={() => change(removeItem(compilation, shownItem.id))} className="btn btn-glass btn-sm flex-none">
-                    <Check className="w-3.5 h-3.5 text-accent" strokeWidth={2.6} /> {t("compilation.remove")}
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => {
-                      const section = compilation.sections.find((s) => s.id === activeSection) ?? compilation.sections[compilation.sections.length - 1];
-                      const { compilation: next, added } = addItems(compilation, section.id, [shownItem]);
-                      if (added === 0) return toast.info(t("compilation.alreadyThere"));
-                      change(next);
-                      toast.success(t("compilation.addedCount", { count: 1 }));
-                    }}
-                    className="btn btn-primary btn-sm flex-none"
-                  >
-                    <Plus className="w-3.5 h-3.5" strokeWidth={2.4} /> {t("compilation.add")}
-                  </button>
-                )}
-              </div>
-              {/* Closed, the whole video gets its full height back */}
-              {items.length > 0 && (
-                <button
-                  onClick={() => setShown(null)}
-                  aria-label={t("compilation.closePiece")}
-                  title={t("compilation.closePiece")}
-                  className="absolute -top-2.5 -right-2.5 w-7 h-7 grid place-items-center rounded-full bg-[#1b1e1c] border border-white/[0.14] text-ink-2 hover:text-white shadow-[0_8px_20px_-6px_rgba(0,0,0,0.8)]"
-                >
-                  <X className="w-3.5 h-3.5" strokeWidth={2.4} />
-                </button>
-              )}
-            </div>
           ) : (
-            items.length === 0 && (
+            !shownItem && (
               <div className="glass rounded-[20px] p-6 w-full text-center">
-                <p className="text-[14px] text-ink-2">{t("compilation.pieceEmpty")}</p>
+                <p className="text-[14px] text-ink-2">{t("live.emptyVideo")}</p>
+                <button onClick={() => assistant.setOpen(true)} className="btn btn-primary btn-sm mt-3">
+                  {t("assistant.title")}
+                </button>
               </div>
             )
           )}
         </div>
 
-        <CompilationPanel
-          compilation={compilation}
-          storyboards={storyboards}
-          home={jobId}
-          source={source}
-          liveNumbers={several ? Object.fromEntries(liveIds.map((id, n) => [id, n + 1])) : undefined}
-          activeSection={activeSection}
-          selectedItem={shownItem?.id ?? null}
-          playing={preview ? onItem : null}
-          onEdit={openEditor}
-          editing={editing}
-          brand={brand}
-          hook={hookMenu}
-          musics={musics}
-          favourites={kit?.musics}
-          cutting={cutting}
-          templates={templates}
-          onActivate={setActiveSection}
-          // A passage clicked: the whole video goes to it, and it opens underneath to be cut
-          onSelect={(item) => {
-            setShown(item);
-            ensure([item]);
-            jumpTo(item.id);
-          }}
-          onChange={change}
-          onExport={exportNow}
-          exporting={exporting}
-          onDelete={() => setToDelete(true)}
-          templateName={templateName}
-          looking={looking}
-          looksNote={looksNote?.id === compilation.id ? looksNote.note : ""}
-          sounding={sounding}
-          soundNote={soundNote?.id === compilation.id ? soundNote.note : ""}
-          onSound={() => soundByAi(compilation)}
-          onLooks={() => chooseByAi(compilation)}
-          onSameLook={() => change(clearLooks(compilation))}
-          fresh={fresh?.ids}
-          freshAt={fresh?.at}
-          gone={gone}
-        />
+        <CompilationPanel part="look" {...panel} />
       </section>
+
+      {/* The passage open to be cut (one of the video's, or a search result not added yet) */}
+      {shownItem && (
+        <section className="relative mt-4 glass-strong rounded-[20px] p-2.5">
+          <PiecePreview
+            jobId={shownItem.job ?? jobId}
+            item={shownItem}
+            piece={shownReady}
+            cutting={cutting.has(shownItem.id)}
+            words={wordsKey ? words[wordsKey] : undefined}
+            onChange={(start, end) => recut(shownItem, start, end)}
+            // A passage of the compilation can be shown in a template of its own
+            templates={inCompilation ? templates : undefined}
+            template={shownItem.template ?? null}
+            videoTemplate={templateName(templateKey)}
+            onTemplate={(key) => change(updateItem(compilation, shownItem.id, { template: key }))}
+            // One sound at a time: it does not start over the whole video, and stops when that one plays
+            autoPlay={!videoPlaying}
+            hush={hush}
+            onPlay={() => playerRef.current?.pause()}
+          />
+          <div className="flex items-start gap-3 px-1.5 pt-3 pb-1">
+            <p className="flex-1 min-w-0 text-[13px] leading-snug text-ink-2">
+              {shownItem.text || shownItem.why}
+              {shownItem.text && shownItem.why && <span className="block mt-1 text-[12px] text-accent">{shownItem.why}</span>}
+            </p>
+            {inCompilation ? (
+              <button onClick={() => change(removeItem(compilation, shownItem.id))} className="btn btn-glass btn-sm flex-none">
+                <Check className="w-3.5 h-3.5 text-accent" strokeWidth={2.6} /> {t("compilation.remove")}
+              </button>
+            ) : (
+              <button
+                onClick={() => {
+                  const section = compilation.sections.find((s) => s.id === activeSection) ?? compilation.sections[compilation.sections.length - 1];
+                  const { compilation: next, added } = addItems(compilation, section.id, [shownItem]);
+                  if (added === 0) return toast.info(t("compilation.alreadyThere"));
+                  change(next);
+                  toast.success(t("compilation.addedCount", { count: 1 }));
+                }}
+                className="btn btn-primary btn-sm flex-none"
+              >
+                <Plus className="w-3.5 h-3.5" strokeWidth={2.4} /> {t("compilation.add")}
+              </button>
+            )}
+          </div>
+          <button
+            onClick={() => setShown(null)}
+            aria-label={t("compilation.closePiece")}
+            title={t("compilation.closePiece")}
+            className="absolute -top-2.5 -right-2.5 w-7 h-7 grid place-items-center rounded-full bg-[#1b1e1c] border border-white/[0.14] text-ink-2 hover:text-white shadow-[0_8px_20px_-6px_rgba(0,0,0,0.8)]"
+          >
+            <X className="w-3.5 h-3.5" strokeWidth={2.4} />
+          </button>
+        </section>
+      )}
 
       <ConfirmModal
         open={toDelete}
@@ -1386,7 +1443,6 @@ export default function CompilationPage() {
           onAnalysed={() => listAllCompilations().then(setLibrary).catch(() => {})}
         />
       )}
-      <CompilationGuide open={guide} onClose={closeGuide} />
     </div>
   );
 }

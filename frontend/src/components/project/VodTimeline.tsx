@@ -14,10 +14,23 @@ interface Props {
   /** Chat messages per slice of the live (analysis timeline), and the length they cover */
   chat?: number[] | null;
   chatDuration?: number | null;
+  /** The live's sequences: the stretch each one tells (live seconds) */
+  spans?: { key: string; start: number; end: number; name: string; state: "todo" | "kept" | "passed" }[];
+  /** The sequence on screen (then no clip is) */
+  selectedSpan?: string | null;
+  onSelectSpan?: (key: string) => void;
+  /** The moments of the compilation on screen (live seconds) */
+  ticks?: number[];
+  /** Named under the strip when what is on screen is not a clip (`at`: where, live seconds) */
+  label?: { at: number; text: string } | null;
 }
 
-/** The whole live as a strip of frames, with every moment pinned where it happened and the chat's activity */
-export default function VodTimeline({ vodId, durationSeconds, moments, selected, onSelect, chat, chatDuration }: Props) {
+/**
+ * The whole live as a strip of frames, with what each source takes from it: a dot where each clip
+ * happened, a stretch for each sequence, the scattered moments of the compilation on screen; and
+ * the chat's activity.
+ */
+export default function VodTimeline({ vodId, durationSeconds, moments, selected, onSelect, chat, chatDuration, spans = [], selectedSpan = null, onSelectSpan, ticks = [], label = null }: Props) {
   const { t } = useTranslation();
   const [storyboard, setStoryboard] = useState<TwitchStoryboard | null>(null);
   const tiles = 24;
@@ -37,7 +50,9 @@ export default function VodTimeline({ vodId, durationSeconds, moments, selected,
   }
 
   const at = (seconds: number) => `${Math.min(100, Math.max(0, (seconds / Math.max(durationSeconds, 1)) * 100))}%`;
-  const current = moments[selected];
+  const current = selected >= 0 ? moments[selected] : undefined;
+  // What is named under the strip: the clip on screen, else the sequence or the compilation that is
+  const named = current ? { at: (current.start + current.end) / 2, text: current.hp.clip_name ?? "" } : label;
   const bars = chat?.length ? chat : null;
   const hours = Array.from({ length: Math.floor(durationSeconds / 3600) }, (_, i) => i + 1).filter(
     (h) => (h * 3600) / durationSeconds < (bars ? 0.9 : 0.97),
@@ -68,6 +83,29 @@ export default function VodTimeline({ vodId, durationSeconds, moments, selected,
             ) : null,
           )}
         </div>
+        {/* A sequence is a stretch of the live in a row */}
+        {spans.map((span) => (
+          <button
+            key={span.key}
+            onClick={() => onSelectSpan?.(span.key)}
+            aria-label={span.name}
+            title={span.name}
+            className={`absolute top-1 h-8 rounded-[6px] border transition-colors ${
+              span.key === selectedSpan
+                ? "z-[1] bg-white/35 border-white"
+                : span.state === "kept"
+                  ? "bg-accent-soft border-accent-line hover:bg-accent/30"
+                  : span.state === "passed"
+                    ? "bg-white/[0.06] border-white/15"
+                    : "bg-white/[0.16] border-white/35 hover:bg-white/25"
+            }`}
+            style={{ left: at(span.start), width: `max(6px, calc(${at(span.end)} - ${at(span.start)}))` }}
+          />
+        ))}
+        {/* A compilation takes moments from all over */}
+        {ticks.map((seconds) => (
+          <span key={seconds} aria-hidden className="absolute top-0 w-[3px] -ml-px h-10 rounded-full bg-accent shadow-[0_0_8px_var(--color-accent-glow)]" style={{ left: at(seconds) }} />
+        ))}
         {moments.map((m, i) => {
           const isSelected = i === selected;
           const pop = m.state === "kept" ? pops.current.get(m.filename) : undefined;
@@ -85,12 +123,12 @@ export default function VodTimeline({ vodId, durationSeconds, moments, selected,
             </button>
           );
         })}
-        {current && (
+        {named && (
           <span
-            className="absolute top-[42px] -translate-x-1/2 text-[11px] font-semibold text-white whitespace-nowrap"
-            style={{ left: `clamp(60px, ${at((current.start + current.end) / 2)}, calc(100% - 60px))` }}
+            className="absolute top-[42px] -translate-x-1/2 max-w-[60%] truncate text-[11px] font-semibold text-white whitespace-nowrap"
+            style={{ left: `clamp(60px, ${at(named.at)}, calc(100% - 60px))` }}
           >
-            {current.hp.clip_name}
+            {named.text}
           </span>
         )}
       </div>

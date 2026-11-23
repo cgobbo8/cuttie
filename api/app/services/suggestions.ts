@@ -47,7 +47,8 @@ export function liveContext(job: Job): LiveContext {
 }
 
 /** Compilations of a live that wait to be built: proposed by the AI, never opened */
-export const waitingCount = (compilations: Compilation[] | null | undefined): number => (compilations ?? []).filter(isWaiting).length
+/** (an idea the streamer passed on no longer waits) */
+export const waitingCount = (compilations: Compilation[] | null | undefined): number => (compilations ?? []).filter((c) => isWaiting(c) && !c.passed).length
 
 /**
  * The ideas the worker gave as compilations that wait to be built: those never proposed for

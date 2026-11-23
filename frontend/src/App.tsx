@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router";
+import { BrowserRouter, Routes, Route, Navigate, useParams, useSearchParams } from "react-router";
 import { AuthProvider, useAuth } from "./lib/AuthContext";
 import { CreatorWorkspaceProvider } from "./lib/CreatorWorkspaceContext";
 import { TransmitProvider } from "./lib/TransmitContext";
@@ -8,7 +8,6 @@ import Layout from "./components/Layout";
 import HomePage from "./pages/HomePage";
 import ProjectsPage from "./pages/ProjectsPage";
 import ProjectPage from "./pages/ProjectPage";
-import MontagePage from "./pages/MontagePage";
 import ExportStepPage from "./pages/ExportStepPage";
 import CompilationPage from "./pages/CompilationPage";
 import CompilationsPage from "./pages/CompilationsPage";
@@ -54,6 +53,24 @@ function RequireOnboarding({ children }: { children: ReactNode }) {
   return children;
 }
 
+/** Where a video used to open (/:jobId/compilation?c=…): its montage, the third step of its live */
+function OldVideoLink() {
+  const { jobId } = useParams<{ jobId: string }>();
+  const [search] = useSearchParams();
+  const next = new URLSearchParams(search);
+  const id = next.get("c");
+  next.delete("c");
+  if (id) next.set("v", id);
+  const query = next.toString();
+  return <Navigate to={`/${jobId}/montage${query ? `?${query}` : ""}`} replace />;
+}
+
+/** Where a live's videos used to be listed (/:jobId/compilations): the live itself, where everything it gives is */
+function OldLiveVideos() {
+  const { jobId } = useParams<{ jobId: string }>();
+  return <Navigate to={`/${jobId}`} replace />;
+}
+
 function AppRoutes() {
   return (
     <Routes>
@@ -86,11 +103,11 @@ function AppRoutes() {
         <Route path="chaine" element={<ChannelPage />} />
         <Route path="modeles/:id" element={<TemplateEditorPage />} />
         <Route path=":jobId" element={<ProjectPage />} />
-        <Route path=":jobId/montage" element={<MontagePage />} />
+        <Route path=":jobId/montage" element={<CompilationPage />} />
         <Route path=":jobId/export" element={<ExportStepPage />} />
-        <Route path=":jobId/compilation" element={<CompilationPage />} />
+        <Route path=":jobId/compilation" element={<OldVideoLink />} />
         <Route path="compilations" element={<CompilationsPage />} />
-        <Route path=":jobId/compilations" element={<CompilationsPage />} />
+        <Route path=":jobId/compilations" element={<OldLiveVideos />} />
       </Route>
       {/* Edit pages: fullscreen, outside the standard layout */}
       <Route

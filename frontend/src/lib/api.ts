@@ -1762,6 +1762,8 @@ export interface Compilation {
   titleStyle?: string;
   /** The AI proposed this video on its own once the live was analysed: `brief` is the request it wrote in the streamer's place */
   suggestion?: CompilationSuggestion;
+  /** An idea of the AI the streamer passed on: it stays in the live's list, dimmed, and can be taken back */
+  passed?: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -1889,6 +1891,8 @@ export interface CompilationSummary {
   suggestion?: { pitch: string; tags: string[]; kind: string | null; score: number; moments: number; span?: [number, number] | null } | null;
   /** Proposed and not built yet: opening it builds it */
   waiting?: boolean;
+  /** An idea the streamer passed on */
+  passed?: boolean;
   /** Length aimed for, seconds */
   target?: number | null;
   /** A passage's clip that stands for it (null: none is cut yet), and the live that clip is in */
@@ -1948,7 +1952,8 @@ export async function deleteCompilation(jobId: string, compilationId: string): P
  */
 export async function ensurePieces(
   jobId: string,
-  pieces: { id: string; start: number; end: number; fit?: [number, number] }[],
+  // (`like`: the passage it was made out of — cut in two, its silences taken out: the same file does when it covers it)
+  pieces: { id: string; start: number; end: number; fit?: [number, number]; like?: string }[],
 ): Promise<{ pieces: (PieceState & { id: string; tight?: [number, number] | null })[]; failed: string[] }> {
   return liveJson(await postJson(`${BASE}/jobs/${jobId}/pieces`, { pieces }));
 }

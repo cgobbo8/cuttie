@@ -2167,5 +2167,52 @@
     "title": "Assistant",
     "close": "Fermer l'assistant",
     "empty": "Ouvre une vidéo dans Monter : chercher dans le live et demander un changement à l'IA se font ici."
+  },
+  "sources": {
+    "one": {
+      "clip": "Clip",
+      "sequence": "Séquence",
+      "compilation": "Compilation"
+    },
+    "tip": {
+      "clip": "Un moment du live, d'une minute environ. L'analyse en trouve une vingtaine.",
+      "sequence": "Un passage d'affilée (une mission, une histoire de 2 minutes à 1 heure) raconté en une vidéo d'une minute.",
+      "compilation": "Des moments pris un peu partout dans le live, ou dans plusieurs lives, réunis autour d'une même idée."
+    },
+    "add": {
+      "clip": "Ajouter un clip",
+      "sequence": "Ajouter une séquence",
+      "compilation": "Ajouter une compilation"
+    }
+  },
+  "live": {
+    "more": "Voir les {{count}} autres",
+    "less": "Voir moins",
+    "ideasToSee_one": "{{count}} idée de l'IA à voir",
+    "ideasToSee_other": "{{count}} idées de l'IA à voir",
+    "videosKept_one": "vidéo gardée",
+    "videosKept_other": "vidéos gardées",
+    "importFile": "Ajouter un fichier vidéo à toi",
+    "keptChip": "Gardée",
+    "passedIdea": "Passée",
+    "sub": {
+      "sequence": "{{minutes}} min d'affilée dans le live",
+      "compilation_one": "{{count}} moment repéré",
+      "compilation_other": "{{count}} moments repérés",
+      "built_one": "{{count}} passage",
+      "built_other": "{{count}} passages"
+    },
+    "idea": {
+      "sequence": "{{minutes}} min d'affilée dans le live, de {{from}} à {{to}}",
+      "compilation_one": "{{count}} moment pris dans le live",
+      "compilation_other": "{{count}} moments pris un peu partout dans le live",
+      "makes": "→ une vidéo d'environ {{length}}",
+      "unbuilt": "Une idée de l'IA : rien n'est construit, rien n'est payé."
+    },
+    "keptVideos": "Vidéos gardées de ce live",
+    "exported": "Exportée",
+    "nothingKept": "Aucune vidéo gardée",
+    "nothingKeptHint": "Garde un clip, une séquence ou une compilation de ce live : il arrive ici pour être monté.",
+    "emptyVideo": "Cette vidéo n'a encore aucun passage. Décris-la à l'assistant, ou cherche des passages dans le live."
   }
 }

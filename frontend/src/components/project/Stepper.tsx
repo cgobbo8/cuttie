@@ -12,12 +12,13 @@ interface Props {
   locked?: ProjectStep[];
   /** Where each reachable step leads */
   links?: Partial<Record<ProjectStep, string>>;
-  /** Extra text after the current step's name (e.g. "6 gardés") */
+  /** Extra text after a step's name (e.g. "6 gardés"): the current one's, unless `detailOn` names another */
   detail?: string;
+  detailOn?: ProjectStep;
 }
 
 /** Analyse → Choisir → Monter → Exporter, always visible on a project */
-export default function Stepper({ current, locked = [], links = {}, detail }: Props) {
+export default function Stepper({ current, locked = [], links = {}, detail, detailOn }: Props) {
   const { t } = useTranslation();
   const currentIndex = STEPS.indexOf(current);
 
@@ -36,7 +37,7 @@ export default function Stepper({ current, locked = [], links = {}, detail }: Pr
               {done ? <Check className="w-3 h-3" strokeWidth={3.2} /> : i + 1}
             </span>
             {t(`project.step.${step}`)}
-            {isCurrent && detail && <span className="font-medium opacity-60">· {detail}</span>}
+            {detail && (detailOn ? step === detailOn : isCurrent) && <span className="font-medium opacity-60">· {detail}</span>}
           </>
         );
         const base = "flex items-center gap-2 h-9 pl-2 pr-3.5 rounded-[9px] text-[13.5px] transition-colors";

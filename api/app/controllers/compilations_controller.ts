@@ -31,6 +31,7 @@ import {
   clipAsPiece,
   isVideoSource,
   type VideoSource,
+  pieceLike,
 } from '#services/compilations'
 import {
   chooseLooks,
@@ -149,8 +150,17 @@ export default class CompilationsController {
     const hp = (job.hotPoints ?? []).find((point: any) => point?.clip_filename === clip) as any
     if (!clip || !hp) return ctx.response.notFound({ error: 'clip not found' })
     const existing = job.compilations ?? []
+    // Making a video of a clip is keeping it
+    const keep = async () => {
+      if (job.selection?.[clip]?.state === 'kept') return
+      job.selection = { ...(job.selection ?? {}), [clip]: { ...(job.selection?.[clip] ?? {}), state: 'kept' } }
+      await job.save()
+    }
     const already = existing.find((c) => c.clip === clip)
-    if (already) return { compilation: describeCompilations(job.id, [already])[0] }
+    if (already) {
+      await keep()
+      return { compilation: describeCompilations(job.id, [already])[0] }
+    }
     if (existing.length >= MAX_COMPILATIONS) return ctx.response.badRequest({ error: 'too many compilations' })
 
     // Where the clip's file is in the live, and what is kept of it
@@ -160,17 +170,23 @@ export default class CompilationsController {
     if (!Number.isFinite(fileStart) || !Number.isFinite(fileEnd) || fileEnd <= fileStart) return ctx.response.badRequest({ error: 'clip without its place in the live' })
     const trim = job.selection?.[clip]?.trim
     const advised = Number.isFinite(hp.llm?.cut_start) && Number.isFinite(hp.llm?.cut_end) ? [hp.llm.cut_start, hp.llm.cut_end] : null
-    const [from, to] = Array.isArray(trim) && trim.length === 2 ? trim : (advised ?? [0, fileEnd - fileStart])
-    const start = Math.min(fileEnd - 1, Math.max(fileStart, fileStart + Number(from)))
-    const end = Math.min(fileEnd, Math.max(start + 1, fileStart + Number(to)))
-    const id = newId()
-    // Its file is the clip's own, copied (nothing is fetched from the live again); a clip cut before files said
+    // What is kept of it: the pieces the streamer cut it into, else their cut, else the AI's, else all of it
+    const pieces = job.selection?.[clip]?.segments
+    const cuts: [number, number][] =
+      Array.isArray(pieces) && pieces.length > 1
+        ? pieces.map((piece: any) => [Number(piece?.[0]), Number(piece?.[1])] as [number, number]).filter(([a, b]) => Number.isFinite(a) && Number.isFinite(b) && b - a >= 0.3)
+        : [Array.isArray(trim) && trim.length === 2 ? [Number(trim[0]), Number(trim[1])] : ((advised as [number, number] | null) ?? [0, fileEnd - fileStart])]
+    const moments = cuts.slice(0, 12).map(([from, to]) => {
+      const start = Math.min(fileEnd - 0.3, Math.max(fileStart, fileStart + from))
+      return { id: newId(), start, end: Math.min(fileEnd, Math.max(start + 0.3, fileStart + to)) }
+    })
+    // Each plays the clip's own file (nothing is fetched from the live again); a clip cut before files said
     // where their first picture is gets cut from the live when the video opens, like any passage
-    if (meta?.settled === true) clipAsPiece(job.id, clip, id)
+    if (meta?.settled === true) for (const moment of moments) clipAsPiece(job.id, clip, moment.id)
     const parsed = parseCompilation(
       {
         name: String(hp.clip_name || 'Clip').slice(0, 80),
-        sections: [{ id: newId(), title: '', query: '', items: [{ id, start, end, text: hp.llm?.transcript ?? '', why: hp.llm?.seen || hp.llm?.summary || '', sources: ['ai'], score: hp.final_score }] }],
+        sections: [{ id: newId(), title: '', query: '', items: moments.map((moment, i) => ({ ...moment, text: i === 0 ? (hp.llm?.transcript ?? '') : '', why: hp.llm?.seen || hp.llm?.summary || '', sources: ['ai'], score: hp.final_score })) }],
         titles: false,
         hook: String(hp.llm?.hook ?? '').slice(0, 80),
         target: null,
@@ -183,10 +199,11 @@ export default class CompilationsController {
       },
       job.vodDurationSeconds ?? 0
     )
-    if (!parsed || parsed.sections[0]?.items.length !== 1) return ctx.response.badRequest({ error: 'invalid clip' })
+    if (!parsed || parsed.sections[0]?.items.length !== moments.length || moments.length === 0) return ctx.response.badRequest({ error: 'invalid clip' })
     const now = new Date().toISOString()
     const compilation: Compilation = { id: newId(), ...dressed(parsed, job.vodGame), created_at: now, updated_at: now }
     job.compilations = [...existing, compilation]
+    job.selection = { ...(job.selection ?? {}), [clip]: { ...(job.selection?.[clip] ?? {}), state: 'kept' } }
     await job.save()
     return ctx.response.created({ compilation: describeCompilations(job.id, [compilation])[0] })
   }
@@ -316,7 +333,7 @@ export default class CompilationsController {
     if (!parsed) return ctx.response.badRequest({ error: 'invalid compilation' })
 
     // `lives`, `transition`, `intro`, `music`, `universe` and `titleStyle` are the whole truth: a compilation that no longer names other lives, went back to plain cuts, lost its intro or its music, or went back to the channel's own look loses the field
-    const { lives: _before, transition: _was, intro: _opened, music: _played, universe: _dressed, titleStyle: _written, effects: _moved, ...kept } = existing[index]
+    const { lives: _before, transition: _was, intro: _opened, music: _played, universe: _dressed, titleStyle: _written, effects: _moved, passed: _passed, ...kept } = existing[index]
     const compilation: Compilation = { ...kept, ...parsed, updated_at: new Date().toISOString() }
     job.compilations = existing.map((c, i) => (i === index ? compilation : c))
     await job.save()
@@ -374,13 +391,14 @@ export default class CompilationsController {
     const job = await ownJob(ctx)
     if (!job) return ctx.response.notFound({ error: 'job not found' })
     const raw = ctx.request.input('pieces')
-    const wanted: { id: string; start: number; end: number; fit?: [number, number] }[] = []
+    const wanted: { id: string; start: number; end: number; fit?: [number, number]; like?: string }[] = []
     for (const piece of Array.isArray(raw) ? raw.slice(0, 60) : []) {
       const start = Number(piece?.start)
       const end = Number(piece?.end)
       if (isPieceId(piece?.id) && Number.isFinite(start) && Number.isFinite(end) && start >= 0 && end - start >= 0.3 && end - start <= 180) {
         const fit = parseFit(piece.fit)
-        wanted.push({ id: piece.id, start, end, ...(fit ? { fit } : {}) })
+        // `like`: the passage it was made out of (cut in two, silences taken out): the same file does, when it covers it
+        wanted.push({ id: piece.id, start, end, ...(fit ? { fit } : {}), ...(isPieceId(piece.like) ? { like: piece.like } : {}) })
       }
     }
     if (wanted.length === 0) return ctx.response.badRequest({ error: 'pieces: [{ id, start, end }] required' })
@@ -388,8 +406,9 @@ export default class CompilationsController {
     try {
       const tight = new Map<string, [number, number] | null>()
       const failed = await oneAtATime(job.id, async () => {
+        for (const piece of wanted) if (piece.like && !pieceState(job.id, piece).ready) pieceLike(job.id, piece.like, piece.id, piece)
         // Those to cut, and those already cut whose words are to be found
-        const todo = wanted.filter((piece) => piece.fit || !pieceState(job.id, piece).ready)
+        const todo = wanted.filter((piece) => piece.fit || !pieceState(job.id, piece).ready).map(({ like: _from, ...piece }) => piece)
         if (todo.length === 0) return []
         const fresh = new Set(todo.filter((piece) => !pieceState(job.id, piece).ready).map((piece) => piece.id))
         // The worker cuts each clip a little wider than its moment

@@ -510,6 +510,9 @@ class Turn:
     def app(self, name: str, args: dict) -> dict:
         """Hand an action to the app and wait for what it answers (the conversation stops here until it does)."""
         answer = interrupt({"name": name, "args": args, "needs": "app"})
+        # What the app spent doing it (a video built or changed by the AI) is part of what this request cost
+        if isinstance(answer, dict) and isinstance(answer.get("cost"), (int, float)) and not isinstance(answer.get("cost"), bool):
+            self.spend(answer["cost"])
         return answer if isinstance(answer, (dict, list, str)) else {"done": bool(answer)}
 
     def passage(self, ref) -> dict:

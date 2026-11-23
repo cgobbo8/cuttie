@@ -194,8 +194,9 @@ export default function AssistantPanel() {
       aria-hidden={!open}
       // (closed: out of the window, and out of the way of the keyboard)
       inert={!open}
-      style={{ width: ASSISTANT_WIDTH }}
-      className={`assistant-panel fixed z-30 top-0 right-0 bottom-0 flex flex-col transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${open ? "translate-x-0" : "translate-x-full"}`}
+      // (beside the page on a wide window; over it, bars included, on a narrow one)
+      style={{ ["--panel-w" as string]: `${ASSISTANT_WIDTH}px` }}
+      className={`assistant-panel fixed z-50 lg:z-30 top-0 right-0 bottom-0 w-full lg:w-[var(--panel-w)] flex flex-col transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${open ? "translate-x-0" : "translate-x-full"}`}
     >
       <header className="relative flex-none h-[76px] pl-4 pr-3 flex items-center gap-3">
         <AssistantMark size={32} busy={busy} />

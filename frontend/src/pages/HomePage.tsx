@@ -433,8 +433,8 @@ export default function HomePage() {
         </div>
       )}
 
-      <div className="relative max-w-[1320px] mx-auto px-8 pb-14">
-        <section className="pt-[230px]">
+      <div className="relative max-w-[1320px] mx-auto px-4 sm:px-8 pb-28 md:pb-14">
+        <section className="pt-[150px] md:pt-[230px]">
           {channel === undefined ? (
             <div className="glass-strong rounded-[20px] w-[560px] max-w-full h-[300px] skeleton" />
           ) : latest ? (

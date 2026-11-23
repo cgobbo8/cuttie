@@ -36,6 +36,8 @@ export const ASSISTANT_WIDTH = 420;
 const KEPT = "cuttie_assistant_open";
 /** How often it is asked what it is doing while its answer is awaited */
 const PROGRESS_EVERY = 1200;
+/** From this width on the panel sits beside the page; under it (a phone, a narrow window) it covers it */
+const BESIDE = "(min-width: 1024px)";
 /** How long a page may take to open before what it was to do is given up, ms */
 const PAGE_WAIT = 25_000;
 
@@ -44,6 +46,8 @@ export type AssistantRun = (name: string, args: Record<string, any>) => Promise<
 
 interface AssistantValue {
   open: boolean;
+  /** Open beside the page, which gives it its width (a window wide enough); else it covers the page */
+  pushes: boolean;
   setOpen: (open: boolean) => void;
   toggle: () => void;
   /** The conversation, the oldest message first (null: not loaded yet) */
@@ -75,6 +79,7 @@ interface AssistantValue {
 const nothing = () => {};
 const AssistantContext = createContext<AssistantValue>({
   open: false,
+  pushes: false,
   setOpen: nothing,
   toggle: nothing,
   messages: null,
@@ -156,10 +161,22 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  // Wide enough for the two side by side?
+  const [wide, setWide] = useState(() => typeof window === "undefined" || !window.matchMedia || window.matchMedia(BESIDE).matches);
+  useEffect(() => {
+    if (!window.matchMedia) return;
+    const media = window.matchMedia(BESIDE);
+    const changed = () => setWide(media.matches);
+    changed();
+    media.addEventListener("change", changed);
+    return () => media.removeEventListener("change", changed);
+  }, []);
+  const pushes = open && wide;
+
   // The room it takes, for what is laid out against the window (the top bar)
   useEffect(() => {
-    document.documentElement.style.setProperty("--assistant-w", open ? `${ASSISTANT_WIDTH}px` : "0px");
-  }, [open]);
+    document.documentElement.style.setProperty("--assistant-w", pushes ? `${ASSISTANT_WIDTH}px` : "0px");
+  }, [pushes]);
 
   // Ctrl / Cmd + J opens and closes it from anywhere
   useEffect(() => {
@@ -419,8 +436,8 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
   const act = useCallback((name: string, args: Record<string, any>) => perform({ call: "", name, args, needs: "app" }), [perform]); // eslint-disable-line @typescript-eslint/no-explicit-any
 
   const value = useMemo(
-    () => ({ open, setOpen, toggle, messages, busy, doing, pending, send, approve, reset, act, place, setPlace, register, onChanged, notify }),
-    [open, setOpen, toggle, messages, busy, doing, pending, send, approve, reset, act, place, setPlace, register, onChanged, notify],
+    () => ({ open, pushes, setOpen, toggle, messages, busy, doing, pending, send, approve, reset, act, place, setPlace, register, onChanged, notify }),
+    [open, pushes, setOpen, toggle, messages, busy, doing, pending, send, approve, reset, act, place, setPlace, register, onChanged, notify],
   );
   return <AssistantContext.Provider value={value}>{children}</AssistantContext.Provider>;
 }

@@ -224,6 +224,16 @@ def test_an_action_is_handed_to_the_app_and_its_answer_resumes(model, app_calls)
         assistant.turn("t1", resume={"call": action["call"], "result": {}}, context=HERE, language="fr")
 
 
+def test_what_the_app_spent_on_an_action_is_part_of_the_request(model, app_calls):
+    model.billed = 0.002
+    model.script = [call("build_video", {"source": "compilation", "brief": "Les morts de Jason", "target": 60}), "C'est construit."]
+    asked = assistant.turn("t1", text="fais une compilation de ses morts", context=HERE, language="fr")
+    assert asked["action"]["name"] == "build_video" and asked["cost"] == 0.002
+    # The app had the video planned by another model: what that cost is told, and counted
+    done = assistant.turn("t1", resume={"call": asked["action"]["call"], "result": {"built": True, "video": "v-new", "passages": 7, "cost": 0.0315}}, context=HERE, language="fr")
+    assert done["status"] == "done" and done["cost"] == 0.0355
+
+
 def test_what_an_action_is_given(model, app_calls):
     model.script = [
         call("build_video", {"source": "clip", "brief": "Vers 3 h, je meurs dans l'hélice", "target": 45, "leads": ["3:12:44"]}),

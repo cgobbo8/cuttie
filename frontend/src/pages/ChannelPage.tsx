@@ -170,14 +170,14 @@ export default function ChannelPage() {
 
   if (!kit) {
     return (
-      <div className="max-w-[1320px] mx-auto px-8 pt-[112px]">
+      <div className="max-w-[1320px] mx-auto px-4 sm:px-8 pt-[88px] md:pt-[112px]">
         <div className="h-[270px] rounded-[20px] skeleton" />
       </div>
     );
   }
 
   return (
-    <div className="max-w-[1320px] mx-auto px-8 pt-[96px] pb-14">
+    <div className="max-w-[1320px] mx-auto px-4 sm:px-8 pt-[84px] md:pt-[96px] pb-28 md:pb-14">
       {/* Banner + identity */}
       <section className="relative h-[270px] rounded-[20px] overflow-hidden border border-white/10 shadow-[0_40px_80px_-40px_rgba(0,0,0,0.8)] bg-white/[0.04] animate-rise">
         {channel?.banner_url && <img src={channel.banner_url} alt="" className="w-full h-full object-cover object-[50%_52%]" />}

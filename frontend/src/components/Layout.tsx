@@ -19,7 +19,7 @@ export default function Layout() {
 
 function Shell() {
   const { pathname } = useLocation();
-  const { open } = useAssistant();
+  const { pushes } = useAssistant();
 
   // A new page starts at the top (the router keeps the previous page's scroll)
   useEffect(() => {
@@ -30,12 +30,12 @@ function Shell() {
     <div className="relative min-h-dvh">
       <AppBackdrop />
       <TopBar />
-      {/* The assistant, open, takes its width off the page: the two are side by side */}
-      <div className="relative z-[1] transition-[padding] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]" style={{ paddingRight: open ? ASSISTANT_WIDTH : 0 }}>
+      {/* The assistant, open, takes its width off the page: the two are side by side (on a narrow window it covers the page instead) */}
+      <div className="relative z-[1] transition-[padding] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]" style={{ paddingRight: pushes ? ASSISTANT_WIDTH : 0 }}>
         {FULL_BLEED.has(pathname) ? (
           <Outlet />
         ) : (
-          <main className="max-w-[1320px] mx-auto px-8 pt-[112px] pb-16">
+          <main className="max-w-[1320px] mx-auto px-4 sm:px-8 pt-[88px] md:pt-[112px] pb-28 md:pb-16">
             <Outlet />
           </main>
         )}

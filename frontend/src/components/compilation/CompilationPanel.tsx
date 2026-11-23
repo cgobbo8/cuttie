@@ -922,7 +922,7 @@ function LookRow({ icon: Icon, label, value, onOpen, before, apart, children }: 
     </>
   );
   return (
-    <div className="first:rounded-t-[12px] last:rounded-b-[12px]">
+    <div className="overflow-hidden first:rounded-t-[12px] last:rounded-b-[12px]">
       <div className={`min-h-[46px] pl-3 pr-2 flex items-center gap-2.5 ${onOpen ? "hover:bg-white/[0.045] transition-colors" : ""}`}>
         {onOpen ? (
           <>

@@ -8,9 +8,10 @@
  *   there for a moment and comes back;
  * - "shake": a short tremor that dies down, on the same instant.
  *
- * Nothing changes length and no sound moves: an effect only scales and shifts the picture of
- * its piece, as a transition does around a cut. The same maths draws the preview and the
- * export (this file is copied to api/remotion by scripts/sync-remotion.mjs).
+ * Nothing changes length and no sound moves: an effect only scales and shifts the pictures of
+ * its piece (the game, the webcam), each inside its own box: what a layout draws round them,
+ * the subtitles and the titles stay still. The same maths draws the preview and the export
+ * (this file is copied to api/remotion by scripts/sync-remotion.mjs).
  *
  * `placeEffects` decides where they go, from what is known of each piece without any AI: its
  * dated words (a word that ends with "!" or "?" is a line that lands) or the key moments the

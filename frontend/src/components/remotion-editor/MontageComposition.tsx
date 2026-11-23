@@ -12,15 +12,35 @@ const FILL = { position: "absolute", inset: 0, isolation: "isolate" } as const;
 /** No box the rest of the time: the layers stack among the overlays as if it was not there */
 const BARE = { display: "contents" } as const;
 
-/** A piece's layers, on its clip's clock (`silent`: a picture held still makes no sound) */
-function Layers({ segment, silent = false }: { segment: MontageSegment; silent?: boolean }) {
-  const { fps } = useVideoConfig();
+/** A layer an effect moves: a picture of the live (the game, the webcam, the blurred backdrop), set straight */
+const isPicture = (layer: MontageSegment["layers"][number]["layer"]) => (layer.type === "gameplay" || layer.type === "facecam") && !layer.transform.rotation;
+
+/**
+ * A piece's layers, on its clip's clock (`silent`: a picture held still makes no sound).
+ * `moved`: what an effect does to the picture right now. Each picture moves INSIDE its own box, which
+ * stays where it is (clipped to it, around its own centre): a frame a layout draws round a picture, the
+ * subtitles and the titles don't move. Moved as one box, the piece went under what a layout draws
+ * between its layers (the GTA layout's frames) and came out black on a real export; moved whole, each
+ * picture grew out of its frame. The boxes are always there (no box at all while nothing moves): a
+ * layer is never mounted again when an effect starts or ends, which would restart its video in the preview.
+ */
+function Layers({ segment, silent = false, moved }: { segment: MontageSegment; silent?: boolean; moved?: string }) {
+  const { fps, width, height } = useVideoConfig();
   const audible = silent ? undefined : audibleLayerId(segment.layers.map((p) => p.layer));
   return (
     <Sequence from={-Math.round(segment.from * fps)} layout="none">
-      {segment.layers.map(({ layer, z }) => (
-        <LayerBox key={layer.id} layer={layer} z={z + 1} audible={layer.id === audible} />
-      ))}
+      {segment.layers.map(({ layer, z }) => {
+        const box = layer.transform;
+        const on = !!moved && isPicture(layer);
+        const clip = `inset(${box.y}px ${width - box.x - box.width}px ${height - box.y - box.height}px ${box.x}px round ${layer.style?.borderRadius ?? 0}px)`;
+        return (
+          <div key={layer.id} style={on ? { position: "absolute", inset: 0, zIndex: z + 1, clipPath: clip } : BARE}>
+            <div style={on ? { position: "absolute", inset: 0, transform: moved, transformOrigin: `${box.x + box.width / 2}px ${box.y + box.height / 2}px` } : BARE}>
+              <LayerBox layer={layer} z={z + 1} audible={layer.id === audible} />
+            </div>
+          </div>
+        );
+      })}
     </Sequence>
   );
 }
@@ -47,8 +67,8 @@ function Piece({ segment, before, next }: { segment: MontageSegment; before?: Mo
           </Freeze>
         </div>
       )}
-      <div style={now ? { ...FILL, ...lookStyle(now.piece, width) } : moved ? { ...FILL, transform: moved.transform } : BARE}>
-        <Layers segment={segment} />
+      <div style={now ? { ...FILL, ...lookStyle(now.piece, width) } : BARE}>
+        <Layers segment={segment} moved={moved?.transform} />
       </div>
       {now && now.flash > 0 && <div style={{ ...FILL, background: "#fff", opacity: now.flash }} />}
     </>

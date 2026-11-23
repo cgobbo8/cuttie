@@ -74,14 +74,28 @@ const FILL = { position: "absolute", inset: 0, isolation: "isolate" } as const;
 const BARE = { display: "contents" } as const;
 
 /** A piece's layers, on its clip's clock (`silent`: a picture held still makes no sound) */
-const Layers: React.FC<{ segment: MontageSegment; silent?: boolean }> = ({ segment, silent = false }) => {
-  const { fps } = useVideoConfig();
+/** A layer an effect moves: a picture of the live (the game, the webcam, the blurred backdrop), set straight */
+const isPicture = (layer: Layer) => (layer.type === "gameplay" || layer.type === "facecam") && !layer.transform.rotation;
+
+const Layers: React.FC<{ segment: MontageSegment; silent?: boolean; moved?: string }> = ({ segment, silent = false, moved }) => {
+  const { fps, width, height } = useVideoConfig();
   const audible = silent ? undefined : audibleLayerId(segment.layers.map((p) => p.layer));
   return (
     <Sequence from={-Math.round(segment.from * fps)} layout="none">
-      {segment.layers.map(({ layer, z }) =>
-        layer.visible ? <ResolvedLayer key={layer.id} layer={layer} z={z + 1} muted={layer.id !== audible} /> : null
-      )}
+      {segment.layers.map(({ layer, z }) => {
+        if (!layer.visible) return null;
+        // (each picture moves inside its own box, at its own place in the stack: see the app's MontageComposition)
+        const box = layer.transform;
+        const on = !!moved && isPicture(layer);
+        const clip = `inset(${box.y}px ${width - box.x - box.width}px ${height - box.y - box.height}px ${box.x}px round ${layer.style?.borderRadius ?? 0}px)`;
+        return (
+          <div key={layer.id} style={on ? { position: "absolute", inset: 0, zIndex: z + 1, clipPath: clip } : BARE}>
+            <div style={on ? { position: "absolute", inset: 0, transform: moved, transformOrigin: `${box.x + box.width / 2}px ${box.y + box.height / 2}px` } : BARE}>
+              <ResolvedLayer layer={layer} z={z + 1} muted={layer.id !== audible} />
+            </div>
+          </div>
+        );
+      })}
     </Sequence>
   );
 };
@@ -108,8 +122,8 @@ const Piece: React.FC<{ segment: MontageSegment; before?: MontageSegment; next?:
           </Freeze>
         </div>
       )}
-      <div style={now ? { ...FILL, ...lookStyle(now.piece, width) } : moved ? { ...FILL, transform: moved.transform } : BARE}>
-        <Layers segment={segment} />
+      <div style={now ? { ...FILL, ...lookStyle(now.piece, width) } : BARE}>
+        <Layers segment={segment} moved={moved?.transform} />
       </div>
       {now && now.flash > 0 && <div style={{ ...FILL, background: "#fff", opacity: now.flash }} />}
     </>

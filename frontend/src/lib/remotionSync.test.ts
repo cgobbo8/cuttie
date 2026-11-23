@@ -67,6 +67,13 @@ describe("editor and server renderer stay in sync", () => {
     expect(read("api/app/services/compilations.ts").match(/export const EFFECT_LEVELS = \[([^\]]+)\]/)?.[1].match(/\w+/g)).toEqual(EFFECT_LEVELS);
     // (the export's composition applies them as the preview's does)
     for (const file of ["api/remotion/MontageComposition.tsx", "frontend/src/components/remotion-editor/MontageComposition.tsx"]) expect(read(file), file).toContain("effectAt(segment.effects, frame, fps)");
+    // (each picture moves inside its own box, at its own place in the stack, on both sides: moved as one box, a
+    // piece went under what a layout draws between its layers and came out black; moved whole, it left its frame)
+    for (const file of ["api/remotion/MontageComposition.tsx", "frontend/src/components/remotion-editor/MontageComposition.tsx"]) {
+      expect(read(file), file).toContain('{ position: "absolute", inset: 0, zIndex: z + 1, clipPath: clip }');
+      expect(read(file), file).toContain("const on = !!moved && isPicture(layer);");
+      expect(read(file), file).toContain("moved={moved?.transform}");
+    }
   });
 
   it("knows the same ways of writing a title on both sides", () => {

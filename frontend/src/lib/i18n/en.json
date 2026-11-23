@@ -833,6 +833,7 @@
     "timelineChat": "Chat",
     "origin": {
       "reading": "The AI spotted it reading everything said during the live.",
+      "watching": "The AI spotted it by looking at the picture, where little is said.",
       "asked": "Someone asked for a clip right then.",
       "manual": "Clip added by hand."
     },

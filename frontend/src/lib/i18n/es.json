@@ -833,6 +833,7 @@
     "timelineChat": "Chat",
     "origin": {
       "reading": "La IA lo detectó leyendo todo lo que se dijo durante el directo.",
+      "watching": "La IA lo encontró mirando la imagen, donde se habla poco.",
       "asked": "Alguien pidió un clip en ese momento.",
       "manual": "Clip añadido a mano."
     },

@@ -43,6 +43,7 @@ from app.services.scorer import seconds_to_display
 from app.services.paths import CLIPS_DIR, work_dir
 from app.services.transcript_format import format_labeled_transcript, format_segments
 from app.services import presort
+from app.services import watching
 from app.services.vod_transcript import VodTranscript
 
 logger = logging.getLogger(__name__)
@@ -54,6 +55,7 @@ MAX_WHISPER_WORKERS = 12  # Parallel Whisper calls
 KEEP_TOP_N = 20  # How many candidates to keep after LLM scoring
 KEEP_NORMAL_FOR_LLM = 50  # Top N non-clip candidates that get full LLM analysis (from 100 scored)
 PRESORT_SLOTS = 15  # Of those, kept for the moments the AI found reading the whole live
+WATCH_SLOTS = 8  # And for the moments it found looking where little is said (see watching.py)
 
 # Keywords that indicate the streamer wants a clip
 CLIP_KEYWORDS = [
@@ -376,11 +378,14 @@ def _build_unified_prompt(
     window: float | None = None,
     chat_lag: float = 0.0,
     clip_keyword_at: float | None = None,
+    seen: str = "",
 ) -> str:
     """Build the unified analysis prompt (English, vision + synthesis in one).
 
     `window`: length of the audio (seconds), for the suggested cut.
     `clip_keyword_at`: someone says "clip" at that second: ask whether it's a request.
+    `seen`: what a first look at the moment's pictures saw (watching.told), for a moment
+    found because something happens on screen while little is said.
     """
     vod_title = vod_meta.get("title", "")
     vod_game = vod_meta.get("game", "")
@@ -460,6 +465,15 @@ def _build_unified_prompt(
 ## "Clip" said on stream
 Someone says "clip" at about {clip_keyword_at:.0f}s. Set "clip_request" to true if it is a request to clip what just happened ("clip ça", "clip it", "quelqu'un clip", "clippez"), and put "cut" around that moment (usually in the minute before the request). Set it to false if the word is used otherwise (talking about clips in general, a music clip, a game item...)."""
 
+    seen_section = ""
+    if seen:
+        seen_section = f"""
+
+## Something to see
+This moment was picked because of what is ON SCREEN, not because of what is said: the streamer says little here (they watch, stunned or laughing).
+{seen}
+Judge it as a viewer who SEES it: a scene that is absurd, spectacular or funny to look at is a clip even with three words said over it, and a quiet streamer is not a reason to rate it low. Check it against the images you are given (the first look saw only three). If the scene is the moment, put "cut" around it with the few seconds that lead to it, write the hook from what is seen without giving its end away, and quote the words written on screen when they are the joke."""
+
     window_text = f" of the {window:.0f}s window" if window else ""
 
     game_narrative = f", referencing {vod_game} gameplay" if vod_game else ""
@@ -498,7 +512,7 @@ Someone says "clip" at about {clip_keyword_at:.0f}s. Set "clip_request" to true 
 **Transcript** (each line starts with its time in the clip, in seconds; speaker-labeled when several voices were told apart):
 {transcript if transcript else "(silence / no speech)"}
 {chat_section}
-{vod_context_section}{keyword_section}
+{vod_context_section}{keyword_section}{seen_section}
 
 ## Audio analysis
 
@@ -736,14 +750,26 @@ def _keyword_moments(transcript: VodTranscript) -> list[float]:
     return sorted(t for t, _ in moments[:MAX_KEYWORD_MOMENTS])
 
 
-def _pick_for_llm(ranked: list[int], presort_picks: list[int], keep: int = KEEP_NORMAL_FOR_LLM, slots: int = PRESORT_SLOTS) -> list[int]:
+def _pick_for_llm(
+    ranked: list[int],
+    presort_picks: list[int],
+    watch_picks: list[int] | None = None,
+    keep: int = KEEP_NORMAL_FOR_LLM,
+    slots: int = PRESORT_SLOTS,
+    watch_slots: int = WATCH_SLOTS,
+) -> list[int]:
     """The candidates the LLM watches: the best by blended score, with up to
     `slots` places kept for the AI's own picks (in its order) when the blended
-    score left them out; spare places go back to the blended order."""
-    top = ranked[: keep - slots] if presort_picks else ranked[:keep]
+    score left them out, and up to `watch_slots` for the moments found by
+    looking (the blended score is made of words and loudness: it leaves out a
+    scene nobody talks over); spare places go back to the blended order."""
+    watch_picks = watch_picks or []
+    reserved = (slots if presort_picks else 0) + min(watch_slots, len(watch_picks))
+    top = ranked[: max(0, keep - reserved)]
     picks = [i for i in presort_picks if i not in top][:slots]
-    rest = [i for i in ranked if i not in top and i not in picks]
-    return top + picks + rest[: max(0, keep - len(top) - len(picks))]
+    watched = [i for i in watch_picks if i not in top and i not in picks][:watch_slots]
+    rest = [i for i in ranked if i not in top and i not in picks and i not in watched]
+    return top + picks + watched + rest[: max(0, keep - len(top) - len(picks) - len(watched))]
 
 
 def _window_bounds(hp: HotPoint, vod_duration: float) -> tuple[float, float]:
@@ -1125,6 +1151,49 @@ def analyze_candidates(
                 presort_picks.append(idx)
         logger.info(f"[{job_id[:8]}] Pre-sort: {len(moments)} moments, {len(found_by_reading)} new candidates")
 
+    # ── Step 3a': the AI looks where little is said ──
+    # (a scene that plays out in front of a streamer who only says "what the fuck": the words don't tell it)
+    watch_picks: list[int] = []
+    seen_at: dict[int, watching.Seen] = {}
+    if vod_transcript is not None and direct_url:
+        update_job(job_id, progress="L'IA regarde les moments où l'on parle peu...")
+        try:
+            from app.services import sound_index
+
+            watched = watching.watch(vod_transcript, sound_index.load(job_id), chat_messages or [], chat_lag or 5.0, vod_duration, direct_url, vod_meta.get("game"))
+        except Exception as e:
+            stop_if_fatal(e)
+            logger.warning(f"[{job_id[:8]}] Watching unavailable, moments found by sound, chat and reading only: {e}")
+            watched = []
+        found_by_watching = 0
+        for moment in watched:
+            start, end = watching.window(moment, vod_duration)
+            if any(_share(i, start, end) >= 0.8 for i in keyword_at):
+                continue
+            # A candidate that already holds the scene (with a few seconds before and after it) keeps its window
+            idx = next((i for i in normal_indices if _share(i, moment.at - 8.0, moment.at + 6.0) >= 0.99), None)
+            if idx is None:
+                signals, mood = measured(start, end)
+                hot_points.append(HotPoint(
+                    timestamp_seconds=round(moment.at, 1),
+                    timestamp_display=seconds_to_display(moment.at),
+                    score=round(moment.watch / 100, 3),
+                    signals=signals,
+                    chat_mood=mood,
+                    clip_start=round(start, 1),
+                    clip_end=round(end, 1),
+                    found_by="watching",
+                ))
+                idx = len(hot_points) - 1
+                found_by_watching += 1
+                candidates.append((idx, hot_points[idx]))
+                normal_indices.append(idx)
+                transcripts[idx] = _from_live_transcript(vod_transcript, hot_points[idx], vod_duration)
+            if idx not in watch_picks:
+                watch_picks.append(idx)
+                seen_at[idx] = moment
+        logger.info(f"[{job_id[:8]}] Watching: {len(watched)} moments worth watching, {found_by_watching} new candidates")
+
     # ── Step 3b: VOD context gathering + content scoring ──
     vod_context: VodContext | None = None
     content_scores: dict[int, float] = {}
@@ -1159,7 +1228,7 @@ def analyze_candidates(
         return blended
 
     normal_candidates_sorted = sorted(normal_indices, key=_blended_pre_score, reverse=True)
-    normal_for_llm = _pick_for_llm(normal_candidates_sorted, presort_picks)
+    normal_for_llm = _pick_for_llm(normal_candidates_sorted, presort_picks, watch_picks)
     dropped_early = [i for i in normal_candidates_sorted if i not in normal_for_llm]
 
     if dropped_early:
@@ -1355,6 +1424,7 @@ def analyze_candidates(
             window=window,
             chat_lag=chat_lag,
             clip_keyword_at=keyword_offset,
+            seen=watching.told(seen_at[idx], seen_at[idx].at - hp.clip_start if hp.clip_start is not None else None) if idx in seen_at else "",
         )
 
         try:

@@ -68,7 +68,8 @@ class HotPoint(BaseModel):
     vertical_filename: str | None = None
     clip_name: str = ""  # short display name, LLM-generated then user-editable
     clip_source: str = "auto"  # "auto" (pipeline-generated), "manual" (user-imported), or "detected" (keyword detection)
-    found_by: str = ""  # "reading": the AI found it reading the whole live (pre-sort), not in the sound and chat peaks
+    # "reading": the AI found it reading the whole live (pre-sort), "watching": looking where little is said; else in the sound and chat peaks
+    found_by: str = ""
     llm: LlmAnalysis | None = None
 
 

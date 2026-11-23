@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
-import { Download, MessageCircle, Pencil, Sparkles, SquarePen, Trash2, Upload } from "lucide-react";
+import { Download, Eye, MessageCircle, Pencil, Sparkles, SquarePen, Trash2, Upload } from "lucide-react";
 import { Link } from "react-router";
 import { clipUrl } from "../../lib/api";
 import { clock } from "../../lib/format";
@@ -38,10 +38,12 @@ export default function MomentDetails({ jobId, moment, onRename, onSeek, onDelet
       ? "manual"
       : moment.hp.clip_source === "detected"
         ? "asked"
-        : moment.hp.found_by === "reading" || !measured
-          ? "reading"
-          : null;
-  const OriginIcon = origin === "manual" ? Upload : origin === "asked" ? MessageCircle : Sparkles;
+        : moment.hp.found_by === "watching"
+          ? "watching"
+          : moment.hp.found_by === "reading" || !measured
+            ? "reading"
+            : null;
+  const OriginIcon = origin === "manual" ? Upload : origin === "asked" ? MessageCircle : origin === "watching" ? Eye : Sparkles;
   const signals = [
     { label: t("project.signal.voice"), value: s?.rms ?? 0 },
     { label: t("project.signal.excitement"), value: s?.vocal_excitement ?? 0 },

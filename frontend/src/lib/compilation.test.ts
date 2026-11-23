@@ -12,6 +12,7 @@ import {
   setVideoTransition,
   transitionsOf,
   addItems,
+  saidAlready,
   addSection,
   allItems,
   applyLooks,
@@ -106,6 +107,19 @@ describe("compilations", () => {
     expect(moveItem(c, "a", -1)).toBe(c);
     expect(ids(removeItem(c, "b"))).toEqual([["a"], ["c"]]);
     expect(updateItem(c, "c", { start: 19, end: 23 }).sections[1].items[0]).toMatchObject({ start: 19, end: 23, text: "c" });
+  });
+
+  it("knows a sentence the video already says, even timed a few seconds away", () => {
+    const tiger = { ...item("a", 13412.3, 13414.6), text: "Oh what the fuck, y'a un tigre et un singe !" };
+    const c = { sections: [{ id: "s1", title: "", query: "", items: [tiger, { ...item("b", 500, 503), text: "Ok" }] }] };
+    // The transcript's line for it starts five seconds earlier and overlaps nothing
+    expect(saidAlready(c, { start: 13407, text: "Oh what the fuck, y'a un tigre et un singe, à la Very Bad Trip" })?.id).toBe("a");
+    expect(saidAlready(c, { start: 13407, text: "oh what the fuck y a un tigre" })?.id).toBe("a");
+    // Other words, the same words far away, another live, or too few words to tell
+    expect(saidAlready(c, { start: 13407, text: "Regarde le singe là-bas" })).toBeUndefined();
+    expect(saidAlready(c, { start: 4730, text: "Oh what the fuck, y'a un tigre et un singe !" })).toBeUndefined();
+    expect(saidAlready(c, { start: 13407, text: "Oh what the fuck, y'a un tigre et un singe !", job: "other" })).toBeUndefined();
+    expect(saidAlready(c, { start: 501, text: "Ok" })).toBeUndefined();
   });
 
   it("adds, moves and removes sections", () => {

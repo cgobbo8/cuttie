@@ -100,6 +100,24 @@ function sameMoment(a: { start: number; end: number; job?: string }, b: { start:
   return shared > 0 && shorter > 0 && shared / shorter >= SAME_MOMENT;
 }
 
+/**
+ * The item of the compilation that already says this, if any: the same words within a few
+ * seconds. A line of the transcript is timed roughly, and a passage of the video sits where its
+ * words really are: the same sentence can be five seconds apart and overlap nothing.
+ */
+export function saidAlready(c: Pick<Compilation, "sections">, moment: { start: number; text?: string; job?: string }): CompilationItem | undefined {
+  const words = (text: string | undefined) => (text ?? "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+  const said = words(moment.text);
+  if (said.length < 8) return undefined;
+  return allItems(c).find((item) => {
+    if (!sameLive(item, moment) || Math.abs(item.start - moment.start) > SAID_NEAR) return false;
+    const theirs = words(item.text);
+    return theirs.length >= 8 && (theirs.startsWith(said) || said.startsWith(theirs));
+  });
+}
+/** How far apart the same sentence can be timed, seconds */
+const SAID_NEAR = 20;
+
 /** The item of the compilation that shows this moment, if any (search results already added) */
 export function itemFor(c: Pick<Compilation, "sections">, moment: { start: number; end: number; job?: string }): CompilationItem | undefined {
   return allItems(c).find((item) => sameMoment(item, moment));

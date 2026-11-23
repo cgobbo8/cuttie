@@ -1,5 +1,5 @@
 import type { Compilation } from "./api";
-import { isEffectLevel } from "./effects";
+import { EFFECT_LEVELS, isEffectLevel } from "./effects";
 import { DEFAULT_HOOK_LOOK, JINGLE_IDS, isJingle } from "./intro/intros";
 import { MUSIC_VOLUMES } from "./music/mix";
 import { HOOK_STYLES, isHookStyle } from "./templateSpec";
@@ -16,10 +16,15 @@ import { UNIVERSES, dressAs, universeOf } from "./universes";
 export interface LookChoices {
   /** The layouts a video can take: the streamer's own, then the app's */
   templates: { key: string; name: string }[];
-  /** The tracks that can play (those whose file is on this machine) */
-  musics: { id: string; name: string }[];
+  /** The tracks that can play (those whose file is on this machine), each with what it is in a few words (genre, kinds of video) */
+  musics: { id: string; name: string; about?: string }[];
   /** The jingle the streamer prefers (their channel's), when they have one */
   jingle?: string | null;
+  /**
+   * What the app calls each thing on screen, by id (« Glissé » for slide, « Impact » for slam,
+   * « Marqués » for strong): the assistant speaks the streamer's language and names them so
+   */
+  names?: { transitions?: Record<string, string>; intros?: Record<string, string>; effects?: Record<string, string>; titles?: Record<string, string> };
 }
 
 export interface LookChange {
@@ -39,6 +44,16 @@ const plain = (value: string) =>
 /** Nothing, in the assistant's words */
 const none = (value: string | null | undefined) => value == null || ["", "none", "no", "off", "aucun", "aucune", "sans", "ninguno", "ninguna"].includes(plain(value));
 const usual = (value: string) => ["default", "channel", "model", "template", "auto", "defaut", "chaine", "modele"].includes(plain(value));
+
+/** The id meant: said as it is, or by the name the app shows for it */
+function idOf<T extends string>(said: string, ids: readonly T[], names: Record<string, string> = {}): T | null {
+  const asked = plain(said);
+  return ids.find((id) => id === asked) ?? ids.find((id) => names[id] && plain(names[id]) === asked) ?? null;
+}
+/** What was set, as the app shows it (the assistant then says « Glissé », not « slide ») */
+const shownAs = (id: string, names: Record<string, string> = {}) => names[id] ?? id;
+/** What there is, each with the name the app shows: « slide (Glissé) » */
+const listed = (ids: readonly string[], names: Record<string, string> = {}) => ids.map((id) => (names[id] && plain(names[id]) !== id ? `${id} (${names[id]})` : id)).join(", ");
 
 /** The one named: by its id, its exact name, then a name that holds what was said */
 function named<T>(list: T[], said: string, id: (one: T) => string, name: (one: T) => string): T | undefined {
@@ -86,10 +101,13 @@ export function applyLook(video: Compilation, look: Record<string, string | null
       const { titleStyle: _before, ...rest } = next;
       next = rest;
       set.title_style = "template";
-    } else if (isHookStyle(plain(said!))) {
-      next = { ...next, titleStyle: plain(said!) };
-      set.title_style = plain(said!);
-    } else unknown.title_style = `no such way of writing titles: there is template, ${HOOK_STYLES.join(", ")}`;
+    } else {
+      const style = idOf(said!, HOOK_STYLES, choices.names?.titles);
+      if (style && isHookStyle(style)) {
+        next = { ...next, titleStyle: style };
+        set.title_style = shownAs(style, choices.names?.titles);
+      } else unknown.title_style = `no such way of writing titles: there is template, ${listed(HOOK_STYLES, choices.names?.titles)}`;
+    }
   }
 
   if (has("effects")) {
@@ -98,10 +116,13 @@ export function applyLook(video: Compilation, look: Record<string, string | null
     if (none(said)) {
       next = rest;
       set.effects = "none";
-    } else if (isEffectLevel(plain(said!))) {
-      next = { ...rest, effects: plain(said!) };
-      set.effects = plain(said!);
-    } else unknown.effects = "effects is one of: none, light, strong";
+    } else {
+      const level = idOf(said!, EFFECT_LEVELS, choices.names?.effects);
+      if (level && isEffectLevel(level)) {
+        next = { ...rest, effects: level };
+        set.effects = shownAs(level, choices.names?.effects);
+      } else unknown.effects = `effects is one of: none, ${listed(EFFECT_LEVELS, choices.names?.effects)}`;
+    }
   }
 
   if (has("transition")) {
@@ -110,16 +131,19 @@ export function applyLook(video: Compilation, look: Record<string, string | null
     if (none(said) || plain(said!) === "cut") {
       next = rest;
       set.transition = "cut";
-    } else if (isTransition(plain(said!))) {
-      next = { ...rest, transition: plain(said!) };
-      set.transition = plain(said!);
-    } else unknown.transition = `no such transition: there is cut, ${TRANSITION_IDS.join(", ")}`;
+    } else {
+      const transition = idOf(said!, TRANSITION_IDS, choices.names?.transitions);
+      if (transition && isTransition(transition)) {
+        next = { ...rest, transition };
+        set.transition = shownAs(transition, choices.names?.transitions);
+      } else unknown.transition = `no such transition: there is cut, ${listed(TRANSITION_IDS, choices.names?.transitions)}`;
+    }
   }
 
   // What the video opens on: nothing, a jingle, or one of its own moments played first (a hook), framed by a jingle's graphics
   if (has("opening") || has("intro")) {
-    const graphic = has("intro") && !none(look.intro) ? plain(look.intro!) : null;
-    if (graphic && !isJingle(graphic)) unknown.intro = `no such intro: there is ${JINGLE_IDS.join(", ")}`;
+    const graphic = has("intro") && !none(look.intro) ? idOf(look.intro!, JINGLE_IDS, choices.names?.intros) : null;
+    if (has("intro") && !none(look.intro) && !graphic) unknown.intro = `no such intro: there is ${listed(JINGLE_IDS, choices.names?.intros)}`;
     const picked = graphic && isJingle(graphic) ? graphic : null;
     const before = next.intro;
     // (the streamer asked: no longer one the AI chose by itself)
@@ -134,13 +158,13 @@ export function applyLook(video: Compilation, look: Record<string, string | null
       const frame = picked ?? (isJingle(before?.look) ? before.look : (universeOf(next.universe)?.look ?? DEFAULT_HOOK_LOOK));
       next = { ...rest, intro: { ...hook, style: "hook", look: frame } };
       set.opening = "hook";
-      set.intro = frame;
+      set.intro = shownAs(frame, choices.names?.intros);
     } else if (opening === "intro") {
       const { hook: _moment, look: _look, ...jingle } = kept;
       const style = picked ?? (before && isJingle(before.style) ? before.style : isJingle(before?.look) ? before.look : isJingle(choices.jingle) ? choices.jingle : (universeOf(next.universe)?.look ?? JINGLE_IDS[0]));
       next = { ...rest, intro: { ...jingle, style } };
       set.opening = "intro";
-      set.intro = style;
+      set.intro = shownAs(style, choices.names?.intros);
     } else unknown.opening = "opening is one of: none, intro, hook";
   }
 
@@ -155,7 +179,7 @@ export function applyLook(video: Compilation, look: Record<string, string | null
       if (track) {
         next = { ...rest, music: { ...(before?.volume ? { volume: before.volume } : {}), track: track.id } };
         set.music = track.name;
-      } else unknown.music = choices.musics.length > 0 ? `no such track: there is ${choices.musics.map((one) => one.name).join(", ")}` : "no music on this machine";
+      } else unknown.music = choices.musics.length > 0 ? `no track is called that: choose one of these by its name. ${choices.musics.map((one) => (one.about ? `${one.name} (${one.about})` : one.name)).join("; ")}` : "no music on this machine";
     }
   }
 

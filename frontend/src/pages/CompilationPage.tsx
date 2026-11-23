@@ -69,6 +69,7 @@ import {
   planCurrent,
   recutVideo,
   revisedSections,
+  saidAlready,
   sameStep,
   sectionsFromPlan,
   setVideoTransition,
@@ -83,8 +84,9 @@ import { clock, splitVodTitle } from "../lib/format";
 import { framesOf, introHold, montageFrames, playsIntro, snapToWords, tighten, wordsIn } from "../lib/montage";
 import { readCutTarget, saveCutTarget, type CutTarget } from "../lib/cutTarget";
 import { evenFrames, tileStyle } from "../lib/storyboard";
-import { isTransition, transitionSpan } from "../lib/transitions";
-import { introSpan, isIntro } from "../lib/intro/intros";
+import { TRANSITION_IDS, isTransition, transitionSpan } from "../lib/transitions";
+import { EFFECT_LEVELS } from "../lib/effects";
+import { JINGLE_IDS, introSpan, isIntro } from "../lib/intro/intros";
 import { trackOf, useMusics } from "../lib/music/library";
 import { playable } from "../lib/music/sound";
 import { fontFamily } from "../lib/fonts";
@@ -1126,6 +1128,11 @@ export default function CompilationPage() {
         }
         lives.push(other);
       }
+      // (the same words a few seconds away: the video already has this moment, timed on its real words)
+      if (saidAlready(next, { start: passage.start, text: passage.text, job: other })) {
+        refused.push(`${passage.start}: already in the video`);
+        continue;
+      }
       const { job: _job, id: _id, vod_id: _vod, ...found } = passage;
       items.push(draftOf({ sources: ["ai"], before: "", after: "", chat: [], why: "", score: 0, ...found, ...(other ? { job: other } : {}) } as LiveHit));
     }
@@ -1144,7 +1151,19 @@ export default function CompilationPage() {
   /** How the video on screen looks or sounds, changed as the assistant asks (what it names that the app has not is said back) */
   const setLook = (look: Record<string, string | null> | null | undefined) => {
     if (!compilation) return { error: "no video open" };
-    const choices = { templates, musics: musics.map((track) => ({ id: track.id, name: track.name })), jingle: kit?.intro };
+    const shown = (ids: readonly string[], key: (id: string) => string) => Object.fromEntries(ids.map((id) => [id, t(key(id))]));
+    const choices = {
+      templates,
+      // (each track with what it is: the assistant chooses « something calmer » among them)
+      musics: musics.map((track) => ({ id: track.id, name: track.name, about: [track.genre, ...track.kinds.map((kind) => t(`compilation.music.kind.${kind}`, { defaultValue: kind }))].filter(Boolean).join(" · ") })),
+      jingle: kit?.intro,
+      // What each thing is called on screen: the assistant names them as the streamer does
+      names: {
+        transitions: shown(TRANSITION_IDS, (id) => `compilation.transition.${id}`),
+        intros: shown(JINGLE_IDS, (id) => `compilation.intro.style.${id}`),
+        effects: shown(EFFECT_LEVELS, (id) => `compilation.effects.${id}`),
+      },
+    };
     const done = applyLook(compilation, look ?? {}, choices);
     if (Object.keys(done.set).length > 0) change(done.video);
     return { set: done.set, ...(Object.keys(done.unknown).length > 0 ? { unknown: done.unknown } : {}), look: lookOf(done.video, choices) };

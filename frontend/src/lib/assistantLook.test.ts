@@ -48,7 +48,7 @@ describe("what the assistant changes in a video's look", () => {
     const done = applyLook(video(), { music: "Thunderstruck", transition: "wobble", effects: "huge", title_style: "comic", template: "Cinéma 4K", universe: "minecraft", opening: "trailer", intro: "boom", presence: "high" }, choices);
     expect(done.video).toEqual(video());
     expect(done.set).toEqual({});
-    expect(done.unknown.music).toContain("Drift Phonk, Money for Nothing");
+    expect(done.unknown.music).toContain("Drift Phonk; Money for Nothing");
     expect(done.unknown.transition).toContain("flash");
     expect(done.unknown.effects).toContain("light");
     expect(done.unknown.title_style).toContain("viceplate");
@@ -98,6 +98,22 @@ describe("what the assistant changes in a video's look", () => {
     expect(back.video.universe).toBeUndefined();
     expect(back.video.template).toBeNull();
     expect(back.set).toEqual({ universe: "channel" });
+  });
+
+  it("understands the names the app shows, in the streamer's language", () => {
+    const named = {
+      ...choices,
+      musics: [{ id: "drift", name: "Drift Phonk", about: "phonk · skill" }, { id: "lofi", name: "Chill Lo-Fi", about: "lofi · posé" }],
+      names: { transitions: { slide: "Glissé", pop: "Rebond" }, intros: { slam: "Impact", news: "Flash info" }, effects: { light: "Légers", strong: "Marqués" }, titles: { box: "Bandeau" } },
+    };
+    const done = applyLook(video(), { transition: "glisse", effects: "Marqués", title_style: "bandeau", opening: "intro", intro: "flash info" }, named);
+    expect(done.video).toMatchObject({ transition: "slide", effects: "strong", titleStyle: "box", intro: { style: "news" } });
+    expect(done.unknown).toEqual({});
+    // What it can't place is said back with both the id and the name on screen, and each track with what it is
+    const lost = applyLook(video(), { transition: "fondu enchaîné", music: "une musique plus posée" }, named);
+    expect(lost.unknown.transition).toContain("slide (Glissé)");
+    expect(lost.unknown.music).toContain("Chill Lo-Fi (lofi · posé)");
+    expect(lost.unknown.music).toContain("choose one of these");
   });
 
   it("tells the assistant how the video looks now", () => {

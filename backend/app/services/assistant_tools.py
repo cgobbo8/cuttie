@@ -835,7 +835,8 @@ def build(turn: Turn) -> list[StructuredTool]:
             "set_look",
             "Change how a video looks or sounds. `look` holds only what changes: universe (the look of a game, or \"channel\"), template (the layout), title_style, "
             f"effects ({' | '.join(EFFECTS)}), transition, opening ({' | '.join(OPENINGS)}), intro (its style), music (a track's name, or \"none\"), presence (how loud the music is). "
-            "The app answers what it set, and what it has no such thing for.",
+            "Name things as the streamer does or by the app's ids; for a music described rather than named (« something calmer »), ask for any name: "
+            "the app answers the tracks there are with what each is, then choose one. The app answers what it set, and what it has no such thing for (`unknown`, with what there is).",
             _schema({"look": {"type": "object", "properties": {key: {"type": "string"} for key in LOOK_KEYS}}, "video": _VIDEO, "live": _LIVE}, ["look"]),
             turn.set_look,
         ),

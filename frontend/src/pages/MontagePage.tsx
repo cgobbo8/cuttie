@@ -21,6 +21,7 @@ import { useBackdrop } from "../lib/BackdropContext";
 import { useChannel } from "../lib/ChannelContext";
 import { buildMoments, type Moment } from "../lib/moments";
 import { suggestTemplate, type TemplateContext } from "../lib/templates";
+import { universeFor } from "../lib/universes";
 import { buildAny, customTemplates, defaultTemplateKey, findCustom, hookOf, isBuiltIn, needsWebcam, showsHook, type TemplateKey } from "../lib/templateKeys";
 import { clipTemplateContext } from "../lib/templateContext";
 import { buildMontage, montageFrames, renderPieces, type MontageProps } from "../lib/montage";
@@ -249,8 +250,10 @@ export default function MontagePage() {
   const clipCam = current ? camFor(current, env) : null;
   const hasWebcam = !!clipCam;
   const cam = env?.cam;
+  // A live on a game that has a look of its own (GTA): its layout is the one advised, its intros and its musics come first
+  const universe = universeFor(job?.vod_game);
   const suggested = current
-    ? suggestTemplate(current.hp.llm?.category, hasWebcam, current.hp.signals?.vocal_excitement, current.hp.signals?.speech_presence, clipCam?.w)
+    ? (universe?.template ?? suggestTemplate(current.hp.llm?.category, hasWebcam, current.hp.signals?.vocal_excitement, current.hp.signals?.speech_presence, clipCam?.w))
     : null;
 
   const pickTemplate = (key: TemplateKey) => {
@@ -600,6 +603,7 @@ export default function MontagePage() {
                       tracks={tracks}
                       favourites={kit.musics}
                       first={kindOfClip(current.hp.llm?.category) ?? undefined}
+                      universe={universe}
                       auto={{ label: t("montage.sound.auto"), hint: t("montage.sound.autoHint"), chosen: !musicChosen, onPick: () => setMusic(undefined) }}
                       onChange={(next) => setMusic(next ?? "none")}
                       onClose={() => setSoundMenu(null)}
@@ -629,6 +633,7 @@ export default function MontagePage() {
                     name={current.hp.clip_name || ctx.hook}
                     onChange={(next) => setPrefs({ intro: next ?? undefined })}
                     onClose={() => setSoundMenu(null)}
+                    pack={universe?.pack}
                     className="right-0 top-full mt-2"
                   />
                 )}

@@ -1844,7 +1844,12 @@
       "hint": "La IA mira el vídeo y elige el modelo de cada pasaje, la transición, la intro y la música. Parte de tus favoritas (Mi canal)."
     },
     "ownLooks_one": "{{count}} pasaje tiene el suyo",
-    "ownLooks_other": "{{count}} pasajes tienen el suyo"
+    "ownLooks_other": "{{count}} pasajes tienen el suyo",
+    "universe": {
+      "label": "Universo",
+      "channel": "Tu canal",
+      "gta": "GTA"
+    }
   },
   "compilations": {
     "title": "Compilaciones",

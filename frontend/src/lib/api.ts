@@ -1263,7 +1263,8 @@ export interface SoundChoice {
 export async function chooseSound(
   jobId: string,
   // `compilation`: the video being decided (its own intro doesn't count among those the streamer's last videos open with)
-  body: { title: string; parts: string[]; seconds: number; passages: number; said: string[]; lengths?: number[]; asked?: string; language?: string; compilation?: string },
+  // `universe`: the look of a game the video is dressed in (null: the channel's own: the AI is not told about that game's graphics)
+  body: { title: string; parts: string[]; seconds: number; passages: number; said: string[]; lengths?: number[]; asked?: string; language?: string; compilation?: string; universe?: string | null },
 ): Promise<SoundChoice> {
   return liveJson(await postJson(`${BASE}/jobs/${jobId}/sound`, body));
 }
@@ -1740,6 +1741,8 @@ export interface Compilation {
   asks?: { ask: string; note: string; added?: number; removed?: number; recut?: number; remembered?: string[] }[];
   /** Other lives it takes passages from, besides the one it is kept with (job ids) */
   lives?: string[];
+  /** The look of a game it is dressed in instead of the channel's own (see lib/universes.ts; absent: the channel's) */
+  universe?: string;
   /** The AI proposed this video on its own once the live was analysed: `brief` is the request it wrote in the streamer's place */
   suggestion?: CompilationSuggestion;
   created_at: string;

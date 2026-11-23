@@ -18,7 +18,7 @@ import logger from '@adonisjs/core/services/logger'
 import transmit from '@adonisjs/transmit/services/main'
 import Job from '#models/job'
 import { getBrandKit } from '#services/brand_kit'
-import { MAX_COMPILATIONS, isWaiting, preferredIntro, type Compilation } from '#services/compilations'
+import { dressed, MAX_COMPILATIONS, isWaiting, preferredIntro, type Compilation } from '#services/compilations'
 import { isMusicKind } from '#services/musics'
 import { WorkerUnavailableError, findLiveIdeas, type LiveContext, type LiveIdea } from '#services/worker_client'
 
@@ -54,7 +54,7 @@ export const waitingCount = (compilations: Compilation[] | null | undefined): nu
  * this live (`known`: the keys of what was), the best first, no more than there is `room` for.
  * `intro`: the intro the streamer prefers, as on any new compilation.
  */
-export function proposed(ideas: LiveIdea[], known: Set<string>, room: number, intro: Compilation['intro'] | null = null, now = new Date().toISOString()): Compilation[] {
+export function proposed(ideas: LiveIdea[], known: Set<string>, room: number, intro: Compilation['intro'] | null = null, now = new Date().toISOString(), game: string | null = null): Compilation[] {
   const made: Compilation[] = []
   const seen = new Set(known)
   for (const idea of ideas) {
@@ -70,11 +70,11 @@ export function proposed(ideas: LiveIdea[], known: Set<string>, room: number, in
       id: newId(),
       name,
       sections: [{ id: newId(), title: '', query: '', items: [] }],
-      template: null,
+      // (a live on a game that has a look of its own: the video is dressed in it, like any new one)
+      ...dressed({ template: null, ...(intro ? { intro: { ...intro } } : {}) }, game),
       titles: true,
       hook: '',
       target: Number.isFinite(seconds) && seconds >= 5 && seconds <= 1800 ? Math.round(seconds) : 45,
-      ...(intro ? { intro: { ...intro } } : {}),
       brief,
       suggestion: {
         key,
@@ -129,7 +129,7 @@ async function look(jobId: string): Promise<Suggested> {
   if (!job) throw new Error('job not found')
   const existing = job.compilations ?? []
   const known = new Set([...(job.suggestions?.keys ?? []), ...existing.flatMap((c) => (c.suggestion ? [c.suggestion.key] : []))])
-  const created = proposed(answer.ideas ?? [], known, MAX_COMPILATIONS - existing.length, preferredIntro(await getBrandKit()) ?? null)
+  const created = proposed(answer.ideas ?? [], known, MAX_COMPILATIONS - existing.length, preferredIntro(await getBrandKit()) ?? null, undefined, job.vodGame)
   job.compilations = [...existing, ...created]
   job.suggestions = { at: new Date().toISOString(), keys: [...known, ...created.map((c) => c.suggestion!.key)], note: String(answer.note ?? '').slice(0, 800) }
   await job.save()

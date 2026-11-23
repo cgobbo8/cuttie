@@ -26,6 +26,7 @@ import {
   pieceState,
   summarizeCompilation,
   type Compilation,
+  dressed,
 } from '#services/compilations'
 import {
   chooseLooks,
@@ -106,7 +107,8 @@ export default class CompilationsController {
     const preferred = preferredIntro(await getBrandKit())
     if (!parsed.intro && preferred) parsed.intro = preferred
     const now = new Date().toISOString()
-    const compilation: Compilation = { id: newId(), ...parsed, created_at: now, updated_at: now }
+    // A live on a game that has a look of its own (GTA): the video takes it, the streamer can go back to their channel's
+    const compilation: Compilation = { id: newId(), ...dressed(parsed, job.vodGame), created_at: now, updated_at: now }
     job.compilations = [...existing, compilation]
     await job.save()
     return ctx.response.created({ compilation: describeCompilations(job.id, [compilation])[0] })
@@ -219,8 +221,8 @@ export default class CompilationsController {
     const parsed = parseCompilation(ctx.request.body(), job.vodDurationSeconds ?? 0, others)
     if (!parsed) return ctx.response.badRequest({ error: 'invalid compilation' })
 
-    // `lives`, `transition`, `intro` and `music` are the whole truth: a compilation that no longer names other lives, went back to plain cuts, lost its intro or its music loses the field
-    const { lives: _before, transition: _was, intro: _opened, music: _played, ...kept } = existing[index]
+    // `lives`, `transition`, `intro`, `music` and `universe` are the whole truth: a compilation that no longer names other lives, went back to plain cuts, lost its intro or its music, or went back to the channel's own look loses the field
+    const { lives: _before, transition: _was, intro: _opened, music: _played, universe: _dressed, ...kept } = existing[index]
     const compilation: Compilation = { ...kept, ...parsed, updated_at: new Date().toISOString() }
     job.compilations = existing.map((c, i) => (i === index ? compilation : c))
     await job.save()
@@ -360,8 +362,9 @@ export default class CompilationsController {
       const chosen = await chooseSound({
         video: {
           title: words(ctx.request.input('title'), 120),
-          // The game of the live: some graphics are made for one (the GTA pack)
-          game: words(job.vodGame, 80),
+          // The game of the live, when the video is dressed in its look: some graphics are made for one (the GTA pack).
+          // A video the streamer put back in their channel's look is not told about them
+          game: ctx.request.input('universe') === null ? '' : words(job.vodGame, 80),
           parts: lines(ctx.request.input('parts'), 12, 80),
           seconds: Math.max(0, Math.min(7200, Number(ctx.request.input('seconds')) || 0)),
           passages: Math.max(0, Math.min(500, Math.round(Number(ctx.request.input('passages')) || 0))),

@@ -208,6 +208,36 @@ test.group('Compilations', (group) => {
     ;(await client.delete(`${url}/${compilation.id}`).loginAs(user)).assertStatus(404)
   })
 
+  test('dresses a new video of a live on GTA in that game\'s look, and lets the streamer go back to their channel\'s', async ({ client, assert }) => {
+    const { user, job } = await setup()
+    const url = `/api/jobs/${job.id}/compilations`
+    // A live on another game (or on none that is known): the channel's own look, nothing said
+    const plain = ((await client.post(url).loginAs(user).json({ name: 'Calme' })).body() as any).compilation
+    assert.notProperty(plain, 'universe')
+    assert.isNull(plain.template)
+    // A live on Grand Theft Auto, whichever one: the video takes the game's look and its layout
+    job.vodGame = 'Grand Theft Auto VI'
+    await job.save()
+    const dressed = ((await client.post(url).loginAs(user).json({ name: 'Braquage' })).body() as any).compilation
+    assert.equal(dressed.universe, 'gta')
+    assert.equal(dressed.template, 'gta')
+    // What it opens on takes the game's graphics: the jingle the channel prefers becomes the look's own, a hook is framed by it
+    assert.deepEqual(((await client.post(url).loginAs(user).json({ name: 'Intro', intro: { style: 'slam', title: 'Le titre', sound: 'boom' } })).body() as any).compilation.intro, { style: 'sunset', title: 'Le titre' })
+    assert.deepEqual(((await client.post(url).loginAs(user).json({ name: 'Hook', intro: { style: 'hook', look: 'neon' } })).body() as any).compilation.intro, { style: 'hook', look: 'sunset' })
+    assert.deepEqual(((await client.post(url).loginAs(user).json({ name: 'Déjà', intro: { style: 'wanted' } })).body() as any).compilation.intro, { style: 'wanted' })
+    // ...unless it comes with a layout of its own: the look is said, the layout stays
+    const own = ((await client.post(url).loginAs(user).json({ name: 'Autre', template: 'plein' })).body() as any).compilation
+    assert.deepInclude(own, { universe: 'gta', template: 'plein' })
+    // The streamer goes back to their channel's look: it is kept that way, and a look nobody knows is not kept
+    const save = async (body: object) => ((await client.put(`${url}/${dressed.id}`).loginAs(user).json({ ...dressed, ...body })).body() as any).compilation
+    const { universe: _was, ...back } = dressed
+    const undressed = ((await client.put(`${url}/${dressed.id}`).loginAs(user).json({ ...back, template: null })).body() as any).compilation
+    assert.notProperty(undressed, 'universe')
+    assert.isNull(undressed.template)
+    assert.notProperty(await save({ universe: 'fortnite' }), 'universe')
+    assert.equal((await save({ universe: 'gta' })).universe, 'gta')
+  })
+
   test('keeps the intro a video opens with, counts it in its length, and forgets it when it goes', async ({ client, assert }) => {
     const { user, job } = await setup()
     const url = `/api/jobs/${job.id}/compilations`

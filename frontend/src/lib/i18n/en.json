@@ -1844,7 +1844,12 @@
       "hint": "The AI looks at the video and chooses each passage's template, the transition, the intro and the music. It starts from your favourites (My channel)."
     },
     "ownLooks_one": "{{count}} passage has its own",
-    "ownLooks_other": "{{count}} passages have their own"
+    "ownLooks_other": "{{count}} passages have their own",
+    "universe": {
+      "label": "Look",
+      "channel": "Your channel",
+      "gta": "GTA"
+    }
   },
   "compilations": {
     "title": "Compilations",

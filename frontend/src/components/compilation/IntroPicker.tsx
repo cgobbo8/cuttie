@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Check, Play, Sparkles, Volume2, VolumeX } from "lucide-react";
 import { hookSpan } from "../../lib/compilation";
 import IntroCard, { INTRO_W, type IntroColors } from "../../lib/intro/IntroCard";
-import { DEFAULT_HOOK_LOOK, defaultIntroSound, HOOK_MAX, HOOK_MIN, hookLook, INTRO_PACKS, INTRO_SOUND_IDS, introPack, introSpan, isIntro, isIntroSound, isJingle, JINGLE_IDS, NO_SOUND, type IntroChoice, type IntroPackId, type JingleId } from "../../lib/intro/intros";
+import { DEFAULT_HOOK_LOOK, defaultIntroSound, HOOK_MAX, HOOK_MIN, hookLook, INTRO_PACKS, INTRO_SOUND_IDS, introPack, introSpan, isIntro, isIntroSound, isJingle, NO_SOUND, type IntroChoice, type IntroPackId, type JingleId } from "../../lib/intro/intros";
 import { snapToWords } from "../../lib/montage";
 import { introSoundUrl } from "../../lib/music/sound";
 
@@ -159,6 +159,8 @@ interface Props {
   fields?: "all" | "sound" | "style";
   /** Where it sits against what opened it */
   className?: string;
+  /** The pack shown first when nothing is chosen yet: the one of the look the video is dressed in */
+  pack?: IntroPackId;
   /**
    * The "hook" intro (the best moment of the video played first): the passages it can play and
    * the one it plays. Without it that intro isn't offered here, except as a preferred intro.
@@ -176,7 +178,7 @@ type Mode = "none" | "jingle" | "hook";
  * jingles. They come in packs, one shown at a time: Cuttie's twelve, drawn with the channel's
  * colours, and the GTA pack, drawn with its own. Each one plays in small with the channel's logo.
  */
-export default function IntroPicker({ value, brand, name, onChange, onClose, heading, fields = "all", className = "", hook }: Props) {
+export default function IntroPicker({ value, brand, name, onChange, onClose, heading, fields = "all", className = "", hook, pack: preferred }: Props) {
   const { t, i18n } = useTranslation();
   const box = useRef<HTMLDivElement>(null);
   const frame = useIntroLoop();
@@ -204,7 +206,9 @@ export default function IntroPicker({ value, brand, name, onChange, onClose, hea
   const last = useRef<JingleId | null>(graphic);
   if (graphic) last.current = graphic;
   // The pack whose graphics are shown: the one of the graphic chosen, until another is opened
-  const [pack, setPack] = useState<IntroPackId>(introPack(graphic));
+  const [pack, setPack] = useState<IntroPackId>(graphic ? introPack(graphic) : (preferred ?? "cuttie"));
+  // The video's own pack comes first among the tabs
+  const packs = [...INTRO_PACKS].sort((a, b) => Number(b.id === preferred) - Number(a.id === preferred));
   // A hook needs a video made of several passages: it is offered there, and as the channel's preferred intro
   const modes: Mode[] = hook || fields === "style" ? ["none", "jingle", "hook"] : ["none", "jingle"];
   // Opened from a row near an edge of the window, it is pushed back inside (under the top bar, above the bottom)
@@ -248,8 +252,9 @@ export default function IntroPicker({ value, brand, name, onChange, onClose, hea
       return onChange(null);
     }
     // The same graphics on the other side: a hook framed like the jingle it replaces, and the other way round
-    if (next === "jingle") pickJingle(last.current ?? JINGLE_IDS[0]);
-    else pickLook(last.current ?? DEFAULT_HOOK_LOOK);
+    const first = (INTRO_PACKS.find((one) => one.id === pack) ?? INTRO_PACKS[0]).jingles[0];
+    if (next === "jingle") pickJingle(last.current ?? first);
+    else pickLook(last.current ?? (pack === "cuttie" ? DEFAULT_HOOK_LOOK : first));
   };
   const pickSound = (sound: string | null) => {
     if (!value) return;
@@ -335,7 +340,7 @@ export default function IntroPicker({ value, brand, name, onChange, onClose, hea
       <div className="flex flex-wrap gap-x-4 gap-y-3">
         <div className="w-[280px] flex-none">
           <div role="tablist" aria-label={t("compilation.intro.pack.label")} className="flex gap-1 pb-2">
-            {INTRO_PACKS.map((one) => (
+            {packs.map((one) => (
               <button
                 key={one.id}
                 type="button"

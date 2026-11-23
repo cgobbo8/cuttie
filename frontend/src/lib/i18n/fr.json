@@ -1844,7 +1844,12 @@
       "hint": "L'IA regarde la vidéo et choisit le modèle de chaque passage, la transition, l'intro et la musique. Elle part de tes préférées (Ma chaîne)."
     },
     "ownLooks_one": "{{count}} passage a le sien",
-    "ownLooks_other": "{{count}} passages ont le leur"
+    "ownLooks_other": "{{count}} passages ont le leur",
+    "universe": {
+      "label": "Univers",
+      "channel": "Ta chaîne",
+      "gta": "GTA"
+    }
   },
   "compilations": {
     "title": "Compilations",

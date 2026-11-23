@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Check, Pause, Play, Star } from "lucide-react";
 import { musicAbout } from "../../lib/music/library";
 import { MUSIC_KINDS, MUSIC_VOLUMES, musicUrl, type MusicChoice, type MusicTrack } from "../../lib/music/mix";
+import { universeTracks, type Universe } from "../../lib/universes";
 
 interface Props {
   /** The music the video has (null: none) */
@@ -20,6 +21,8 @@ interface Props {
   presence?: boolean;
   /** A kind of video: the tracks that suit it come first, under its name */
   first?: string;
+  /** The look of a game the video is dressed in: the musics that go with it come before all the others, under its name */
+  universe?: Universe;
   /** A third answer besides a track and none: let the app choose (for each clip, the streamer's favourite for its kind) */
   auto?: { label: string; hint?: string; chosen: boolean; onPick: () => void };
   /** Where it sits against what opened it */
@@ -55,7 +58,7 @@ export function useListen() {
 }
 
 /** The musics a video can play in the background, by the kind of video they suit, each one to listen to */
-export default function MusicPicker({ value, tracks, favourites = {}, onChange, onClose, title, noneLabel, presence = true, first, auto, className = "" }: Props) {
+export default function MusicPicker({ value, tracks: every, favourites = {}, onChange, onClose, title, noneLabel, presence = true, first, universe, auto, className = "" }: Props) {
   const { t } = useTranslation();
   const box = useRef<HTMLDivElement>(null);
   const { playing, toggle } = useListen();
@@ -70,10 +73,13 @@ export default function MusicPicker({ value, tracks, favourites = {}, onChange, 
     };
   }, [onClose]);
 
-  // Each track under the first kind it suits; one that says none comes last. Asked for a kind: every track that suits it first
+  // The musics of the video's universe first, under its name; then each track under the first kind it suits, one that
+  // says none last. Asked for a kind: every track that suits it first
+  const { own, others: tracks } = universeTracks(every, universe);
   const fitting = first ? tracks.filter((track) => track.kinds.includes(first)) : [];
   const rest = tracks.filter((track) => !fitting.includes(track));
   const groups = [
+    ...(universe && own.length > 0 ? [{ kind: `universe:${universe.id}`, tracks: own }] : []),
     ...(first ? [{ kind: first, tracks: fitting }] : []),
     ...MUSIC_KINDS.filter((kind) => kind !== first).map((kind) => ({ kind: kind as string, tracks: rest.filter((track) => track.kinds[0] === kind) })),
     { kind: "", tracks: rest.filter((track) => !MUSIC_KINDS.some((kind) => kind !== first && kind === track.kinds[0])) },
@@ -113,7 +119,7 @@ export default function MusicPicker({ value, tracks, favourites = {}, onChange, 
         )}
         {groups.map(({ kind, tracks: list }) => (
           <div key={kind}>
-            <p className="px-1 pt-2.5 pb-1 text-[11px] font-[600] tracking-[0.04em] uppercase text-ink-3">{kind ? t(`compilation.music.kind.${kind}`) : t("compilation.music.unsorted")}</p>
+            <p className="px-1 pt-2.5 pb-1 text-[11px] font-[600] tracking-[0.04em] uppercase text-ink-3">{kind.startsWith("universe:") ? t(`compilation.universe.${kind.slice(9)}`) : kind ? t(`compilation.music.kind.${kind}`) : t("compilation.music.unsorted")}</p>
             {list.map((track) => {
               const chosen = value?.track === track.id;
               const loved = Object.entries(favourites).filter(([, id]) => id === track.id).map(([liked]) => t(`compilation.music.kind.${liked}`));

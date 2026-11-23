@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from "react";
 import { useTranslation } from "react-i18next";
-import { ArrowDown, ArrowRight, ArrowUp, Blend, Check, ChevronRight, Clapperboard, FolderInput, Layers, Loader2, Music2, Plus, Sparkles, Trash2, Type, X, LayoutTemplate, type LucideIcon } from "lucide-react";
+import { ArrowDown, ArrowRight, ArrowUp, Blend, Check, ChevronRight, Clapperboard, FolderInput, Gamepad2, Layers, Loader2, Music2, Plus, Sparkles, Trash2, Type, X, LayoutTemplate, type LucideIcon } from "lucide-react";
 import type { Compilation, CompilationItem, CompilationSection, TwitchStoryboard } from "../../lib/api";
 import {
   PLAIN_CUT,
@@ -32,6 +32,7 @@ import type { MusicTrack } from "../../lib/music/mix";
 import IntroPicker, { type HookMenu, type IntroBrand } from "./IntroPicker";
 import MusicPicker from "./MusicPicker";
 import TemplateMenu from "../TemplateMenu";
+import { dressAs, UNIVERSES, universeOf } from "../../lib/universes";
 import TransitionPicker from "./TransitionPicker";
 
 interface Props {
@@ -239,7 +240,7 @@ export default function CompilationPanel({
   }, [picked.size]);
 
   // What is open: the list of parts to move the picked passages to, or the transitions (of the video, of the picked ones, of one passage)
-  const [menu, setMenu] = useState<"move" | "video" | "picked" | "intro" | "music" | "template" | { item: string } | null>(null);
+  const [menu, setMenu] = useState<"move" | "video" | "picked" | "intro" | "music" | "template" | "universe" | { item: string } | null>(null);
   const partName = (section: CompilationSection, among = compilation.sections) => section.title.trim() || t("compilation.partN", { n: among.indexOf(section) + 1 });
   const moveTo = (sectionId: string | null) => {
     setMenu(null);
@@ -293,6 +294,8 @@ export default function CompilationPanel({
   const ownLooks = allItems(compilation).filter((item) => item.template).length;
   // The track the video plays, when it is one that can be played here
   const track = trackOf(musics, compilation.music?.track);
+  // The look of a game the video is dressed in (none: the channel's own)
+  const universe = universeOf(compilation.universe);
   // The intro is part of the video: it counts in its length
   const opening = openingSeconds(compilation, trackOf(musics, compilation.music?.track)?.bpm);
   const total = compilationLength(compilation) + opening;
@@ -544,6 +547,29 @@ export default function CompilationPanel({
             </button>
           </div>
           <div className="rounded-[13px] border border-white/[0.09] bg-black/25 divide-y divide-white/[0.07]">
+            {/* The look the video is dressed in: the channel's own, or a game's (it then comes first in every picker below) */}
+            <SettingRow
+              icon={Gamepad2}
+              label={t("compilation.universe.label")}
+              value={universe ? t(`compilation.universe.${universe.id}`) : t("compilation.universe.channel")}
+              set={!!universe}
+              open={menu === "universe"}
+              onOpen={() => setMenu(menu === "universe" ? null : "universe")}
+            >
+              {menu === "universe" && (
+                <TemplateMenu
+                  label={t("compilation.universe.label")}
+                  value={universe?.id ?? null}
+                  templates={UNIVERSES.map((one) => ({ key: one.id, name: t(`compilation.universe.${one.id}`) }))}
+                  fallback={t("compilation.universe.channel")}
+                  onPick={(key) => {
+                    setMenu(null);
+                    onChange(dressAs(compilation, universeOf(key) ?? null));
+                  }}
+                  onClose={() => setMenu(null)}
+                />
+              )}
+            </SettingRow>
             <SettingRow
               icon={LayoutTemplate}
               label={t("compilation.template")}
@@ -555,7 +581,8 @@ export default function CompilationPanel({
               {menu === "template" && (
                 <TemplateMenu
                   value={compilation.template ?? null}
-                  templates={templates}
+                  // (the layout of the video's universe first)
+                  templates={universe ? [...templates].sort((a, b) => Number(b.key === universe.template) - Number(a.key === universe.template)) : templates}
                   fallback={t("compilation.defaultTemplate")}
                   onPick={(key) => {
                     setMenu(null);
@@ -639,6 +666,7 @@ export default function CompilationPanel({
                     onClose={() => setMenu(null)}
                     className="right-0 bottom-full mb-2"
                     hook={hook}
+                    pack={universe?.pack}
                   />
                 )}
               </SettingRow>
@@ -651,6 +679,7 @@ export default function CompilationPanel({
                     value={track ? compilation.music! : null}
                     tracks={musics}
                     favourites={favourites}
+                    universe={universe}
                     onChange={(next) => {
                       const { music: _before, ...rest } = compilation;
                       onChange(next ? { ...rest, music: next } : rest);

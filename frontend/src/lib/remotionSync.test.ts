@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { INTRO_IDS, INTRO_SOUND_IDS, introSpan, JINGLE_IDS } from "./intro/intros";
 import { MUSIC_KINDS } from "./music/mix";
 import { TRANSITION_IDS } from "./transitions";
+import { UNIVERSES } from "./universes";
 
 /** The server renderer must draw exactly what the editor shows (scripts/sync-remotion.mjs) */
 const root = path.resolve(__dirname, "../../..");
@@ -44,6 +45,16 @@ describe("editor and server renderer stay in sync", () => {
     for (const id of INTRO_SOUND_IDS) {
       // Played by the page, mixed into the export by the server
       for (const side of ["frontend/public/sounds", "api/public/sounds"]) expect(existsSync(path.join(root, side, `intro-${id}.mp3`)), `${side}/intro-${id}.mp3`).toBe(true);
+    }
+  });
+
+  it("knows the same universes on both sides: their layout, their graphics, their games", () => {
+    const service = readFileSync(path.join(root, "api/app/services/compilations.ts"), "utf8");
+    for (const universe of UNIVERSES) {
+      const said = service.match(new RegExp(`${universe.id}: \\{ template: '(\\w+)', look: '(\\w+)', intros: \\[([^\\]]+)\\]`));
+      expect(said?.[1], universe.id).toBe(universe.template);
+      expect(said?.[2], universe.id).toBe(universe.look);
+      expect(said?.[3].match(/\w+/g), universe.id).toEqual([...universe.intros]);
     }
   });
 

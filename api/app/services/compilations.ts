@@ -81,8 +81,42 @@ export interface Compilation {
   suggestion?: Suggestion
   /** Other lives it takes passages from, besides the one it is kept with (job ids) */
   lives?: string[]
+  /** The look of a game it is dressed in instead of the channel's own (absent: the channel's) */
+  universe?: string
   created_at: string
   updated_at: string
+}
+
+/**
+ * The universes: the look of a game, which a video from a live on that game takes instead of the
+ * channel's own (the app draws them and says what belongs to each: frontend/src/lib/universes.ts).
+ * The server only knows their names, the layout each one sets and the games each one is for.
+ */
+export const UNIVERSES: Record<string, { template: string; look: string; intros: string[]; plays: RegExp }> = {
+  gta: { template: 'gta', look: 'sunset', intros: ['sunset', 'miami', 'wanted', 'cover'], plays: /grand theft auto|^\s*gta\b/i },
+}
+export const isUniverse = (value: unknown): value is string => typeof value === 'string' && Object.hasOwn(UNIVERSES, value)
+/** The universe of a live's game (undefined: none) */
+export const universeFor = (game: string | null | undefined): string | undefined => Object.keys(UNIVERSES).find((id) => UNIVERSES[id].plays.test(game ?? ''))
+
+/**
+ * A new video of a live on a game that has a universe is dressed in it: its name, its layout unless
+ * the video comes with one, and its graphics round what the video opens on (the jingle the channel
+ * prefers becomes the universe's own, a hook is framed by it).
+ */
+export function dressed<T extends { universe?: string; template: string | null; intro?: Intro }>(video: T, game: string | null | undefined): T {
+  const id = video.universe ?? universeFor(game)
+  if (!id) return video
+  const universe = UNIVERSES[id]
+  const intro = video.intro
+  const opening: Intro | undefined = !intro
+    ? undefined
+    : intro.style === 'hook'
+      ? { ...intro, look: intro.look && universe.intros.includes(intro.look) ? intro.look : universe.look }
+      : universe.intros.includes(intro.style)
+        ? intro
+        : (({ sound: _sound, ...jingle }) => ({ ...jingle, style: universe.look }))(intro)
+  return { ...video, universe: id, template: video.template ?? universe.template, ...(opening ? { intro: opening } : {}) }
 }
 
 /** What the AI saw in the live that makes a video it proposes */
@@ -353,6 +387,7 @@ export function parseCompilation(raw: any, liveDuration: number, others?: Map<st
     ...(intro ? { intro } : {}),
     ...(parseMusic(raw.music) ? { music: parseMusic(raw.music)! } : {}),
     ...(lives.length > 0 ? { lives } : {}),
+    ...(isUniverse(raw.universe) ? { universe: raw.universe } : {}),
     ...(text(raw.brief, MAX_BRIEF) ? { brief: text(raw.brief, MAX_BRIEF) } : {}),
     // What the AI answered to the description: what it built and why
     ...(text(raw.brief, MAX_BRIEF) && text(raw.answer, 800) ? { answer: text(raw.answer, 800) } : {}),

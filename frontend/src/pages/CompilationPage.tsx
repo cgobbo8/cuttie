@@ -804,7 +804,7 @@ export default function CompilationPage() {
       setSounding(true);
       try {
         const { ids, ...brief } = soundBrief(source);
-        const choice = await chooseSound(jobId, { ...brief, asked, language: i18n.language.slice(0, 2), compilation: source.id });
+        const choice = await chooseSound(jobId, { ...brief, asked, language: i18n.language.slice(0, 2), compilation: source.id, universe: source.universe ?? null });
         // What the streamer changed while the AI was thinking stays
         const current = compilationsRef.current?.find((c) => c.id === source.id) ?? source;
         // A track whose file isn't on this machine can't be played: left out. The passage it would open the video on is told by its place among those it was sent

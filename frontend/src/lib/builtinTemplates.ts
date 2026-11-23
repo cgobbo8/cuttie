@@ -70,6 +70,8 @@ interface BrandWidget {
 interface Extra extends BrandWidget {
   id: string;
   show: WidgetShow;
+  /** Part of the layout itself (the GTA pack's seam, its stars): there with or without the channel's widgets */
+  layout?: boolean;
 }
 
 /** Where things sit in a layout and how they look (the subtitle style comes from the channel) */
@@ -103,7 +105,7 @@ const followAtEnd = (box: Box): Extra => ({
 });
 
 /** A widget of the GTA pack that follows the whole clip */
-const allAlong = (id: string, kind: WidgetKind, box: Box, enter: EnterId): Extra => ({ id, kind, box, show: { in: 0, inFrom: "start", out: null, outFrom: "end" }, enter, exit: "none" });
+const allAlong = (id: string, kind: WidgetKind, box: Box, enter: EnterId): Extra => ({ id, kind, box, show: { in: 0, inFrom: "start", out: null, outFrom: "end" }, enter, exit: "none", layout: true });
 
 /*
  * The GTA pack's layout: what the most-viewed short videos of a live do (32 French reels about that game looked
@@ -310,7 +312,9 @@ export function builtInSpec(id: TemplateId, o: BuiltInOptions = {}): TemplateSpe
       fields: { ...b.fields },
     });
   }
-  for (const e of widget.enabled ? (l.extras ?? []) : []) {
+  for (const e of l.extras ?? []) {
+    // What says the channel (a follow button) goes with its widgets; what belongs to the layout stays
+    if (!widget.enabled && !e.layout) continue;
     // The channel's widget already comes at the end: no follow button on top of it
     if (widget.timing === "end" && timingOf(e.show) === "end") continue;
     widgets.push({ id: e.id, kind: e.kind, box: { ...e.box }, timing: timingOf(e.show), show: { ...e.show }, enter: e.enter, exit: e.exit, fields: { ...e.fields } });

@@ -214,7 +214,9 @@ def test_the_sound_of_a_video_is_chosen_from_what_it_is_and_what_the_streamer_li
     # No music is an answer too. The video opens in one of three ways, each said: straight on, on a jingle, on its hook
     assert "[none] No music." in shown
     assert "[none] Straight on its first passage." in shown and "[jingle] A classic intro" in shown and "[hook] No jingle: the teaser of the video (see 4) plays first" in shown
-    assert "Choose the hook when the video leads up to something worth teasing" in shown and '"opening": "<none | jingle | hook>"' in shown
+    assert "choose the hook when one of the passages makes a good teaser" in shown and '"opening": "<none | jingle | hook>"' in shown
+    # What the most-viewed short videos do is said: none opens on a jingle, so a jingle is only for a streamer who asks for one
+    assert "none opens on an intro card or a jingle (0 of 32 looked at)" in shown and "Choose a jingle only when the streamer asked for an intro, or prefers one" in shown
     # ...then its graphics, the same for a jingle or a hook; the ones the streamer prefers are said
     assert "The streamer's preferred graphics are [rush]" in shown and "likes their videos to open on a hook" not in shown
     for graphics in looks.INTROS:

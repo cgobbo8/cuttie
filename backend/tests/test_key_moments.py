@@ -119,3 +119,19 @@ def test_asks_whether_clip_is_a_request_and_lines_chat_up():
     messages = [{"timestamp": 104.0, "author": "a", "text": "trop tôt"}, {"timestamp": 112.0, "author": "b", "text": "MDR"}, {"timestamp": 170.0, "author": "c", "text": "hors"}]
     chat = llm_analyzer._extract_chat_for_clip(messages, 100.0, 160.0, lag=6.0)
     assert chat == "[6s] b: MDR"
+
+
+def test_the_title_holds_the_end_back_and_the_cut_starts_on_the_subject():
+    """What the most-viewed short videos of a game's launch do (32 French reels and 1,272 Shorts, November 2026) is
+    what a clip's title and cut are asked for."""
+    prompt = llm_analyzer._build_unified_prompt(transcript="x", speech_rate=2.0, score=0.5, timestamp_display="0:10:00", vod_meta={"streamer": "falkarst", "game": "Grand Theft Auto VI"})
+    # The title: on the first frame, a sentence that says what the moment is without giving its end away
+    assert '"hook": the line written on the picture from its very first frame' in prompt
+    assert "3 to 12 words, written as a sentence" in prompt and "never give away how it ends" in prompt
+    assert "max 8 words" not in prompt
+    # The cut: from the first second on the subject, to the moment itself; as long as such videos are
+    assert "Start on the first line or image that already shows what the clip is about" in prompt
+    assert "End right after the payoff and the reaction to it" in prompt
+    assert "Usually 30 to 75 s" in prompt and "15-45" not in prompt
+    # Something found or explained about the game is clip material even said calmly
+    assert "a secret or an easter egg met by chance" in prompt

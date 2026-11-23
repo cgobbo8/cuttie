@@ -749,7 +749,7 @@
     "noMusics": "No hay ninguna música instalada en este equipo.",
     "musicFor": "Música para: {{kind}}",
     "ownMusics": "Tus músicas",
-    "ownMusicsHint": "Añade un archivo: la IA lo escucha y escribe para qué sirve (menos de un céntimo). Puedes corregirlo todo.",
+    "ownMusicsHint": "Añade un archivo: la IA lo escucha y escribe para qué sirve (menos de un céntimo). Puedes corregirlo todo. Cuidado con la música con derechos (un tema conocido, la banda sonora de un juego): YouTube bloquea un Short de más de un minuto que la contenga, Instagram y TikTok pueden silenciarlo.",
     "addMusic": "Añadir una música",
     "musicListening": "La IA escucha…",
     "musicAdded": "«{{name}}» añadida. Lee lo que dice la IA.",

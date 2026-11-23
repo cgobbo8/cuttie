@@ -119,7 +119,8 @@ const GTA: Layout = {
   game: { box: { x: 0, y: 770, w: 1080, h: 1150 }, frame: frame(0) },
   subtitles: { box: { x: 150, y: 640, w: 780, h: 240 }, font: "rammetto", size: 74, uppercase: false, words: 3, stroke: true },
   // Titles go on the game, never on the face
-  hook: { box: { x: 90, y: 900, w: 900, h: 200 }, style: "vice", font: "rammetto", size: 70, until: 3.5 },
+  // (held 5 s: the titles of the best live clips stay 5 to 7 s, or the whole video)
+  hook: { box: { x: 90, y: 900, w: 900, h: 200 }, style: "vice", font: "rammetto", size: 70, until: 5 },
   brand: { kind: "channel-pill", box: { x: 40, y: 218, w: 480, h: 64 }, enter: "pop", exit: "shrink" },
   extras: [allAlong("w-seam", "gta-seam", { x: 0, y: 742, w: 1080, h: 34 }, "none"), allAlong("w-wanted", "gta-wanted", { x: 600, y: 218, w: 420, h: 66 }, "slideRight")],
   // The seam covers the join of the two pictures; the words go over it

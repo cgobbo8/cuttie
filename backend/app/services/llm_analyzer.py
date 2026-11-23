@@ -340,6 +340,29 @@ def _extract_chat_for_clip(
 
 # ─── Unified prompt ──────────────────────────────────────────────────────────
 
+# How a clip's title and its cut are asked for. Drawn from what the most-viewed short videos of a game's launch
+# do (32 French reels about GTA 6 looked at frame by frame and 1,272 French Shorts counted, November 2026): 30 of
+# 32 show a title within the first half second, the best ones a full sentence that says what the moment is and
+# holds its end back (the same streamer, the same layout, the same day: 675,000 views with a situation named on
+# the first frame, 2,000 with a title that came at 2 s and gave the outcome away); their first image is the
+# subject itself, never an empty frame; they last 27 to 75 s when they are one moment of a live (median 57 s over
+# all, one in 32 under 20 s) and 17 of 32 stop dead on their last moment.
+HOOK_RULE = (
+    "3 to 12 words, written as a sentence (not all capitals, no emoji, no hashtag). It says what the moment is in words that "
+    "someone who never watched the stream understands, and it holds the end back: never give away how it ends. What works: a "
+    "situation people know (« POV : quand tu veux juste faire une mission tranquille »), what happens told from outside with "
+    "the outcome kept (« Il demande son chemin au mauvais PNJ »), a warning (« Ne fais jamais ça devant un flic »), a short "
+    "question, a surprising fact; speaking to the viewer (« tu ») is welcome; name the game when that helps to get it. Not the "
+    "clip name, and nothing that is not in the clip."
+)
+CUT_RULE = (
+    "Start on the first line or image that already shows what the clip is about: viewers decide in the first second, so never "
+    "start on a silence, a loading screen, small talk or someone catching their breath, and keep only the context needed to "
+    "follow. End right after the payoff and the reaction to it, on the moment itself: no goodbye, no talk that trails off. "
+    "Usually 30 to 75 s (a strong moment that is short stays short: 20 s is fine), never in the middle of a sentence."
+)
+
+
 def _build_unified_prompt(
     transcript: str,
     speech_rate: float,
@@ -508,6 +531,8 @@ The NUMBER of people reacting matters: 3 people laughing uncontrollably > 1 pers
 
 **Off-topic conversations:** Streamers frequently talk about completely unrelated topics while playing. If the conversation has NO connection to what's happening on screen, it's likely idle chat, NOT a memorable moment. However, off-topic talk CAN be viral if it's genuinely funny, shocking, or entertaining. Mundane chatter = NOT viral regardless of volume.
 
+**The game itself:** the streamer finding, showing or explaining something about the game that viewers would want to know or see for themselves (a secret or an easter egg met by chance, a trick, a detail most players miss, a strong opinion on the game) is clip material even when it is said calmly: such videos are the steadiest performers among short videos about a game.
+
 **Visual-audio alignment:** If the game screen shows a menu or idle moment while people chat about unrelated topics, this is a strong signal of a LOW-value clip — UNLESS the conversation itself is the content (funny story, roast, argument).
 
 ## How to use the visual frames
@@ -543,8 +568,8 @@ Return a single JSON object:
   - "label": short title (5-8 words), in French{game_narrative}
   - "description": 1 sentence describing what happens visually (include HUD info if relevant)
 - "narrative": fluid story of the clip (3-5 sentences), driven by what you HEAR in the audio, using visuals only for gameplay context{game_narrative}. In French.
-- "hook": the on-screen hook shown during the first seconds of the short (max 8 words). Makes people stay without lying about what happens; not the clip name. In French.
-- "cut": {{"start": float, "end": float}} — the tightest cut{window_text} that works as a standalone short, in seconds on the same clock as the transcript: start just before the setup (enough context to follow), end once the payoff and the reactions have landed. Usually 15-45 s, never in the middle of a sentence.{chr(10) + '- "clip_request": true or false (see above).' if clip_keyword_at is not None else ""}
+- "hook": the line written on the picture from its very first frame: the video's title, what makes someone scrolling stay. {HOOK_RULE} In French.
+- "cut": {{"start": float, "end": float}} — the cut{window_text} that works as a standalone short, in seconds on the same clock as the transcript. {CUT_RULE}{chr(10) + '- "clip_request": true or false (see above).' if clip_keyword_at is not None else ""}
 
 JSON only, no markdown."""
 

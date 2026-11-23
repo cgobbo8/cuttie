@@ -112,7 +112,10 @@ the chat reacted. Your job: point at the moments that would make the best standa
 What makes a great clip here:
 - a punchline, a roleplay payoff, an absurd or awkward exchange, a running gag landing, a big reaction, a fail, a clutch,
   an emotional beat, a chat explosion, the streamer or the chat asking for a clip
-- it works on its own in 15 to 60 seconds, without knowing the rest of the stream
+- the streamer finding, showing or explaining something about the game that people would want to know or see for
+  themselves (a secret, an easter egg met by chance, a trick, a detail most players miss, a strong opinion on the game):
+  the steadiest kind of short video about a game
+- it works on its own in 20 to 75 seconds, without knowing the rest of the stream
 - many great moments are said calmly: don't only look for shouting; read what is actually said and how people react
 
 Avoid: starting soon / break screens, long monologues without a payoff, moments that need too much context.

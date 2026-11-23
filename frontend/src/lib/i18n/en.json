@@ -749,7 +749,7 @@
     "noMusics": "No music is installed on this machine.",
     "musicFor": "Music for: {{kind}}",
     "ownMusics": "Your musics",
-    "ownMusicsHint": "Add a file: the AI listens to it and writes what it is for (under a cent). You can correct everything.",
+    "ownMusicsHint": "Add a file: the AI listens to it and writes what it is for (under a cent). You can correct everything. Mind copyrighted music (a well-known track, a game's soundtrack): YouTube blocks a Short of more than a minute that contains some, Instagram and TikTok may mute it.",
     "addMusic": "Add a music",
     "musicListening": "The AI is listening…",
     "musicAdded": "“{{name}}” added. Read what the AI says of it.",

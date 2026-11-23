@@ -66,7 +66,7 @@ PLAN_MAX_COST = float(os.getenv("CUTTIE_PLAN_MAX_COST", "0.12"))
 # How hard the searching model thinks between two tools (as on the benchmark: it reads, it doesn't ponder)
 REASONING = {"effort": "low"}
 # Changes when the instructions do: answers kept on disk under the old ones are asked again
-ANSWERS_VERSION = "7"
+ANSWERS_VERSION = "8"
 MAX_STEPS = 28
 PLAN_STEPS = 36
 # A planned video that comes to less than this share of the length asked is sent back once
@@ -277,7 +277,7 @@ IDEAS_SPEC = {
                 "items": {
                     "type": "object",
                     "properties": {
-                        "title": {"type": "string", "description": "The video's title as it would be posted: 2 to 6 words in the stream's language"},
+                        "title": {"type": "string", "description": "The video's title as it would be posted: what happens in it, said in 3 to 8 words in the stream's language. Never « best of », « top », « compilation », « moments » or a date: videos titled that way are the least watched"},
                         "brief": {
                             "type": "string",
                             "description": "The request the streamer would type to have this video made, in the stream's language and in their voice (\"Fais-moi une vidéo...\"): "
@@ -306,7 +306,8 @@ IDEAS_WHAT = """A compilation is a short vertical video (20 to 90 seconds) made 
 - The same kind of thing happening many times: kills or great plays, fails, crashes, chases, arrests, fits of laughter, rages, scares, awkward silences, someone getting teased.
 - A story the live tells over time, with a beginning and an end: a mission that goes wrong, an argument and how it ends, a bet and who loses it.
 - The chat going wild several times about the same thing.
-- A best-of of the live: only when it has at least six strong moments of different kinds, and never the only idea when something more particular exists.
+- Things about the game that people want to know or see: the streamer finding a secret or an easter egg, a trick (to make money, to go faster), a detail most players miss, how something works. The steadiest kind of short video about a game.
+- A best-of of the live: only when it has at least six strong moments of different kinds, never the only idea when something more particular exists, and never titled as one (say what happens in it).
 An idea is one thing, said in one sentence, that someone who never watched the stream would get and watch to the end. It has a hook (a first moment or a first line that makes people stay) and an ending (a punchline, a biggest moment, how the story ends): with neither it is a list, not a video. It needs at least five moments that really belong together (a story: four), short enough to make a fast video. Two ideas never rest on the same moments.
 A live of several hours usually holds three to five such videos, of different kinds: go through every kind above before settling for fewer.
 Score each idea honestly, 0 to 100, on how well it should do as a short: 80 and more for a particular idea with many moments that are funny or impressive on their own; 60 to 79 for good material on a more usual idea; under 60 it is thin. Never propose an idea under 50, and never fill with weak ones: a live that really has one good idea gets one."""

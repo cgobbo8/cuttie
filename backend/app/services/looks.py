@@ -303,6 +303,8 @@ TRANSITIONS = {
     "pop": "The next passage bounces in. Playful. Fits jokes, silly moments, light-hearted videos.",
     "fade": "A short cross-fade. Soft. Fits calm talk, emotion, a story told slowly.",
 }
+# What was seen of how the most-viewed short videos open (32 French reels about a game's launch, looked at frame by frame in November 2026)
+OPENING_FACT = "Among the most-viewed short videos of a game's launch, none opens on an intro card or a jingle (0 of 32 looked at): 30 show their title within the first half second, over the content itself, and the two that open on an empty frame are among the least watched."
 # How many intros the model ranks for a video, and how many of the streamer's last videos its choice stays away from
 FITTING_INTROS, RECENT_INTROS = 3, 3
 # How many passages of a video the model is told about (it names the one the video could open on among them)
@@ -361,7 +363,13 @@ def choose_sound(
     # What the streamer prefers their videos to open with: a jingle, or the hook (`preferred_look`: the graphics they like it framed with)
     prefers_hook = preferred_intro == "hook"
     preferred_intro = (preferred_look if prefers_hook else preferred_intro) if (preferred_look if prefers_hook else preferred_intro) in INTROS else None
-    opening_wish = "The streamer likes their videos to open on a hook: choose it whenever one of the passages makes a good teaser." if prefers_hook else ""
+    opening_wish = (
+        "The streamer likes their videos to open on a hook: choose it whenever one of the passages makes a good teaser."
+        if prefers_hook
+        else "The streamer likes their videos to open on a jingle: choose it for a video of 30 s or more with a title worth reading."
+        if preferred_intro
+        else ""
+    )
     graphics_wish = f"The streamer's preferred graphics are [{preferred_intro}]: put them among those you give whenever they can fit this video." if preferred_intro else ""
     spoken = LANGUAGES.get(language, "French")
     named = INTRO_NAMES.get(language, INTRO_NAMES["fr"])
@@ -413,7 +421,7 @@ Take the streamer's favourite for the kind of the video when they have one (★)
 [none] Straight on its first passage.
 [jingle] A classic intro: about two seconds before the first passage, with the channel's logo, its colours and the video's title.
 [hook] No jingle: the teaser of the video (see 4) plays first, under its title, then the video starts from its beginning and the teaser plays again at its place. Nothing to wait through: it grips from the first frame.
-On these platforms many viewers leave within the first second, so an opening must earn its place. Choose the hook when the video leads up to something worth teasing (a story with a payoff, a claim that turns out wrong, a reaction people will want explained) and one of its passages makes a good teaser. Choose a jingle for a video with a title worth reading that a teaser would not serve: a best-of, a themed series of like moments, several parts; it should last 30 s or more. Choose none for a single moment or a very short video. If the streamer asked for an intro, a hook or none, follow that first.
+On these platforms viewers decide within the first second. {OPENING_FACT} So: choose the hook when one of the passages makes a good teaser (a story with a payoff, a claim that turns out wrong, a reaction people will want explained): the video then plays from its first frame, under its title. Choose none for a single moment, a very short video, or when no passage would do as a teaser: its first passage is then its first image. Choose a jingle only when the streamer asked for an intro, or prefers one (said below). If the streamer asked for an intro, a hook or none, follow that first.
 {opening_wish}
 Then its graphics. The same ones dress a jingle or frame a hook (several fit the same video: a kind of video has no graphics of its own):
 {chr(10).join(f"[{key}] « {named[key]} ». {what}" for key, what in INTROS.items())}

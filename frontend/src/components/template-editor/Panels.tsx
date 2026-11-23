@@ -397,6 +397,7 @@ const SENTENCE_FONTS: FontId[] = ["poppins", "montserrat", "geist", "archivo"];
 
 /** A font that suits the hook style: display caps outlined, a sentence font on a box */
 function hookFont(style: HookStyle, font: FontId): FontId {
+  if (style === "vice") return "rammetto";
   if (style === "outline") return font === "geist" || font === "poppins" ? "anton" : font;
   return SENTENCE_FONTS.includes(font) ? font : "poppins";
 }
@@ -424,6 +425,7 @@ export function HookPanel({ value, onChange, onReset }: { value: TemplateSpec["h
             { value: "outline", label: t("templateEditor.hookOutline") },
             { value: "box", label: t("templateEditor.hookBox") },
             { value: "brand", label: t("templateEditor.hookBrand") },
+            { value: "vice", label: t("templateEditor.hookVice") },
           ]}
         />
       </Row>

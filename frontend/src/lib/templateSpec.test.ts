@@ -352,8 +352,14 @@ describe("what the apps cover", () => {
     const { coveredBy } = await import("./templateSpec");
     const { KIT_WIDGETS } = await import("../components/editor/widgets/kit");
     // A logo, a live badge, a lower third, a sticker and the corner logo sit on a side on purpose
-    const onASide = ["logo", "live-badge", "lower-third", "clip-sticker", "corner-logo"];
+    const onASide = ["logo", "live-badge", "lower-third", "clip-sticker", "corner-logo", "gta-wanted"];
+    // The word a mission ends on is stamped over the whole picture (the word itself across its middle, clear of the apps)
+    const overEverything = ["gta-wasted", "gta-mission"];
     for (const w of KIT_WIDGETS) {
+      if (overEverything.includes(w.id)) {
+        expect(w.box, w.id).toEqual({ x: 0, y: 0, w: 1080, h: 1920 });
+        continue;
+      }
       expect(coveredBy(w.box), w.id).toEqual([]);
       if (!onASide.includes(w.id)) expect(w.box.x + w.box.w / 2, w.id).toBe(540);
     }

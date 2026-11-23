@@ -913,6 +913,10 @@
       "sanscam": {
         "name": "No cam",
         "desc": "Just the game, the hook line for the first half"
+      },
+      "gta": {
+        "name": "GTA",
+        "desc": "Your cam big on top, the game below, GTA lettering and stars"
       }
     },
     "clipOf": "Clip {{n}} of {{total}}",
@@ -1337,7 +1341,8 @@
     "usageByAi": "Write with the AI",
     "usagePlaceholder": "E.g.: for my fails, the game big and my cam small.",
     "usageHint": "The AI reads this sentence, along with where each element sits, when it picks the template of a passage. Left empty, it is written when you save.",
-    "usageFailed": "The AI could not write the description. Try again, or write it yourself."
+    "usageFailed": "The AI could not write the description. Try again, or write it yourself.",
+    "hookVice": "GTA"
   },
   "widgets": {
     "channel-pill": {
@@ -1391,6 +1396,22 @@
     "progress-bar": {
       "name": "Progress bar",
       "desc": "It moves along with the clip"
+    },
+    "gta-wanted": {
+      "name": "Wanted stars",
+      "desc": "Six stars that light up as the clip plays, then blink"
+    },
+    "gta-seam": {
+      "name": "Sunset strip",
+      "desc": "A strip in Vice City colours between your cam and the game"
+    },
+    "gta-wasted": {
+      "name": "Wasted",
+      "desc": "The picture goes grey and the word slams down in red: for a fail"
+    },
+    "gta-mission": {
+      "name": "Mission passed",
+      "desc": "A yellow stamp at the end of the clip: for a win"
     }
   },
   "freed": {

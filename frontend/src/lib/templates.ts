@@ -7,10 +7,13 @@
 import type { BrandColors, SubtitleStyle, WidgetTiming } from "./api";
 import { DEFAULT_STYLE, type ChatMessage, type Layer, type LayerTransform, type SubtitleWord } from "./editorTypes";
 
-/** Ids kept from the first layouts: "plein" is shown as Action, "accroche" as Cinéma */
-export type TemplateId = "empile" | "signature" | "reaction" | "discussion" | "plein" | "accroche" | "sanscam";
+/** Ids kept from the first layouts: "plein" is shown as Action, "accroche" as Cinéma. "gta" is the GTA pack's own layout */
+export type TemplateId = "empile" | "signature" | "reaction" | "discussion" | "plein" | "accroche" | "sanscam" | "gta";
 
-export const TEMPLATE_IDS: TemplateId[] = ["empile", "signature", "reaction", "discussion", "plein", "accroche", "sanscam"];
+export const TEMPLATE_IDS: TemplateId[] = ["empile", "signature", "reaction", "discussion", "plein", "accroche", "sanscam", "gta"];
+
+/** The layouts that belong to a pack (a game's own look), by its name: the others are the channel's */
+export const TEMPLATE_PACKS: Record<string, TemplateId[]> = { gta: ["gta"] };
 
 /** Templates built around the webcam */
 export const NEEDS_WEBCAM: TemplateId[] = ["empile", "reaction"];

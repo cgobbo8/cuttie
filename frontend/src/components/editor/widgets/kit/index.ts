@@ -11,6 +11,7 @@ import CornerLogo from "./CornerLogo";
 import FollowBanner from "./FollowBanner";
 import FollowButton from "./FollowButton";
 import FollowerCount from "./FollowerCount";
+import { GtaMission, GtaSeam, GtaWanted, GtaWasted } from "./gta";
 import Handle from "./Handle";
 import LiveBadge from "./LiveBadge";
 import Logo from "./Logo";
@@ -30,7 +31,12 @@ export type KitWidgetId =
   | "follower-count"
   | "clip-sticker"
   | "corner-logo"
-  | "progress-bar";
+  | "progress-bar"
+  // The GTA pack (./gta.tsx): drawn with its own colours, whatever the channel's
+  | "gta-wanted"
+  | "gta-seam"
+  | "gta-wasted"
+  | "gta-mission";
 
 export type KitEnter = "bounceIn" | "scaleIn" | "fadeIn" | "slideInBottom" | "slideInLeft" | "slideInRight";
 
@@ -60,7 +66,14 @@ export const KIT_WIDGETS: KitWidget[] = [
   { id: "clip-sticker", box: { x: 560, y: 216, w: 460, h: 160 }, timing: "start", enter: "bounceIn", fields: ["text"], Component: ClipSticker },
   { id: "corner-logo", box: { x: 950, y: 216, w: 90, h: 90 }, timing: "always", enter: "fadeIn", fields: [], Component: CornerLogo },
   { id: "progress-bar", box: { x: 60, y: 200, w: 960, h: 14 }, timing: "always", enter: null, fields: [], Component: ProgressBar },
+  { id: "gta-wanted", box: { x: 560, y: 216, w: 460, h: 72 }, timing: "always", enter: "slideInRight", fields: [], Component: GtaWanted },
+  { id: "gta-seam", box: { x: 0, y: 728, w: 1080, h: 30 }, timing: "always", enter: null, fields: [], Component: GtaSeam },
+  { id: "gta-wasted", box: { x: 0, y: 0, w: 1080, h: 1920 }, timing: "end", enter: null, fields: ["text"], Component: GtaWasted },
+  { id: "gta-mission", box: { x: 0, y: 0, w: 1080, h: 1920 }, timing: "end", enter: null, fields: ["text"], Component: GtaMission },
 ];
+
+/** The widgets of a pack, by its name: shown together in the editor */
+export const WIDGET_PACKS: Record<string, KitWidgetId[]> = { gta: ["gta-wanted", "gta-seam", "gta-wasted", "gta-mission"] };
 
 export const KIT_COMPONENTS: Record<string, FC<KitWidgetProps>> = Object.fromEntries(KIT_WIDGETS.map((w) => [w.id, w.Component]));
 

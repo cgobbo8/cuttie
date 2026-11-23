@@ -36,6 +36,7 @@ export const BUILTIN_USES: Record<TemplateId, string> = {
   accroche:
     "The whole stream picture between two black bands, like a film, with the title above for the whole video: when the entire screen matters (interface, things to read, wide shots) or to give a moment a story-telling feel.",
   sanscam: "Only the game: when nobody is in the webcam, or when the face adds nothing to the moment.",
+  gta: "The look of Grand Theft Auto for a live on that game: the face cam big on top of the game with a strip of sunset on the seam (the game alone when nobody is in the cam), the title and the subtitles in heavy small letters with a black outline, six stars that light up as the video plays. For any moment of a GTA live; not for another game unless the streamer asks for it.",
 };
 
 const FONT_NAMES: Record<string, string> = {
@@ -66,6 +67,10 @@ const WIDGET_NAMES: Record<string, string> = {
   "clip-sticker": "a sticker label",
   "corner-logo": "a small logo in a corner",
   "progress-bar": "a progress bar of the video",
+  "gta-wanted": "six wanted stars that light up one by one as the video plays, and blink red and blue at the end",
+  "gta-seam": "a strip of sunset colours between the webcam and the game",
+  "gta-wasted": "the picture going grey with a red WASTED stamped across it (for a fail, a death, a plan gone wrong)",
+  "gta-mission": "a yellow script « Mission réussie » stamped across the picture (for a win, a clutch, a plan that worked)",
 };
 
 const ENTER_WORDS: Record<string, string> = {
@@ -179,7 +184,7 @@ export function describeSpec(spec: TemplateSpec): string {
   lines.push(`Captions (what is said, word by word): ${subsWhere}; ${letters}; ${subs.words ?? 4} words at a time, ${spoken}${subs.pop ? ", the spoken word pops bigger" : ""}.`);
 
   if (spec.hook.visible) {
-    const style = { outline: "white letters with a black outline", box: "dark text on a white box", brand: "white text on a box in the channel's main color" }[spec.hook.style];
+    const style = { outline: "white letters with a black outline", box: "dark text on a white box", brand: "white text on a box in the channel's main color", vice: "heavy white small letters with a black outline, like a GTA title" }[spec.hook.style];
     const until = spec.hook.until === null ? "for the whole video" : spec.hook.until === "half" ? "for the first half" : `for the first ${round(spec.hook.until ?? 3.5)} s`;
     lines.push(`Hook line (the video's title, on the first frame): ${placeOf(spec.hook.box)}; ${style}, ${FONT_NAMES[spec.hook.font] ?? spec.hook.font}, ${Math.round(spec.hook.size)} px; on screen ${until}, then it bounces away.`);
   } else {

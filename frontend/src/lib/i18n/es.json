@@ -913,6 +913,10 @@
       "sanscam": {
         "name": "Sin cámara",
         "desc": "Solo el juego, el gancho durante la primera mitad"
+      },
+      "gta": {
+        "name": "GTA",
+        "desc": "Tu cámara en grande, el juego debajo, letras y estrellas estilo GTA"
       }
     },
     "clipOf": "Clip {{n}} de {{total}}",
@@ -1337,7 +1341,8 @@
     "usageByAi": "Redactar con la IA",
     "usagePlaceholder": "Ej.: para mis fails, el juego en grande y mi cámara en pequeño.",
     "usageHint": "La IA lee esta frase, además del lugar de cada elemento, cuando elige la plantilla de un trozo. Si la dejas vacía, se redacta al guardar.",
-    "usageFailed": "La IA no ha podido redactar la descripción. Vuelve a intentarlo o escríbela tú."
+    "usageFailed": "La IA no ha podido redactar la descripción. Vuelve a intentarlo o escríbela tú.",
+    "hookVice": "GTA"
   },
   "widgets": {
     "channel-pill": {
@@ -1391,6 +1396,22 @@
     "progress-bar": {
       "name": "Barra de progreso",
       "desc": "Avanza con el clip"
+    },
+    "gta-wanted": {
+      "name": "Estrellas de búsqueda",
+      "desc": "Seis estrellas que se encienden durante el clip y luego parpadean"
+    },
+    "gta-seam": {
+      "name": "Franja de atardecer",
+      "desc": "Una franja con los colores de Vice City entre tu cámara y el juego"
+    },
+    "gta-wasted": {
+      "name": "Wasted",
+      "desc": "La imagen se vuelve gris y la palabra cae en rojo: para un fallo"
+    },
+    "gta-mission": {
+      "name": "Misión superada",
+      "desc": "Un sello amarillo al final del clip: para una victoria"
     }
   },
   "freed": {

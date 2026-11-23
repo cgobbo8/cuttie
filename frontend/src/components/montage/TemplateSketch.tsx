@@ -139,8 +139,9 @@ export default function TemplateSketch({ layers, frameUrl, width, sample, at, cl
     }
     const kit = layer.type === "widget" && layer.widget ? kitWidget(layer.widget.widgetId) : undefined;
     if (kit && layer.widget) {
-      // As it looks once settled, a couple of seconds after it shows up
-      const at = Number(layer.widget.props.appearAt ?? 0) + 2.4;
+      // As it looks once settled, a couple of seconds after it shows up; one that follows the whole clip, as it looks half way through
+      const follows = ["progress-bar", "gta-wanted"].includes(layer.widget.widgetId) && Number(layer.widget.props.endAt) > Number(layer.widget.props.startAt);
+      const at = follows ? (Number(layer.widget.props.startAt) + Number(layer.widget.props.endAt)) / 2 : Number(layer.widget.props.appearAt ?? 0) + 2.4;
       return <kit.Component props={layer.widget.props} width={t.width} height={t.height} currentTime={at} />;
     }
     if (layer.type === "text" && layer.text) {

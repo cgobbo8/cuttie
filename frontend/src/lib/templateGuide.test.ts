@@ -46,8 +46,13 @@ describe("what a template is, in words", () => {
     expect(of("discussion")).toContain("Twitch chat: message bubbles");
     expect(of("signature")).toContain("Background (behind everything): the clip itself, blurred and darkened.");
     expect(of("reaction")).toContain("a card with rounded corners");
-    // Seven layouts, seven different descriptions
-    expect(new Set(TEMPLATE_IDS.map(of)).size).toBe(7);
+    // The GTA pack's own: the cam on top of the game with its strip of sunset, its lettering, its stars that follow the video
+    expect(of("gta")).toContain("heavy white small letters with a black outline, like a GTA title");
+    expect(of("gta")).toContain("Rammetto");
+    expect(of("gta")).toContain("six wanted stars that light up one by one as the video plays");
+    expect(of("gta")).toContain("a strip of sunset colours between the webcam and the game");
+    // Eight layouts, eight different descriptions
+    expect(new Set(TEMPLATE_IDS.map(of)).size).toBe(8);
   });
 
   it("follows what the streamer changed in a template of their own", () => {

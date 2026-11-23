@@ -110,7 +110,9 @@ export interface SpecWidget {
 
 /** How a widget is timed when added: its kit timing, the whole clip for the progress bar, to the end for the corner logo */
 export function defaultShow(kind: WidgetKind, timing: WidgetTimingKind): WidgetShow {
-  if (kind === "progress-bar") return { in: 0, inFrom: "start", out: null, outFrom: "end" };
+  // What follows the whole clip is there from its first frame to its last; a word a mission ends on, for its last seconds
+  if (kind === "progress-bar" || kind === "gta-wanted" || kind === "gta-seam") return { in: 0, inFrom: "start", out: null, outFrom: "end" };
+  if (kind === "gta-wasted" || kind === "gta-mission") return { in: 2.5, inFrom: "end", out: null, outFrom: "end" };
   if (kind === "corner-logo") return { in: 0.5, inFrom: "start", out: null, outFrom: "end" };
   return SHOW_PRESETS[timing];
 }
@@ -224,7 +226,8 @@ export function restack(spec: TemplateSpec, key: string, to: "up" | "down" | "fr
   return order;
 }
 
-export type HookStyle = "outline" | "box" | "brand";
+/** ("vice": the GTA pack's lettering, heavy small letters with a black outline) */
+export type HookStyle = "outline" | "box" | "brand" | "vice";
 
 export const BRAND_COLOR_REFS = ["white", "accent", "highlight", "dark", "light"] as const;
 
@@ -324,15 +327,16 @@ function hookLayers(ctx: TemplateContext, h: TemplateSpec["hook"]): Layer[] {
   if (h.style === "brand") layers.push(shape("Fond de l'accroche", t, ctx.colors.accent, 0.94, 26, "soft"));
   const textLayer = base("Accroche", "text", boxed ? { x: t.x + 30, y: t.y + 10, width: t.width - 60, height: t.height - 20 } : t);
   textLayer.text = {
-    content: ctx.hook,
+    // (the GTA pack writes in small letters, as the title of that game is)
+    content: h.style === "vice" ? ctx.hook.toLowerCase() : ctx.hook,
     fontFamily: `"${fontFamily(h.font)}", system-ui, sans-serif`,
     fontSize: Math.round(h.size),
     color: h.style === "box" ? "#0C0C0E" : h.style === "brand" ? inkOn(ctx.colors.accent) : "#FFFFFF",
     fontWeight: "bold",
     textAlign: "center",
     uppercase: h.style === "outline",
-    lineHeight: boxed ? 1.18 : 1.08,
-    ...(h.style === "outline" ? { stroke: true } : {}),
+    lineHeight: boxed ? 1.18 : h.style === "vice" ? 1.0 : 1.08,
+    ...(h.style === "outline" || h.style === "vice" ? { stroke: true } : {}),
   };
   layers.push(textLayer);
   // No entrance: it's the cover. Fades out when its time is up

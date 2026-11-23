@@ -102,6 +102,30 @@ const followAtEnd = (box: Box): Extra => ({
   exit: "none",
 });
 
+/** A widget of the GTA pack that follows the whole clip */
+const allAlong = (id: string, kind: WidgetKind, box: Box, enter: EnterId): Extra => ({ id, kind, box, show: { in: 0, inFrom: "start", out: null, outFrom: "end" }, enter, exit: "none" });
+
+/*
+ * The GTA pack's layout: what the most-viewed short videos of a live do (32 French reels about that game looked
+ * at in November 2026: the face cam big on top of the game or no cam at all, never a small one in a corner; a
+ * title on the first frame; 4 words of subtitles at most, white with a black outline), in the pack's own
+ * look: a strip of sunset on the seam, heavy small letters, six stars that light up as the clip plays.
+ */
+const GTA: Layout = {
+  background: "color",
+  bgColor: "#160b36",
+  dim: 0,
+  cam: { box: { x: 0, y: 0, w: 1080, h: 750 }, frame: frame(0) },
+  game: { box: { x: 0, y: 770, w: 1080, h: 1150 }, frame: frame(0) },
+  subtitles: { box: { x: 150, y: 640, w: 780, h: 240 }, font: "rammetto", size: 74, uppercase: false, words: 3, stroke: true },
+  // Titles go on the game, never on the face
+  hook: { box: { x: 90, y: 900, w: 900, h: 200 }, style: "vice", font: "rammetto", size: 70, until: 3.5 },
+  brand: { kind: "channel-pill", box: { x: 40, y: 218, w: 480, h: 64 }, enter: "pop", exit: "shrink" },
+  extras: [allAlong("w-seam", "gta-seam", { x: 0, y: 742, w: 1080, h: 34 }, "none"), allAlong("w-wanted", "gta-wanted", { x: 600, y: 218, w: 420, h: 66 }, "slideRight")],
+  // The seam covers the join of the two pictures; the words go over it
+  order: ["cam", "game", "widget:w-seam", "chat", "subtitles", "hook"],
+};
+
 /*
  * Text, webcam and brand stay out of what TikTok / Shorts / Reels cover
  * (COVERED_ZONES): the tabs above y 200, the description below y 1440, the
@@ -189,10 +213,20 @@ const LAYOUTS: Record<TemplateId, Layout> = {
     brand: { kind: "channel-pill", box: { x: 190, y: 1352, w: 700, h: 68 }, enter: "bounce", exit: "shrink" },
     extras: [followAtEnd({ x: 290, y: 760, w: 500, h: 160 })],
   },
+  gta: GTA,
 };
 
 /** Layouts on a clip where nobody is in the webcam (mode réalisateur, a break...) */
 const WITHOUT_CAM: Partial<Record<TemplateId, Layout>> = {
+  // The game alone, in the pack's lettering: the title on top, the stars above it
+  gta: {
+    ...GTA,
+    cam: null,
+    game: { box: { x: 0, y: 0, w: 1080, h: 1920 }, frame: frame(0) },
+    subtitles: { ...GTA.subtitles, box: { x: 150, y: 1060, w: 780, h: 240 } },
+    hook: { ...GTA.hook, box: { x: 90, y: 310, w: 900, h: 220 } },
+    extras: [allAlong("w-wanted", "gta-wanted", { x: 600, y: 218, w: 420, h: 66 }, "slideRight")],
+  },
   // The game card moves up, the hook line above it like a title
   signature: {
     ...LAYOUTS.signature,

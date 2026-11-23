@@ -34,7 +34,7 @@ export type WidgetTiming = 'start' | 'always' | 'end'
 export type SubtitleStyle = 'bold' | 'karaoke' | 'minimal'
 
 /** Allowed values of a custom template (mirrors frontend/src/lib/templates.ts) */
-export const TEMPLATE_BASES = ['empile', 'signature', 'reaction', 'discussion', 'plein', 'accroche', 'sanscam'] as const
+export const TEMPLATE_BASES = ['empile', 'signature', 'reaction', 'discussion', 'plein', 'accroche', 'sanscam', 'gta'] as const
 const LOOK_VALUES = {
   camSize: ['s', 'm', 'l'],
   camShape: ['rounded', 'circle'],
@@ -75,6 +75,11 @@ const WIDGET_KINDS = [
   'clip-sticker',
   'corner-logo',
   'progress-bar',
+  // The GTA pack
+  'gta-wanted',
+  'gta-seam',
+  'gta-wasted',
+  'gta-mission',
 ]
 const COLOR_REFS = ['white', 'accent', 'highlight', 'dark', 'light']
 const ENTER_IDS = ['pop', 'bounce', 'elastic', 'drop', 'rise', 'slideLeft', 'slideRight', 'zoom', 'fade', 'none']
@@ -161,7 +166,7 @@ function parseSpec(item: Json): TemplateSpec {
     hook: {
       visible: bool(hook.visible),
       box: box(hook.box),
-      style: oneOf(hook.style, ['outline', 'box', 'brand']),
+      style: oneOf(hook.style, ['outline', 'box', 'brand', 'vice']),
       font: oneOf(hook.font, FONT_IDS),
       size: num(hook.size, 20, 240),
       ...(hook.until !== undefined ? { until: hookUntil(hook.until) } : {}),

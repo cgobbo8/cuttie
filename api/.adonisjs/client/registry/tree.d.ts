@@ -19,6 +19,7 @@ export interface ApiDefinition {
   }
   internal: {
     workerEvents: typeof routes['internal.worker_events']
+    assistant: typeof routes['internal.assistant']
   }
   accessToken: {
     store: typeof routes['access_token.store']
@@ -102,6 +103,12 @@ export interface ApiDefinition {
     proposals: typeof routes['memory.proposals']
     apply: typeof routes['memory.apply']
     ignore: typeof routes['memory.ignore']
+  }
+  assistant: {
+    index: typeof routes['assistant.index']
+    turn: typeof routes['assistant.turn']
+    progress: typeof routes['assistant.progress']
+    destroy: typeof routes['assistant.destroy']
   }
   compilations: {
     searchInfo: typeof routes['compilations.search_info']

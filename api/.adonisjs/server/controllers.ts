@@ -8,6 +8,7 @@ export const controllers = {
   AiEditor: () => import('#controllers/ai_editor_controller'),
   App: () => import('#controllers/app_controller'),
   Assets: () => import('#controllers/assets_controller'),
+  Assistant: () => import('#controllers/assistant_controller'),
   AuthMe: () => import('#controllers/auth_me_controller'),
   Brand: () => import('#controllers/brand_controller'),
   Clips: () => import('#controllers/clips_controller'),

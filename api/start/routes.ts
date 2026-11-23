@@ -29,6 +29,8 @@ router
     router.get('/storage/*', [() => import('#controllers/storage_controller'), 'show'])
     // Status events pushed by the Python worker (shared-secret auth)
     router.post('/internal/worker-events', [() => import('#controllers/internal_controller'), 'workerEvents'])
+    // What the assistant asks of the app while it works (shared-secret auth)
+    router.post('/internal/assistant', [() => import('#controllers/internal_controller'), 'assistant'])
 
     // ── Auth (public, rate-limited) ────────────────────────────────────────
     router.post('/auth/login', [() => import('#controllers/access_token_controller'), 'store']).use(authRateLimit)
@@ -114,6 +116,11 @@ router
         router.get('/memory/proposals', [() => import('#controllers/memory_controller'), 'proposals'])
         router.post('/memory/proposals/:id/apply', [() => import('#controllers/memory_controller'), 'apply'])
         router.delete('/memory/proposals/:id', [() => import('#controllers/memory_controller'), 'ignore'])
+        // The assistant's panel: one conversation, from one page to the next
+        router.get('/assistant', [() => import('#controllers/assistant_controller'), 'index'])
+        router.post('/assistant/turn', [() => import('#controllers/assistant_controller'), 'turn'])
+        router.get('/assistant/progress', [() => import('#controllers/assistant_controller'), 'progress'])
+        router.delete('/assistant', [() => import('#controllers/assistant_controller'), 'destroy'])
 
         // Searching the live, compilations (videos made of pieces of the live)
         router.get('/jobs/:id/search/info', [() => import('#controllers/compilations_controller'), 'searchInfo'])

@@ -42,6 +42,12 @@ const routes = {
     tokens: [{"old":"/api/internal/worker-events","type":0,"val":"api","end":""},{"old":"/api/internal/worker-events","type":0,"val":"internal","end":""},{"old":"/api/internal/worker-events","type":0,"val":"worker-events","end":""}],
     types: placeholder as Registry['internal.worker_events']['types'],
   },
+  'internal.assistant': {
+    methods: ["POST"],
+    pattern: '/api/internal/assistant',
+    tokens: [{"old":"/api/internal/assistant","type":0,"val":"api","end":""},{"old":"/api/internal/assistant","type":0,"val":"internal","end":""},{"old":"/api/internal/assistant","type":0,"val":"assistant","end":""}],
+    types: placeholder as Registry['internal.assistant']['types'],
+  },
   'access_token.store': {
     methods: ["POST"],
     pattern: '/api/auth/login',
@@ -419,6 +425,30 @@ const routes = {
     pattern: '/api/memory/proposals/:id',
     tokens: [{"old":"/api/memory/proposals/:id","type":0,"val":"api","end":""},{"old":"/api/memory/proposals/:id","type":0,"val":"memory","end":""},{"old":"/api/memory/proposals/:id","type":0,"val":"proposals","end":""},{"old":"/api/memory/proposals/:id","type":1,"val":"id","end":""}],
     types: placeholder as Registry['memory.ignore']['types'],
+  },
+  'assistant.index': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/assistant',
+    tokens: [{"old":"/api/assistant","type":0,"val":"api","end":""},{"old":"/api/assistant","type":0,"val":"assistant","end":""}],
+    types: placeholder as Registry['assistant.index']['types'],
+  },
+  'assistant.turn': {
+    methods: ["POST"],
+    pattern: '/api/assistant/turn',
+    tokens: [{"old":"/api/assistant/turn","type":0,"val":"api","end":""},{"old":"/api/assistant/turn","type":0,"val":"assistant","end":""},{"old":"/api/assistant/turn","type":0,"val":"turn","end":""}],
+    types: placeholder as Registry['assistant.turn']['types'],
+  },
+  'assistant.progress': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/assistant/progress',
+    tokens: [{"old":"/api/assistant/progress","type":0,"val":"api","end":""},{"old":"/api/assistant/progress","type":0,"val":"assistant","end":""},{"old":"/api/assistant/progress","type":0,"val":"progress","end":""}],
+    types: placeholder as Registry['assistant.progress']['types'],
+  },
+  'assistant.destroy': {
+    methods: ["DELETE"],
+    pattern: '/api/assistant',
+    tokens: [{"old":"/api/assistant","type":0,"val":"api","end":""},{"old":"/api/assistant","type":0,"val":"assistant","end":""}],
+    types: placeholder as Registry['assistant.destroy']['types'],
   },
   'compilations.search_info': {
     methods: ["GET","HEAD"],

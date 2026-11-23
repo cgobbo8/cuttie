@@ -79,6 +79,18 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/internal_controller').default['workerEvents']>>>
     }
   }
+  'internal.assistant': {
+    methods: ["POST"]
+    pattern: '/api/internal/assistant'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/internal_controller').default['assistant']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/internal_controller').default['assistant']>>>
+    }
+  }
   'access_token.store': {
     methods: ["POST"]
     pattern: '/api/auth/login'
@@ -833,6 +845,54 @@ export interface Registry {
       query: {}
       response: ExtractResponse<Awaited<ReturnType<import('#controllers/memory_controller').default['ignore']>>>
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/memory_controller').default['ignore']>>>
+    }
+  }
+  'assistant.index': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/assistant'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/assistant_controller').default['index']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/assistant_controller').default['index']>>>
+    }
+  }
+  'assistant.turn': {
+    methods: ["POST"]
+    pattern: '/api/assistant/turn'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/assistant_controller').default['turn']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/assistant_controller').default['turn']>>>
+    }
+  }
+  'assistant.progress': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/assistant/progress'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/assistant_controller').default['progress']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/assistant_controller').default['progress']>>>
+    }
+  }
+  'assistant.destroy': {
+    methods: ["DELETE"]
+    pattern: '/api/assistant'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/assistant_controller').default['destroy']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/assistant_controller').default['destroy']>>>
     }
   }
   'compilations.search_info': {

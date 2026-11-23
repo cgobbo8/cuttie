@@ -528,3 +528,35 @@ export async function runLocalTest(): Promise<Record<string, unknown>> {
 export async function getDiagnostics(): Promise<Record<string, unknown>> {
   return call('GET', '/diagnostics', { timeoutMs: 30_000 })
 }
+
+/* ── The assistant (backend/app/services/assistant.py) ────── */
+
+/** What the worker answers to one request of a conversation with the assistant */
+export interface AssistantTurn {
+  /** "done": it answered; "action": it waits for the page to do something, or for the streamer's yes */
+  status: 'done' | 'action'
+  /** Its words then what it shows, for the whole request (each answer replaces the one before) */
+  reply: unknown[]
+  action?: { call: string; name: string; args: Record<string, unknown>; needs: 'app' | 'approval' }
+  steps: string[]
+  cost: number
+}
+
+/**
+ * One request of a conversation: what the streamer says (`text`), or the answer to the action
+ * the conversation waits on (`resume`). The assistant may read a whole live, listen, look and
+ * search before it answers: up to 10 minutes (a live transcribed again first takes that long).
+ */
+export async function assistantTurn(body: { thread: string; text?: string; resume?: { call: string; result: unknown }; context: Record<string, unknown>; language: string }): Promise<AssistantTurn> {
+  return call('POST', '/assistant/turn', { body, timeoutMs: 15 * 60_000 })
+}
+
+/** What the assistant is doing right now for a conversation */
+export async function assistantProgress(thread: string): Promise<{ steps: string[]; running: boolean; sub?: unknown }> {
+  return call('GET', `/assistant/progress?thread=${encodeURIComponent(thread)}`, { timeoutMs: 5_000 })
+}
+
+/** A conversation forgotten by the worker (409: it is answering) */
+export async function assistantForget(thread: string): Promise<void> {
+  await call('DELETE', `/assistant/thread?thread=${encodeURIComponent(thread)}`, { timeoutMs: 10_000 })
+}

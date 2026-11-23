@@ -90,12 +90,14 @@ def attack_foot(y, sr: int, at: float) -> float:
     close = librosa.feature.rms(y=y[low : int((at + 0.15) * sr)], frame_length=512, hop_length=fine)[0]
     if len(close) < 3 or close.max() <= 0:
         return at
-    # The steepest of the rise, near where the detector heard it; then down to its foot
+    # The steepest of the rise, near where the detector heard it; then down to its foot (on the level
+    # smoothed over 30 ms: a rise is never perfectly even, and would be left at its first ripple)
     near = max(0, int((at - 0.12) * sr - low) // fine)
     rise = near + int(np.argmax(np.diff(close[near:])))
     peak = float(close[rise + 1 : rise + 1 + int(0.1 * sr / fine)].max())
+    even = np.convolve(close, np.ones(5) / 5, mode="same")
     for _ in range(int(0.15 * sr / fine)):
-        if rise == 0 or close[rise] <= 0.15 * peak or close[rise - 1] >= close[rise]:
+        if rise == 0 or even[rise] <= 0.12 * peak or even[rise - 1] >= even[rise]:
             break
         rise -= 1
     return low / sr + rise * fine / sr

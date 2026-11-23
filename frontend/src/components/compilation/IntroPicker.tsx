@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Check, Play, Sparkles, Volume2, VolumeX } from "lucide-react";
 import { hookSpan } from "../../lib/compilation";
 import IntroCard, { INTRO_W, type IntroColors } from "../../lib/intro/IntroCard";
-import { DEFAULT_HOOK_LOOK, defaultIntroSound, HOOK_MAX, HOOK_MIN, hookLook, INTRO_SOUND_IDS, introSpan, isIntro, isIntroSound, isJingle, JINGLE_IDS, NO_SOUND, type IntroChoice, type JingleId } from "../../lib/intro/intros";
+import { DEFAULT_HOOK_LOOK, defaultIntroSound, HOOK_MAX, HOOK_MIN, hookLook, INTRO_PACKS, INTRO_SOUND_IDS, introPack, introSpan, isIntro, isIntroSound, isJingle, JINGLE_IDS, NO_SOUND, type IntroChoice, type IntroPackId, type JingleId } from "../../lib/intro/intros";
 import { snapToWords } from "../../lib/montage";
 import { introSoundUrl } from "../../lib/music/sound";
 
@@ -172,8 +172,9 @@ type Mode = "none" | "jingle" | "hook";
 /**
  * What a video opens with, chosen in two steps. First the kind: nothing, a jingle (a ready-made
  * opening over the whole screen), or the hook (the best moment of the video played first). Then
- * its graphics: twelve jingles, or the twelve looks that can frame a hook, which have the names
- * of the jingles. Each one plays in small with the channel's own logo and colours.
+ * its graphics: the jingles, or the looks that can frame a hook, which have the names of the
+ * jingles. They come in packs, one shown at a time: Cuttie's twelve, drawn with the channel's
+ * colours, and the GTA pack, drawn with its own. Each one plays in small with the channel's logo.
  */
 export default function IntroPicker({ value, brand, name, onChange, onClose, heading, fields = "all", className = "", hook }: Props) {
   const { t, i18n } = useTranslation();
@@ -202,6 +203,8 @@ export default function IntroPicker({ value, brand, name, onChange, onClose, hea
   // The one chosen last: what going from "none" to a kind, or from one kind to the other, starts from
   const last = useRef<JingleId | null>(graphic);
   if (graphic) last.current = graphic;
+  // The pack whose graphics are shown: the one of the graphic chosen, until another is opened
+  const [pack, setPack] = useState<IntroPackId>(introPack(graphic));
   // A hook needs a video made of several passages: it is offered there, and as the channel's preferred intro
   const modes: Mode[] = hook || fields === "style" ? ["none", "jingle", "hook"] : ["none", "jingle"];
   // Opened from a row near an edge of the window, it is pushed back inside (under the top bar, above the bottom)
@@ -213,7 +216,7 @@ export default function IntroPicker({ value, brand, name, onChange, onClose, hea
     const [min, max] = [76, window.innerHeight - 12];
     const shift = top < min ? min - top : bottom > max ? Math.max(min - top, max - bottom) : 0;
     if (shift) el.style.transform = `translateY(${Math.round(shift)}px)`;
-  }, [mode, fields, hook?.passages.length]);
+  }, [mode, fields, pack, hook?.passages.length]);
   /** Heard as soon as it is chosen */
   const listen = (id: string) => {
     try {
@@ -330,7 +333,23 @@ export default function IntroPicker({ value, brand, name, onChange, onClose, hea
         </div>
       </div>
       <div className="flex flex-wrap gap-x-4 gap-y-3">
-        <div className={`grid grid-cols-4 gap-1 w-[280px] flex-none content-start transition-opacity ${mode === "none" ? "opacity-55" : ""}`}>{JINGLE_IDS.map(tile)}</div>
+        <div className="w-[280px] flex-none">
+          <div role="tablist" aria-label={t("compilation.intro.pack.label")} className="flex gap-1 pb-2">
+            {INTRO_PACKS.map((one) => (
+              <button
+                key={one.id}
+                type="button"
+                role="tab"
+                aria-selected={pack === one.id}
+                onClick={() => setPack(one.id)}
+                className={`h-6 px-2.5 rounded-full text-[11.5px] transition-colors ${pack === one.id ? "bg-white/[0.14] text-white font-[550]" : "text-ink-3 hover:text-white hover:bg-white/[0.07]"}`}
+              >
+                {t(`compilation.intro.pack.${one.id}`)}
+              </button>
+            ))}
+          </div>
+          <div className={`grid grid-cols-4 gap-1 content-start transition-opacity ${mode === "none" ? "opacity-55" : ""}`}>{(INTRO_PACKS.find((one) => one.id === pack) ?? INTRO_PACKS[0]).jingles.map(tile)}</div>
+        </div>
         {mode === "none" && fields !== "style" && <p className="flex-1 min-w-[200px] px-0.5 pt-2 text-[12px] leading-relaxed text-ink-3">{t("compilation.intro.noneHint")}</p>}
         {style && fields !== "style" && (
           <div className="flex-1 min-w-[200px]">

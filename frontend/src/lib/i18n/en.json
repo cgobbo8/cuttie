@@ -1704,7 +1704,11 @@
         "news": "Breaking news",
         "shatter": "Shatter",
         "countdown": "Countdown",
-        "fuse": "Fuse"
+        "fuse": "Fuse",
+        "sunset": "Sunset",
+        "miami": "Miami",
+        "wanted": "Wanted",
+        "cover": "Cover"
       },
       "sounds": {
         "boom": "Impact",
@@ -1718,7 +1722,11 @@
         "sting": "News sting",
         "glass": "Broken glass",
         "beep": "Beeps",
-        "fizz": "Fuse and blast"
+        "fizz": "Fuse and blast",
+        "synth": "80s synth",
+        "buzz": "Buzz",
+        "siren": "Siren and chopper",
+        "stamp": "Stamps"
       },
       "chosen": "Intro chosen by the AI: {{name}}",
       "followLabel": "Follow",
@@ -1744,6 +1752,11 @@
         "none": "None",
         "jingle": "Classic intro",
         "hook": "Hook"
+      },
+      "pack": {
+        "label": "Pack",
+        "cuttie": "Cuttie",
+        "gta": "GTA"
       }
     },
     "music": {

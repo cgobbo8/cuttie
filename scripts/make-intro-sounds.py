@@ -338,8 +338,155 @@ def fizz() -> np.ndarray:
     return room(track, 0.6, 0.2)
 
 
+# ── The GTA pack: an evening in Vice City. Each sound is written on the four counts of its intro ──
+
+
+def saw(freq: float, seconds: float, detune: float = 0.006) -> np.ndarray:
+    """A fat synth voice: three saws a hair apart."""
+    x = t(seconds)
+    return sum(signal.sawtooth(2 * np.pi * freq * (1 + k) * x) for k in (-detune, 0, detune)) / 3
+
+
+def chord(freqs: tuple, seconds: float, attack: float = 0.004, decay: float = 1.6, cut: float = 3000) -> np.ndarray:
+    """A chord on that synth through a filter that closes as it rings: the stab of an 80s record."""
+    x = t(seconds)
+    voice = sum(saw(f, seconds) for f in freqs) / len(freqs)
+    closing = np.exp(-x * 5)
+    return (lowpass(voice, cut * 2.2) * closing + lowpass(voice, cut * 0.45) * (1 - closing)) * np.minimum(1, x / attack) * np.exp(-x * decay)
+
+
+def snare(seconds: float = 0.4) -> np.ndarray:
+    """A snare with the reverb of an 80s record: big, then cut off."""
+    x = t(seconds)
+    body = np.sin(2 * np.pi * np.cumsum(190 + 120 * np.exp(-x * 40)) / SR) * np.exp(-x * 22)
+    gate = np.where(x < seconds * 0.7, 1.0, np.maximum(0, 1 - (x - seconds * 0.7) / 0.03)) * (0.35 + 0.65 * np.exp(-x * 9))
+    return body * 0.7 + band(rng.standard_normal(len(x)), 900, 7500) * gate * 0.8
+
+
+def crackle(seconds: float, often: float) -> np.ndarray:
+    """Sparks: short bursts of bright noise, `often` of them in ten thousand samples."""
+    n = int(seconds * SR)
+    sparks = (rng.random(n) > 1 - often / 10000).astype(float)
+    return band(signal.fftconvolve(sparks, np.exp(-t(0.008) * 700))[:n] * rng.standard_normal(n), 2000, 10000)
+
+
+def synth() -> np.ndarray:
+    """Sunset, on four counts of 0.467 s. A pad swells as the sun comes up and the palms whip in; the logo lands on the
+    first count; the title hits on the second with a chord and a snare, its second line a sixteenth later; bells run up
+    on the third; a cymbal is sucked back into the cut."""
+    c = 14 / 30
+    track = np.zeros(int(2.7 * SR))
+    pad = chord((174.6, 220.0, 261.6, 329.6), 1.0, attack=0.45, decay=0.2, cut=900)
+    place(track, pad * np.linspace(0, 1, len(pad)) ** 1.2, 0.0, 0.4)
+    place(track, sweep(0.45, 400, 3600, "up"), 0.0, 0.3)
+    place(track, thud(0.5, 130, 48, 9), c, 0.8)
+    place(track, bell(0.7, 698.5, 6), c, 0.22)
+    place(track, thud(0.9, 150, 42, 5), 2 * c, 1.0)
+    place(track, snare(0.42), 2 * c, 0.55)
+    place(track, chord((220.0, 261.6, 329.6, 392.0, 523.3), 1.5), 2 * c, 0.65)
+    place(track, chord((440.0, 523.3, 659.3), 0.9, decay=3.0), 2 * c + c / 4, 0.3)
+    place(track, thud(0.2, 170, 90, 30), 2 * c + c / 4, 0.4)
+    for i, freq in enumerate((659.3, 784.0, 987.8, 1318.5)):
+        place(track, bell(0.7, freq, 7), 3 * c + i * 0.055, 0.2)
+    place(track, snare(0.3), 3 * c, 0.3)
+    swell = int(0.45 * SR)
+    place(track, highpass(rng.standard_normal(swell), 5000) * np.linspace(0, 1, swell) ** 2.5, 4 * c - 0.45, 0.3)
+    place(track, thud(0.4, 110, 50, 12), 4 * c, 0.5)
+    place(track, sweep(0.4, 5000, 700, "down"), 4 * c, 0.3)
+    follow(track, 4 * c)
+    return room(track, 0.7, 0.2)
+
+
+def buzz() -> np.ndarray:
+    """Miami, on four counts of 0.5 s. A spark runs round the frame of a neon sign; the tubes catch on the first count
+    (the clicks of a starter, a hum that sets in) and the letters of the name tick on; the title flares on the second
+    with a chord; the sign spits; it goes out on the fourth, its hum falling."""
+    c = 0.5
+    track = np.zeros(int(2.8 * SR))
+    n = int(c * SR)
+    place(track, crackle(c, 25) * np.linspace(0.5, 1, n), 0.0, 0.5)
+    place(track, highpass(rng.standard_normal(n), 5000) * np.linspace(0.2, 0.6, n), 0.0, 0.12)
+    # The transformer: mains hum with its buzz, from the first count to the cut, where it falls away
+    x = t(3 * c + 0.5)
+    pitch = np.where(x < 3 * c, 100.0, 100 * np.exp(-(x - 3 * c) * 3.2))
+    phase = 2 * np.pi * np.cumsum(pitch) / SR
+    hum = lowpass(np.sin(phase) + 0.4 * np.sign(np.sin(phase)) + 0.3 * np.sin(2 * phase) + 0.15 * np.sin(3 * phase), 1400)
+    place(track, hum * np.minimum(1, x / 0.03) * np.where(x < 3 * c, 1.0, np.exp(-(x - 3 * c) * 7)), c, 0.13)
+    click = highpass(rng.standard_normal(int(0.02 * SR)), 2500) * np.exp(-t(0.02) * 300)
+    for at in (c, c + 0.066, c + 0.166, c + 0.2):
+        place(track, click, at, 0.55)
+        place(track, bell(0.12, 2637, 40), at, 0.12)
+    for i in range(8):
+        place(track, click, c + 0.07 + i * 0.034, 0.22)
+    written = int(0.27 * SR)
+    place(track, band(rng.standard_normal(written), 3000, 9000) * np.linspace(0.3, 1, written) ** 2, 1.45 * c, 0.2)
+    place(track, chord((146.8, 185.0, 220.0, 277.2, 329.6, 440.0), 1.6, decay=1.3), 2 * c, 0.75)
+    place(track, thud(0.7, 120, 45, 6), 2 * c, 0.8)
+    place(track, band(rng.standard_normal(int(0.12 * SR)), 1500, 8000) * np.exp(-t(0.12) * 30), 2 * c, 0.5)
+    for at in (2.55 * c, 3.4 * c):
+        place(track, crackle(0.09, 120), at, 0.4)
+    place(track, bell(0.5, 1046.5, 9), 3 * c, 0.22)
+    for at in (4 * c, 4 * c + 0.066, 4 * c + 0.166):
+        place(track, click, at, 0.45)
+    follow(track, 4 * c)
+    return room(track, 0.5, 0.15)
+
+
+def siren() -> np.ndarray:
+    """Recherché, on four counts of 0.5 s. A helicopter overhead and a police siren all along (a wail that climbs, then
+    yelps); three stars are thrown on by the first count, each with a ring; the title is stamped on the second; three
+    more stars by the third, and a police radio spits before the cut."""
+    c = 0.5
+    track = np.zeros(int(2.8 * SR))
+    x = np.arange(len(track)) / SR
+    # The helicopter: the thump of its blades, eleven a second, and the wash of its engine
+    blades = lowpass(rng.standard_normal(len(x)), 220) * (0.2 + 0.8 * np.maximum(0, np.sin(2 * np.pi * 11.5 * x)) ** 3)
+    place(track, (blades * 3 + lowpass(rng.standard_normal(len(x)), 900) * 0.25) * np.minimum(1, x / 0.15), 0.0, 0.62)
+    # The siren: a wail up over the first two counts, then yelps
+    freq = np.where(x < 2 * c, 520 + 900 * (x / (2 * c)) ** 0.8, 1000 + 430 * np.sin(2 * np.pi * 4 * (x - 2 * c)))
+    phase = 2 * np.pi * np.cumsum(freq) / SR
+    place(track, band(0.5 * np.sign(np.sin(phase)) + 0.5 * np.sin(phase), 400, 3200) * np.minimum(1, x / 0.2), 0.0, 0.34)
+    for i, at in enumerate((c - c / 2, c - c / 4, c, 3 * c - c / 2, 3 * c - c / 4, 3 * c)):
+        place(track, bell(0.35, 1174.7 * 2 ** (i / 6), 12), at, 0.3)
+        place(track, thud(0.12, 220, 110, 40), at, 0.35)
+    place(track, thud(0.9, 150, 40, 5), 2 * c, 1.0)
+    place(track, snare(0.4), 2 * c, 0.6)
+    place(track, thud(0.6, 130, 50, 8), 3 * c, 0.7)
+    # The radio: a burst of static, cut by the beep that ends a call
+    static = band(rng.standard_normal(int(0.2 * SR)), 900, 3200) * (0.6 + 0.4 * np.sign(np.sin(2 * np.pi * 37 * t(0.2))))
+    place(track, static, 3 * c + 0.12, 0.28)
+    beep_ = t(0.07)
+    place(track, np.sin(2 * np.pi * 1250 * beep_) * np.minimum(1, np.minimum(beep_, 0.07 - beep_) / 0.005), 3 * c + 0.33, 0.2)
+    place(track, sweep(0.35, 800, 6000, "up"), 4 * c - 0.3, 0.35)
+    follow(track, 4 * c)
+    return room(track, 0.5, 0.14)
+
+
+def stamp() -> np.ndarray:
+    """Jaquette, on four counts of 0.467 s. Four panels are thrown on half a count apart, each a rush of air and a slap;
+    the plate lands on the second count with the biggest hit and a chord; a gloss rings over the cover on the third; the
+    panels leave in a rush."""
+    c = 14 / 30
+    track = np.zeros(int(2.7 * SR))
+    for i in range(4):
+        at = i * c / 2
+        if at > 0.14:
+            place(track, sweep(0.14, 600, 4000, "up"), at - 0.14, 0.3)
+        place(track, thud(0.3, 170 - 12 * i, 70, 16), at, 0.6)
+        place(track, band(rng.standard_normal(int(0.08 * SR)), 1200, 6000) * np.exp(-t(0.08) * 60), at, 0.4)
+    place(track, sweep(0.16, 500, 3500, "up"), 2 * c - 0.16, 0.4)
+    place(track, thud(1.0, 150, 38, 4.5), 2 * c, 1.0)
+    place(track, snare(0.4), 2 * c, 0.5)
+    place(track, chord((196.0, 246.9, 293.7, 392.0), 1.2, decay=2.0), 2 * c, 0.45)
+    for i, freq in enumerate((784.0, 1174.7, 1568.0)):
+        place(track, bell(0.6, freq, 8), 3 * c + i * 0.05, 0.2)
+    place(track, sweep(0.4, 4000, 500, "down"), 4 * c, 0.4)
+    follow(track, 4 * c)
+    return room(track, 0.5, 0.16)
+
+
 # (in this order: each sound draws its noise after the ones before it, a new one goes last so the others stay as they are)
-SOUNDS = {"boom": boom, "swish": swish, "zap": zap, "shine": shine, "rush": rush, "drum": drum, "clash": clash, "coin": coin, "sting": sting, "glass": glass, "beep": beep, "fizz": fizz}
+SOUNDS = {"boom": boom, "swish": swish, "zap": zap, "shine": shine, "rush": rush, "drum": drum, "clash": clash, "coin": coin, "sting": sting, "glass": glass, "beep": beep, "fizz": fizz, "synth": synth, "buzz": buzz, "siren": siren, "stamp": stamp}
 
 
 def main() -> int:

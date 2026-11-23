@@ -47,6 +47,8 @@ const FONT_NAMES: Record<string, string> = {
   poppins: "Poppins ExtraBold (round heavy letters)",
   marker: "Permanent Marker (handwritten)",
   archivo: "Archivo (heavy letters)",
+  rammetto: "Rammetto (very heavy, playful letters, like a GTA title)",
+  dafoe: "Mr Dafoe (a neon-sign script, 80s Miami)",
   geist: "Geist (plain interface letters)",
 };
 

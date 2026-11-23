@@ -1,10 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { backOut, between, DEFAULT_HOOK_LOOK, defaultIntroSound, hookLook, INTRO_IDS, INTRO_SOUND_IDS, introFade, introSeconds, introSound, introSpan, introVolume, isIntro, isIntroSound, isJingle, JINGLE_IDS, NO_SOUND, titleLines } from "./intros";
+import { backOut, between, CLASSIC_JINGLES, DEFAULT_HOOK_LOOK, defaultIntroSound, GTA_JINGLES, hookLook, INTRO_IDS, INTRO_PACKS, INTRO_SOUND_IDS, introFade, introPack, introSeconds, introSound, introSpan, introVolume, isIntro, isIntroSound, isJingle, JINGLE_IDS, NO_SOUND, titleLines } from "./intros";
 
 describe("the intros of a compilation", () => {
   it("knows its styles and how long each holds the screen, at any frame rate", () => {
-    // Twelve jingles: three full rows of four in the picker
-    expect(JINGLE_IDS).toEqual(["slam", "bands", "glitch", "neon", "rush", "sticker", "split", "arcade", "news", "shatter", "countdown", "fuse"]);
+    // Cuttie's twelve jingles: three full rows of four in the picker
+    expect(CLASSIC_JINGLES).toEqual(["slam", "bands", "glitch", "neon", "rush", "sticker", "split", "arcade", "news", "shatter", "countdown", "fuse"]);
+    // The GTA pack: one more row of four
+    expect(GTA_JINGLES).toEqual(["sunset", "miami", "wanted", "cover"]);
+    expect(JINGLE_IDS).toEqual([...CLASSIC_JINGLES, ...GTA_JINGLES]);
+    // Every jingle is in one pack, shown in full rows of four
+    expect(INTRO_PACKS.flatMap((pack) => pack.jingles)).toEqual([...JINGLE_IDS]);
+    for (const pack of INTRO_PACKS) expect(pack.jingles.length % 4).toBe(0);
+    expect([introPack("fuse"), introPack("wanted"), introPack("wobble"), introPack(null)]).toEqual(["cuttie", "gta", "cuttie", "cuttie"]);
     // An intro is one of them, or the hook (which is no jingle)
     expect(INTRO_IDS).toEqual(["hook", ...JINGLE_IDS]);
     expect(isJingle("fuse") && isJingle("sticker") && !isJingle("hook") && !isJingle("wobble")).toBe(true);
@@ -84,6 +91,8 @@ describe("the intros of a compilation", () => {
     // A font nobody measured: a safe width
     expect(titleLines("De calme à débordés", "Comic Sans").size).toBe(139);
     expect(titleLines("   ").lines).toEqual([]);
+    // Written in small letters, which are narrower: the caller says how wide they are, and the title is bigger for it
+    expect(titleLines("Brigade du tigre", "", 12, 4, 0.7).size).toBeGreaterThan(titleLines("Brigade du tigre", "Rammetto One").size);
   });
 
   it("moves between two frames, and bounces past its place", () => {

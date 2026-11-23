@@ -215,7 +215,7 @@ def test_the_sound_of_a_video_is_chosen_from_what_it_is_and_what_the_streamer_li
     assert "[none] No music." in shown
     assert "[none] Straight on its first passage." in shown and "[jingle] A classic intro" in shown and "[hook] No jingle: the teaser of the video (see 4) plays first" in shown
     assert "Choose the hook when the video leads up to something worth teasing" in shown and '"opening": "<none | jingle | hook>"' in shown
-    # ...then its graphics, the same twelve for a jingle or a hook; the ones the streamer prefers are said
+    # ...then its graphics, the same for a jingle or a hook; the ones the streamer prefers are said
     assert "The streamer's preferred graphics are [rush]" in shown and "likes their videos to open on a hook" not in shown
     for graphics in looks.INTROS:
         assert f"[{graphics}]" in shown
@@ -243,6 +243,26 @@ def test_the_ai_names_the_intros_as_the_app_does():
     spanish = Eyes({"kind": "funny", "music": "none", "why": "", "intros": []})
     looks.choose_sound(VIDEO, MUSICS, language="es", client=spanish)
     assert "[split] « Duelo »." in spanish.seen[0]["messages"][0]["content"]
+
+
+def test_the_graphics_made_for_gta_go_to_the_videos_of_that_game():
+    # A live on Grand Theft Auto, however it is named
+    assert all(looks.is_gta(game) for game in ("Grand Theft Auto VI", "Grand Theft Auto V", "GTA 6", "gta: San Andreas"))
+    assert not any(looks.is_gta(game) for game in ("Just Chatting", "Valorant", "Gtaoui", "", None))
+    told = Eyes({"kind": "funny", "music": "none", "why": "", "intros": []})
+    looks.choose_sound({**VIDEO, "game": "Grand Theft Auto VI"}, MUSICS, client=told)
+    shown = told.seen[0]["messages"][0]["content"]
+    assert "Game played in the live: Grand Theft Auto VI" in shown and "they are the natural choice here, give them first" in shown
+    # The four of the pack are described as such, with the others
+    for key in ("sunset", "miami", "wanted", "cover"):
+        assert looks.INTROS[key].startswith("(GTA pack)") and f"[{key}]" in shown
+    assert sum(what.startswith("(GTA pack)") for what in looks.INTROS.values()) == 4
+    # A live on another game, or on a game nobody knows: they are left out unless asked for
+    for video, game in (({**VIDEO, "game": "Valorant"}, "Valorant"), (VIDEO, "(not known)")):
+        other = Eyes({"kind": "funny", "music": "none", "why": "", "intros": []})
+        looks.choose_sound(video, MUSICS, client=other)
+        shown = other.seen[0]["messages"][0]["content"]
+        assert f"Game played in the live: {game}" in shown and "leave them out, unless the streamer asks" in shown and "natural choice" not in shown
 
 
 def test_the_ai_does_not_open_every_video_the_same_way_and_never_leaves_what_fits():
@@ -323,7 +343,7 @@ def test_the_ai_opens_a_video_on_a_jingle_or_on_its_hook_and_names_the_passage_t
     assert "likes their videos to open on a hook" in told and "The streamer's preferred graphics are [glitch]" in told
     assert (theirs["intro"], theirs["look"]) == ("hook", "glitch")
     # The graphics it knows are the app's twelve: the sticker ones are back, the fuse is new; the hook is no graphics
-    assert list(looks.INTROS) == ["slam", "bands", "glitch", "neon", "rush", "sticker", "split", "arcade", "news", "shatter", "countdown", "fuse"]
+    assert list(looks.INTROS) == ["slam", "bands", "glitch", "neon", "rush", "sticker", "split", "arcade", "news", "shatter", "countdown", "fuse", "sunset", "miami", "wanted", "cover"]
     assert "hook" not in looks.INTROS and all(set(names) == {"hook", *looks.INTROS} for names in looks.INTRO_NAMES.values())
 
 

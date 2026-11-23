@@ -360,6 +360,8 @@ export default class CompilationsController {
       const chosen = await chooseSound({
         video: {
           title: words(ctx.request.input('title'), 120),
+          // The game of the live: some graphics are made for one (the GTA pack)
+          game: words(job.vodGame, 80),
           parts: lines(ctx.request.input('parts'), 12, 80),
           seconds: Math.max(0, Math.min(7200, Number(ctx.request.input('seconds')) || 0)),
           passages: Math.max(0, Math.min(500, Math.round(Number(ctx.request.input('passages')) || 0))),

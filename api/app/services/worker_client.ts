@@ -451,7 +451,8 @@ export interface SoundChoice {
 
 /** The background music and the intro of a video, chosen by the AI from what the video is and what the streamer likes */
 export async function chooseSound(body: {
-  video: { title: string; parts: string[]; seconds: number; passages: number; said: string[]; lengths?: number[] }
+  /** (`game`: the game of the live, some graphics are made for one) */
+  video: { title: string; game?: string; parts: string[]; seconds: number; passages: number; said: string[]; lengths?: number[] }
   musics: { key: string; name: string; kinds: string[]; about: string }[]
   /** The streamer's favourite track for a kind of video, and the intro they prefer */
   favourites: Record<string, string>

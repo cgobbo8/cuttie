@@ -141,13 +141,15 @@ export const isTransition = (value: unknown): value is string => typeof value ==
  * And the sound effects one can play (api/public/sounds/intro-<id>.mp3). "hook" is the odd one:
  * no jingle, a moment of the video plays first, and it holds the screen for as long as that
  * moment lasts (its number here is only what the picker's sketch plays); what frames that moment
- * is one of twelve looks, each named after a jingle.
+ * is a look, named after a jingle.
  */
 export const INTROS: Record<string, [number, number]> = {
   hook: [150, 8], slam: [48, 8], bands: [54, 12], glitch: [45, 6], neon: [60, 10], rush: [46, 7], sticker: [54, 10],
   split: [50, 12], arcade: [56, 8], news: [54, 10], shatter: [50, 12], countdown: [60, 8], fuse: [54, 10],
+  // The GTA pack: drawn in its own colours (a Vice City evening), not the channel's
+  sunset: [56, 10], miami: [60, 8], wanted: [60, 8], cover: [56, 12],
 }
-export const INTRO_SOUNDS = ['boom', 'swish', 'zap', 'shine', 'rush', 'drum', 'clash', 'coin', 'sting', 'glass', 'beep', 'fizz']
+export const INTRO_SOUNDS = ['boom', 'swish', 'zap', 'shine', 'rush', 'drum', 'clash', 'coin', 'sting', 'glass', 'beep', 'fizz', 'synth', 'buzz', 'siren', 'stamp']
 export const isIntro = (value: unknown): value is string => typeof value === 'string' && Object.hasOwn(INTROS, value)
 export const isIntroSound = (value: unknown): value is string => typeof value === 'string' && INTRO_SOUNDS.includes(value)
 /** A jingle: any intro but the hook. It is also what a look of the hook is named after */

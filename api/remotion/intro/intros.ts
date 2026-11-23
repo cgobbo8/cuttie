@@ -10,15 +10,30 @@
  * which is already playing underneath (nothing of the video is covered for
  * long, and its sound starts on time).
  *
- * An intro is one of two kinds. A jingle: one of twelve ready-made openings
- * drawn over the whole screen. Or the "hook": no jingle, the best few seconds
- * of the video play first (a moment of the video, shown again at its place
- * later), then the video starts; it holds the screen for as long as that
- * moment lasts, and is framed by one of twelve looks, each with the name and
- * the feel of a jingle (`look`).
+ * An intro is one of two kinds. A jingle: a ready-made opening drawn over the
+ * whole screen. Or the "hook": no jingle, the best few seconds of the video
+ * play first (a moment of the video, shown again at its place later), then
+ * the video starts; it holds the screen for as long as that moment lasts, and
+ * is framed by a look, which has the name and the feel of a jingle (`look`).
+ *
+ * The jingles come in packs, one shown at a time in the picker, each in full
+ * rows of four. Cuttie's own twelve are drawn with the channel's colours and
+ * the font of the video's titles. The GTA pack is drawn with its own: a
+ * Vice City sunset, palms, neon, heavy lettering with a black outline,
+ * whatever the channel's colours are (the logo and the name stay the channel's).
  */
-export const JINGLE_IDS = ["slam", "bands", "glitch", "neon", "rush", "sticker", "split", "arcade", "news", "shatter", "countdown", "fuse"] as const;
+export const CLASSIC_JINGLES = ["slam", "bands", "glitch", "neon", "rush", "sticker", "split", "arcade", "news", "shatter", "countdown", "fuse"] as const;
+export const GTA_JINGLES = ["sunset", "miami", "wanted", "cover"] as const;
+export const JINGLE_IDS = [...CLASSIC_JINGLES, ...GTA_JINGLES] as const;
 export type JingleId = (typeof JINGLE_IDS)[number];
+/** The packs of jingles, in the order the picker offers them */
+export const INTRO_PACKS = [
+  { id: "cuttie", jingles: CLASSIC_JINGLES as readonly JingleId[] },
+  { id: "gta", jingles: GTA_JINGLES as readonly JingleId[] },
+] as const;
+export type IntroPackId = (typeof INTRO_PACKS)[number]["id"];
+/** The pack a jingle (or the look of a hook) belongs to; one nobody knows: Cuttie's */
+export const introPack = (id: unknown): IntroPackId => INTRO_PACKS.find((pack) => (pack.jingles as readonly unknown[]).includes(id))?.id ?? "cuttie";
 export const isJingle = (value: unknown): value is JingleId => typeof value === "string" && (JINGLE_IDS as readonly string[]).includes(value);
 export const INTRO_IDS = ["hook", ...JINGLE_IDS] as const;
 export type IntroId = (typeof INTRO_IDS)[number];
@@ -27,7 +42,7 @@ export const isIntro = (value: unknown): value is IntroId => typeof value === "s
 export const DEFAULT_HOOK_LOOK: JingleId = "fuse";
 
 /** The sound effects made for the intros, one timed on each (frontend/public/sounds/intro-<id>.mp3, made by scripts/make-intro-sounds.py) */
-export const INTRO_SOUND_IDS = ["boom", "swish", "zap", "shine", "rush", "drum", "clash", "coin", "sting", "glass", "beep", "fizz"] as const;
+export const INTRO_SOUND_IDS = ["boom", "swish", "zap", "shine", "rush", "drum", "clash", "coin", "sting", "glass", "beep", "fizz", "synth", "buzz", "siren", "stamp"] as const;
 export type IntroSoundId = (typeof INTRO_SOUND_IDS)[number];
 export const isIntroSound = (value: unknown): value is IntroSoundId => typeof value === "string" && (INTRO_SOUND_IDS as readonly string[]).includes(value);
 /** `intro.sound` when the intro is silent */
@@ -49,6 +64,11 @@ const SPANS: Record<IntroId, { hold: number; out: number; sound: IntroSoundId | 
   shatter: { hold: 50, out: 12, sound: "glass" },
   countdown: { hold: 60, out: 8, sound: "beep" },
   fuse: { hold: 54, out: 10, sound: "fizz" },
+  // (the GTA pack: each is written on four counts of 14 or 15 frames, something lands on each)
+  sunset: { hold: 56, out: 10, sound: "synth" },
+  miami: { hold: 60, out: 8, sound: "buzz" },
+  wanted: { hold: 60, out: 8, sound: "siren" },
+  cover: { hold: 56, out: 12, sound: "stamp" },
 };
 
 /** The intro a compilation keeps: its style, its own title (else the video's name), its sound (else its style's; "none": silent) */
@@ -148,10 +168,15 @@ const GLYPH: Record<string, number> = {
   Poppins: 0.7,
   Montserrat: 0.74,
   "Archivo Black": 0.74,
+  "Rammetto One": 0.76,
+  "Mr Dafoe": 0.5,
 };
 
-/** The title in capitals, cut into lines that fit the screen (words kept whole), and the size it is written at (1080 px wide frame) */
-export function titleLines(title: string, font = "", perLine = 12, maxLines = 4): { lines: string[]; size: number } {
+/**
+ * The title in capitals, cut into lines that fit the screen (words kept whole), and the size it is written at (1080 px wide frame).
+ * `glyph`: how wide a letter is when the title isn't written in capitals of `font` (a share of its size).
+ */
+export function titleLines(title: string, font = "", perLine = 12, maxLines = 4, glyph?: number): { lines: string[]; size: number } {
   const words = title.trim().toUpperCase().split(/\s+/).filter(Boolean);
   const lines: string[] = [];
   for (const word of words) {
@@ -160,10 +185,10 @@ export function titleLines(title: string, font = "", perLine = 12, maxLines = 4)
     else lines.push(word);
   }
   // Too many lines: wider lines, smaller letters
-  if (lines.length > maxLines && perLine < 44) return titleLines(title, font, perLine + 4, maxLines);
+  if (lines.length > maxLines && perLine < 44) return titleLines(title, font, perLine + 4, maxLines, glyph);
   const longest = Math.max(1, ...lines.map((line) => line.length));
-  const glyph = GLYPH[font.replace(/["']/g, "").split(",")[0].trim()] ?? 0.62;
+  const wide = glyph ?? GLYPH[font.replace(/["']/g, "").split(",")[0].trim()] ?? 0.62;
   // A line fills at most 860 px of the 1080
-  const size = Math.round(Math.min(190, Math.max(56, 860 / (longest * glyph))));
+  const size = Math.round(Math.min(190, Math.max(56, 860 / (longest * wide))));
   return { lines: lines.slice(0, maxLines), size };
 }

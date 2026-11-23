@@ -1704,7 +1704,11 @@
         "news": "Última hora",
         "shatter": "Añicos",
         "countdown": "Cuenta atrás",
-        "fuse": "Mecha"
+        "fuse": "Mecha",
+        "sunset": "Sunset",
+        "miami": "Miami",
+        "wanted": "Buscado",
+        "cover": "Carátula"
       },
       "sounds": {
         "boom": "Impacto",
@@ -1718,7 +1722,11 @@
         "sting": "Sintonía",
         "glass": "Cristal roto",
         "beep": "Pitidos",
-        "fizz": "Mecha y explosión"
+        "fizz": "Mecha y explosión",
+        "synth": "Sinte de los 80",
+        "buzz": "Zumbido",
+        "siren": "Sirena y helicóptero",
+        "stamp": "Golpes de sello"
       },
       "chosen": "Intro elegida por la IA: {{name}}",
       "followLabel": "Seguir",
@@ -1744,6 +1752,11 @@
         "none": "Ninguna",
         "jingle": "Intro clásica",
         "hook": "Hook"
+      },
+      "pack": {
+        "label": "Universo",
+        "cuttie": "Cuttie",
+        "gta": "GTA"
       }
     },
     "music": {

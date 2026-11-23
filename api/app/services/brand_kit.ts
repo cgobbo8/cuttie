@@ -60,7 +60,7 @@ const MAX_TEMPLATES = 30
 const MAX_WIDGETS = 16
 
 /** Allowed values of an element template (mirrors frontend/src/lib/templateSpec.ts) */
-const FONT_IDS = ['luckiest', 'bangers', 'anton', 'bebas', 'montserrat', 'poppins', 'marker', 'archivo', 'geist']
+const FONT_IDS = ['luckiest', 'bangers', 'anton', 'bebas', 'montserrat', 'poppins', 'marker', 'archivo', 'geist', 'rammetto', 'dafoe']
 const WIDGET_KINDS = [
   'channel-pill',
   'logo',

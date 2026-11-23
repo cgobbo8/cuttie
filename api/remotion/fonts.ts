@@ -13,6 +13,8 @@ const CLIP_FONTS: { family: string; file: string; weight: string }[] = [
   { family: "Poppins", file: "poppins-800.woff2", weight: "800" },
   { family: "Permanent Marker", file: "permanent-marker-400.woff2", weight: "400" },
   { family: "Archivo Black", file: "archivo-black-400.woff2", weight: "400" },
+  { family: "Rammetto One", file: "rammetto-one-400.woff2", weight: "400" },
+  { family: "Mr Dafoe", file: "mr-dafoe-400.woff2", weight: "400" },
   { family: "Geist Variable", file: "Geist-Variable.woff2", weight: "100 900" },
 ];
 

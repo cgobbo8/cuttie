@@ -34,6 +34,8 @@ export const CLIP_FONTS = [
   ["poppins", 800],
   ["permanent-marker", 400],
   ["archivo-black", 400],
+  ["rammetto-one", 400],
+  ["mr-dafoe", 400],
 ];
 
 /** The one kit file that differs on each side */

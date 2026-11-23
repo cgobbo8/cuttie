@@ -1704,7 +1704,11 @@
         "news": "Flash info",
         "shatter": "Éclats",
         "countdown": "Décompte",
-        "fuse": "Mèche"
+        "fuse": "Mèche",
+        "sunset": "Sunset",
+        "miami": "Miami",
+        "wanted": "Recherché",
+        "cover": "Jaquette"
       },
       "sounds": {
         "boom": "Impact",
@@ -1718,7 +1722,11 @@
         "sting": "Jingle info",
         "glass": "Verre brisé",
         "beep": "Bips",
-        "fizz": "Mèche et explosion"
+        "fizz": "Mèche et explosion",
+        "synth": "Synthé années 80",
+        "buzz": "Grésillement",
+        "siren": "Sirène et hélico",
+        "stamp": "Coups de tampon"
       },
       "chosen": "Intro choisie par l'IA : {{name}}",
       "followLabel": "Suivre",
@@ -1744,6 +1752,11 @@
         "none": "Aucune",
         "jingle": "Intro classique",
         "hook": "Hook"
+      },
+      "pack": {
+        "label": "Univers",
+        "cuttie": "Cuttie",
+        "gta": "GTA"
       }
     },
     "music": {

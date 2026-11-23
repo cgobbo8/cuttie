@@ -13,6 +13,9 @@ export const FONTS = [
   { id: "marker", family: "Permanent Marker", label: "Marker" },
   { id: "archivo", family: "Archivo Black", label: "Archivo" },
   { id: "geist", family: "Geist Variable", label: "Geist" },
+  // The GTA pack's lettering: heavy letters to write small and outline in black, and a neon-sign script (not for capitals)
+  { id: "rammetto", family: "Rammetto One", label: "Rammetto" },
+  { id: "dafoe", family: "Mr Dafoe", label: "Mr Dafoe" },
 ] as const;
 
 export type FontId = (typeof FONTS)[number]["id"];

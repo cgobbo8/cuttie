@@ -14,6 +14,7 @@ for, written from its description when the template is saved.
 import base64
 import logging
 import os
+import re
 import subprocess
 import tempfile
 import time
@@ -260,10 +261,11 @@ SOUND_KINDS = {
     "hype": "a best-of, highlights of an evening, energy",
 }
 
-# What each of the twelve graphics looks like and feels like (the app draws them: frontend/src/lib/intro): they dress
+# What each of the graphics looks like and feels like (the app draws them: frontend/src/lib/intro): they dress
 # a jingle (described here) or frame a hook, the other way a video can open (described in the instructions). Each says
 # several things it fits, and several fit the same video: when "Stickers" alone said "for funny videos", every
 # video of a streamer whose lives are funny opened on it (5 out of 5 in the logs of an evening of tries).
+GTA_PACK = "(GTA pack)"
 INTROS = {
     "slam": "The logo falls on the screen, which shakes, with a deep hit. Heavy and blunt. Fits action, big moments, a punchline that lands, a fail that hurts.",
     "bands": "Three slanted bands in the channel's colours sweep across the screen. Lively and clean. Fits nearly any light video: funny moments, best-ofs, a themed compilation.",
@@ -277,13 +279,18 @@ INTROS = {
     "shatter": "The logo hits the screen, which cracks, then falls in pieces onto the video. Violent. Fits rage, crashes, fights, big plays, things breaking.",
     "countdown": "A film leader counts 3, 2, 1, then the logo and the title hit. Fits best-ofs, challenges, a series of moments, a video that builds up to something.",
     "fuse": "A fuse burns its way up to the logo, which blows up; the title is thrown out of the blast. Cartoonish and tense. Fits a video where things go wrong, a calm that ends in chaos, a prank, an explosion of anger or of laughter.",
+    # The GTA pack: drawn with its own colours and lettering (an evening in Vice City), not the channel's
+    "sunset": f"{GTA_PACK} An evening by the sea: the sun comes up behind palms and hotels, the logo drops, the title slams in heavy letters. Warm and cinematic. Fits a best-of, a story, funny or laid-back moments, anything in the sun.",
+    "miami": f"{GTA_PACK} A neon sign on a wall at night: a spark draws its frame, the tubes catch, the title is written in a pink script. Stylish, 80s Miami. Fits role-play scenes, talk, stories, night moods, a calm or classy video.",
+    "wanted": f"{GTA_PACK} Police sirens, a helicopter and its searchlight, six wanted stars thrown on one by one. Tense and loud. Fits chases, shoot-outs, arrests, the police showing up, things getting out of hand, a fail that ends badly.",
+    "cover": f"{GTA_PACK} The panels of a game's cover slam in one after the other around the title. Punchy, like box art. Fits a best-of, a series of moments, several parts, action, jokes.",
 }
 # What the app calls each intro, in each language it speaks (frontend/src/lib/i18n, compilation.intro.style): the AI
 # names an intro to the streamer as their screen does, not "Breaking news" to someone who reads "Flash info"
 INTRO_NAMES = {
-    "en": {"hook": "Hook", "slam": "Impact", "bands": "Bands", "glitch": "Glitch", "neon": "Neon", "rush": "Speed", "sticker": "Stickers", "split": "Versus", "arcade": "Arcade", "news": "Breaking news", "shatter": "Shatter", "countdown": "Countdown", "fuse": "Fuse"},
-    "fr": {"hook": "Hook", "slam": "Impact", "bands": "Bandes", "glitch": "Glitch", "neon": "Néon", "rush": "Vitesse", "sticker": "Stickers", "split": "Duel", "arcade": "Arcade", "news": "Flash info", "shatter": "Éclats", "countdown": "Décompte", "fuse": "Mèche"},
-    "es": {"hook": "Hook", "slam": "Impacto", "bands": "Bandas", "glitch": "Glitch", "neon": "Neón", "rush": "Velocidad", "sticker": "Stickers", "split": "Duelo", "arcade": "Arcade", "news": "Última hora", "shatter": "Añicos", "countdown": "Cuenta atrás", "fuse": "Mecha"},
+    "en": {"hook": "Hook", "slam": "Impact", "bands": "Bands", "glitch": "Glitch", "neon": "Neon", "rush": "Speed", "sticker": "Stickers", "split": "Versus", "arcade": "Arcade", "news": "Breaking news", "shatter": "Shatter", "countdown": "Countdown", "fuse": "Fuse", "sunset": "Sunset", "miami": "Miami", "wanted": "Wanted", "cover": "Cover"},
+    "fr": {"hook": "Hook", "slam": "Impact", "bands": "Bandes", "glitch": "Glitch", "neon": "Néon", "rush": "Vitesse", "sticker": "Stickers", "split": "Duel", "arcade": "Arcade", "news": "Flash info", "shatter": "Éclats", "countdown": "Décompte", "fuse": "Mèche", "sunset": "Sunset", "miami": "Miami", "wanted": "Recherché", "cover": "Jaquette"},
+    "es": {"hook": "Hook", "slam": "Impacto", "bands": "Bandas", "glitch": "Glitch", "neon": "Neón", "rush": "Velocidad", "sticker": "Stickers", "split": "Duelo", "arcade": "Arcade", "news": "Última hora", "shatter": "Añicos", "countdown": "Cuenta atrás", "fuse": "Mecha", "sunset": "Sunset", "miami": "Miami", "wanted": "Buscado", "cover": "Carátula"},
 }
 # How one passage gives way to the next, the same at every cut of a video (the app draws them: frontend/src/lib/transitions.ts)
 TRANSITIONS = {
@@ -300,6 +307,12 @@ TRANSITIONS = {
 FITTING_INTROS, RECENT_INTROS = 3, 3
 # How many passages of a video the model is told about (it names the one the video could open on among them)
 MAX_SAID = 30
+
+
+def is_gta(game: str | None) -> bool:
+    """A live on Grand Theft Auto, whichever one, as Twitch names it ("Grand Theft Auto VI", "GTA V"...)."""
+    name = (game or "").lower()
+    return "grand theft auto" in name or re.match(r"gta\b", name.strip()) is not None
 
 
 def pick_intro(fits: list[str], preferred: str | None = None, recent: list[str] | None = None) -> str | None:
@@ -352,6 +365,13 @@ def choose_sound(
     graphics_wish = f"The streamer's preferred graphics are [{preferred_intro}]: put them among those you give whenever they can fit this video." if preferred_intro else ""
     spoken = LANGUAGES.get(language, "French")
     named = INTRO_NAMES.get(language, INTRO_NAMES["fr"])
+    # The graphics made for a game go to the videos of that game
+    game = " ".join(str(video.get("game") or "").split())[:80]
+    gta_wish = (
+        "This live is on that game: they are the natural choice here, give them first among those that fit."
+        if is_gta(game)
+        else "This live is not on that game: leave them out, unless the streamer asks for them or for that mood."
+    )
 
     liked = {key: [kind for kind, k in favourites.items() if k == key] for key in keys}
     tracks = "\n".join(
@@ -374,6 +394,7 @@ def choose_sound(
 
 THE VIDEO
 Title: « {str(video.get("title") or "").strip()[:120] or "(none)"} »
+Game played in the live: {game or "(not known)"}
 Parts: {", ".join(f"« {p} »" for p in parts) if parts else "one part, no titles"}
 Length: {seconds:.0f} s in {int(video.get("passages") or 0)} passages.
 What is said in some of them, in the order they play:
@@ -394,8 +415,9 @@ Take the streamer's favourite for the kind of the video when they have one (★)
 [hook] No jingle: the teaser of the video (see 4) plays first, under its title, then the video starts from its beginning and the teaser plays again at its place. Nothing to wait through: it grips from the first frame.
 On these platforms many viewers leave within the first second, so an opening must earn its place. Choose the hook when the video leads up to something worth teasing (a story with a payoff, a claim that turns out wrong, a reaction people will want explained) and one of its passages makes a good teaser. Choose a jingle for a video with a title worth reading that a teaser would not serve: a best-of, a themed series of like moments, several parts; it should last 30 s or more. Choose none for a single moment or a very short video. If the streamer asked for an intro, a hook or none, follow that first.
 {opening_wish}
-Then its graphics. The same twelve dress a jingle or frame a hook (several fit the same video: a kind of video has no graphics of its own):
+Then its graphics. The same ones dress a jingle or frame a hook (several fit the same video: a kind of video has no graphics of its own):
 {chr(10).join(f"[{key}] « {named[key]} ». {what}" for key, what in INTROS.items())}
+Those marked {GTA_PACK} are drawn in the look of Grand Theft Auto (a Vice City sunset, palms, neon, wanted stars) instead of the channel's colours. {gta_wish}
 Give the {FITTING_INTROS} that fit this video best, the best first: judge on what happens in it and how it feels (its title, its parts, what is said), not on its kind alone. Fewer when fewer fit; when the streamer named or described one, give that one alone; an empty list with [none]. Which of them is used is then decided by what the streamer's last videos opened with, so that they don't all start the same way.
 {graphics_wish}
 

@@ -106,4 +106,30 @@ describe("the sound of a video beyond its clips' own", () => {
     expect(without.music).toBeUndefined();
     expect(without.segments).toBe(montage.segments);
   });
+
+  it("starts a track that builds up to its strong moment before it, as long as the intro lasts, and lets the moment be heard", () => {
+    // The streamer's own track: a riff at 35.1 s that the track builds up to, at 134.2 beats a minute
+    const riff = { ...phonk, id: "u1234abcd", own: true, start: 35.1, bpm: 134.2, build: true };
+    const talk = { words: [{ start: 0, end: 10 }], start: 0, end: 10 };
+    // A jingle on that track lasts four of its beats: 1.788 s
+    const intro = montageIntro({ style: "sunset" }, drawn, null, riff.bpm)!;
+    expect(intro.hold).toBe(1.788);
+    const montage: MontageProps = { segments: [], overlays: [], intro, music: montageMusic([{ duration: 10 }], [talk], { track: riff.id }, introOf({ intro }), undefined, riff) };
+    // The page reads the track from four beats before the riff, which lands on the first picture of the video...
+    expect(playable(montage, [riff], -14).music!.from).toBeCloseTo(35.1 - 1.788);
+    // ...where the music is still up front, before it goes down under what is said
+    expect(gainAt(montage.music!.curve, 1.788)).toBe(MUSIC_LEVELS.intro);
+    expect(gainAt(montage.music!.curve, 2.1)).toBe(MUSIC_LEVELS.intro);
+    expect(gainAt(montage.music!.curve, 4)).toBeCloseTo(MUSIC_LEVELS.talk);
+    // The same track without the build-up, or a video without an intro: read from the moment, the music down as the video starts
+    const flat = { ...riff, build: false };
+    const plain: MontageProps = { ...montage, music: montageMusic([{ duration: 10 }], [talk], { track: riff.id }, introOf({ intro }), undefined, flat) };
+    expect(playable(plain, [flat], -14).music!.from).toBe(35.1);
+    expect(gainAt(plain.music!.curve, 2.3)).toBeCloseTo(MUSIC_LEVELS.talk);
+    const bare: MontageProps = { segments: [], overlays: [], music: montageMusic([{ duration: 10 }], [talk], { track: riff.id }, 0, undefined, riff) };
+    expect(playable(bare, [riff], -14).music!.from).toBe(35.1);
+    expect(bare.music!.curve.start).toBe(0);
+    // The track not told: as before
+    expect(montageMusic([{ duration: 10 }], [talk], { track: riff.id }, 1.788).curve).toEqual(plain.music!.curve);
+  });
 });

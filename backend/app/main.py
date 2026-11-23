@@ -243,6 +243,12 @@ class MusicRequest(BaseModel):
     hint: str = ""
 
 
+class MusicMomentRequest(BaseModel):
+    # One of the streamer's tracks (in <data dir>/musics), and about where its strong moment is (seconds)
+    path: str
+    at: float
+
+
 class TemplateUsageRequest(BaseModel):
     name: str = ""
     description: str
@@ -629,6 +635,24 @@ def describe_music(req: MusicRequest) -> dict:
         raise HTTPException(status_code=422, detail=str(e)) from e
     except Exception as e:
         raise _ai_errors(e) from e
+
+
+@app.post("/musics/moment", dependencies=[Depends(require_secret)])
+def music_moment(req: MusicMomentRequest) -> dict:
+    """The strong moment of a track as the streamer points at it: the attack nearest to the time they give, and the tempo there."""
+    from app.services import music_library, paths
+
+    folder = os.path.realpath(os.path.join(paths.DATA_DIR, "musics"))
+    path = os.path.realpath(req.path)
+    # Only a track of the musics folder: nothing else on the machine is read
+    if os.path.dirname(path) != folder or not path.endswith(".mp3") or not os.path.isfile(path):
+        raise HTTPException(status_code=400, detail="not a track of the musics folder")
+    if not (req.at >= 0):
+        raise HTTPException(status_code=400, detail="at: seconds from the start of the track")
+    try:
+        return music_library.moment(path, req.at)
+    except Exception as e:
+        raise HTTPException(status_code=422, detail="this track could not be read") from e
 
 
 @app.post("/sound", dependencies=[Depends(require_secret)])

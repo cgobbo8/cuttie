@@ -78,6 +78,25 @@ def test_a_track_in_swing_from_its_first_note_starts_on_it(tmp_path, monkeypatch
     assert 0.44 <= measured["start"] <= 0.5
 
 
+def test_the_strong_moment_the_streamer_points_at_is_the_nearest_attack(tmp_path, monkeypatch):
+    monkeypatch.setattr(music_library.paths, "WORK_DIR", str(tmp_path / "work"))
+    # 8 s of loud drums, a third of a second of nothing, then a quiet riff (a click 134 times a minute over a low
+    # tone) that the track is known by: half as loud as what leads to it, so nothing that measures loudness finds it
+    click = "0.3*sin(2*PI*880*t)*lt(mod(t-8.3,60/134),0.04)"
+    drums = "0.6*sin(2*PI*110*t)*(0.6+0.4*lt(mod(t,0.25),0.12))"
+    path = sound(tmp_path, "riff", f"if(lt(t,8),{drums},if(lt(t,8.3),0,0.12*sin(2*PI*220*t)+{click}))", 40)
+    assert music_library.measure(path)["start"] < 1
+    # "About 8 seconds", by ear: the riff's first note, to the hundredth, a hair before it; and the tempo from there
+    found = music_library.moment(path, 8.0)
+    assert 8.22 <= found["start"] <= 8.3
+    assert min(abs(found["bpm"] - tempo) for tempo in (67, 134, 268)) < 0.4
+    # The same from a little after it
+    assert 8.22 <= music_library.moment(path, 8.7)["start"] <= 8.3
+    # Far from any attack (the tone holds, nothing starts): the time as given; never past the end of the track
+    assert music_library.moment(path, 8.3 + 60 / 134 * 20 + 0.2)["start"] > 8.3
+    assert music_library.moment(path, 500)["start"] < 40
+
+
 def test_the_model_hears_two_parts_and_its_answer_is_made_safe(track):
     ears = Ears({"genre": " Drift  PHONK ", "kinds": ["skill", "epic", "hype", "skill"], "description": "Basses lourdes et rythme nerveux.  Pour les kills.", "about": "Aggressive, driving. Suits action; would ruin a calm talk."})
     measured = {"seconds": 50.0, "bpm": 120, "start": 10.0, "lufs": -9.0}

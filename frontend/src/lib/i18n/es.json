@@ -763,7 +763,14 @@
     "musicKinds": "Tipos de vídeo a los que va",
     "musicDescription": "Qué es esta música (la IA lo lee para elegir)",
     "musicDescriptionHint": "A qué suena, para qué vídeos. La IA lee este texto para elegir.",
-    "defaultTemplate": "Modelo por defecto"
+    "defaultTemplate": "Modelo por defecto",
+    "musicMoment": "Momento fuerte",
+    "musicMomentHelp": "Donde un vídeo arranca la música. Escribe más o menos dónde está, de oído (el riff, el drop): Cuttie se ajusta a la nota más cercana.",
+    "musicMomentSaved": "Momento fuerte ajustado a {{seconds}} s",
+    "musicMomentListen": "Escuchar la llegada",
+    "musicMomentListenHelp": "Reproduce la música {{seconds}} s antes de su momento fuerte",
+    "musicBuild": "Sube durante la intro",
+    "musicBuildHelp": "Con una intro, la música arranca antes de su momento fuerte, que cae justo cuando empieza el vídeo."
   },
   "project": {
     "steps": "Pasos del proyecto",

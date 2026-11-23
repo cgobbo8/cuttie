@@ -763,7 +763,14 @@
     "musicKinds": "Types de vidéo auxquels elle va",
     "musicDescription": "Ce qu'est cette musique (l'IA le lit pour choisir)",
     "musicDescriptionHint": "À quoi elle ressemble, pour quelles vidéos. L'IA lit ce texte pour choisir.",
-    "defaultTemplate": "Modèle par défaut"
+    "defaultTemplate": "Modèle par défaut",
+    "musicMoment": "Moment fort",
+    "musicMomentHelp": "Là où une vidéo démarre la musique. Tape l'endroit à l'oreille (le riff, le drop) : Cuttie se cale sur la note la plus proche.",
+    "musicMomentSaved": "Moment fort calé à {{seconds}} s",
+    "musicMomentListen": "Écouter l'arrivée",
+    "musicMomentListenHelp": "Joue la musique {{seconds}} s avant son moment fort",
+    "musicBuild": "Monte pendant l'intro",
+    "musicBuildHelp": "Avec une intro, la musique part avant son moment fort, qui tombe pile quand la vidéo commence."
   },
   "project": {
     "steps": "Étapes du projet",

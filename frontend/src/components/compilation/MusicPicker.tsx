@@ -38,13 +38,14 @@ export function useListen() {
     audio.current = null;
     setPlaying(null);
   };
-  const toggle = (track: MusicTrack) => {
+  /** Plays a track from where a video starts it, or from `from` seconds (to hear what leads to its strong moment); again: stops it */
+  const toggle = (track: MusicTrack, from = track.start) => {
     if (playing === track.id) return stop();
     stop();
     try {
       const next = new Audio(musicUrl(track.id));
       next.volume = 0.5;
-      next.currentTime = track.start;
+      next.currentTime = Math.max(0, from);
       next.onended = () => setPlaying(null);
       audio.current = next;
       setPlaying(track.id);

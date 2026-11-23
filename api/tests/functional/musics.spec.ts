@@ -82,6 +82,19 @@ test.group('Musics of the streamer', (group) => {
     const fixed = (await client.put('/api/musics/u1234abcd').loginAs(user).json({ name: '  Ma trap  ', kinds: ['funny', 'epic', 'skill', 'chill', 'hype'], description: ' Pour les fails, en fait. ' })).body() as any
     assert.deepInclude(fixed.music, { name: 'Ma trap', kinds: ['funny', 'skill', 'chill'], description: 'Pour les fails, en fait.', about: 'Pour les fails, en fait.' })
     assert.equal(JSON.parse(readFileSync(path.join(OWN, 'catalogue.json'), 'utf-8')).tracks[0].name, 'Ma trap')
+    // It builds up to its strong moment (a video with an intro then starts it earlier), or no longer does
+    const builds = (await client.put('/api/musics/u1234abcd').loginAs(user).json({ build: true })).body() as any
+    assert.isTrue(builds.music.build)
+    assert.isTrue(JSON.parse(readFileSync(path.join(OWN, 'catalogue.json'), 'utf-8')).tracks[0].build)
+    assert.isTrue(((await client.get('/api/musics').loginAs(user)).body() as any).musics.at(-1).build)
+    assert.notProperty(((await client.put('/api/musics/u1234abcd').loginAs(user).json({ build: false })).body() as any).music, 'build')
+    // Where that moment is: a time in the track, or nothing is changed
+    for (const start of [-1, 95, '35', null]) {
+      ;(await client.put('/api/musics/u1234abcd').loginAs(user).json({ start })).assertStatus(400)
+    }
+    // ...which the engine brings to the nearest attack: without it, the moment stays where it was
+    ;(await client.put('/api/musics/u1234abcd').loginAs(user).json({ start: 35 })).assertStatus(503)
+    assert.equal(JSON.parse(readFileSync(path.join(OWN, 'catalogue.json'), 'utf-8')).tracks[0].start, 4.2)
     // A track that ships is not theirs to change or remove
     ;(await client.put('/api/musics/phonk').loginAs(user).json({ name: 'Mine' })).assertStatus(404)
     ;(await client.delete('/api/musics/phonk').loginAs(user)).assertStatus(404)

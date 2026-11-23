@@ -7,7 +7,7 @@ import { streamFile } from '#services/file_stream'
 import { getBrandKit, saveBrandKit } from '#services/brand_kit'
 import { MAX_OWN_MUSICS, MUSIC_KINDS, musicFile, musicTracks, newMusicId, ownMusicsDir, ownTracks, parseKinds, removeOwnFile, saveOwnTracks, type MusicTrack } from '#services/musics'
 import { measureLoudness } from '#services/sound_level'
-import { describeMusic } from '#services/worker_client'
+import { describeMusic, musicMoment } from '#services/worker_client'
 import { workerFailure } from '#services/worker_failure'
 
 /** A track as the app shows it: what it is, never where its file is */
@@ -86,12 +86,35 @@ export default class MusicsController {
     }
   }
 
-  /** PUT /api/musics/:id { name?, kinds?, description? } — the streamer corrects what one of their own tracks is */
+  /**
+   * PUT /api/musics/:id { name?, kinds?, description?, start?, build? } — the streamer corrects what one of
+   * their own tracks is. `start`: about where its strong moment is (seconds, given by ear): the attack
+   * nearest to it is kept, with the tempo there. `build`: the track builds up to that moment (a video
+   * with an intro then starts it earlier, and the moment falls on the first picture of the video).
+   */
   async update({ params, request, response }: HttpContext) {
     const own = ownTracks()
     const track = own.find((t) => t.id === params.id)
     if (!track) return response.notFound({ error: 'music not found' })
     const body = request.body() as Record<string, unknown>
+    if (body.start !== undefined) {
+      const at = Number(body.start)
+      const file = musicFile(track.id)
+      if (typeof body.start !== 'number' || !Number.isFinite(at) || at < 0 || at > Math.max(0, track.seconds - 1)) return response.badRequest({ error: 'start: seconds from the start of the track' })
+      if (!file) return response.notFound({ error: 'music not found' })
+      try {
+        const found = await musicMoment({ path: file, at })
+        track.start = Math.max(0, Math.round((Number(found.start) || 0) * 100) / 100)
+        // (the tempo is the one from there on: an intro played on the track lasts four of its beats)
+        if (typeof found.bpm === 'number' && found.bpm > 0) track.bpm = Math.round(found.bpm * 100) / 100
+      } catch (err) {
+        return workerFailure(response, err)
+      }
+    }
+    if (body.build !== undefined) {
+      if (body.build === true) track.build = true
+      else delete track.build
+    }
     if (typeof body.name === 'string' && body.name.trim()) track.name = body.name.trim().slice(0, 60)
     if (body.kinds !== undefined) track.kinds = parseKinds(body.kinds)
     if (typeof body.description === 'string') {

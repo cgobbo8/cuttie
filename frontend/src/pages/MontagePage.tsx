@@ -221,7 +221,7 @@ export default function MontagePage() {
         trackOf(tracks, music?.track)?.bpm,
       );
       if (drawn) cut.intro = drawn;
-      if (music) cut.music = montageMusic(cut.segments, pieces.map(([start, end]) => ({ words: clipCtx.words, start, end, said: !!m.hp.llm?.transcript })), music, introOf(cut));
+      if (music) cut.music = montageMusic(cut.segments, pieces.map(([start, end]) => ({ words: clipCtx.words, start, end, said: !!m.hp.llm?.transcript })), music, introOf(cut), undefined, trackOf(tracks, music.track));
       return cut;
     },
     [customs, musicFor, prefs.intro, t],

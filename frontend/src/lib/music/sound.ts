@@ -6,7 +6,7 @@
 import { beatSeconds, hookLook, introSeconds, introSound, isIntro, type IntroChoice } from "../intro/intros";
 import type { MontageIntro, MontageMusic, MontageProps, MontageSegment } from "../montage";
 import { trackOf } from "./library";
-import { musicCurve, musicUrl, passageLevel, PROGRAM_LUFS, speechShare, trackGain, type MusicChoice, type MusicKind, type MusicTrack } from "./mix";
+import { musicCurve, musicFrom, musicLeads, musicUrl, passageLevel, PROGRAM_LUFS, speechShare, trackGain, type MusicChoice, type MusicKind, type MusicTrack } from "./mix";
 
 /** Where an intro's sound is served from (frontend/public/sounds) */
 export const introSoundUrl = (id: string) => `/sounds/intro-${id}.mp3`;
@@ -45,12 +45,23 @@ export interface SoundPiece {
  * more present where the game plays alone. `intro`: seconds the intro holds the screen (0: none).
  * `hook`: the moment a "hook" intro plays first, and how long: a passage like the others, the
  * music sits under it as under them (not up front, as during a jingle).
+ * `track`: the track itself, when known. One that builds up to its strong moment is started
+ * earlier, so that the moment falls where the video starts after its intro: it is heard there.
  */
-export function montageMusic(segments: { duration: number }[], pieces: SoundPiece[], choice: MusicChoice, intro = 0, hook?: { seconds: number; piece: SoundPiece }): MontageMusic {
+export function montageMusic(
+  segments: { duration: number }[],
+  pieces: SoundPiece[],
+  choice: MusicChoice,
+  intro = 0,
+  hook?: { seconds: number; piece: SoundPiece },
+  track?: Pick<MusicTrack, "start" | "build"> | null,
+): MontageMusic {
   const level = (piece: SoundPiece) => passageLevel(speechShare(piece.words, piece.start, piece.end), piece.words.length === 0 && !!piece.said);
   const levels = pieces.map(level);
   const passages = segments.map((segment, i) => ({ seconds: segment.duration, level: levels[i] ?? levels[0] ?? 0 }));
-  return { track: choice.track, curve: musicCurve(hook ? [{ seconds: hook.seconds, level: level(hook.piece) }, ...passages] : passages, hook ? 0 : intro, choice.volume ?? 1) };
+  const opening = hook ? hook.seconds : intro;
+  const drop = musicLeads(track, opening) ? opening : undefined;
+  return { track: choice.track, curve: musicCurve(hook ? [{ seconds: hook.seconds, level: level(hook.piece) }, ...passages] : passages, hook ? 0 : intro, choice.volume ?? 1, drop) };
 }
 
 /**
@@ -95,6 +106,7 @@ export function playable(montage: MontageProps, tracks: MusicTrack[], liveLufs: 
   return {
     ...montage,
     ...(montage.intro?.sound ? { intro: { ...montage.intro, sound: introSoundUrl(montage.intro.sound), ...(liveLufs === null ? {} : { gain: trim }) } } : {}),
-    ...(montage.music && track ? { music: { ...montage.music, src: musicUrl(track.id), from: track.start, gain: trackGain(track) * trim } } : { music: undefined }),
+    // (a track that builds up to its strong moment starts earlier: the moment falls where the video starts, after its intro)
+    ...(montage.music && track ? { music: { ...montage.music, src: musicUrl(track.id), from: musicFrom(track, introOf(montage)), gain: trackGain(track) * trim } } : { music: undefined }),
   };
 }

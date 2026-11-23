@@ -1440,8 +1440,11 @@ export async function addMusic(file: File, language: string): Promise<{ music: M
   return liveJson(await fetch(`${BASE}/musics`, { method: "POST", body }));
 }
 
-/** The streamer corrects what one of their tracks is */
-export async function updateMusic(id: string, patch: { name?: string; kinds?: string[]; description?: string }): Promise<MusicTrack> {
+/**
+ * The streamer corrects what one of their tracks is. `start`: about where its strong moment is
+ * (seconds, by ear): the attack nearest to it is kept; `build`: the track builds up to that moment.
+ */
+export async function updateMusic(id: string, patch: { name?: string; kinds?: string[]; description?: string; start?: number; build?: boolean }): Promise<MusicTrack> {
   const res = await fetch(`${BASE}/musics/${encodeURIComponent(id)}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(patch) });
   return (await jsonOrThrow<{ music: MusicTrack }>(res, "Failed to save the music")).music;
 }

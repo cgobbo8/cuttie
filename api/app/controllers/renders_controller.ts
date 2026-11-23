@@ -10,7 +10,7 @@ import { clipDir } from '#services/data_paths'
 import { followsBeat, introFade, introHoldFrames, isIntro, isIntroSound, isJingle, isTransition } from '#services/compilations'
 import { enqueueRender } from '#services/render_queue'
 import { levelSound, type Music } from '#services/sound_level'
-import { findMusic, musicFile, parseCurve, trackGain, type MusicCurve } from '#services/musics'
+import { findMusic, musicFile, musicFrom, parseCurve, trackGain, type MusicCurve } from '#services/musics'
 import { loadJobSharedData, resolveEditEnv } from '#services/edit_env_resolver'
 import { resolveThemeForClip, type ThemeLayerTemplate } from '#services/theme_resolver'
 import type { Layer } from '../../remotion/editorTypes.js'
@@ -501,7 +501,8 @@ async function runRender(opts: {
     const last = montage?.pieces.at(-1)
     const music: Music | undefined =
       montage?.music && track && trackFile && last
-        ? { file: trackFile, from: track.start, gain: trackGain(track), curve: montage.music.curve, seconds: (frames + Math.max(1, Math.round(last.duration * fps))) / fps }
+        ? // (a track that builds up to its strong moment starts earlier: the moment falls where the video starts, after its intro)
+          { file: trackFile, from: musicFrom(track, introHoldFrames(montage.intro, fps) / fps), gain: trackGain(track), curve: montage.music.curve, seconds: (frames + Math.max(1, Math.round(last.duration * fps))) / fps }
         : undefined
     const fade = introFade(montage?.intro?.style, montage?.intro?.hold)
     const levelled = await levelSound(outputPath, cuts, jingle ? { file: jingle, gain: 1, fade: fade ?? undefined, rate: fade?.rate } : undefined, music)

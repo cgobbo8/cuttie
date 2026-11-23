@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronDown, Clapperboard, Loader2, Music2, Pause, Play, Plus, Trash2 } from "lucide-react";
 import { addMusic, deleteMusic, updateMusic, type BrandKit } from "../lib/api";
@@ -21,12 +21,39 @@ const FIELD = "h-9 min-w-0 px-2.5 rounded-[10px] bg-black/30 border border-white
 const PICK = "h-9 px-2.5 rounded-[10px] bg-black/30 border border-white/10 hover:border-white/20 text-[13px] flex items-center gap-2 outline-none focus-visible:border-accent-line transition-colors";
 const ROUND = "flex-none w-9 h-9 grid place-items-center rounded-full bg-white/[0.08] hover:bg-white/[0.16] text-white disabled:opacity-30 disabled:hover:bg-white/[0.08]";
 
-/** One of the streamer's own tracks: its name, the kinds of video it suits and what is said of it, all theirs to change */
-function OwnTrack({ track, playing, onListen, onChanged }: { track: MusicTrack; playing: boolean; onListen: () => void; onChanged: () => void }) {
+/** How many seconds before a track's strong moment it is played from, to hear what leads to it */
+const LEAD_HEARD = 3;
+
+/**
+ * One of the streamer's own tracks: its name, the kinds of video it suits and what is said of it, all theirs
+ * to change. And its strong moment, where a video starts it: they type about where it is, by ear (the riff
+ * comes in, the drop), and the attack nearest to that is kept. A track that builds up to it can be started
+ * before it when the video has an intro: the moment then falls on the first picture of the video.
+ */
+function OwnTrack({ track, playing, onListen, onListenFrom, onChanged }: { track: MusicTrack; playing: boolean; onListen: () => void; onListenFrom: (seconds: number) => void; onChanged: () => void }) {
   const { t } = useTranslation();
   const toast = useToast();
   const [name, setName] = useState(track.name);
   const [description, setDescription] = useState(track.description ?? "");
+  const [moment, setMoment] = useState(String(track.start));
+  const [finding, setFinding] = useState(false);
+  // (what is kept is the attack nearest to what was typed: shown once it is found)
+  useEffect(() => setMoment(String(track.start)), [track.start]);
+  const point = async () => {
+    const at = Number(moment.replace(",", "."));
+    if (!Number.isFinite(at) || at < 0 || Math.abs(at - track.start) < 0.005) return setMoment(String(track.start));
+    setFinding(true);
+    try {
+      const kept = await updateMusic(track.id, { start: Math.min(at, Math.max(0, track.seconds - 1)) });
+      onChanged();
+      toast.success(t("brand.musicMomentSaved", { seconds: kept.start }));
+    } catch (err) {
+      setMoment(String(track.start));
+      toast.error(err instanceof Error ? err.message : t("brand.saveError"));
+    } finally {
+      setFinding(false);
+    }
+  };
   const save = async (patch: Parameters<typeof updateMusic>[1]) => {
     try {
       await updateMusic(track.id, patch);
@@ -79,6 +106,37 @@ function OwnTrack({ track, playing, onListen, onChanged }: { track: MusicTrack; 
             </button>
           );
         })}
+      </div>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <label className="flex items-center gap-2 text-[12px] text-ink-2" title={t("brand.musicMomentHelp")}>
+          {t("brand.musicMoment")}
+          <input
+            value={moment}
+            inputMode="decimal"
+            disabled={finding}
+            aria-label={t("brand.musicMoment")}
+            onChange={(e) => setMoment(e.target.value)}
+            onBlur={point}
+            onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+            className={`${FIELD} w-[72px] tabular-nums text-right`}
+          />
+          <span className="text-ink-3">s</span>
+        </label>
+        <button
+          type="button"
+          onClick={() => onListenFrom(track.start - LEAD_HEARD)}
+          title={t("brand.musicMomentListenHelp", { seconds: LEAD_HEARD })}
+          className="h-7 px-2.5 rounded-full border border-white/10 text-[11.5px] text-ink-2 hover:bg-white/[0.07] inline-flex items-center gap-1.5 transition-colors"
+        >
+          {finding ? <Loader2 className="w-3 h-3 spinner" /> : <Play className="w-3 h-3" />}
+          {t("brand.musicMomentListen")}
+        </button>
+        <label className="ml-auto flex items-center gap-2 text-[12px] text-ink-2" title={t("brand.musicBuildHelp")}>
+          {t("brand.musicBuild")}
+          <button type="button" role="switch" aria-checked={!!track.build} aria-label={t("brand.musicBuild")} onClick={() => save({ build: !track.build })} className="switch flex-none">
+            <span />
+          </button>
+        </label>
       </div>
       <textarea
         value={description}
@@ -229,7 +287,7 @@ export default function SoundPrefs({ kit, brand, onSave }: Props) {
         {own.length > 0 && (
           <ul className="mt-3 flex flex-col gap-2">
             {own.map((track) => (
-              <OwnTrack key={track.id} track={track} playing={playing === track.id} onListen={() => toggle(track)} onChanged={reload} />
+              <OwnTrack key={track.id} track={track} playing={playing === track.id} onListen={() => toggle(track)} onListenFrom={(seconds) => toggle(track, seconds)} onChanged={reload} />
             ))}
           </ul>
         )}

@@ -22,8 +22,13 @@ export interface MusicTrack {
   kinds: string[]
   bpm: number
   seconds: number
-  /** Where it is in full swing: a video starts it there */
+  /** Its strong moment: where a video starts it (measured when it is added; the streamer can point at another) */
   start: number
+  /**
+   * It builds up to that moment: a video that opens with an intro starts the track that much
+   * earlier, so that the moment falls on the first picture of the video (see `musicFrom`)
+   */
+  build?: boolean
   /** Its loudness as recorded (LUFS) */
   lufs: number
   /** What it sounds like and what it is for, in English: read by the AI */
@@ -116,6 +121,17 @@ export function musicFile(id: unknown): string | null {
 /** The level every sound of an export is brought to (LUFS): a track is brought there, then turned down by its curve */
 export const PROGRAM_LUFS = -14
 export const trackGain = (track: Pick<MusicTrack, 'lufs'>): number => 10 ** ((PROGRAM_LUFS - track.lufs) / 20)
+
+/**
+ * Where a video starts reading a track, seconds: at its strong moment, or, when the track builds
+ * up to it and the video opens with an intro (`opening` seconds: a jingle, a hook's moment), that
+ * much earlier: the intro plays what leads to the moment, which falls on the first picture of the
+ * video. A moment too near the start of the track to have that much before it: at the moment.
+ * (The app counts the same way: frontend/src/lib/music/mix.ts.)
+ */
+export function musicFrom(track: Pick<MusicTrack, 'start' | 'build'>, opening: number): number {
+  return track.build && opening > 0 && track.start >= opening ? Math.round((track.start - opening) * 1000) / 1000 : track.start
+}
 
 /** The music's level over a video: where it starts, then each change ([at, over, to], seconds and levels) */
 export interface MusicCurve {

@@ -434,6 +434,11 @@ export async function describeMusic(body: { source: string; target: string; lang
   return call('POST', '/musics/describe', { body, timeoutMs: 5 * 60_000 })
 }
 
+/** The strong moment of a track as the streamer points at it: the attack nearest to `at` seconds, and the tempo there (null: no beat to follow) */
+export async function musicMoment(body: { path: string; at: number }): Promise<{ start: number; bpm: number | null }> {
+  return call('POST', '/musics/moment', { body, timeoutMs: 2 * 60_000 })
+}
+
 /** What the AI chose for the sound of a video (worker: looks.choose_sound): any of them may be null */
 export interface SoundChoice {
   kind: string | null

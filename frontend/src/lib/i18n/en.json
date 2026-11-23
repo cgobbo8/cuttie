@@ -763,7 +763,14 @@
     "musicKinds": "Kinds of video it suits",
     "musicDescription": "What this music is (the AI reads it to choose)",
     "musicDescriptionHint": "What it sounds like, for which videos. The AI reads this to choose.",
-    "defaultTemplate": "Default template"
+    "defaultTemplate": "Default template",
+    "musicMoment": "Strong moment",
+    "musicMomentHelp": "Where a video starts the music. Type about where it is, by ear (the riff, the drop): Cuttie lands on the nearest note.",
+    "musicMomentSaved": "Strong moment set at {{seconds}} s",
+    "musicMomentListen": "Hear it come in",
+    "musicMomentListenHelp": "Plays the music {{seconds}} s before its strong moment",
+    "musicBuild": "Builds during the intro",
+    "musicBuildHelp": "With an intro, the music starts before its strong moment, which lands right as the video begins."
   },
   "project": {
     "steps": "Project steps",

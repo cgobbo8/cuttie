@@ -77,6 +77,30 @@ def beat_grid(y, sr: int, around: float) -> tuple[float, float] | None:
     return (best[0], best[1]) if best else None
 
 
+def attack_foot(y, sr: int, at: float) -> float:
+    """Exactly where the sound of an attack starts to rise, looked at closely (every 6 ms). A detector dates
+    an attack at the height of its rise, a few hundredths late, and an attack can take a tenth of a second
+    to come: a start a tenth of a second early is a tenth of a second of nothing at the very start of a
+    video; late, the attack is cut off and what lands in an intro no longer lands on the beat."""
+    import librosa
+    import numpy as np
+
+    fine = 128
+    low = max(0, int((at - 0.3) * sr))
+    close = librosa.feature.rms(y=y[low : int((at + 0.15) * sr)], frame_length=512, hop_length=fine)[0]
+    if len(close) < 3 or close.max() <= 0:
+        return at
+    # The steepest of the rise, near where the detector heard it; then down to its foot
+    near = max(0, int((at - 0.12) * sr - low) // fine)
+    rise = near + int(np.argmax(np.diff(close[near:])))
+    peak = float(close[rise + 1 : rise + 1 + int(0.1 * sr / fine)].max())
+    for _ in range(int(0.15 * sr / fine)):
+        if rise == 0 or close[rise] <= 0.15 * peak or close[rise - 1] >= close[rise]:
+            break
+        rise -= 1
+    return low / sr + rise * fine / sr
+
+
 def best_start(y, sr: int) -> float:
     """Where a video starts the track: on a clear attack from which the music is loud at once and stays so.
     The start of a video is what matters most: a track started in a quiet bar, in the tail of a note or just
@@ -103,28 +127,8 @@ def best_start(y, sr: int) -> float:
         b = min(len(rms), max(a + 1, int(seconds_to * per_second)))
         return float(sums[b] - sums[a]) / (b - a) / full
 
-    fine = 128
-
     def foot(at: float) -> float:
-        """Exactly where the sound of an attack starts to rise, looked at closely (every 6 ms). The detector dates
-        an attack at the height of its rise, a few hundredths late, and an attack can take a tenth of a second
-        to come: a start a tenth of a second early is a tenth of a second of nothing at the very start of a
-        video; late, the attack is cut off and what lands in an intro no longer lands on the beat."""
-        low = max(0, int((at - 0.3) * sr))
-        close = librosa.feature.rms(y=y[low : int((at + 0.15) * sr)], frame_length=512, hop_length=fine)[0]
-        if len(close) < 3 or close.max() <= 0:
-            return at
-        # The steepest of the rise, near where the detector heard it; then down to its foot (on the level
-        # smoothed over 30 ms: a rise is never perfectly even, and would be left at its first ripple)
-        near = max(0, int((at - 0.12) * sr - low) // fine)
-        rise = near + int(np.argmax(np.diff(close[near:])))
-        peak = float(close[rise + 1 : rise + 1 + int(0.1 * sr / fine)].max())
-        even = np.convolve(close, np.ones(5) / 5, mode="same")
-        for _ in range(int(0.15 * sr / fine)):
-            if rise == 0 or even[rise] <= 0.12 * peak or even[rise - 1] >= even[rise]:
-                break
-            rise -= 1
-        return low / sr + rise * fine / sr
+        return attack_foot(y, sr, at)
 
     scored = []
     for heard in librosa.onset.onset_detect(y=y, sr=sr, hop_length=hop, units="time"):
@@ -167,6 +171,48 @@ def measure(path: str) -> dict:
     found = re.findall(r"I:\s+(-?\d+(?:\.\d+)?) LUFS", printed)
     lufs = float(found[-1]) if found else -14.0
     return {"seconds": round(seconds, 1), "bpm": bpm, "start": round(start, 2), "lufs": max(-40.0, min(0.0, lufs))}
+
+
+# How far from the time the streamer gives an attack is looked for: they say "about 35 seconds"
+MOMENT_REACH = 0.75
+
+
+def moment(path: str, at: float) -> dict:
+    """{"start", "bpm"}: the track's strong moment as the streamer points at it (the riff comes in, the drop),
+    where a video starts it or, with an intro that builds up to it, the first picture of the video.
+
+    They give a time by ear, to the second or so; an attack near it is taken, to the hundredth: nobody can
+    type where a note starts, and a moment a tenth of a second off is heard. How loud it is does not count:
+    the riff a song is known by can be quieter than the drum fill that leads to it (seen: a guitar riff at
+    35.1 s after 8 s of drums twice as loud, which no measure of loudness would ever choose). Among the
+    attacks within reach, the one that starts something wins over a hit in what leads to it: how much louder
+    the sound is just after than just before, with the nearer ones ahead. No attack within reach: the time
+    as given. `bpm`: the tempo from there, None when no beat can be followed."""
+    import librosa
+    import numpy as np
+
+    y, sr = librosa.load(path, sr=22050, mono=True)
+    seconds = len(y) / sr
+    at = min(max(0.0, float(at)), max(0.0, seconds - 1))
+    hop = 128
+    rms = librosa.feature.rms(y=y, frame_length=512, hop_length=hop)[0]
+    usual = float(np.percentile(rms, 90)) + 1e-9
+
+    def loud(seconds_from: float, seconds_to: float) -> float:
+        a = min(len(rms) - 1, max(0, int(seconds_from * sr / hop)))
+        b = min(len(rms), max(a + 1, int(seconds_to * sr / hop)))
+        return float(rms[a:b].mean())
+
+    def starts_something(foot: float) -> float:
+        # Louder after than before (four times at most: after a silence anything is), and nearer to what was said
+        rises = min(4.0, loud(foot + 0.01, foot + 0.16) / (loud(foot - 0.14, foot - 0.02) + 0.05 * usual))
+        return rises * (1 - 0.6 * (abs(foot - at) / MOMENT_REACH) ** 2)
+
+    feet = [attack_foot(y, sr, float(heard)) for heard in librosa.onset.onset_detect(y=y, sr=sr, hop_length=512, units="time") if abs(float(heard) - at) <= MOMENT_REACH + 0.2]
+    near = [foot for foot in feet if abs(foot - at) <= MOMENT_REACH]
+    start = max(0.0, max(near, key=starts_something) - 0.03) if near else at
+    grid = beat_grid(y, sr, start + 0.03)
+    return {"start": round(start, 2), "bpm": round(60 / grid[1], 2) if grid else None}
 
 
 def to_mp3(source: str, target: str) -> None:

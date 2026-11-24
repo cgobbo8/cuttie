@@ -1009,7 +1009,10 @@
     "cutTooClose": "Too close to the passage's edge to cut here.",
     "noSilence": "No blank to take out of this passage.",
     "silencesOut_one": "Blanks taken out: {{count}} passage",
-    "silencesOut_other": "Blanks taken out: {{count}} passages"
+    "silencesOut_other": "Blanks taken out: {{count}} passages",
+    "side": {
+      "passages": "Passages"
+    }
   },
   "exportStep": {
     "title": "Your clips are ready",

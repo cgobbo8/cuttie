@@ -1009,7 +1009,10 @@
     "cutTooClose": "Demasiado cerca del borde del pasaje para cortar aquí.",
     "noSilence": "Ningún silencio que quitar en este pasaje.",
     "silencesOut_one": "Silencios quitados: {{count}} pasaje",
-    "silencesOut_other": "Silencios quitados: {{count}} pasajes"
+    "silencesOut_other": "Silencios quitados: {{count}} pasajes",
+    "side": {
+      "passages": "Pasajes"
+    }
   },
   "exportStep": {
     "title": "Tus clips están listos",

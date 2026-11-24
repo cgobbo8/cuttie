@@ -543,8 +543,10 @@ export default function ProjectPage() {
             />
           </section>
 
-          <section className="mt-[18px] flex flex-wrap gap-[18px] items-start">
-            <div className="flex-[1_1_640px] min-w-0 flex flex-col gap-4">
+          {/* What is on screen beside the list, laid out on the room there is (see .chooser) */}
+          <div className="chooser-room mt-[18px]">
+          <section className="chooser">
+            <div className="flex flex-col gap-4">
               {videoEntry ? (
                 <VideoDetail
                   jobId={jobId}
@@ -615,7 +617,7 @@ export default function ProjectPage() {
               ) : null}
             </div>
 
-            <div className="flex-[0_1_410px] min-w-[300px] lg:sticky lg:top-[96px]">
+            <div data-area="list">
               <SourceList
                 jobId={jobId}
                 entries={freed ? { ...entries, clip: entries.clip.filter((entry) => entry.kind === "video") } : entries}
@@ -652,6 +654,7 @@ export default function ProjectPage() {
               />
             </div>
           </section>
+          </div>
         </>
       )}
 

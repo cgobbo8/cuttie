@@ -176,6 +176,8 @@ export default function CompilationPage() {
   currentIdRef.current = currentId;
   // The live searched by hand for passages (a window of its own)
   const [searching, setSearching] = useState(false);
+  // On a window too narrow for the three panels: the one shown beside the video
+  const [side, setSide] = useState<"passages" | "look">("passages");
   // The AI is building or changing a video: which one, and what it did so far
   const [working, setWorking] = useState<{ id: string; lines: string[] } | null>(null);
   // The video whose plan came from the disk (nothing was searched this time): it can be asked again
@@ -1550,7 +1552,10 @@ export default function CompilationPage() {
     onExport: exportNow,
     exporting,
     onDelete: () => setToDelete(true),
-    onSearch: () => setSearching(true),
+    onSearch: () => {
+      setSearching(true);
+      setSide("passages");
+    },
     // Passages asked of the assistant: its panel opens on a field made for that (what to look for, where they go)
     onAskAi: () => assistant.compose({ kind: "passages", parts: compilation.sections.map((section) => section.title.trim()).filter(Boolean) }),
     templateName,
@@ -1651,11 +1656,20 @@ export default function CompilationPage() {
       </section>
       )}
 
-      {/* The workshop: the video's passages, the video itself, its look */}
-      <section className="mt-4 flex flex-wrap gap-[18px] items-start">
+      {/* The workshop: the video's passages, the video itself, its look (side by side when there is room, see .workshop) */}
+      <div className="workshop-room mt-4">
+      <section className="workshop" data-side={side}>
+        {/* Not enough room for the three: the video stays, and one panel at a time beside it */}
+        <div data-area="tabs" role="tablist" aria-label={t("compilation.title")} className="seg">
+          {(["passages", "look"] as const).map((one) => (
+            <button key={one} role="tab" aria-selected={side === one} onClick={() => setSide(one)}>
+              {one === "passages" ? `${t("montage.side.passages")} · ${items.length}` : t("compilation.dress.label")}
+            </button>
+          ))}
+        </div>
         {searching ? (
           // The live searched by hand, where the video's passages are: what is found plays underneath, and is added from here
-          <div className="flex-[1_1_300px] max-w-[400px] max-h-[max(420px,calc(100dvh-400px))] overflow-y-auto rounded-[20px]">
+          <div data-area="passages" className="max-h-[max(420px,calc(100dvh-400px))] overflow-y-auto rounded-[20px]">
             <SearchPanel
               jobId={jobId}
               storyboards={storyboards}
@@ -1673,17 +1687,19 @@ export default function CompilationPage() {
             />
           </div>
         ) : (
-          <CompilationPanel part="passages" {...panel} />
+          <div data-area="passages" className="[&>aside]:max-w-none">
+            <CompilationPanel part="passages" {...panel} />
+          </div>
         )}
 
-        <div className="flex-[1_1_280px] min-w-[260px] lg:[@media(min-height:820px)]:sticky lg:[@media(min-height:820px)]:top-[84px] flex flex-col items-center gap-3">
+        <div data-area="preview" className="flex flex-col items-center gap-3">
           {items.length > 0 ? (
             <>
               <div
                 aria-label={t("compilation.wholeVideo")}
                 className="relative max-w-full aspect-[9/16] rounded-[24px] overflow-hidden border border-white/[0.14] shadow-[0_50px_100px_-40px_rgba(0,0,0,0.9)] bg-black"
-                // (as tall as the window leaves it above the timeline)
-                style={{ height: "clamp(340px, calc(100dvh - 430px), 604px)" }}
+                // (as tall as the window leaves it above the timeline, and never wider than its column)
+                style={{ height: "min(clamp(340px, calc(100dvh - 430px), 604px), calc(100cqw * 16 / 9))" }}
               >
                 {preview ? (
                   <Player
@@ -1743,13 +1759,19 @@ export default function CompilationPage() {
               working={working?.id === compilation.id ? working.lines : behind ? [behind.state === "cutting" ? t("live.buildCutting") : behind.state === "waiting" ? t("live.buildWaiting") : stepText(t, behind.step)] : null}
               unreadable={!!info && !info.transcript}
               onBuild={(brief, target) => describe(compilation.id, brief, target, compilation.suggestion?.moments ?? [])}
-              onSearch={() => setSearching(true)}
+              onSearch={() => {
+                setSearching(true);
+                setSide("passages");
+              }}
             />
           )}
         </div>
 
-        <CompilationPanel part="look" {...panel} />
+        <div data-area="look" className="[&>aside]:max-w-none">
+          <CompilationPanel part="look" {...panel} />
+        </div>
       </section>
+      </div>
 
       {preview && (
         <VideoTimeline

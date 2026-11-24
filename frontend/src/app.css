@@ -217,6 +217,115 @@ body::after {
   backdrop-filter: blur(36px) saturate(170%);
 }
 
+/*
+ * The montage's workshop, laid out on the room it really has (the assistant, open, takes some):
+ * its three panels side by side; or the video beside one panel at a time (tabs: passages, look);
+ * or, on a phone, the video then the panel under it.
+ */
+.workshop-room {
+  container: workshop / inline-size;
+}
+.workshop {
+  display: grid;
+  gap: 18px;
+  align-items: start;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: "preview" "tabs" "panel";
+}
+.workshop > [data-area="preview"] {
+  grid-area: preview;
+  /* (its own width is what the video is sized on: it never grows wider than its column) */
+  container-type: inline-size;
+  min-width: 0;
+}
+.workshop > [data-area="tabs"] {
+  grid-area: tabs;
+}
+.workshop > [data-area="passages"],
+.workshop > [data-area="look"] {
+  grid-area: panel;
+  min-width: 0;
+}
+.workshop[data-side="passages"] > [data-area="look"],
+.workshop[data-side="look"] > [data-area="passages"] {
+  display: none;
+}
+@container workshop (min-width: 640px) {
+  .workshop {
+    grid-template-columns: minmax(240px, 340px) minmax(0, 1fr);
+    grid-template-rows: auto 1fr;
+    grid-template-areas: "preview tabs" "preview panel";
+  }
+  @media (min-height: 820px) {
+    .workshop > [data-area="preview"] {
+      position: sticky;
+      top: 84px;
+    }
+  }
+}
+@container workshop (min-width: 1040px) {
+  .workshop {
+    grid-template-columns: minmax(280px, 380px) minmax(260px, 1fr) minmax(320px, 400px);
+    grid-template-rows: auto;
+    grid-template-areas: "passages preview look";
+  }
+  .workshop > [data-area="tabs"] {
+    display: none;
+  }
+  .workshop[data-side] > [data-area="passages"] {
+    display: block;
+    grid-area: passages;
+  }
+  .workshop[data-side] > [data-area="look"] {
+    display: block;
+    grid-area: look;
+  }
+}
+
+/*
+ * Choosing in a live, on the room it really has: what is on screen beside the list of everything
+ * the live gives (the list narrower when there is less room), or, on a phone, one under the other.
+ */
+.chooser-room {
+  container: chooser / inline-size;
+}
+.chooser {
+  display: grid;
+  gap: 18px;
+  align-items: start;
+  grid-template-columns: minmax(0, 1fr);
+}
+.chooser > * {
+  min-width: 0;
+}
+@container chooser (min-width: 640px) {
+  .chooser {
+    grid-template-columns: minmax(0, 1fr) minmax(270px, 340px);
+  }
+  .chooser > [data-area="list"] {
+    position: sticky;
+    top: 96px;
+  }
+}
+@container chooser (min-width: 1040px) {
+  .chooser {
+    grid-template-columns: minmax(0, 1fr) 410px;
+  }
+}
+
+/* A row that scrolls sideways instead of wrapping (the kept videos of a live), fading out where it goes on */
+.scroll-row {
+  display: flex;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-right: 28px;
+  mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+}
+.scroll-row::-webkit-scrollbar {
+  display: none;
+}
+
 /* A glow of the channel's color at the top of the panel: it is lit from where the assistant speaks */
 .assistant-panel::before {
   content: "";

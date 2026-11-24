@@ -1009,7 +1009,10 @@
     "cutTooClose": "Trop près du bord du passage pour couper ici.",
     "noSilence": "Aucun blanc à retirer dans ce passage.",
     "silencesOut_one": "Blancs retirés : {{count}} passage",
-    "silencesOut_other": "Blancs retirés : {{count}} passages"
+    "silencesOut_other": "Blancs retirés : {{count}} passages",
+    "side": {
+      "passages": "Passages"
+    }
   },
   "exportStep": {
     "title": "Tes clips sont prêts",

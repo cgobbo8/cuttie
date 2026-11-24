@@ -42,8 +42,8 @@ import AnalysisView from "../components/project/AnalysisView";
 import LiveHeader from "../components/live/LiveHeader";
 import SourceList from "../components/live/SourceList";
 import VideoDetail from "../components/live/VideoDetail";
-import { ideasToSee, keptCount, liveEntries, momentKey, shownEntries, videoMoments, type ListPart, type LiveEntry } from "../lib/liveEntries";
-import { VIDEO_SOURCES, sourceOf } from "../lib/videoSources";
+import { ideasToSee, keptCount, liveEntries, momentKey, shownEntries, videoMoments, type LiveEntry } from "../lib/liveEntries";
+import { VIDEO_SOURCES, sourceOf, type VideoSource } from "../lib/videoSources";
 import VodTimeline from "../components/project/VodTimeline";
 import MomentPlayer, { type MomentPlayerHandle } from "../components/project/MomentPlayer";
 import MomentDetails from "../components/project/MomentDetails";
@@ -79,7 +79,7 @@ export default function ProjectPage() {
   const [videos, setVideos] = useState<Compilation[]>([]);
   // The sequence or compilation on screen (its id); none: the clip selected is
   const [openVideo, setOpenVideo] = useState<string | null>(null);
-  const [openSections, setOpenSections] = useState<Partial<Record<ListPart, boolean>>>({});
+  const [openSections, setOpenSections] = useState<Partial<Record<VideoSource, boolean>>>({});
   const [storyboard, setStoryboard] = useState<TwitchStoryboard | null>(null);
   const [videoBusy, setVideoBusy] = useState(false);
   const [videoToDelete, setVideoToDelete] = useState<Compilation | null>(null);

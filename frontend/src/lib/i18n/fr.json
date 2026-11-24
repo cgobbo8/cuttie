@@ -2456,8 +2456,7 @@
     "buildWaiting": "Attend son tour…",
     "buildCutting": "Découpe les passages dans le live…",
     "buildStarted": "L'IA construit « {{name}} » en arrière-plan.",
-    "built": "« {{name}} » est prête dans Monter.",
-    "proposed": "L'IA te propose"
+    "built": "« {{name}} » est prête dans Monter."
   },
   "describe": {
     "title": {

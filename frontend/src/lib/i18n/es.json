@@ -2456,8 +2456,7 @@
     "buildWaiting": "Esperando su turno…",
     "buildCutting": "Cortando los pasajes del directo…",
     "buildStarted": "La IA está montando «{{name}}» en segundo plano.",
-    "built": "«{{name}}» está lista en Montar.",
-    "proposed": "La IA te propone"
+    "built": "«{{name}}» está lista en Montar."
   },
   "describe": {
     "title": {

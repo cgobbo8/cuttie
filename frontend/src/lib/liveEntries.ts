@@ -59,29 +59,22 @@ export function liveEntries(moments: Moment[], videos: Compilation[]): Record<Vi
 
 /** How many entries of a section are shown before « see the others » */
 export const SHOWN = 6;
-/** ...and how many of the ideas the AI proposes, at the head of the list */
-export const SHOWN_IDEAS = 3;
-
-/** A part of the list: what the AI proposes, then the three sources */
-export type ListPart = VideoSource | "ideas";
-
-/** An idea of the AI nobody decided on yet: proposed at the head of the list, above the clips, not in its source's section */
-export const isProposed = (entry: LiveEntry): boolean => entry.kind === "video" && entry.idea && entry.state === "todo";
-
-/** What the AI proposes, sequences and compilations together, the most promising first */
-export const proposedEntries = (entries: Record<VideoSource, LiveEntry[]>): LiveEntry[] =>
-  [...entries.sequence, ...entries.compilation].filter(isProposed).sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
-
-/** A source's own section: what is kept, made or passed on (an idea still to see is proposed above) */
-export const sectionEntries = (entries: Record<VideoSource, LiveEntry[]>, source: VideoSource): LiveEntry[] => entries[source].filter((entry) => !isProposed(entry));
 
 /**
- * The entries on screen, in order: what the AI proposes, then every section; each cut to its
- * first ones unless it is open (`open`) or holds what is selected.
+ * The sections of the list where a live's videos are chosen, in order: its sequences and its
+ * compilations first (what the AI worked out of the whole live: the part with the most thought
+ * behind it, put forward), then its clips. Everywhere else the three sources keep their usual
+ * order (VIDEO_SOURCES): there they list what is kept, mostly clips.
  */
-export function shownEntries(entries: Record<VideoSource, LiveEntry[]>, open: Partial<Record<ListPart, boolean>>, selected: string | null): LiveEntry[] {
-  const cut = (list: LiveEntry[], most: number, whole: boolean | undefined) => (whole || list.findIndex((entry) => entry.key === selected) >= most ? list : list.slice(0, most));
-  return [...cut(proposedEntries(entries), SHOWN_IDEAS, open.ideas), ...VIDEO_SOURCES.flatMap((source) => cut(sectionEntries(entries, source), SHOWN, open[source]))];
+export const CHOOSE_ORDER: VideoSource[] = ["sequence", "compilation", "clip"];
+
+/** The entries on screen, in order: every section, cut to its first ones unless it is open (`open`) or holds what is selected */
+export function shownEntries(entries: Record<VideoSource, LiveEntry[]>, open: Partial<Record<VideoSource, boolean>>, selected: string | null): LiveEntry[] {
+  return CHOOSE_ORDER.flatMap((source) => {
+    const list = entries[source];
+    const whole = open[source] || list.findIndex((entry) => entry.key === selected) >= SHOWN;
+    return whole ? list : list.slice(0, SHOWN);
+  });
 }
 
 /** What is kept: the videos of this live to edit and export */

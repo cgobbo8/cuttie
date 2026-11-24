@@ -313,8 +313,9 @@ body::after {
   }
 }
 
-/* What the AI proposes (the ideas at the head of a live's list): a panel lit in the channel's own
-   color, from two corners, a little brighter than the rest of the list so it is seen first */
+/* The sequences and the compilations of a live, where its videos are chosen (what the AI worked
+   out of the whole live): a panel lit in the channel's own color, from two corners, a little
+   brighter than the rest of the list so it is seen first */
 .ai-ideas {
   position: relative;
   isolation: isolate;

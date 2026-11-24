@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Compilation } from "./api";
-import { ideasToSee, keptCount, liveEntries, proposedEntries, sectionEntries, shownEntries, videoFacts, videoMoments } from "./liveEntries";
+import { CHOOSE_ORDER, ideasToSee, keptCount, liveEntries, shownEntries, videoFacts, videoMoments } from "./liveEntries";
 import type { Moment } from "./moments";
 
 const moment = (filename: string, score: number, state: Moment["state"] = "todo") => ({ filename, score, state, rank: 1, start: 0, end: 60, duration: 60, hp: { clip_name: filename } }) as unknown as Moment;
@@ -42,22 +42,10 @@ describe("what a live gives, in one list", () => {
     expect([ideasToSee(entries, "clip"), ideasToSee(entries, "sequence"), ideasToSee(entries, "compilation")]).toEqual([0, 1, 2]);
   });
 
-  it("proposes the ideas still to see at the head of the list, the most promising first, and leaves the rest to each source", () => {
-    // Sequences and compilations together; one passed on is no longer proposed
-    expect(proposedEntries(entries).map((e) => e.key)).toEqual(["v:yacht", "v:romance", "v:calme"]);
-    expect(sectionEntries(entries, "sequence").map((e) => e.key)).toEqual(["v:banque"]);
-    expect(sectionEntries(entries, "compilation").map((e) => e.key)).toEqual(["v:mine"]);
-    expect(sectionEntries(entries, "clip").map((e) => e.key)).toEqual(["v:helice", "m:a.mp4", "m:b.mp4", "m:c.mp4"]);
-    // On screen: what the AI proposes, then the clips, the sequences, the compilations
-    expect(shownEntries(entries, {}, null).map((e) => e.key)).toEqual(["v:yacht", "v:romance", "v:calme", "v:helice", "m:a.mp4", "m:b.mp4", "m:c.mp4", "v:banque", "v:mine"]);
-  });
-
-  it("shows the three best ideas, all of them once open or when the one selected is further down", () => {
-    const five = liveEntries([moment("a.mp4", 83)], [idea("un", 90), idea("deux", 85), idea("trois", 80), idea("quatre", 75), idea("cinq", 70)]);
-    expect(shownEntries(five, {}, null).map((e) => e.key)).toEqual(["v:un", "v:deux", "v:trois", "m:a.mp4"]);
-    expect(shownEntries(five, { ideas: true }, null)).toHaveLength(6);
-    expect(shownEntries(five, {}, "v:cinq")).toHaveLength(6);
-    expect(shownEntries(five, {}, "v:deux")).toHaveLength(4);
+  it("lists the sequences and the compilations before the clips, where a live's videos are chosen", () => {
+    expect(CHOOSE_ORDER).toEqual(["sequence", "compilation", "clip"]);
+    // On screen, and under the arrows of the keyboard: what the AI worked out of the whole live first
+    expect(shownEntries(entries, {}, null).map((e) => e.key)).toEqual(["v:yacht", "v:banque", "v:mine", "v:romance", "v:calme", "v:helice", "m:a.mp4", "m:b.mp4", "m:c.mp4"]);
   });
 
   it("shows the first ones of a long section, all of it once open or when what is selected is further down", () => {

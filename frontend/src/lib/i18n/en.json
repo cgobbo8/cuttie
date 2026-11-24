@@ -2456,8 +2456,7 @@
     "buildWaiting": "Waiting its turn…",
     "buildCutting": "Cutting the passages from the live…",
     "buildStarted": "The AI is building “{{name}}” in the background.",
-    "built": "“{{name}}” is ready in Edit.",
-    "proposed": "The AI suggests"
+    "built": "“{{name}}” is ready in Edit."
   },
   "describe": {
     "title": {

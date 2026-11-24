@@ -26,3 +26,17 @@ Pistes téléchargées sur Pixabay Music par Corentin (licence de contenu Pixaba
 | `quirky.mp3` | Funny Comedy Quirky | lnplusmusic | pixabay.com, 316889 (`lnplusmusic-funny-comedy-quirky-background-music-316889.mp3`) |
 
 Réencodées en 128 kb/s par `scripts/make-musics.py`. Ce que chaque piste est (types de vidéo, description, mesures) : `catalogue.json`.
+
+## Collection personnelle
+
+Pistes de la collection personnelle de Corentin, livrées avec l'app. Contrairement aux pistes Pixabay, certaines sont sous droits (Dire Straits, Travis Scott, Justice, thèmes des jeux GTA) : sur YouTube, un Short de plus d'une minute peut être bloqué, et Instagram / TikTok peuvent couper le son.
+
+| Fichier | Titre | Auteur |
+|---|---|---|
+| `u4af06c26.mp3` | Money For Nothing | Dire Straits |
+| `u99598061.mp3` | GTA San Andreas | — |
+| `u071643bd.mp3` | GTA Vice City | — |
+| `ucdae0c21.mp3` | GTA V | — |
+| `u296f00a6.mp3` | GTA IV (ralenti) | — |
+| `uf1ddf6bd.mp3` | BURN | Travis Scott |
+| `u4ae54a39.mp3` | Flower In A Hurricane | Justice |

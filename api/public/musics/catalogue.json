@@ -349,6 +349,130 @@
       "start": 7.9,
       "lufs": -13.0,
       "about": "Mood: playful, quirky, lighthearted. Energy: low to medium. Suits: funny moments, casual chatting, light gaming. Ruins: intense action, horror, serious storytelling, high-stakes competitive gameplay."
+    },
+    {
+      "id": "u4af06c26",
+      "name": "Money For Nothing",
+      "author": "Dire Straits",
+      "source": "collection personnelle",
+      "file": "Dire Straits - Money For Nothing (Official Music Video).mp3",
+      "genre": "rock",
+      "kinds": [
+        "hype"
+      ],
+      "bpm": 134.66,
+      "seconds": 279.0,
+      "start": 35.1,
+      "lufs": -17.3,
+      "about": "Classic rock: a drum build-up, then the famous guitar riff comes in. For a video that builds up to a payoff, a win, a big entrance.",
+      "build": true
+    },
+    {
+      "id": "u99598061",
+      "name": "GTA San Andreas",
+      "author": "",
+      "source": "collection personnelle",
+      "file": "GTA San Andreas Theme.mp3",
+      "genre": "hip-hop",
+      "kinds": [
+        "hype",
+        "chill"
+      ],
+      "bpm": 95.06,
+      "seconds": 236.4,
+      "start": 0.48,
+      "lufs": -11.0,
+      "about": "Theme of GTA San Andreas: West Coast hip-hop, laid-back G-funk groove with a whistling synth lead. For GTA videos: cruising, banter, a relaxed best-of."
+    },
+    {
+      "id": "u071643bd",
+      "name": "GTA Vice City",
+      "author": "",
+      "source": "collection personnelle",
+      "file": "Gta Vice City Theme.mp3",
+      "genre": "synthwave",
+      "kinds": [
+        "chill",
+        "hype"
+      ],
+      "bpm": 120.05,
+      "seconds": 79.6,
+      "start": 18.45,
+      "lufs": -13.1,
+      "about": "Theme of GTA Vice City: bright 80s synths, nostalgic, Miami at sunset. For a GTA video with the Vice City look, cruising, a relaxed best-of."
+    },
+    {
+      "id": "ucdae0c21",
+      "name": "GTA V",
+      "author": "",
+      "source": "collection personnelle",
+      "file": "GTA 5 Theme.mp3",
+      "genre": "hip-hop",
+      "kinds": [
+        "suspense",
+        "hype"
+      ],
+      "bpm": 89.01,
+      "seconds": 120.6,
+      "start": 45.24,
+      "lufs": -13.9,
+      "about": "Theme of GTA V: tense, cinematic hip-hop beat with brooding synths. For a heist, a chase, something that builds up."
+    },
+    {
+      "id": "u296f00a6",
+      "name": "GTA IV (ralenti)",
+      "author": "",
+      "source": "collection personnelle",
+      "file": "gta 4 - loading screen theme tiktok (slowed + reverb).mp3",
+      "genre": "ambient",
+      "kinds": [
+        "chill",
+        "suspense"
+      ],
+      "bpm": 115.71,
+      "seconds": 161.3,
+      "start": 36.09,
+      "lufs": -18.7,
+      "about": "The GTA IV loading theme, slowed down with reverb: dark, heavy, melancholic. For a sad or awkward moment, a fail in slow motion, a calm story."
+    },
+    {
+      "id": "uf1ddf6bd",
+      "name": "BURN",
+      "author": "Travis Scott",
+      "source": "collection personnelle",
+      "file": "Travis Scott - BURN (Grand Theft Auto VI).mp3",
+      "genre": "trap",
+      "kinds": [
+        "hype",
+        "skill"
+      ],
+      "bpm": 119.19,
+      "seconds": 166.3,
+      "start": 0.09,
+      "lufs": -19.1,
+      "about": "Trap by Travis Scott, from GTA VI: dark and heavy. For action, kills, a montage that hits hard.",
+      "universes": [
+        "gta"
+      ]
+    },
+    {
+      "id": "u4ae54a39",
+      "name": "Flower In A Hurricane",
+      "author": "Justice",
+      "source": "collection personnelle",
+      "file": "Justice  Flower In A Hurricane (UnOfficial Music Video).mp3",
+      "genre": "electro",
+      "kinds": [
+        "hype"
+      ],
+      "bpm": 126.05,
+      "seconds": 227.4,
+      "start": 48.8,
+      "lufs": -9.9,
+      "about": "Electro by Justice: driving and cinematic. For an energetic best-of, a montage with pace.",
+      "universes": [
+        "gta"
+      ]
     }
   ]
 }

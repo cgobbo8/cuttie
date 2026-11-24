@@ -1,3 +1,5 @@
+Depuis la 0.3.0 : Money For Nothing est rangé avec les sons GTA. Le reste de cette note présente la 0.3.
+
 Grosse mise à jour : l'app a été repensée d'un bout à l'autre. À la première ouverture, Cuttie installe quelques modules de plus pour l'assistant (quelques minutes, une seule fois).
 
 - **Un seul parcours par live** : Analyse → Choisir → Monter → Exporter. En haut : Accueil · Lives · Vidéos · Ma chaîne. Dans « Choisir », tu regardes et tu décides (Garder / Passer) ; toute la coupe se fait dans « Monter ».
@@ -10,7 +12,7 @@ Grosse mise à jour : l'app a été repensée d'un bout à l'autre. À la premi�
 - **Médiathèque** (Ma chaîne) : tes propres vidéos courtes (un outro, un mème), à glisser dans n'importe quelle vidéo comme un passage.
 - **Pack GTA** : sur un live GTA, la vidéo prend le look du jeu toute seule (mise en page, titres sur leur encadré, étoiles de recherche, quatre intros et leurs sons). Ligne « Univers » pour revenir au look de ta chaîne.
 - **Habillage** rangé en deux : ce qui vaut pour toute la vidéo, et ce qui vaut pour un passage (son modèle, son arrivée). Nouveaux réglages : le chat affiché sur n'importe quel modèle, le style des titres, un titre de partie caché.
-- **Musique** : l'intro se cale sur les temps de la musique ; sur tes pistes, tu désignes le « moment fort » et la piste peut monter pendant l'intro pour qu'il tombe sur la première image. Sept morceaux de plus dans le catalogue (Money For Nothing, les thèmes GTA, BURN, Flower In A Hurricane). Attention, ceux-là sont sous droits : YouTube peut bloquer un Short de plus d'une minute, Instagram et TikTok peuvent couper le son.
+- **Musique** : l'intro se cale sur les temps de la musique ; sur tes pistes, tu désignes le « moment fort » et la piste peut monter pendant l'intro pour qu'il tombe sur la première image. Sept morceaux de plus dans le catalogue, tous rangés avec les sons GTA (Money For Nothing, les thèmes du jeu, BURN, Flower In A Hurricane). Attention, ceux-là sont sous droits : YouTube peut bloquer un Short de plus d'une minute, Instagram et TikTok peuvent couper le son.
 - **Analyse** : l'IA regarde aussi l'image là où l'on parle peu, pour trouver les scènes où c'est ce qui se passe à l'écran qui est drôle ; chaque clip a des tags et une description ; les accroches et les coupes suivent ce que font les shorts les plus vus (30 à 75 s, une phrase qui ne donne pas la fin).
 - Ce qui disparaît : l'ancien écran « Monter » des clips et ses réglages (modèle, intro et musique choisis clip par clip dans l'ancienne version ne sont pas repris : un clip gardé s'ouvre dans le nouveau « Monter »).
 - Pas encore essayé sur un PC Windows avant cette version : « Parcourir le live » et la médiathèque. Si l'un des deux coince chez toi, envoie les journaux (Paramètres > Aide à distance).

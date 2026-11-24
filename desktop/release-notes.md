@@ -1,4 +1,4 @@
-Depuis la 0.3.0 : Money For Nothing est rangé avec les sons GTA. Le reste de cette note présente la 0.3.
+Depuis la 0.3.0 : après une analyse, « Choisir » et « Vidéos » disent quand l'IA est en train de chercher des séquences et des compilations dans le live (ses idées arrivent une demi-minute après, sans recharger) ; Money For Nothing est rangé avec les sons GTA. Le reste de cette note présente la 0.3.
 
 Grosse mise à jour : l'app a été repensée d'un bout à l'autre. À la première ouverture, Cuttie installe quelques modules de plus pour l'assistant (quelques minutes, une seule fois).
 

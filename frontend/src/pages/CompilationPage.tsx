@@ -118,6 +118,7 @@ import LiveHeader from "../components/live/LiveHeader";
 import VideoRail from "../components/live/VideoRail";
 import CamSheet from "../components/montage/CamSheet";
 import LiveBrowser from "../components/compilation/LiveBrowser";
+import { seenMoves, videoMoves } from "../lib/effectMoves";
 import { spanText } from "../lib/liveBrowse";
 import TemplateSketch from "../components/montage/TemplateSketch";
 import VideoTimeline from "../components/montage/VideoTimeline";
@@ -943,6 +944,8 @@ export default function CompilationPage() {
   }, [preview]);
   const marksRef = useRef(marks);
   marksRef.current = marks;
+  // Where the picture moves in the video (its effects), for the timeline to show and the look panel to count
+  const moves = useMemo(() => videoMoves(preview?.montage.segments ?? [], marks, FPS), [marks, preview]);
   // In the page the intro's sound and the music are files the player plays (the export mixes them in afterwards)
   const playerProps = useMemo(() => (preview ? playable(preview.montage, musics, liveLufs) : undefined), [liveLufs, musics, preview]);
   // The same passages in the same order: the same player, which keeps its place when a cut or a template changes
@@ -1814,6 +1817,8 @@ export default function CompilationPage() {
     selection,
     scope: lookScope,
     onScope: setLookScope,
+    // (how many times the picture moves, once the video is built: said on the « Effets » row)
+    moves: preview ? seenMoves(moves) : null,
     // Passages asked of the assistant: its panel opens on a field made for that (what to look for, where they go)
     onAskAi: () => assistant.compose({ kind: "passages", parts: compilation.sections.map((section) => section.title.trim()).filter(Boolean) }),
     templateName,
@@ -2055,6 +2060,7 @@ export default function CompilationPage() {
           player={playerRef}
           playerKey={playerKey}
           playing={videoPlaying}
+          moves={moves}
           selected={inCompilation ? (shownItem?.id ?? null) : null}
           onSelect={(id) => {
             // (a plain click is on that passage alone: the ones picked together are let go)

@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from "react";
 import { useTranslation } from "react-i18next";
 import type { PlayerRef } from "@remotion/player";
-import { Check, Clapperboard, Eye, EyeOff, Loader2, Music2, Pause, Play, X } from "lucide-react";
+import { Check, Clapperboard, Eye, EyeOff, Loader2, Music2, Pause, Play, X, ZoomIn } from "lucide-react";
 import { clipThumbUrl, type Compilation } from "../../lib/api";
 import { allItems } from "../../lib/compilation";
+import type { Move } from "../../lib/effectMoves";
 import { clock } from "../../lib/format";
 import { gainAt, type MusicCurve } from "../../lib/music/curve";
 import { dropPlace, frameUnder, scrubClock, type DropPlace } from "../../lib/timelineDrop";
@@ -42,6 +43,8 @@ interface Props {
   onMove?: (ids: string[], section: string, before: string | null) => void;
   /** The music's level over the video, when it plays one, and the track's name */
   music: { curve: MusicCurve; name: string } | null;
+  /** Where the picture moves (the video's effects): shown on a lane of their own, each saying what it is for */
+  moves?: Move[];
   /** Passages just added (lit) */
   fresh?: Set<string>;
   /** Passages whose clip is still being cut from the live */
@@ -49,6 +52,14 @@ interface Props {
   /** What cuts the passage under the playhead, on the right of the bar */
   tools?: ReactNode;
 }
+
+/** How each kind of move is drawn: a shout in the channel's color (the strongest), a line lighter, a slow close-up as an outline */
+const MOVE_LOOK: Record<Move["kind"], string> = {
+  shout: "bg-accent shadow-[0_0_8px_var(--color-accent-glow)]",
+  line: "bg-accent/55",
+  calm: "bg-white/[0.07] border border-white/35",
+  closer: "bg-white/10",
+};
 
 /** A press that moves less than this is a click, not a drag (px) */
 const DRAG_FROM = 6;
@@ -60,7 +71,7 @@ const DRAG_FROM = 6;
  * dragged to another place (all the picked ones with it), a click on one takes the video there and
  * opens it to be cut, Ctrl / Cmd + click picks several.
  */
-export default function VideoTimeline({ compilation, marks, fps, frames, opening, pieces, player, playerKey, playing, selected, onSelect, picked, onPick, onClearPicked, onMove, music, fresh, waiting, tools }: Props) {
+export default function VideoTimeline({ compilation, marks, fps, frames, opening, pieces, player, playerKey, playing, selected, onSelect, picked, onPick, onClearPicked, onMove, music, moves, fresh, waiting, tools }: Props) {
   const { t } = useTranslation();
   const lanes = useRef<HTMLDivElement>(null);
   const head = useRef<HTMLSpanElement>(null);
@@ -96,6 +107,8 @@ export default function VideoTimeline({ compilation, marks, fps, frames, opening
     return theirs.length > 0 ? [{ id: section.id, title: section.title.trim(), hidden: !!section.hidden, from: theirs[0].from, to: theirs[theirs.length - 1].to }] : [];
   });
   const named = compilation.titles && parts.some((part) => part.title);
+  // (a passage that only plays a little closer from end to end is not a move to point at)
+  const shownMoves = (moves ?? []).filter((move) => move.kind !== "closer");
 
   // The music's level, drawn over the video's length (a point every quarter of a second)
   const level = useMemo(() => {
@@ -113,7 +126,7 @@ export default function VideoTimeline({ compilation, marks, fps, frames, opening
   const [scrubbing, setScrubbing] = useState(false);
   /** A press anywhere that isn't a passage: the video goes there, and follows the pointer until it is let go */
   const scrub = (e: ReactPointerEvent) => {
-    if (e.button !== 0 || (e.target as HTMLElement).closest("[data-clip]")) return;
+    if (e.button !== 0 || (e.target as HTMLElement).closest("[data-clip], [data-move]")) return;
     const p = player.current;
     const box = lanes.current?.getBoundingClientRect();
     if (!p || !box || box.width === 0) return;
@@ -251,6 +264,11 @@ export default function VideoTimeline({ compilation, marks, fps, frames, opening
         <div className="flex-none w-5 flex flex-col gap-1 text-ink-4">
           {named && <span className="h-[22px]" />}
           <span className="h-[52px]" />
+          {shownMoves.length > 0 && (
+            <span className="h-[14px] grid place-items-center" title={t("montage.moves.label")}>
+              <ZoomIn className="w-3.5 h-3.5" />
+            </span>
+          )}
           {music && (
             <span className="h-[26px] grid place-items-center" title={music.name}>
               <Music2 className="w-3.5 h-3.5" />
@@ -328,6 +346,31 @@ export default function VideoTimeline({ compilation, marks, fps, frames, opening
               {/* Where what is being dragged would land */}
               {drag?.drop && <span aria-hidden className="absolute -top-1 -bottom-1 z-[2] w-[3px] rounded-full bg-accent shadow-[0_0_10px_var(--color-accent-glow)] pointer-events-none" style={{ left: `calc(${at(drag.drop.at)} - 3px)` }} />}
             </div>
+            {/* Where the picture moves: a mark for each zoom, as long as it lasts; a click takes the video just before it */}
+            {shownMoves.length > 0 && (
+              <div role="list" aria-label={t("montage.moves.label")} className="relative h-[14px]">
+                {shownMoves.map((move, k) => {
+                  const what = `${t(`montage.moves.${move.kind}`)}${move.shake ? t("montage.moves.shake") : ""} · ${clock(move.from / fps)}`;
+                  return (
+                    <button
+                      key={k}
+                      type="button"
+                      role="listitem"
+                      data-move
+                      title={what}
+                      aria-label={what}
+                      onClick={() => {
+                        const p = player.current;
+                        if (!p) return;
+                        p.seekTo(Math.max(0, move.from - Math.round(fps * 0.8)));
+                      }}
+                      className={`absolute top-[3px] h-2 min-w-[5px] rounded-full transition-[filter] hover:brightness-150 ${MOVE_LOOK[move.kind]}`}
+                      style={{ left: at(move.from), width: at(move.to - move.from) }}
+                    />
+                  );
+                })}
+              </div>
+            )}
             {music && (
               <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="h-[26px] w-full" aria-hidden>
                 <polygon points={level} fill="var(--color-accent)" opacity="0.5" />

@@ -1022,7 +1022,15 @@
     "silencesOutMany_other": "Blancs retirés dans {{count}} passages",
     "silencesHintMany": "Retire les blancs des passages sélectionnés",
     "aiCutMany_one": "Montage IA : {{count}} passage recoupé",
-    "aiCutMany_other": "Montage IA : {{count}} passages recoupés"
+    "aiCutMany_other": "Montage IA : {{count}} passages recoupés",
+    "moves": {
+      "label": "Mouvements de l'image",
+      "shout": "Zoom sur la cam : ça crie",
+      "line": "Zoom sur une réplique",
+      "calm": "Gros plan lent",
+      "closer": "Ce passage joue un peu plus près",
+      "shake": ", avec un tremblement"
+    }
   },
   "exportStep": {
     "title": "Tes clips sont prêts",
@@ -1578,7 +1586,10 @@
       "label": "Effets",
       "none": "Aucun",
       "light": "Légers",
-      "strong": "Marqués"
+      "strong": "Marqués",
+      "count_one": "{{count}} mouvement, marqué sur la timeline",
+      "count_other": "{{count}} mouvements, marqués sur la timeline",
+      "nothing": "Rien à souligner dans cette vidéo (ni cri, ni réplique, trop courte)"
     },
     "titleStyle": {
       "label": "Style des titres",

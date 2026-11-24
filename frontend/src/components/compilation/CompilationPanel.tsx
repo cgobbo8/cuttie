@@ -78,6 +78,8 @@ interface Props {
   onImport?: () => void;
   /** The live gone through by hand, to pick a stretch of it as a passage */
   onBrowse?: () => void;
+  /** How many times the picture moves in the video as it is (its effects); null: not known yet */
+  moves?: number | null;
   /** One more live for the video to take passages from (absent: none can be added) */
   onOtherLive?: () => void;
   /** The passages picked in the whole montage (the timeline shows and changes the same ones); without it, the list keeps its own */
@@ -228,6 +230,7 @@ export default function CompilationPanel({
   onImport,
   onBrowse,
   onOtherLive,
+  moves = null,
   selection,
   scope,
   onScope,
@@ -926,7 +929,12 @@ export default function CompilationPanel({
 
             <LookGroup label={t("compilation.dress.group.motion")}>
               {/* How much the picture moves on what is said: three answers, chosen on the row */}
-              <LookRow icon={Zap} label={t("compilation.effects.label")}>
+              <LookRow
+                icon={Zap}
+                label={t("compilation.effects.label")}
+                // (what the level gave on this video: each move is marked on the timeline)
+                apart={effects && moves !== null ? { text: moves > 0 ? t("compilation.effects.count", { count: moves }) : t("compilation.effects.nothing") } : undefined}
+              >
                 <span role="group" aria-label={t("compilation.effects.label")} className="seg">
                   {[null, ...EFFECT_LEVELS].map((level) => (
                     <button
@@ -1058,7 +1066,7 @@ function LookGroup({ label, children }: { label: string; children: ReactNode }) 
  * (`onOpen`; `value`: what it is set to, in words). `apart`: some passages do otherwise, said
  * under it with a way to bring them back.
  */
-function LookRow({ icon: Icon, label, value, onOpen, before, apart, children }: { icon: LucideIcon; label: string; value?: string; onOpen?: () => void; before?: ReactNode; apart?: { text: string; action: string; onClick: () => void }; children: ReactNode }) {
+function LookRow({ icon: Icon, label, value, onOpen, before, apart, children }: { icon: LucideIcon; label: string; value?: string; onOpen?: () => void; before?: ReactNode; apart?: { text: string; action?: string; onClick?: () => void }; children: ReactNode }) {
   const inside = (
     <>
       <Icon className="w-4 h-4 flex-none text-ink-3" />
@@ -1087,9 +1095,11 @@ function LookRow({ icon: Icon, label, value, onOpen, before, apart, children }: 
       {apart && (
         <p className="-mt-1 pb-2 pl-[38px] pr-3 flex items-baseline gap-2 text-[12px] text-ink-3">
           <span className="flex-1 min-w-0 truncate">{apart.text}</span>
-          <button type="button" onClick={apart.onClick} className="flex-none text-accent hover:text-white transition-colors">
-            {apart.action}
-          </button>
+          {apart.action && (
+            <button type="button" onClick={apart.onClick} className="flex-none text-accent hover:text-white transition-colors">
+              {apart.action}
+            </button>
+          )}
         </p>
       )}
     </div>

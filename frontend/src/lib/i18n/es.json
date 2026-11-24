@@ -1022,7 +1022,15 @@
     "silencesOutMany_other": "Silencios quitados en {{count}} pasajes",
     "silencesHintMany": "Quita los silencios de los pasajes seleccionados",
     "aiCutMany_one": "Montaje IA: {{count}} pasaje recortado",
-    "aiCutMany_other": "Montaje IA: {{count}} pasajes recortados"
+    "aiCutMany_other": "Montaje IA: {{count}} pasajes recortados",
+    "moves": {
+      "label": "Movimientos de la imagen",
+      "shout": "Zoom a la cámara: un grito",
+      "line": "Zoom en una frase",
+      "calm": "Primer plano lento",
+      "closer": "Este pasaje se ve un poco más cerca",
+      "shake": ", con un temblor"
+    }
   },
   "exportStep": {
     "title": "Tus clips están listos",
@@ -1578,7 +1586,10 @@
       "label": "Efectos",
       "none": "Ninguno",
       "light": "Suaves",
-      "strong": "Marcados"
+      "strong": "Marcados",
+      "count_one": "{{count}} movimiento, marcado en la línea de tiempo",
+      "count_other": "{{count}} movimientos, marcados en la línea de tiempo",
+      "nothing": "Nada que subrayar en este vídeo (ni grito, ni frase, demasiado corto)"
     },
     "titleStyle": {
       "label": "Estilo de los títulos",

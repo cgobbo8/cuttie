@@ -1022,7 +1022,15 @@
     "silencesOutMany_other": "Silences taken out of {{count}} passages",
     "silencesHintMany": "Takes the silences out of the picked passages",
     "aiCutMany_one": "AI cut: {{count}} passage cut again",
-    "aiCutMany_other": "AI cut: {{count}} passages cut again"
+    "aiCutMany_other": "AI cut: {{count}} passages cut again",
+    "moves": {
+      "label": "Moves of the picture",
+      "shout": "Zoom on the cam: a shout",
+      "line": "Zoom on a line",
+      "calm": "Slow close-up",
+      "closer": "This passage plays a little closer",
+      "shake": ", with a tremor"
+    }
   },
   "exportStep": {
     "title": "Your clips are ready",
@@ -1578,7 +1586,10 @@
       "label": "Effects",
       "none": "None",
       "light": "Light",
-      "strong": "Strong"
+      "strong": "Strong",
+      "count_one": "{{count}} move, marked on the timeline",
+      "count_other": "{{count}} moves, marked on the timeline",
+      "nothing": "Nothing to underline in this video (no shout, no line, too short)"
     },
     "titleStyle": {
       "label": "Title style",

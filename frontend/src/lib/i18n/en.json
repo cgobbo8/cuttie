@@ -2263,7 +2263,7 @@
       "clip": "E.g. “cut the beginning”, “also keep what happens right after”. Enter to send.",
       "sequence": "E.g. “shorten the middle part”, “add the end of the mission”. Enter to send."
     },
-    "keptAll": "Everything you kept, whatever the live.",
+    "keptAll": "Live by live: what the AI suggests making of it, and everything you kept.",
     "files": "Exported files",
     "newVideo": "New video",
     "all": "All",
@@ -2273,12 +2273,10 @@
       "draft": "In progress",
       "exported": "Exported"
     },
-    "noneKept": "Nothing kept here",
+    "noneKept": "Nothing to show here",
     "noneKeptHint": "Open a live: what you keep there (clips, sequences, compilations) comes here.",
     "pickLiveHint": "One live: you choose what to keep from it. Several: a compilation that takes from all of them.",
-    "openLive": "Open this live",
-    "ideas": "The AI suggests",
-    "ideasHint": "Nothing is built or paid for until you choose one."
+    "openLive": "Open this live"
   },
   "assistant": {
     "title": "Assistant",

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { useTranslation } from "react-i18next";
-import { ArrowRight, FolderDown, Layers, Loader2, Plus, Sparkles } from "lucide-react";
+import { ArrowRight, FolderDown, Layers, Loader2, Plus } from "lucide-react";
 import {
   clipThumbUrl,
   deleteCompilation,
@@ -32,11 +32,12 @@ import { useToast } from "../components/Toast";
 type Standing = "all" | "draft" | "exported";
 
 /**
- * /compilations — « Vidéos »: everything kept, whatever the live it comes from. The clips kept
- * from the analyses, the sequences and the compilations made, by live, the newest first;
- * filtered by what a video is made from and by where it stands. A card opens the video's
- * montage in its live. (What a live still has to offer — the clips to sort, the ideas of the
- * AI — is on that live's own page.)
+ * /compilations — « Vidéos »: by live, the newest first, the videos the AI proposes to make of
+ * it (its ideas of sequences and compilations nobody decided on, at the head of the live) and
+ * everything kept of it: the clips kept from the analysis, the sequences and the compilations
+ * made. Filtered by what a video is made from and by where it stands. A card opens the video's
+ * montage in its live; an idea is built from here, behind the page. (The clips still to sort
+ * are on the live's own page.)
  * A compilation made from several lives is with each of them: the same card, the same video
  * (`home`: the live it is kept with, where every action on it goes).
  */
@@ -65,8 +66,6 @@ export default function CompilationsPage() {
   const vodThumbs = useMemo(() => new Map((channel?.vods ?? []).map((v) => [v.id, v.thumbnail_url])), [channel]);
   const liveCover = (live: LiveCompilations) => (live.cover_clip ? clipThumbUrl(live.job_id, live.cover_clip, { width: 480 }) : (live.vod_id && vodThumbs.get(live.vod_id)) || null);
   const liveTitle = (live: LiveCompilations) => splitVodTitle(live.title).title || t("compilations.untitledLive");
-  /** A live in a few words: its day, its title */
-  const liveName = (live: LiveCompilations) => [liveWhen(live) ? plainDate(liveWhen(live)!, i18n.language) : null, liveTitle(live)].filter(Boolean).join(" · ");
   const liveLine = (live: LiveCompilations) => {
     const when = liveWhen(live);
     return [when ? plainDate(when, i18n.language) : null, live.game, live.duration ? hoursMinutes(live.duration) : null].filter(Boolean).join(" · ");
@@ -80,12 +79,19 @@ export default function CompilationsPage() {
       return [[when ? plainDate(when, i18n.language) : null, liveTitle(live)].filter(Boolean).join(" · ")];
     });
 
-  // What is kept of each live: the videos made (not the ideas nobody built, nor the blank ones), and the kept clips that have no video yet
+  // What each live shows: the ideas the AI proposes for it that nobody decided on (the most promising first, not among
+  // what is exported: none is), then what is kept of it: the videos made (not the blank ones) and the kept clips that have no video yet
   const keptOf = useCallback(
     (live: LiveCompilations) => {
+      const ideas =
+        standing === "exported"
+          ? []
+          : live.compilations
+              .filter((c) => c.home === live.job_id && c.waiting && !c.passed && c.suggestion && (kind === "all" || sourceOf(c) === kind))
+              .sort((a, b) => (b.suggestion?.score ?? 0) - (a.suggestion?.score ?? 0));
       const videos = live.compilations.filter((c) => !c.waiting && !c.passed && c.passages > 0 && (kind === "all" || sourceOf(c) === kind) && (standing === "all" || (standing === "exported") === !!c.exported_at));
       const clips = kind === "all" || kind === "clip" ? (live.clips ?? []).filter((clip) => clip.state === "kept" && standing !== "exported") : [];
-      return { videos: [...videos].sort((a, b) => Date.parse(b.updated_at) - Date.parse(a.updated_at)), clips };
+      return { ideas, videos: [...videos].sort((a, b) => Date.parse(b.updated_at) - Date.parse(a.updated_at)), clips };
     },
     [kind, standing],
   );
@@ -93,7 +99,7 @@ export default function CompilationsPage() {
     () =>
       (lives ?? [])
         .map((live) => ({ live, ...keptOf(live) }))
-        .filter((group) => group.videos.length + group.clips.length > 0)
+        .filter((group) => group.ideas.length + group.videos.length + group.clips.length > 0)
         .sort((a, b) => Date.parse(liveWhen(b.live) ?? "") - Date.parse(liveWhen(a.live) ?? "")),
     [keptOf, lives],
   );
@@ -107,18 +113,8 @@ export default function CompilationsPage() {
       0,
     );
 
-  /* ── What the AI proposes, all lives together ───────────── */
+  /* ── What the AI proposes for each live ─────────────────── */
 
-  // The ideas nobody has had built nor passed on, the most promising first (not among what is exported: none is)
-  const ideas = useMemo(
-    () =>
-      standing === "exported"
-        ? []
-        : (lives ?? [])
-            .flatMap((live) => live.compilations.filter((c) => c.home === live.job_id && c.waiting && !c.passed && c.suggestion && (kind === "all" || sourceOf(c) === kind)).map((c) => ({ live, c })))
-            .sort((a, b) => (b.c.suggestion?.score ?? 0) - (a.c.suggestion?.score ?? 0)),
-    [kind, lives, standing],
-  );
   const builds = useBuilds();
   const musics = useMusics();
   /** An idea is chosen: the AI builds it behind this page, and it joins what is kept when it is ready */
@@ -277,35 +273,6 @@ export default function CompilationsPage() {
             </div>
           </div>
 
-          {/* What the AI proposes in every live: an idea chosen here is built behind the page and joins what is kept */}
-          {ideas.length > 0 && (
-            <section className="mt-7" aria-labelledby="videos-ideas">
-              <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1 mb-3">
-                <h2 id="videos-ideas" className="flex items-center gap-1.5 text-[16px] font-[600] tracking-[-0.01em] text-white">
-                  <Sparkles className="w-4 h-4 text-accent" /> {t("videos.ideas")}
-                </h2>
-                <span className="mono text-[12px] text-ink-3">{ideas.length}</span>
-                <p className="text-[12.5px] text-ink-3">{t("videos.ideasHint")}</p>
-              </div>
-              <div className="scroll-row gap-4 pb-1 items-stretch">
-                {ideas.map(({ live, c }) => (
-                  <div key={`${c.home}/${c.id}`} className="flex-none w-[320px] max-w-[86vw] flex">
-                    <SuggestionCard
-                      jobId={c.home}
-                      compilation={c}
-                      fallback={liveCover(live)}
-                      live={liveName(live)}
-                      busy={busy === c.id}
-                      building={buildLine(c)}
-                      onBuild={() => buildIdea(live, c)}
-                      onDismiss={() => passIdea(c)}
-                    />
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
-
           {shown.length === 0 && (
             <section className="mt-8 glass rounded-[20px] p-7 max-w-[560px]">
               <h2 className="text-[17px] font-[600] text-white">{t("videos.noneKept")}</h2>
@@ -316,7 +283,7 @@ export default function CompilationsPage() {
             </section>
           )}
 
-          {shown.map(({ live, videos, clips }) => (
+          {shown.map(({ live, ideas, videos, clips }) => (
             <section key={live.job_id} className="mt-8">
               <div className="flex flex-wrap items-end justify-between gap-3 mb-3">
                 <div className="min-w-0">
@@ -327,6 +294,14 @@ export default function CompilationsPage() {
                   {t("compilations.openLive")} <ArrowRight className="w-3.5 h-3.5" />
                 </Link>
               </div>
+              {/* What the AI proposes for this live, before what is kept of it: an idea chosen is built behind the page and joins the videos below */}
+              {ideas.length > 0 && (
+                <div className={`grid gap-4 grid-cols-[repeat(auto-fill,minmax(310px,1fr))] ${videos.length + clips.length > 0 ? "mb-4" : ""}`}>
+                  {ideas.map((c) => (
+                    <SuggestionCard key={`${c.home}/${c.id}`} jobId={c.home} compilation={c} fallback={liveCover(live)} busy={busy === c.id} building={buildLine(c)} onBuild={() => buildIdea(live, c)} onDismiss={() => passIdea(c)} />
+                  ))}
+                </div>
+              )}
               <div className="grid gap-4 grid-cols-[repeat(auto-fill,minmax(250px,1fr))]">
                 {videos.map((c) => (
                   <CompilationCard

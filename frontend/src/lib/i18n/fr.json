@@ -2263,7 +2263,7 @@
       "clip": "Ex. : « coupe le début », « garde aussi ce qui se passe juste après ». Entrée pour envoyer.",
       "sequence": "Ex. : « raccourcis le passage du milieu », « ajoute la fin de la mission ». Entrée pour envoyer."
     },
-    "keptAll": "Tout ce que tu as gardé, tous lives confondus.",
+    "keptAll": "Live par live : ce que l'IA te propose d'en faire, et tout ce que tu as gardé.",
     "files": "Fichiers exportés",
     "newVideo": "Nouvelle vidéo",
     "all": "Toutes",
@@ -2273,12 +2273,10 @@
       "draft": "En cours",
       "exported": "Exportées"
     },
-    "noneKept": "Rien de gardé ici",
+    "noneKept": "Rien à montrer ici",
     "noneKeptHint": "Ouvre un live : ce que tu y gardes (clips, séquences, compilations) arrive ici.",
     "pickLiveHint": "Un live : tu choisis ce que tu en gardes. Plusieurs : une compilation qui prend dans tous.",
-    "openLive": "Ouvrir ce live",
-    "ideas": "L'IA te propose",
-    "ideasHint": "Rien n'est construit ni payé tant que tu n'en choisis pas une."
+    "openLive": "Ouvrir ce live"
   },
   "assistant": {
     "title": "Assistant",

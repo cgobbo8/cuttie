@@ -2263,7 +2263,7 @@
       "clip": "Ej.: «corta el principio», «guarda también lo que pasa justo después». Intro para enviar.",
       "sequence": "Ej.: «acorta la parte del medio», «añade el final de la misión». Intro para enviar."
     },
-    "keptAll": "Todo lo que guardaste, de todos los directos.",
+    "keptAll": "Directo a directo: lo que la IA te propone hacer con él y todo lo que has guardado.",
     "files": "Archivos exportados",
     "newVideo": "Nuevo vídeo",
     "all": "Todos",
@@ -2273,12 +2273,10 @@
       "draft": "En curso",
       "exported": "Exportados"
     },
-    "noneKept": "Nada guardado aquí",
+    "noneKept": "Nada que mostrar aquí",
     "noneKeptHint": "Abre un directo: lo que guardes allí (clips, secuencias, compilaciones) llega aquí.",
     "pickLiveHint": "Un directo: eliges qué guardar. Varios: una compilación que toma de todos.",
-    "openLive": "Abrir este directo",
-    "ideas": "La IA te propone",
-    "ideasHint": "Nada se construye ni se paga hasta que elijas una."
+    "openLive": "Abrir este directo"
   },
   "assistant": {
     "title": "Asistente",

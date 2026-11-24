@@ -85,8 +85,9 @@ export function shiftClipClock(hp: any, added: number): any {
 /**
  * Where a clip's file sits in the live (its _meta.json), null when unknown.
  * `settled`: the file starts on its first picture, at `vod_start` exactly (clips cut since 0.2).
+ * `media`: it is not of the live at all, but a video of the streamer's media library (from 0 to its end).
  */
-export function readClipMeta(jobId: string, clipFilename: string): { vod_start: number; vod_end: number; settled?: boolean } | null {
+export function readClipMeta(jobId: string, clipFilename: string): { vod_start: number; vod_end: number; settled?: boolean; media?: string } | null {
   const base = path.basename(clipFilename, path.extname(clipFilename))
   const metaPath = path.join(CLIPS_DIR, jobId, `${base}_meta.json`)
   if (!existsSync(metaPath)) return null

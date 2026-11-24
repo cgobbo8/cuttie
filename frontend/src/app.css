@@ -1208,6 +1208,29 @@ video {
   box-shadow: 0 0 12px var(--color-accent-glow);
 }
 /* The number of the live a passage is from, when a compilation takes from several */
+/* Where a video file comes into the media library: picked, or dropped */
+.media-drop {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 11px 13px;
+  border-radius: 13px;
+  border: 1.5px dashed rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--color-ink-2);
+  transition: border-color 0.15s, background-color 0.15s, color 0.15s;
+}
+.media-drop:hover:not(:disabled),
+.media-drop.is-over {
+  border-color: var(--color-accent);
+  background: var(--color-accent-soft);
+  color: #fff;
+}
+.media-drop:disabled {
+  cursor: progress;
+}
+
 .live-dot {
   display: inline-grid;
   place-items: center;

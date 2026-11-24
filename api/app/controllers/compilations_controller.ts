@@ -1,6 +1,6 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import { getBrandKit } from '#services/brand_kit'
-import { isMusicKind, musicFile, musicTracks } from '#services/musics'
+import { isMusicKind, musicFile, musicTracks, soundsLike } from '#services/musics'
 import { randomBytes } from 'node:crypto'
 import logger from '@adonisjs/core/services/logger'
 import db from '@adonisjs/lucid/services/db'
@@ -32,7 +32,10 @@ import {
   isVideoSource,
   type VideoSource,
   pieceLike,
+  pieceFile,
+  universeFor,
 } from '#services/compilations'
+import { isMediaId, mediaAsPiece } from '#services/media_library'
 import {
   chooseLooks,
   chooseSound,
@@ -380,25 +383,29 @@ export default class CompilationsController {
   }
 
   /**
-   * POST /api/jobs/:id/pieces { pieces: [{ id, start, end, fit? }] } — makes sure each
+   * POST /api/jobs/:id/pieces { pieces: [{ id, start, end, fit?, media? }] } — makes sure each
    * moment (live seconds) has its clip, cut from the live with room around it.
    * Answers each piece's clip and where it sits in the live. A piece sent with
    * `fit` (the lines of the live's transcript it is made of, their times rough)
    * also gets `tight`: where those words are really said, null when they are
-   * not found in the clip.
+   * not found in the clip. A piece sent with `media` is a video of the media
+   * library: its clip is that video's file, nothing is cut from the live
+   * (it comes back in `failed` when the video left the library).
    */
   async pieces(ctx: HttpContext) {
     const job = await ownJob(ctx)
     if (!job) return ctx.response.notFound({ error: 'job not found' })
     const raw = ctx.request.input('pieces')
-    const wanted: { id: string; start: number; end: number; fit?: [number, number]; like?: string }[] = []
+    const wanted: { id: string; start: number; end: number; fit?: [number, number]; like?: string; media?: string }[] = []
     for (const piece of Array.isArray(raw) ? raw.slice(0, 60) : []) {
       const start = Number(piece?.start)
       const end = Number(piece?.end)
       if (isPieceId(piece?.id) && Number.isFinite(start) && Number.isFinite(end) && start >= 0 && end - start >= 0.3 && end - start <= 180) {
-        const fit = parseFit(piece.fit)
+        // (a video of the media library has no lines of a transcript to be set on)
+        const media = isMediaId(piece.media) ? (piece.media as string) : undefined
+        const fit = media ? null : parseFit(piece.fit)
         // `like`: the passage it was made out of (cut in two, silences taken out): the same file does, when it covers it
-        wanted.push({ id: piece.id, start, end, ...(fit ? { fit } : {}), ...(isPieceId(piece.like) ? { like: piece.like } : {}) })
+        wanted.push({ id: piece.id, start, end, ...(fit ? { fit } : {}), ...(isPieceId(piece.like) ? { like: piece.like } : {}), ...(media ? { media } : {}) })
       }
     }
     if (wanted.length === 0) return ctx.response.badRequest({ error: 'pieces: [{ id, start, end }] required' })
@@ -407,9 +414,16 @@ export default class CompilationsController {
       const tight = new Map<string, [number, number] | null>()
       const failed = await oneAtATime(job.id, async () => {
         for (const piece of wanted) if (piece.like && !pieceState(job.id, piece).ready) pieceLike(job.id, piece.like, piece.id, piece)
+        // Videos of the media library: their file is put there under the piece's name, nothing is asked of the live
+        const gone: string[] = []
+        for (const piece of wanted) {
+          if (!piece.media || pieceState(job.id, piece).ready) continue
+          if (mediaAsPiece(job.id, piece.media, piece.id)) dropClipCaches(job.id, pieceFile(piece.id))
+          if (!pieceState(job.id, piece).ready) gone.push(piece.id)
+        }
         // Those to cut, and those already cut whose words are to be found
-        const todo = wanted.filter((piece) => piece.fit || !pieceState(job.id, piece).ready).map(({ like: _from, ...piece }) => piece)
-        if (todo.length === 0) return []
+        const todo = wanted.filter((piece) => !piece.media && (piece.fit || !pieceState(job.id, piece).ready)).map(({ like: _from, ...piece }) => piece)
+        if (todo.length === 0) return gone
         const fresh = new Set(todo.filter((piece) => !pieceState(job.id, piece).ready).map((piece) => piece.id))
         // The worker cuts each clip a little wider than its moment
         const result = await extractLivePieces(job.id, job.url, todo)
@@ -418,7 +432,7 @@ export default class CompilationsController {
           if (fresh.has(piece.id)) dropClipCaches(job.id, piece.file)
           if (piece.tight !== undefined) tight.set(piece.id, parseFit(piece.tight))
         }
-        return result.failed
+        return [...gone, ...result.failed]
       })
       return {
         pieces: wanted.map((piece) => ({
@@ -458,9 +472,11 @@ export default class CompilationsController {
     const lines = (value: unknown, count: number, max: number) => (Array.isArray(value) ? value.map((line) => words(line, max)).filter(Boolean).slice(0, count) : [])
     const kit = await getBrandKit()
     // Only the tracks that can be played on this machine
+    // (those that go with the look the video is dressed in say so: a sound of that game, by its name or by the streamer's word)
+    const look = ctx.request.input('universe') === null ? undefined : universeFor(job.vodGame)
     const musics = musicTracks()
       .filter((track) => musicFile(track.id))
-      .map((track) => ({ key: track.id, name: track.name, kinds: track.kinds, about: track.about || track.description || track.genre || track.name }))
+      .map((track) => ({ key: track.id, name: track.name, kinds: track.kinds, about: track.about || track.description || track.genre || track.name, ...(soundsLike(track, look) ? { of_game: true } : {}) }))
     // The intros the AI gave the streamer's last videos, the newest first (the video being decided left out):
     // its choice stays away from them, or every funny video opens the same way. An intro the streamer picked
     // themselves is their taste, not a repetition: it is never one to stay away from

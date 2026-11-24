@@ -12,6 +12,9 @@ import {
   setVideoTransition,
   transitionsOf,
   addItems,
+  insertItems,
+  itemFromMedia,
+  pieceAsk,
   saidAlready,
   addSection,
   allItems,
@@ -719,5 +722,76 @@ describe("cutting a passage in the montage", () => {
     expect(items[0].id).toBe("aaaaaaaaaa");
     expect(items.slice(1).every((i) => i.like === "aaaaaaaaaa")).toBe(true);
     expect(recutVideo(before, [])).toBe(before);
+  });
+});
+
+describe("a video of the media library as a passage", () => {
+  const media = { id: "m0000000a", name: "Outro de fin", seconds: 12.34 };
+  const live = (id: string, start: number, end: number, more: Partial<CompilationItem> = {}): CompilationItem => ({ id, start, end, text: "", why: "", sources: ["voice"], ...more });
+  const imported = (id: string, more: Partial<CompilationItem> = {}): CompilationItem => ({ ...itemFromMedia(media), id, ...more });
+  const part = (id: string, title: string, items: CompilationItem[]): CompilationSection => ({ id, title, query: "", items });
+  const hit = (start: number, end: number): LiveHit => ({ start, end, sources: ["ai"], text: "", before: "", after: "", chat: [], why: "", score: 0.8, spoken: false });
+
+  it("is all of it, on its own clock, named by its name; its clip is asked from the library", () => {
+    const item = itemFromMedia(media);
+    expect(item).toMatchObject({ start: 0, end: 12.34, text: "", why: "Outro de fin", media: "m0000000a" });
+    expect(itemFromMedia({ ...media, seconds: 400 }).end).toBe(180);
+    // Filmed upright: it fills the frame; a wide one is shown as the rest of the video
+    expect(itemFromMedia({ ...media, width: 1080, height: 1920 }).template).toBe("plein");
+    expect(itemFromMedia({ ...media, width: 1920, height: 1080 }).template).toBeUndefined();
+    expect(pieceAsk(item)).toEqual({ id: item.id, start: 0, end: 12.34, media: "m0000000a" });
+    // A passage cut out of it plays the same file; a passage of the live still waiting for its words asks for them whole
+    expect(pieceAsk({ ...item, start: 2, end: 5, like: "aaaaaaaaaa" })).toEqual({ id: item.id, start: 2, end: 5, like: "aaaaaaaaaa", media: "m0000000a" });
+    expect(pieceAsk(live("bbbbbbbbbb", 100.4, 102, { fit: [100, 103] }))).toEqual({ id: "bbbbbbbbbb", start: 100, end: 103, fit: [100, 103] });
+  });
+
+  it("is never taken for a moment of the live at the same seconds, and can be in a video twice", () => {
+    const c = { sections: [part("s1", "", [live("aaaaaaaaaa", 0, 12)])] };
+    // (the first twelve seconds of the live and of the video are not the same thing)
+    expect(itemFor(c, { start: 0, end: 12, media: "m0000000a" })).toBeUndefined();
+    const once = insertItems(c, "s1", [imported("mmmmmmmmm1")]);
+    const twice = insertItems(once, "s1", [imported("mmmmmmmmm2")], "aaaaaaaaaa");
+    expect(allItems(twice).map((item) => item.id)).toEqual(["aaaaaaaaaa", "mmmmmmmmm2", "mmmmmmmmm1"]);
+    expect(insertItems(c, "nowhere", [imported("mmmmmmmmm1")])).toEqual(c);
+    expect(insertItems(c, "s1", [])).toBe(c);
+  });
+
+  it("is neither shortened nor taken out when the video is brought to a length", () => {
+    const c = { sections: [part("s1", "", [live("aaaaaaaaaa", 100, 110, { score: 0.9 }), imported("mmmmmmmmm1"), live("bbbbbbbbbb", 200, 210, { score: 0.2 }), live("cccccccccc", 300, 310, { score: 0.6 })])] };
+    const whole = fitToTarget(c, 25, true);
+    expect(allItems(whole).map((item) => item.id)).toEqual(["aaaaaaaaaa", "mmmmmmmmm1"]);
+    const squeezed = fitToTarget(c, 30);
+    const kept = allItems(squeezed).find((item) => item.id === "mmmmmmmmm1")!;
+    expect([kept.start, kept.end]).toEqual([0, 12.34]);
+    // Nothing but the imported video left to take from: it stops there
+    const alone = { sections: [part("s1", "", [imported("mmmmmmmmm1"), imported("mmmmmmmmm2")])] };
+    expect(allItems(fitToTarget(alone, 5, true))).toHaveLength(2);
+  });
+
+  it("is not told to the AI, and stays where it was when the AI gives the video back", () => {
+    const c = {
+      sections: [
+        part("s1", "Le plan", [imported("mmmmmmmmm0"), live("aaaaaaaaaa", 100, 104), imported("mmmmmmmmm1"), live("bbbbbbbbbb", 200, 204)]),
+        part("s2", "La fuite", [live("cccccccccc", 300, 304), imported("mmmmmmmmm2")]),
+        part("s3", "", [imported("mmmmmmmmm3")]),
+      ],
+    };
+    expect(planCurrent(c)).toEqual([
+      { title: "Le plan", items: [{ start: 100, end: 104 }, { start: 200, end: 204 }] },
+      { title: "La fuite", items: [{ start: 300, end: 304 }] },
+    ]);
+    // The AI takes the first passage out, adds one, and drops the second part
+    const plan: VideoPlan = { title: "", sections: [{ title: "Le plan", hits: [hit(200, 204), hit(500, 503)] }] };
+    const revised = revisedSections(c, plan, 3600);
+    expect(revised.sections).toHaveLength(1);
+    const ids = revised.sections[0].items.map((item) => (item.media || item.id.length === 10 && /^[a-c]+$/.test(item.id) ? item.id : "new"));
+    // At the head of its part; after the passage it followed, or the one before that when it is gone; those of parts that are gone follow the last passage before them
+    expect(ids).toEqual(["mmmmmmmmm0", "mmmmmmmmm1", "bbbbbbbbbb", "mmmmmmmmm2", "mmmmmmmmm3", "new"]);
+    // Only what the AI took out is counted as gone
+    expect(revised.gone.map(({ item }) => item.id)).toEqual(["aaaaaaaaaa", "cccccccccc"]);
+    expect(revised).toMatchObject({ added: 1, removed: 2 });
+    // The AI gives nothing back: the imported videos are still a video
+    const emptied = revisedSections(c, { title: "", sections: [] }, 3600);
+    expect(emptied.sections.flatMap((s) => s.items.map((item) => item.id))).toEqual(["mmmmmmmmm0", "mmmmmmmmm1", "mmmmmmmmm2", "mmmmmmmmm3"]);
   });
 });

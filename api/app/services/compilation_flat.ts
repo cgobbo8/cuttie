@@ -42,6 +42,8 @@ export interface FlatPart {
   from: number
   length: number
   liveStart: number
+  /** A video of the media library, not a moment of the live */
+  media?: boolean
 }
 
 interface Word {
@@ -65,7 +67,7 @@ export function flatParts(jobId: string, compilation: Pick<Compilation, 'section
     const meta = readClipMeta(live, file)
     if (!meta || !existsSync(path.join(clipDir(live), file))) return null
     if (meta.vod_start > item.start + 0.05 || meta.vod_end < item.end - 0.05) return null
-    parts.push({ live, file, from: thousandth(Math.max(0, item.start - meta.vod_start)), length: thousandth(item.end - item.start), liveStart: item.start })
+    parts.push({ live, file, from: thousandth(Math.max(0, item.start - meta.vod_start)), length: thousandth(item.end - item.start), liveStart: item.start, ...(meta.media ? { media: true } : {}) })
   }
   return parts
 }
@@ -201,7 +203,8 @@ export async function flattenCompilation(
         const words = flatWords(parts.map((p) => ({ ...p, words: readJson<Word[]>(path.join(clipDir(p.live), `${p.file.slice(0, -4)}_words.json`), []) })), starts)
         // What the chat wrote while each passage ran, on the joined clip's clock
         const chat = parts.flatMap((p, i) =>
-          chatOf(p.live)
+          // (a video of the media library was never on the stream: no chat ran with it)
+          (p.media ? [] : chatOf(p.live))
             .filter((m) => m.timestamp >= p.liveStart && m.timestamp <= p.liveStart + p.length)
             .map((m) => ({ ...m, timestamp: thousandth(starts[i] + (m.timestamp - p.liveStart)) }))
         )

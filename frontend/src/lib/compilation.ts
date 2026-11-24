@@ -6,7 +6,7 @@
  */
 
 import type { TFunction } from "i18next";
-import type { Compilation, CompilationItem, CompilationSection, LiveHit, LiveSearchStep, VideoPlan } from "./api";
+import type { Compilation, CompilationItem, CompilationSection, LiveHit, LiveSearchStep, MediaItem, VideoPlan } from "./api";
 import { HOOK_MAX, HOOK_MIN, HOOK_SECONDS, introSeconds, type HookChoice } from "./intro/intros";
 import { isTransition, type TransitionId } from "./transitions";
 
@@ -90,10 +90,37 @@ export const allItems = (c: Pick<Compilation, "sections">): CompilationItem[] =>
 export const sectionLength = (s: CompilationSection): number => s.items.reduce((sum, item) => sum + (item.end - item.start), 0);
 export const compilationLength = (c: Pick<Compilation, "sections">): number => c.sections.reduce((sum, s) => sum + sectionLength(s), 0);
 
-/** Two moments of the same live (times of two lives say nothing of each other) */
-const sameLive = (a: { job?: string }, b: { job?: string }) => (a.job ?? "") === (b.job ?? "");
+/** Where a moment is from: a live, or a video of the media library */
+type From = { job?: string; media?: string };
+const fromKey = (m: From) => (m.media ? `media:${m.media}` : (m.job ?? ""));
+/** Two moments of the same live, or of the same imported video (times of two of them say nothing of each other) */
+const sameLive = (a: From, b: From) => fromKey(a) === fromKey(b);
 
-function sameMoment(a: { start: number; end: number; job?: string }, b: { start: number; end: number; job?: string }): boolean {
+/** The longest a passage can be, seconds (the server's limit) */
+const LONGEST_ITEM = 180;
+
+/** The layout an upright video is shown in: the one where the picture fills the whole frame */
+export const UPRIGHT_TEMPLATE = "plein";
+
+/**
+ * A video of the media library as a passage: all of it, from its first picture. Its times are the
+ * video's own seconds; its name stands for it in the list until what is said in it is known. An
+ * upright one (filmed on a phone, made for a feed) fills the frame instead of being cropped to the
+ * part of the screen the video's layout gives the game; the streamer can show it otherwise.
+ */
+export function itemFromMedia(media: Pick<MediaItem, "id" | "name" | "seconds"> & Partial<Pick<MediaItem, "width" | "height">>): CompilationItem {
+  const upright = (media.height ?? 0) > (media.width ?? 0);
+  return { id: newId(), start: 0, end: hundredth(Math.min(media.seconds, LONGEST_ITEM)), text: "", why: media.name, sources: [], media: media.id, ...(upright ? { template: UPRIGHT_TEMPLATE } : {}) };
+}
+
+/** What a passage's clip is asked with: its moment (wider while it waits for its words), the passage it was made out of, the imported video it is */
+export function pieceAsk({ id, start, end, fit, like, media }: CompilationItem): { id: string; start: number; end: number; fit?: [number, number]; like?: string; media?: string } {
+  // A passage still on the transcript's rough times: its clip holds those lines whole, and tells where they are really said
+  if (fit && !media) return { id, start: Math.min(start, fit[0]), end: Math.max(end, fit[1]), fit };
+  return { id, start, end, ...(like ? { like } : {}), ...(media ? { media } : {}) };
+}
+
+function sameMoment(a: { start: number; end: number } & From, b: { start: number; end: number } & From): boolean {
   if (!sameLive(a, b)) return false;
   const shared = Math.min(a.end, b.end) - Math.max(a.start, b.start);
   const shorter = Math.min(a.end - a.start, b.end - b.start);
@@ -105,7 +132,7 @@ function sameMoment(a: { start: number; end: number; job?: string }, b: { start:
  * seconds. A line of the transcript is timed roughly, and a passage of the video sits where its
  * words really are: the same sentence can be five seconds apart and overlap nothing.
  */
-export function saidAlready(c: Pick<Compilation, "sections">, moment: { start: number; text?: string; job?: string }): CompilationItem | undefined {
+export function saidAlready(c: Pick<Compilation, "sections">, moment: { start: number; text?: string } & From): CompilationItem | undefined {
   const words = (text: string | undefined) => (text ?? "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
   const said = words(moment.text);
   if (said.length < 8) return undefined;
@@ -119,7 +146,7 @@ export function saidAlready(c: Pick<Compilation, "sections">, moment: { start: n
 const SAID_NEAR = 20;
 
 /** The item of the compilation that shows this moment, if any (search results already added) */
-export function itemFor(c: Pick<Compilation, "sections">, moment: { start: number; end: number; job?: string }): CompilationItem | undefined {
+export function itemFor(c: Pick<Compilation, "sections">, moment: { start: number; end: number } & From): CompilationItem | undefined {
   return allItems(c).find((item) => sameMoment(item, moment));
 }
 
@@ -132,6 +159,19 @@ export function addItems<T extends Pick<Compilation, "sections">>(c: T, sectionI
     if (!itemFor(c, item) && !fresh.some((f) => sameMoment(f, item))) fresh.push(item);
   }
   return { compilation: mapSections(c, (s) => (s.id === sectionId ? { ...s, items: [...s.items, ...fresh] } : s)), added: fresh.length };
+}
+
+/**
+ * Passages put in a part as they are, at its end or right after one of its passages. Nothing is
+ * left out: a video of the media library can be in a video twice (a sting between two moments).
+ */
+export function insertItems<T extends Pick<Compilation, "sections">>(c: T, sectionId: string, items: CompilationItem[], after: string | null = null): T {
+  if (items.length === 0) return c;
+  return mapSections(c, (s) => {
+    if (s.id !== sectionId) return s;
+    const at = after ? s.items.findIndex((item) => item.id === after) + 1 : 0;
+    return { ...s, items: at > 0 ? [...s.items.slice(0, at), ...items, ...s.items.slice(at)] : [...s.items, ...items] };
+  });
 }
 
 export function removeItem<T extends Pick<Compilation, "sections">>(c: T, itemId: string): T {
@@ -281,7 +321,8 @@ export function extendItem<T extends Pick<Compilation, "sections">>(c: T, itemId
  * seconds), all made out of its first one.
  */
 export function recutVideo<T extends Pick<Compilation, "sections">>(c: T, pieces: [number, number][]): T {
-  const [first, ...rest] = allItems(c);
+  // (videos of the media library put in it are not of the clip: they stay where they are)
+  const [first, ...rest] = allItems(c).filter((item) => !item.media);
   if (!first || pieces.length === 0) return c;
   const gone = new Set(rest.map((item) => item.id));
   const alone = { ...c, sections: c.sections.map((s) => ({ ...s, items: s.items.filter((item) => !gone.has(item.id)) })) };
@@ -408,32 +449,36 @@ export function fitToTarget<T extends Pick<Compilation, "sections">>(c: T, targe
     return { ...item, start: hundredth(middle - length / 2), end: hundredth(middle + length / 2) };
   };
 
-  const spare = whole ? 0 : allItems(c).reduce((sum, item) => sum + Math.max(0, item.end - item.start - WHOLE_UNDER), 0);
+  // A video the streamer imported is theirs to cut or to take out, never the app's: it stays as it is
+  const mine = (item: CompilationItem) => !!item.media;
+  const spare = whole ? 0 : allItems(c).reduce((sum, item) => sum + (mine(item) ? 0 : Math.max(0, item.end - item.start - WHOLE_UNDER)), 0);
   const share = spare > 0 ? Math.min(1, (total - target) / spare) : 0;
   let fitted = mapSections(c, (s) => ({
     ...s,
     items: s.items.map((item) => {
       const length = item.end - item.start;
-      return length > WHOLE_UNDER && share > 0 ? around(item, length - (length - WHOLE_UNDER) * share) : item;
+      return length > WHOLE_UNDER && share > 0 && !mine(item) ? around(item, length - (length - WHOLE_UNDER) * share) : item;
     }),
   }));
 
+  const score = (item: CompilationItem) => item.score ?? NO_SCORE;
   while (compilationLength(fitted) > target * 1.03) {
-    const droppable = fitted.sections.filter((s) => s.items.length > 1);
+    const droppable = fitted.sections.filter((s) => s.items.length > 1 && s.items.some((item) => !mine(item)));
     if (droppable.length === 0) break;
-    const weakest = Math.min(...droppable.flatMap((s) => s.items.map((item) => item.score ?? NO_SCORE)));
+    const weakest = Math.min(...droppable.flatMap((s) => s.items.filter((item) => !mine(item)).map(score)));
     // Of the weakest, the last one of the longest part
-    const from = [...droppable].filter((s) => s.items.some((item) => (item.score ?? NO_SCORE) === weakest)).sort((x, y) => sectionLength(y) - sectionLength(x))[0];
-    const gone = [...from.items].reverse().find((item) => (item.score ?? NO_SCORE) === weakest)!;
+    const from = [...droppable].filter((s) => s.items.some((item) => !mine(item) && score(item) === weakest)).sort((x, y) => sectionLength(y) - sectionLength(x))[0];
+    const gone = [...from.items].reverse().find((item) => !mine(item) && score(item) === weakest)!;
     fitted = mapSections(fitted, (s) => (s.id === from.id ? { ...s, items: s.items.filter((item) => item.id !== gone.id) } : s));
   }
 
   const left = compilationLength(fitted);
   if (!whole && left > target * 1.03) {
-    const squeeze = target / left;
+    const kept = allItems(fitted).reduce((sum, item) => sum + (mine(item) ? item.end - item.start : 0), 0);
+    const squeeze = left > kept ? Math.max(0, target - kept) / (left - kept) : 1;
     fitted = mapSections(fitted, (s) => ({
       ...s,
-      items: s.items.map((item) => around(item, Math.max(Math.min(item.end - item.start, MIN_FITTED), (item.end - item.start) * squeeze))),
+      items: s.items.map((item) => (mine(item) ? item : around(item, Math.max(Math.min(item.end - item.start, MIN_FITTED), (item.end - item.start) * squeeze)))),
     }));
   }
   return fitted;
@@ -577,9 +622,14 @@ export function sectionsFromPlan(plan: VideoPlan, liveDuration: LiveLength): Com
   return sections;
 }
 
-/** The video as the AI is told about it when a change is asked: its parts and where their passages are in the live */
+/**
+ * The video as the AI is told about it when a change is asked: its parts and where their passages
+ * are in the live. The videos of the media library are left out: the AI reads lives, it has never
+ * seen them (they stay where they are when it gives the video back: see `revisedSections`).
+ */
 export function planCurrent(c: Pick<Compilation, "sections">): { title: string; items: { start: number; end: number; job?: string; opening?: boolean }[] }[] {
   return c.sections
+    .map((s) => ({ ...s, items: s.items.filter((item) => !item.media) }))
     .filter((s) => s.items.length > 0)
     .map((s) => ({ title: s.title, items: s.items.map(({ start, end, job, opening }) => ({ start, end, ...(job ? { job } : {}), ...(opening ? { opening: true } : {}) })) }));
 }
@@ -644,6 +694,23 @@ export function revisedSections(
     const id = old?.id ?? newId();
     parts.add(id);
     sections.push({ id, title: planned.title, query: old?.query ?? "", items });
+  }
+  // The videos of the media library were never the AI's to move: each one stays in its part, right after
+  // the passage it followed (at the head of the part when that one is gone); a part that is gone hands its
+  // own to the passage before them in the video
+  const there = (id: string) => sections.find((s) => s.items.some((item) => item.id === id));
+  const after = (s: CompilationSection, id: string, item: CompilationItem) => s.items.splice(s.items.findIndex((one) => one.id === id) + 1, 0, item);
+  for (const old of c.sections) {
+    for (const item of old.items) {
+      if (!item.media) continue;
+      kept.add(item.id);
+      const home = sections.find((s) => s.id === old.id);
+      const earlier = (home ? old.items.slice(0, old.items.indexOf(item)) : before.slice(0, before.indexOf(item))).reverse();
+      const prior = earlier.find((one) => (home ? home.items.some((i) => i.id === one.id) : !!there(one.id)));
+      if (prior) after(home ?? there(prior.id)!, prior.id, item);
+      else if (home ?? sections[0]) (home ?? sections[0]).items.unshift(item);
+      else sections.push({ id: old.id, title: old.title, query: old.query, items: [item] });
+    }
   }
   // What it took out, and where each one was (the video shows them leaving)
   const gone = c.sections.flatMap((s) => s.items.map((item, index) => ({ item, section: s.id, index })).filter(({ item }) => !kept.has(item.id)));

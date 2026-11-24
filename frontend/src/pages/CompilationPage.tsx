@@ -40,15 +40,21 @@ import {
   type LiveFailure,
   type LiveHit,
   type LiveSearchInfo,
+  type MediaItem,
   type TranscriptWord,
   type TwitchStoryboard,
   type VideoPlan,
 } from "../lib/api";
 import { openKeptClip } from "../lib/clipVideo";
+import { mediaOf, useMedia } from "../lib/mediaLibrary";
+import MediaLibrary from "../components/MediaLibrary";
 import { useBackdrop } from "../lib/BackdropContext";
 import { useChannel } from "../lib/ChannelContext";
 import {
   addItems,
+  insertItems,
+  itemFromMedia,
+  pieceAsk,
   addSection,
   allItems,
   applyTight,
@@ -176,6 +182,9 @@ export default function CompilationPage() {
   currentIdRef.current = currentId;
   // The live searched by hand for passages (a window of its own)
   const [searching, setSearching] = useState(false);
+  // The media library takes the place of the passages while a video of the streamer's own is picked there
+  const [importing, setImporting] = useState(false);
+  const { media: ownVideos } = useMedia();
   // On a window too narrow for the three panels: the one shown beside the video
   const [side, setSide] = useState<"passages" | "look">("passages");
   // The AI is building or changing a video: which one, and what it did so far
@@ -424,13 +433,17 @@ export default function CompilationPage() {
       try {
         // Each live cuts its own passages, a few at a time
         const batches: { live: string; batch: CompilationItem[] }[] = [];
-        for (const live of new Set(todo.map((item) => item.job ?? jobId))) {
-          const theirs = todo.filter((item) => (item.job ?? jobId) === live);
+        // (the videos of the media library first and apart: they need nothing of the live, which may be gone)
+        const mine = todo.filter((item) => item.media);
+        if (mine.length > 0) batches.push({ live: jobId, batch: mine });
+        const cut = todo.filter((item) => !item.media);
+        for (const live of new Set(cut.map((item) => item.job ?? jobId))) {
+          const theirs = cut.filter((item) => (item.job ?? jobId) === live);
           for (let i = 0; i < theirs.length; i += CUT_BATCH) batches.push({ live, batch: theirs.slice(i, i + CUT_BATCH) });
         }
         for (const { live, batch } of batches) {
           // A passage still on the transcript's rough times: its clip holds those lines whole, and tells where they are really said
-          const asked = batch.map(({ id, start, end, fit, like }) => (fit ? { id, start: Math.min(start, fit[0]), end: Math.max(end, fit[1]), fit } : { id, start, end, ...(like ? { like } : {}) }));
+          const asked = batch.map(pieceAsk);
           const done = await ensurePieces(live, asked);
           const states = Object.fromEntries(done.pieces.map(({ id, tight: _found, ...state }) => [id, { ...state, job: live }]));
           const found = Object.fromEntries(done.pieces.filter((piece) => piece.tight !== undefined).map((piece) => [piece.id, piece.tight ?? null]));
@@ -534,6 +547,25 @@ export default function CompilationPage() {
     toast.success(t("compilation.addedCount", { count: added }));
   };
 
+  /** Where a video of the media library ends, seconds (its file's end) */
+  const lastOf = (item: CompilationItem): number => mediaOf(ownVideos, item.media)?.seconds ?? piecesRef.current[item.id]?.file_end ?? item.end;
+  /**
+   * Videos of the media library become passages of the video on screen, whole: right after the
+   * passage open in the part being filled, else at its end. The same one can be added again.
+   */
+  const addMedia = (list: MediaItem[]) => {
+    if (!compilation || list.length === 0) return;
+    const section = compilation.sections.find((s) => s.id === activeSection) ?? compilation.sections[compilation.sections.length - 1];
+    if (!section) return;
+    const made = list.map(itemFromMedia);
+    const after = shown && section.items.some((item) => item.id === shown.id) ? shown.id : null;
+    const next = insertItems(compilation, section.id, made, after);
+    change(next);
+    ensure(made);
+    light(made.map((item) => item.id));
+    toast.success(t("media.added", { count: made.length }));
+  };
+
   /** The AI changed the video as asked: what it kept stays as it was, what it added gets its clip */
   const applyChange = (plan: VideoPlan, ask: string) => {
     if (!compilation) return { error: "no video open" };
@@ -623,7 +655,9 @@ export default function CompilationPage() {
   const recut = (item: CompilationItem, start: number, end: number) => {
     // The streamer's own cut: no longer waiting to be set on its words
     const { fit: _waiting, ...kept } = item;
-    const moved = { ...kept, start: Math.round(start * 100) / 100, end: Math.round(end * 100) / 100 };
+    // (a video of the media library ends where its file does)
+    const last = item.media ? lastOf(item) : Infinity;
+    const moved = { ...kept, start: Math.round(start * 100) / 100, end: Math.round(Math.min(end, last) * 100) / 100 };
     setShown(moved);
     if (compilation && allItems(compilation).some((i) => i.id === item.id)) change(updateItem(compilation, item.id, { start: moved.start, end: moved.end, fit: undefined }));
     else for (const [key, draft] of drafts.current) if (draft.id === item.id) drafts.current.set(key, moved);
@@ -985,8 +1019,8 @@ export default function CompilationPage() {
   const extend = (side: "start" | "end") => {
     const item = toolItem();
     if (!compilation || !item) return;
-    const next = extendItem(compilation, item.id, side, 30, lengthOf(item.job));
-    if (next === compilation) return toast.info(t(side === "start" ? "project.extendEdgeStart" : "project.extendEdgeEnd"));
+    const next = extendItem(compilation, item.id, side, 30, item.media ? lastOf(item) : lengthOf(item.job));
+    if (next === compilation) return toast.info(t(item.media ? "media.whole" : side === "start" ? "project.extendEdgeStart" : "project.extendEdgeEnd"));
     change(next);
     const moved = allItems(next).find((one) => one.id === item.id)!;
     setShown((open) => (open?.id === item.id ? moved : open));
@@ -1020,6 +1054,36 @@ export default function CompilationPage() {
       const reason = err instanceof LiveError ? err.reason : "failed";
       toast.error(t(reason === "no_transcript" ? "project.tightenNoWords" : `compilation.failure.${reason}`));
       return { error: reason === "no_transcript" ? "this clip has no words to cut on" : reason };
+    } finally {
+      setAiCutting(false);
+    }
+  };
+
+  /**
+   * A passage made of an imported video is cut by the AI on what is said in it: the parts worth
+   * keeping become passages, in its place (as « Montage IA » does of a clip).
+   */
+  const aiCutPassage = async (item: CompilationItem, aim: number | null = cutTarget) => {
+    const piece = piecesRef.current[item.id];
+    if (!compilation || aiCutting || !covers(piece, item)) return;
+    const id = compilation.id;
+    setAiCutting(true);
+    try {
+      // (listened to now if it never was)
+      const said = await wordsOf(piece);
+      if (said.length === 0) return void toast.info(t("project.tightenNoWords"));
+      const origin = piece.file_start;
+      const { parts, note } = await suggestClipCut(piece.job, piece.file, { target: aim, current: [[item.start - origin, item.end - origin]] });
+      const current = compilationsRef.current?.find((c) => c.id === id);
+      const text = (a: number, b: number) => wordsIn(said, a, b).map((w) => w.word).join(" ");
+      const cut = current && parts.length > 0 ? cutItem(current, item.id, parts.map(([a, b]) => [origin + a, origin + b] as [number, number]), parts.map(([a, b]) => text(a, b))) : null;
+      if (!cut || cut.ids.length === 0) return void toast.info(t("project.aiCutSame"));
+      afterCut(cut.compilation, cut.ids);
+      setShown(null);
+      toast.success(note || t("project.aiCutDone", { count: cut.ids.length }));
+    } catch (err) {
+      const reason = err instanceof LiveError ? err.reason : "failed";
+      toast.error(t(reason === "no_transcript" ? "project.tightenNoWords" : `compilation.failure.${reason}`));
     } finally {
       setAiCutting(false);
     }
@@ -1107,6 +1171,42 @@ export default function CompilationPage() {
   };
 
   /** Passages the assistant found, added at the end of a part of the video on screen (`part`: its title; one no part has makes a new part) */
+  /**
+   * Videos of the media library put into the video by the assistant, each named by its id or its
+   * name: whole, at the end of a part (the last one unless named; a title no part has makes one).
+   * Answers what was added, and the names it has no video for with those there are.
+   */
+  const addImported = (named: unknown, part = "") => {
+    if (!jobId || !compilation) return { error: "no video open" };
+    const plain = (text: string) => text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+    const found: MediaItem[] = [];
+    const unknown: string[] = [];
+    for (const one of Array.isArray(named) ? named : []) {
+      const said = typeof one === "string" ? one.trim() : "";
+      if (!said) continue;
+      const match = ownVideos.find((m) => m.id === said) ?? ownVideos.find((m) => plain(m.name) === plain(said)) ?? ownVideos.find((m) => plain(said).length >= 3 && plain(m.name).includes(plain(said)));
+      if (match) found.push(match);
+      else unknown.push(said);
+    }
+    const there = ownVideos.map((m) => ({ id: m.id, name: m.name, seconds: m.seconds }));
+    if (found.length === 0) return { added: 0, error: ownVideos.length === 0 ? "the media library is empty: the streamer imports videos in « Ma chaîne » or from the passages of a video" : "no such imported video", unknown, there };
+    const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+    let next = compilation;
+    let section = part.trim() ? next.sections.find((one) => same(one.title, part)) : next.sections[next.sections.length - 1];
+    if (!section) {
+      const made = addSection(next, part.trim().slice(0, 60));
+      next = made.compilation;
+      section = next.sections.find((one) => one.id === made.id)!;
+    }
+    const items = found.map(itemFromMedia);
+    next = insertItems(next, section.id, items);
+    change(next);
+    ensure(items);
+    light(items.map((item) => item.id));
+    toast.success(t("media.added", { count: items.length }));
+    return { added: items.length, videos: found.map((m) => m.name), part: section.title, passages: allItems(next).length, ...(unknown.length > 0 ? { unknown, there } : {}) };
+  };
+
   const addPassages = (passages: AssistantPassage[], part = "") => {
     if (!jobId || !compilation) return { error: "no video open" };
     const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
@@ -1173,8 +1273,8 @@ export default function CompilationPage() {
   };
 
   // What the assistant calls after it waited (another video put on screen first): as this page is now
-  const actions = useRef({ compilation, applyPlan, applyChange, aiCut, addPassages, setLook });
-  actions.current = { compilation, applyPlan, applyChange, aiCut, addPassages, setLook };
+  const actions = useRef({ compilation, applyPlan, applyChange, aiCut, addPassages, addImported, setLook });
+  actions.current = { compilation, applyPlan, applyChange, aiCut, addPassages, addImported, setLook };
 
   // Who waits for a video to be the one on screen
   const awaited = useRef<{ id: string; done: () => void }[]>([]);
@@ -1255,6 +1355,7 @@ export default function CompilationPage() {
       await show(args.video);
       if (name === "change_video") return await revise(String(args.request ?? ""));
       if (name === "add_passages") return actions.current.addPassages(args.passages, typeof args.part === "string" ? args.part : "");
+      if (name === "add_media") return actions.current.addImported(args.media, typeof args.part === "string" ? args.part : "");
       if (name === "set_look") return actions.current.setLook(args.look);
       return { error: `the editor can't do this: ${name}` };
     } catch (err) {
@@ -1499,6 +1600,9 @@ export default function CompilationPage() {
 
   const at = (seconds: number, job?: string) => `${Math.min(100, Math.max(0, (seconds / Math.max(lengthOf(job), 1)) * 100))}%`;
   const items = allItems(compilation);
+  // The passage the cut tools are on (the one open to be cut, else the one the video is on), when it is an imported video
+  const toolNow = items.find((item) => item.id === shownItem?.id) ?? items.find((item) => item.id === onItem);
+  const importedTool = toolNow?.media ? toolNow : null;
   const liveTitle = (id: string) => splitVodTitle(liveInfo(id)?.title ?? (id === jobId ? job.custom_title || job.vod_title : null)).title || t("compilations.untitledLive");
   const liveDay = (id: string) => {
     const when = liveInfo(id) ? liveWhen(liveInfo(id)!) : null;
@@ -1554,6 +1658,12 @@ export default function CompilationPage() {
     onDelete: () => setToDelete(true),
     onSearch: () => {
       setSearching(true);
+      setImporting(false);
+      setSide("passages");
+    },
+    onImport: () => {
+      setImporting(true);
+      setSearching(false);
       setSide("passages");
     },
     // Passages asked of the assistant: its panel opens on a field made for that (what to look for, where they go)
@@ -1595,7 +1705,8 @@ export default function CompilationPage() {
         <div className="flex flex-col gap-2.5">
           {liveIds.map((live, n) => {
             const frames = storyboards[live];
-            const theirs = items.filter((item) => (item.job ?? jobId) === live);
+            // (a video of the media library is in none of them)
+            const theirs = items.filter((item) => !item.media && (item.job ?? jobId) === live);
             return (
               <div key={live}>
                 {several && (
@@ -1685,6 +1796,17 @@ export default function CompilationPage() {
                 setResults([]);
               }}
             />
+          </div>
+        ) : importing ? (
+          // The streamer's own videos, where the video's passages are: one is added in a click, a file dropped here goes straight in
+          <div data-area="passages" className="max-h-[max(420px,calc(100dvh-400px))] overflow-y-auto rounded-[20px]">
+            <div className="glass rounded-[20px] p-3 min-w-0">
+              <MediaLibrary
+                onAdd={addMedia}
+                used={Object.fromEntries(ownVideos.map((one) => [one.id, items.filter((item) => item.media === one.id).length]))}
+                onClose={() => setImporting(false)}
+              />
+            </div>
           </div>
         ) : (
           <div data-area="passages" className="[&>aside]:max-w-none">
@@ -1795,7 +1917,8 @@ export default function CompilationPage() {
           tools={
             <>
               {/* What cuts on its own first: the AI, on a clip (its parts worth keeping) or by asking it in the assistant */}
-              {compilation.clip ? (
+              {/* (and on a passage made of an imported video: the one open, else the one the video is on) */}
+              {compilation.clip || importedTool ? (
                 <AiCutButton
                   busy={aiCutting}
                   disabled={aiCutting || cutting.size > 0}
@@ -1804,7 +1927,7 @@ export default function CompilationPage() {
                     setCutTarget(next);
                     saveCutTarget(jobId, next);
                   }}
-                  onCut={() => aiCut()}
+                  onCut={() => (importedTool ? aiCutPassage(importedTool) : aiCut())}
                 />
               ) : (
                 <button onClick={() => assistant.send(t("assistant.suggest.tighten"))} title={t("montage.tightenHint")} className="btn btn-glass btn-sm">
@@ -1842,6 +1965,7 @@ export default function CompilationPage() {
             piece={shownReady}
             cutting={cutting.has(shownItem.id)}
             words={wordsKey ? words[wordsKey] : undefined}
+            media={shownItem.media ? { name: mediaOf(ownVideos, shownItem.media)?.name ?? shownItem.why, seconds: lastOf(shownItem) } : undefined}
             onChange={(start, end) => recut(shownItem, start, end)}
             // A passage of the compilation can be shown in a template of its own
             templates={inCompilation ? templates : undefined}

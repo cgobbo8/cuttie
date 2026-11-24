@@ -1447,7 +1447,7 @@ export async function addMusic(file: File, language: string): Promise<{ music: M
  * The streamer corrects what one of their tracks is. `start`: about where its strong moment is
  * (seconds, by ear): the attack nearest to it is kept; `build`: the track builds up to that moment.
  */
-export async function updateMusic(id: string, patch: { name?: string; kinds?: string[]; description?: string; start?: number; build?: boolean }): Promise<MusicTrack> {
+export async function updateMusic(id: string, patch: { name?: string; kinds?: string[]; description?: string; start?: number; build?: boolean; universes?: string[] }): Promise<MusicTrack> {
   const res = await fetch(`${BASE}/musics/${encodeURIComponent(id)}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(patch) });
   return (await jsonOrThrow<{ music: MusicTrack }>(res, "Failed to save the music")).music;
 }
@@ -1455,6 +1455,61 @@ export async function updateMusic(id: string, patch: { name?: string; kinds?: st
 export async function deleteMusic(id: string): Promise<void> {
   await jsonOrThrow(await fetch(`${BASE}/musics/${encodeURIComponent(id)}`, { method: "DELETE" }), "Failed to remove the music");
 }
+
+/**
+ * A video of the streamer's media library: a short video of their own (an outro, a meme, something
+ * filmed on a phone) that a video can take as a passage, like a moment of a live.
+ */
+export interface MediaItem {
+  id: string;
+  name: string;
+  seconds: number;
+  width: number;
+  height: number;
+  size: number;
+  added_at: string;
+  /** Somebody speaks in it (null: nobody listened to it yet) */
+  spoken: boolean | null;
+}
+
+/** Why a file was not taken into the library */
+export type MediaRefusal = "not_video" | "too_long" | "full" | "failed";
+export class MediaError extends Error {
+  constructor(
+    readonly reason: MediaRefusal,
+    /** The longest a video can be, seconds (said with "too_long") */
+    readonly longest?: number,
+  ) {
+    super(reason);
+  }
+}
+
+/** The videos of the library, the newest first, and the longest one it takes (seconds) */
+export async function listMedia(): Promise<{ media: MediaItem[]; longest: number; max: number }> {
+  return jsonOrThrow(await fetch(`${BASE}/media`), "Failed to load the media library");
+}
+
+/** A video joins the library: brought to what the montage plays, then listened to (MediaError when it is refused) */
+export async function addMedia(file: File): Promise<MediaItem> {
+  const body = new FormData();
+  body.append("file", file);
+  const res = await fetch(`${BASE}/media`, { method: "POST", body });
+  if (res.ok) return ((await res.json()) as { media: MediaItem }).media;
+  const said = await res.json().catch(() => null);
+  throw new MediaError(["not_video", "too_long", "full"].includes(said?.error) ? said.error : "failed", typeof said?.longest === "number" ? said.longest : undefined);
+}
+
+export async function renameMedia(id: string, name: string): Promise<MediaItem> {
+  const res = await fetch(`${BASE}/media/${encodeURIComponent(id)}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name }) });
+  return (await jsonOrThrow<{ media: MediaItem }>(res, "Failed to rename the video")).media;
+}
+
+export async function deleteMedia(id: string): Promise<void> {
+  await jsonOrThrow(await fetch(`${BASE}/media/${encodeURIComponent(id)}`, { method: "DELETE" }), "Failed to remove the video");
+}
+
+export const mediaFileUrl = (id: string) => `${BASE}/media/${encodeURIComponent(id)}/file`;
+export const mediaThumbUrl = (id: string) => `${BASE}/media/${encodeURIComponent(id)}/thumb`;
 
 /** How loud a live's clips are (LUFS), null when nothing could be measured: what the preview sets the music against */
 export async function liveLoudness(jobId: string): Promise<number | null> {
@@ -1673,6 +1728,11 @@ export interface CompilationItem extends Partial<PieceState> {
   opening?: boolean;
   /** The passage it was made out of (cut in two, its silences taken out): that one's clip does for it until it has its own (not kept by the server) */
   like?: string;
+  /**
+   * A video of the streamer's media library (see MediaItem), not a moment of a live: its times are
+   * that video's own seconds, its clip is that video's file. Never with `job`.
+   */
+  media?: string;
 }
 
 /** A template as the AI is told about it (see templateGuide.ts) */
@@ -1954,8 +2014,9 @@ export async function deleteCompilation(jobId: string, compilationId: string): P
  */
 export async function ensurePieces(
   jobId: string,
-  // (`like`: the passage it was made out of — cut in two, its silences taken out: the same file does when it covers it)
-  pieces: { id: string; start: number; end: number; fit?: [number, number]; like?: string }[],
+  // (`like`: the passage it was made out of — cut in two, its silences taken out: the same file does when it covers it;
+  // `media`: a video of the media library: its file is put there, nothing is cut from the live)
+  pieces: { id: string; start: number; end: number; fit?: [number, number]; like?: string; media?: string }[],
 ): Promise<{ pieces: (PieceState & { id: string; tight?: [number, number] | null })[]; failed: string[] }> {
   return liveJson(await postJson(`${BASE}/jobs/${jobId}/pieces`, { pieces }));
 }
@@ -1965,10 +2026,11 @@ export async function ensurePieces(
 export async function suggestClipCut(
   jobId: string,
   filename: string,
-  { wish = "", target = null }: { wish?: string; target?: number | null } = {},
+  // (`current`: for a passage made of an imported video, the part of its file it plays now, clip seconds)
+  { wish = "", target = null, current }: { wish?: string; target?: number | null; current?: [number, number][] } = {},
 ): Promise<{ parts: [number, number][]; note: string; cost: number; origin?: number }> {
   // (`origin`: where the clip's file starts in the live, seconds: what places its parts in the live)
-  return liveJson(await postJson(`${BASE}/clips/${jobId}/${encodeURIComponent(filename)}/suggest-cut`, { wish, ...(target ? { target } : {}) }));
+  return liveJson(await postJson(`${BASE}/clips/${jobId}/${encodeURIComponent(filename)}/suggest-cut`, { wish, ...(target ? { target } : {}), ...(current ? { current } : {}) }));
 }
 
 // ── The assistant ───────────────────────────────────────

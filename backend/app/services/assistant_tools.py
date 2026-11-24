@@ -172,6 +172,7 @@ _DOING = {
         "list_videos": "Regarde tes vidéos", "get_video": "Regarde la vidéo", "keep_clip": "Range le clip", "analyse_live": "Prépare l'analyse du live",
         "ask_approval": "Te demande ton accord", "open": "Ouvre la page", "build_video": "Construit la vidéo", "change_video": "Modifie la vidéo",
         "add_passages": "Ajoute les passages à la vidéo", "cut_clip": "Découpe le clip", "set_look": "Change l'habillage", "export_videos": "Lance l'export",
+        "list_imported_videos": "Regarde ta médiathèque", "add_imported_videos": "Ajoute ta vidéo au montage",
         "hearing": "Écoute tout le live une première fois (quelques minutes)",
     },
     "en": {
@@ -183,6 +184,7 @@ _DOING = {
         "list_videos": "Looks at your videos", "get_video": "Looks at the video", "keep_clip": "Sorts the clip", "analyse_live": "Gets the live's analysis ready",
         "ask_approval": "Asks for your go-ahead", "open": "Opens the page", "build_video": "Builds the video", "change_video": "Changes the video",
         "add_passages": "Adds the passages to the video", "cut_clip": "Cuts the clip", "set_look": "Changes the look", "export_videos": "Starts the export",
+        "list_imported_videos": "Looks at your media library", "add_imported_videos": "Adds your video to the montage",
         "hearing": "Listens to the whole live once (a few minutes)",
     },
     "es": {
@@ -194,6 +196,7 @@ _DOING = {
         "list_videos": "Mira tus vídeos", "get_video": "Mira el vídeo", "keep_clip": "Ordena el clip", "analyse_live": "Prepara el análisis del directo",
         "ask_approval": "Te pide permiso", "open": "Abre la página", "build_video": "Construye el vídeo", "change_video": "Cambia el vídeo",
         "add_passages": "Añade los pasajes al vídeo", "cut_clip": "Corta el clip", "set_look": "Cambia el estilo", "export_videos": "Lanza la exportación",
+        "list_imported_videos": "Mira tu mediateca", "add_imported_videos": "Añade tu vídeo al montaje",
         "hearing": "Escucha todo el directo una primera vez (unos minutos)",
     },
 }
@@ -577,6 +580,23 @@ class Turn:
             **({"part": _text(part, 60)} if _text(part, 60) else {}),
         })
 
+    def list_imported_videos(self) -> dict:
+        answer = api_tool("media", {})
+        if _failed(answer):
+            raise Refused(_failed(answer))
+        return answer
+
+    def add_imported_videos(self, videos, video=None, live=None, part: str = "") -> dict:
+        named = [_text(one, 80) for one in videos if _text(one, 80)][:20] if isinstance(videos, list) else []
+        if not named:
+            raise Refused("`videos` is a list of imported videos, each by its id or its name as `list_imported_videos` gives them")
+        return self.app("add_media", {
+            "job": self.job(live),
+            "video": self.video_id(video),
+            "media": named,
+            **({"part": _text(part, 60)} if _text(part, 60) else {}),
+        })
+
     def cut_clip(self, live=None, clip=None, video=None, target=None) -> dict:
         filename = _id_of(clip, "filename") or (None if video else _id_of(self.context.get("clip"), "filename", "id"))
         video_id = _id_of(video, "id") or (None if filename else _id_of(self.context.get("video"), "id"))
@@ -769,7 +789,20 @@ def build(turn: Turn) -> list[StructuredTool]:
             _schema({"live": {"type": "string", "description": "A live's number, to have its videos only"}}),
             turn.list_videos,
         ),
-        _tool("get_video", "One video in full: its parts, each passage (id, times, what is said) and its look.", _schema({"video": _VIDEO, "live": _LIVE}), turn.get_video),
+        _tool(
+            "get_video",
+            "One video in full: its parts, each passage (id, times, what is said) and its look. A passage marked `imported` is a video of the streamer's own "
+            "(an outro, a meme), not a moment of a live: it has no hour, and it stays where it is when the video is changed.",
+            _schema({"video": _VIDEO, "live": _LIVE}),
+            turn.get_video,
+        ),
+        _tool(
+            "list_imported_videos",
+            "The streamer's media library: short videos of their own (an outro, a meme, something filmed on a phone) that any video can take as a passage. "
+            "Each: id, name, seconds, upright (filmed upright), spoken (somebody speaks in it).",
+            _schema({}),
+            turn.list_imported_videos,
+        ),
         _tool(
             "keep_clip",
             "Sort a clip of the analysis as the streamer would: kept (it becomes a video to edit and export), passed, or none (neither).",
@@ -826,6 +859,13 @@ def build(turn: Turn) -> list[StructuredTool]:
             "Add passages to a video, at the end of one of its parts (the last one unless `part` names another by its title; a title no part has makes a new part).",
             _schema({"passages": {"type": "array", "items": _PASSAGE}, "video": _VIDEO, "live": _LIVE, "part": {"type": "string"}}, ["passages"]),
             turn.add_passages,
+        ),
+        _tool(
+            "add_imported_videos",
+            "Add videos of the streamer's media library to a video, whole, at the end of one of its parts (the last one unless `part` names another by its title; "
+            "a title no part has makes a new part). Free. Name each by its id or its name; the app answers what it added, and what it has no such video for (with those there are).",
+            _schema({"videos": {"type": "array", "items": {"type": "string", "description": "An imported video's id or name"}}, "video": _VIDEO, "live": _LIVE, "part": {"type": "string"}}, ["videos"]),
+            turn.add_imported_videos,
         ),
         _tool(
             "cut_clip",

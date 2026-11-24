@@ -354,6 +354,42 @@ const routes = {
     tokens: [{"old":"/api/jobs/:id/loudness","type":0,"val":"api","end":""},{"old":"/api/jobs/:id/loudness","type":0,"val":"jobs","end":""},{"old":"/api/jobs/:id/loudness","type":1,"val":"id","end":""},{"old":"/api/jobs/:id/loudness","type":0,"val":"loudness","end":""}],
     types: placeholder as Registry['musics.level']['types'],
   },
+  'media.index': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/media',
+    tokens: [{"old":"/api/media","type":0,"val":"api","end":""},{"old":"/api/media","type":0,"val":"media","end":""}],
+    types: placeholder as Registry['media.index']['types'],
+  },
+  'media.store': {
+    methods: ["POST"],
+    pattern: '/api/media',
+    tokens: [{"old":"/api/media","type":0,"val":"api","end":""},{"old":"/api/media","type":0,"val":"media","end":""}],
+    types: placeholder as Registry['media.store']['types'],
+  },
+  'media.update': {
+    methods: ["PUT"],
+    pattern: '/api/media/:id',
+    tokens: [{"old":"/api/media/:id","type":0,"val":"api","end":""},{"old":"/api/media/:id","type":0,"val":"media","end":""},{"old":"/api/media/:id","type":1,"val":"id","end":""}],
+    types: placeholder as Registry['media.update']['types'],
+  },
+  'media.destroy': {
+    methods: ["DELETE"],
+    pattern: '/api/media/:id',
+    tokens: [{"old":"/api/media/:id","type":0,"val":"api","end":""},{"old":"/api/media/:id","type":0,"val":"media","end":""},{"old":"/api/media/:id","type":1,"val":"id","end":""}],
+    types: placeholder as Registry['media.destroy']['types'],
+  },
+  'media.file': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/media/:id/file',
+    tokens: [{"old":"/api/media/:id/file","type":0,"val":"api","end":""},{"old":"/api/media/:id/file","type":0,"val":"media","end":""},{"old":"/api/media/:id/file","type":1,"val":"id","end":""},{"old":"/api/media/:id/file","type":0,"val":"file","end":""}],
+    types: placeholder as Registry['media.file']['types'],
+  },
+  'media.thumb': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/media/:id/thumb',
+    tokens: [{"old":"/api/media/:id/thumb","type":0,"val":"api","end":""},{"old":"/api/media/:id/thumb","type":0,"val":"media","end":""},{"old":"/api/media/:id/thumb","type":1,"val":"id","end":""},{"old":"/api/media/:id/thumb","type":0,"val":"thumb","end":""}],
+    types: placeholder as Registry['media.thumb']['types'],
+  },
   'notes.index': {
     methods: ["GET","HEAD"],
     pattern: '/api/notes',

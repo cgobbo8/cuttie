@@ -11,6 +11,7 @@ import TemplatePreview, { useDefaultTemplate } from "../components/TemplatePrevi
 import TemplateSketch from "../components/montage/TemplateSketch";
 import MemoryButton from "../components/AiMemory";
 import AiNotes from "../components/AiNotes";
+import MediaLibrary from "../components/MediaLibrary";
 import SoundPrefs from "../components/SoundPrefs";
 import { fontFamily } from "../lib/fonts";
 import type { TemplateContext } from "../lib/templates";
@@ -405,6 +406,11 @@ export default function ChannelPage() {
                 brand={{ name: channel?.display_name ?? channel?.login ?? kit.twitch_login ?? "", logo: channel?.avatar_url ?? null, colors: kit.colors, font: fontFamily("luckiest") }}
                 onSave={(patch) => save(patch)}
               />
+            </Card>
+
+            {/* Videos of their own (an outro, a meme, something filmed on a phone) that any video can take as a passage */}
+            <Card title={t("media.title")} hint={t("media.hint")}>
+              <MediaLibrary header={false} className="mt-3.5" />
             </Card>
 
             {/* What the AI should know about them: notes it reads before every analysis, search and video */}

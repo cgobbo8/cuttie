@@ -224,6 +224,42 @@ def test_an_action_is_handed_to_the_app_and_its_answer_resumes(model, app_calls)
         assistant.turn("t1", resume={"call": action["call"], "result": {}}, context=HERE, language="fr")
 
 
+def test_a_video_of_the_media_library_is_looked_up_then_added_by_the_app(model, app_calls):
+    app_calls.answers["media"] = {"videos": [{"id": "m0000000a", "name": "Outro de fin", "seconds": 12.3, "upright": True, "spoken": True}]}
+    # An imported passage of a video has no hour of a live: its name and how long it plays, as the app gives them
+    app_calls.answers["video"] = {"id": "v-yacht", "name": "Le yacht", "parts": [{"title": "", "passages": [
+        {"id": "aaaaaaaaaa", "start": 600.0, "end": 605.5, "text": "À l'aide !"},
+        {"id": "mmmmmmmmm1", "imported": "Outro de fin", "seconds": 12.3, "text": ""},
+    ]}]}
+    model.script = [
+        call("get_video", {}, "c1"),
+        call("list_imported_videos", {}, "c2"),
+        call("add_imported_videos", {"videos": ["Outro de fin"], "part": "Fin"}, "c3"),
+        "Ton outro est à la fin.",
+    ]
+    answer = assistant.turn("t1", text="mets mon outro à la fin", context=HERE, language="fr")
+    told = [json.loads(message) for message in tool_messages(model)]
+    assert told[0]["parts"][0]["passages"] == [
+        {"id": "aaaaaaaaaa", "start": "0:10:00.0", "end": "0:10:05.5", "text": "À l'aide !"},
+        {"id": "mmmmmmmmm1", "imported": "Outro de fin", "seconds": 12.3, "text": ""},
+    ]
+    assert told[1] == app_calls.answers["media"]
+    # Adding it is the app's to do, on the video open, named as the streamer names it
+    action = answer["action"]
+    assert answer["status"] == "action" and action["name"] == "add_media" and action["needs"] == "app"
+    assert action["args"] == {"job": "job-miami", "video": "v-yacht", "media": ["Outro de fin"], "part": "Fin"}
+    assert answer["steps"] == ["Regarde la vidéo", "Regarde ta médiathèque", "Ajoute ta vidéo au montage"]
+    done = assistant.turn("t1", resume={"call": action["call"], "result": {"added": 1, "videos": ["Outro de fin"], "part": "Fin"}}, context=HERE, language="fr")
+    assert done["status"] == "done" and done["reply"] == [{"type": "text", "text": "Ton outro est à la fin."}]
+
+
+def test_an_imported_video_must_be_named_to_be_added(model, app_calls):
+    model.script = [call("add_imported_videos", {"videos": []}), "Dis-moi laquelle."]
+    answer = assistant.turn("t1", text="ajoute ma vidéo", context=HERE, language="fr")
+    assert answer["status"] == "done"
+    assert "list of imported videos" in tool_messages(model)[0]
+
+
 def test_what_the_app_spent_on_an_action_is_part_of_the_request(model, app_calls):
     model.billed = 0.002
     model.script = [call("build_video", {"source": "compilation", "brief": "Les morts de Jason", "target": 60}), "C'est construit."]

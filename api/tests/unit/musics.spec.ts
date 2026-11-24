@@ -1,5 +1,5 @@
 import { test } from '@japa/runner'
-import { musicFrom } from '#services/musics'
+import { musicFrom, parseUniverses, soundsLike } from '#services/musics'
 
 test.group('where a video starts reading a track', () => {
   test('before its strong moment when the track builds up to it and the video opens with an intro', ({ assert }) => {
@@ -12,5 +12,23 @@ test.group('where a video starts reading a track', () => {
     assert.deepEqual([musicFrom(riff, 0), musicFrom({ start: 35.1 }, 1.79), musicFrom({ start: 35.1, build: false }, 1.79)], [35.1, 35.1, 35.1])
     // A moment too near the start of the track to have that much before it: on the moment
     assert.equal(musicFrom({ start: 0.4, build: true }, 1.79), 0.4)
+  })
+})
+
+test.group('the sounds of a game', () => {
+  test('a track goes with a game when the streamer says so; when they said nothing, when its name does', ({ assert }) => {
+    // By its name: a theme of the game; the track that ships and sounds like it
+    assert.isTrue(soundsLike({ id: 'u1', name: 'GTA Vice City' }, 'gta'))
+    assert.isTrue(soundsLike({ id: 'synthwave', name: 'Arcade Retro Nights' }, 'gta'))
+    assert.isFalse(soundsLike({ id: 'u2', name: 'Flower In A Hurricane' }, 'gta'))
+    // The streamer's word comes first, either way
+    assert.isTrue(soundsLike({ id: 'u2', name: 'Flower In A Hurricane', universes: ['gta'] }, 'gta'))
+    assert.isFalse(soundsLike({ id: 'u1', name: 'GTA Vice City', universes: [] }, 'gta'))
+    // A video in the channel's own look, or a look nobody knows: no track is set apart
+    assert.isFalse(soundsLike({ id: 'u1', name: 'GTA Vice City' }, undefined))
+    assert.isFalse(soundsLike({ id: 'u1', name: 'GTA Vice City' }, 'zelda'))
+    // Only looks the app has, each once
+    assert.deepEqual(parseUniverses(['gta', 'zelda', 'gta', 3]), ['gta'])
+    assert.deepEqual(parseUniverses('gta'), [])
   })
 })

@@ -5,7 +5,7 @@ import Job from '#models/job'
 import { clipDir } from '#services/data_paths'
 import { streamFile } from '#services/file_stream'
 import { getBrandKit, saveBrandKit } from '#services/brand_kit'
-import { MAX_OWN_MUSICS, MUSIC_KINDS, musicFile, musicTracks, newMusicId, ownMusicsDir, ownTracks, parseKinds, removeOwnFile, saveOwnTracks, type MusicTrack } from '#services/musics'
+import { MAX_OWN_MUSICS, MUSIC_KINDS, musicFile, musicTracks, newMusicId, ownMusicsDir, ownTracks, parseKinds, parseUniverses, removeOwnFile, saveOwnTracks, type MusicTrack } from '#services/musics'
 import { measureLoudness } from '#services/sound_level'
 import { describeMusic, musicMoment } from '#services/worker_client'
 import { workerFailure } from '#services/worker_failure'
@@ -87,10 +87,11 @@ export default class MusicsController {
   }
 
   /**
-   * PUT /api/musics/:id { name?, kinds?, description?, start?, build? } — the streamer corrects what one of
+   * PUT /api/musics/:id { name?, kinds?, description?, start?, build?, universes? } — the streamer corrects what one of
    * their own tracks is. `start`: about where its strong moment is (seconds, given by ear): the attack
    * nearest to it is kept, with the tempo there. `build`: the track builds up to that moment (a video
    * with an intro then starts it earlier, and the moment falls on the first picture of the video).
+   * `universes`: the games' looks it goes with (["gta"]: a sound of that game; []: none, whatever its name says).
    */
   async update({ params, request, response }: HttpContext) {
     const own = ownTracks()
@@ -117,6 +118,7 @@ export default class MusicsController {
     }
     if (typeof body.name === 'string' && body.name.trim()) track.name = body.name.trim().slice(0, 60)
     if (body.kinds !== undefined) track.kinds = parseKinds(body.kinds)
+    if (body.universes !== undefined) track.universes = parseUniverses(body.universes)
     if (typeof body.description === 'string') {
       track.description = body.description.trim().slice(0, 300)
       // What the streamer says of their track is what the AI reads from now on

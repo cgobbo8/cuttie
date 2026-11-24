@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import type { Compilation } from "./api";
 import { dressAs, universeFor, universeOf, universeTracks, UNIVERSES } from "./universes";
@@ -34,6 +36,26 @@ describe("the look of a game a video can be dressed in", () => {
     expect(others.map((track) => track.id)).toEqual(["phonk", "own-3"]);
     // No universe: nothing is set apart
     expect(universeTracks(tracks, undefined)).toEqual({ own: [], others: tracks });
+  });
+
+  it("takes the streamer's word for a track before its name: a song of the game's radio, a theme they don't want there", () => {
+    const tracks = [
+      { id: "own-3", name: "Flower In A Hurricane", universes: ["gta"] },
+      { id: "own-4", name: "BURN", universes: ["gta"] },
+      { id: "own-1", name: "Gta Vice City Theme", universes: [] },
+      { id: "synthwave", name: "Arcade Retro Nights" },
+    ];
+    const { own, others } = universeTracks(tracks, gta);
+    expect(own.map((track) => track.id)).toEqual(["own-3", "own-4", "synthwave"]);
+    expect(others.map((track) => track.id)).toEqual(["own-1"]);
+  });
+
+  it("knows a game's sounds by the same names as the server, which tells the AI about them", () => {
+    const service = readFileSync(path.resolve(__dirname, "../../../api/app/services/musics.ts"), "utf8");
+    const theirs = service.match(/gta: \{ names: \/(.+?)\/i, shipped: \[([^\]]*)\] \}/);
+    const ours = readFileSync(path.resolve(__dirname, "universes.ts"), "utf8");
+    expect(theirs?.[1]).toBe(ours.match(/const GTA_WORDS = \/(.+?)\/i;/)?.[1]);
+    expect(theirs?.[2].match(/\w+/g)).toEqual(ours.match(/const GTA_SHIPPED = \[([^\]]*)\];/)?.[1].match(/\w+/g));
   });
 
   it("dresses a video: its layout, and its look round what the video opens on", () => {

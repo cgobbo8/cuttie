@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ChevronDown, Clapperboard, Loader2, Music2, Pause, Play, Plus, Trash2 } from "lucide-react";
+import { ChevronDown, Clapperboard, Gamepad2, Loader2, Music2, Pause, Play, Plus, Trash2 } from "lucide-react";
 import { addMusic, deleteMusic, updateMusic, type BrandKit } from "../lib/api";
 import { hookLook, isIntro } from "../lib/intro/intros";
 import { loadMusics, trackOf, useMusics } from "../lib/music/library";
 import { MUSIC_KINDS, type MusicTrack } from "../lib/music/mix";
+import { UNIVERSES } from "../lib/universes";
 import IntroPicker, { IntroSketch, useIntroLoop, type IntroBrand } from "./compilation/IntroPicker";
 import MusicPicker, { useListen } from "./compilation/MusicPicker";
 import { useToast } from "./Toast";
@@ -103,6 +104,25 @@ function OwnTrack({ track, playing, onListen, onListenFrom, onChanged }: { track
               className={`h-7 px-2.5 rounded-full border text-[11.5px] transition-colors ${on ? "border-accent bg-accent-soft text-white" : "border-white/10 text-ink-2 hover:bg-white/[0.07]"}`}
             >
               {t(`compilation.music.kind.${kind}`)}
+            </button>
+          );
+        })}
+        {/* A sound of a game: it comes first, under the game's name, in the videos dressed in its look */}
+        {UNIVERSES.map((universe) => {
+          const on = universe.sounds(track);
+          const name = t(`compilation.universe.${universe.id}`);
+          return (
+            <button
+              key={universe.id}
+              type="button"
+              aria-pressed={on}
+              title={t("brand.musicUniverseHelp", { name })}
+              // (said once, it is the streamer's word that counts, not the track's name)
+              onClick={() => save({ universes: UNIVERSES.filter((one) => (one.id === universe.id ? !on : one.sounds(track))).map((one) => one.id) })}
+              className={`h-7 pl-2 pr-2.5 rounded-full border text-[11.5px] inline-flex items-center gap-1.5 transition-colors ${on ? "border-accent bg-accent-soft text-white" : "border-dashed border-white/15 text-ink-2 hover:bg-white/[0.07]"}`}
+            >
+              <Gamepad2 className="w-3.5 h-3.5" />
+              {t("brand.musicUniverse", { name })}
             </button>
           );
         })}

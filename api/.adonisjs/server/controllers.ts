@@ -20,6 +20,7 @@ export const controllers = {
   GoogleAuth: () => import('#controllers/google_auth_controller'),
   Internal: () => import('#controllers/internal_controller'),
   Jobs: () => import('#controllers/jobs_controller'),
+  Media: () => import('#controllers/media_controller'),
   Memory: () => import('#controllers/memory_controller'),
   Musics: () => import('#controllers/musics_controller'),
   NewAccount: () => import('#controllers/new_account_controller'),

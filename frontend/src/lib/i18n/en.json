@@ -770,7 +770,9 @@
     "musicMomentListen": "Hear it come in",
     "musicMomentListenHelp": "Plays the music {{seconds}} s before its strong moment",
     "musicBuild": "Builds during the intro",
-    "musicBuildHelp": "With an intro, the music starts before its strong moment, which lands right as the video begins."
+    "musicBuildHelp": "With an intro, the music starts before its strong moment, which lands right as the video begins.",
+    "musicUniverse": "{{name}} sound",
+    "musicUniverseHelp": "A {{name}} sound: it comes first in the videos dressed in {{name}}, and the AI knows it."
   },
   "project": {
     "steps": "Project steps",
@@ -2408,5 +2410,49 @@
     "changing": "The AI is changing the video…",
     "ideaOf": "Idea of the AI · score {{score}}",
     "rewrite": "Rewrite the request"
+  },
+  "media": {
+    "title": "Media library",
+    "hint": "Videos of your own (an outro, a meme, a reaction filmed on a phone), to drop into any video as a passage.",
+    "count_one": "{{count}} video",
+    "count_other": "{{count}} videos",
+    "import": "Import a video",
+    "importHint": "A video of your own, from your media library or a file, added as a passage",
+    "importFile": "Import videos",
+    "importAndAdd": "Import a file and add it",
+    "importing": "Importing {{done}}/{{of}}…",
+    "importingHint": "Converting, then listening to what is said in it.",
+    "dropHint": "Click, or drop files here. {{minutes}} min at most per video.",
+    "dropHere": "Drop your videos here",
+    "empty": "Nothing yet. A video imported here is there in every montage.",
+    "add": "Add",
+    "addNamed": "Add {{name}} to the video",
+    "added_one": "Video added to the passages",
+    "added_other": "{{count}} videos added to the passages",
+    "used_one": "in the video",
+    "used_other": "{{count}} times in the video",
+    "imported_one": "Video imported",
+    "imported_other": "{{count}} videos imported",
+    "refused": {
+      "not_video": "{{name}} is not a video Cuttie can read.",
+      "too_long": "{{name}} is too long: {{minutes}} min at most.",
+      "full": "The media library is full: remove a video first.",
+      "failed": "{{name}} could not be imported."
+    },
+    "name": "Name of the video",
+    "rename": "Rename",
+    "renameNamed": "Rename {{name}}",
+    "renamed": "Video renamed",
+    "remove": "Remove",
+    "removeNamed": "Remove {{name}}",
+    "removeTitle": "Remove “{{name}}”?",
+    "removeBody": "It leaves the media library. The videos already using it keep it.",
+    "removed": "Video removed from the media library",
+    "playNamed": "Play {{name}}",
+    "stopNamed": "Stop {{name}}",
+    "passage": "Imported",
+    "moreBefore": "5 s more at the start",
+    "moreAfter": "5 s more at the end",
+    "whole": "The imported video is already whole on that side."
   }
 }

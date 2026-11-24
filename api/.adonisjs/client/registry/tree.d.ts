@@ -88,6 +88,14 @@ export interface ApiDefinition {
     destroy: typeof routes['musics.destroy']
     level: typeof routes['musics.level']
   }
+  media: {
+    index: typeof routes['media.index']
+    store: typeof routes['media.store']
+    update: typeof routes['media.update']
+    destroy: typeof routes['media.destroy']
+    file: typeof routes['media.file']
+    thumb: typeof routes['media.thumb']
+  }
   notes: {
     index: typeof routes['notes.index']
     store: typeof routes['notes.store']

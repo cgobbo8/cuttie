@@ -703,6 +703,78 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/musics_controller').default['level']>>>
     }
   }
+  'media.index': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/media'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/media_controller').default['index']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/media_controller').default['index']>>>
+    }
+  }
+  'media.store': {
+    methods: ["POST"]
+    pattern: '/api/media'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/media_controller').default['store']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/media_controller').default['store']>>>
+    }
+  }
+  'media.update': {
+    methods: ["PUT"]
+    pattern: '/api/media/:id'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { id: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/media_controller').default['update']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/media_controller').default['update']>>>
+    }
+  }
+  'media.destroy': {
+    methods: ["DELETE"]
+    pattern: '/api/media/:id'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { id: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/media_controller').default['destroy']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/media_controller').default['destroy']>>>
+    }
+  }
+  'media.file': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/media/:id/file'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { id: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/media_controller').default['file']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/media_controller').default['file']>>>
+    }
+  }
+  'media.thumb': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/media/:id/thumb'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { id: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/media_controller').default['thumb']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/media_controller').default['thumb']>>>
+    }
+  }
   'notes.index': {
     methods: ["GET","HEAD"]
     pattern: '/api/notes'

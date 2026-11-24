@@ -26,11 +26,17 @@ export interface Universe {
   titles: readonly HookStyle[];
   /** A live on its game, as Twitch names it */
   plays: (game: string | null | undefined) => boolean;
-  /** A music that goes with it, by what it is called (a theme of the game, a track of its soundtrack) or one that ships with the app */
-  sounds: (track: Pick<MusicTrack, "id" | "name">) => boolean;
+  /**
+   * A music that goes with it: one the streamer says does (a track of the game's radio, a song with
+   * its mood); when they said nothing, by what it is called (a theme of the game) or one that ships
+   * with the app and sounds like it
+   */
+  sounds: (track: Pick<MusicTrack, "id" | "name" | "universes">) => boolean;
 }
 
+/** Names that say a track belongs to the game's world, and the tracks that ship and sound like it (the API has the same: services/musics.ts) */
 const GTA_WORDS = /grand theft auto|\bgta\b|vice city|san andreas|liberty city|los santos|leonida/i;
+const GTA_SHIPPED = ["synthwave"];
 
 export const UNIVERSES: Universe[] = [
   {
@@ -42,7 +48,7 @@ export const UNIVERSES: Universe[] = [
     titles: ["viceplate", "vice"],
     plays: (game) => /grand theft auto|^\s*gta\b/i.test(game ?? ""),
     // (the synthwave track that ships has the sound of an evening in Vice City)
-    sounds: (track) => track.id === "synthwave" || GTA_WORDS.test(track.name),
+    sounds: (track) => (Array.isArray(track.universes) ? track.universes.includes("gta") : GTA_SHIPPED.includes(track.id) || GTA_WORDS.test(track.name)),
   },
 ];
 
@@ -51,7 +57,7 @@ export const universeOf = (id: string | null | undefined): Universe | undefined 
 export const universeFor = (game: string | null | undefined): Universe | undefined => UNIVERSES.find((universe) => universe.plays(game));
 
 /** The tracks that go with a universe first, the others after, each group in its own order */
-export function universeTracks<T extends Pick<MusicTrack, "id" | "name">>(tracks: T[], universe: Universe | undefined): { own: T[]; others: T[] } {
+export function universeTracks<T extends Pick<MusicTrack, "id" | "name" | "universes">>(tracks: T[], universe: Universe | undefined): { own: T[]; others: T[] } {
   if (!universe) return { own: [], others: tracks };
   return { own: tracks.filter((track) => universe.sounds(track)), others: tracks.filter((track) => !universe.sounds(track)) };
 }

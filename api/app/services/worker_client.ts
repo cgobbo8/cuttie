@@ -441,6 +441,11 @@ export async function musicMoment(body: { path: string; at: number }): Promise<{
   return call('POST', '/musics/moment', { body, timeoutMs: 2 * 60_000 })
 }
 
+/** The words said in a video of the media library (its own seconds); an empty list: nobody speaks in it (worker: media_library.py) */
+export async function mediaWordsOf(file: string): Promise<{ words: { word: string; start: number; end: number }[] }> {
+  return call('POST', '/media/words', { body: { path: file }, timeoutMs: 5 * 60_000 })
+}
+
 /** What the AI chose for the sound of a video (worker: looks.choose_sound): any of them may be null */
 export interface SoundChoice {
   kind: string | null
@@ -460,7 +465,8 @@ export interface SoundChoice {
 export async function chooseSound(body: {
   /** (`game`: the game of the live, some graphics are made for one) */
   video: { title: string; game?: string; parts: string[]; seconds: number; passages: number; said: string[]; lengths?: number[] }
-  musics: { key: string; name: string; kinds: string[]; about: string }[]
+  /** (`of_game`: a sound of the game the video is dressed in) */
+  musics: { key: string; name: string; kinds: string[]; about: string; of_game?: boolean }[]
   /** The streamer's favourite track for a kind of video, and the intro they prefer */
   favourites: Record<string, string>
   intro: string | null

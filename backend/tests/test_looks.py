@@ -1,6 +1,7 @@
 """Choosing each passage's template by looking at it: what the model is shown, what is made of its answer (the model is faked)."""
 
 import json
+import os
 from types import SimpleNamespace
 
 import pytest
@@ -347,6 +348,49 @@ def test_the_ai_opens_a_video_on_a_jingle_or_on_its_hook_and_names_the_passage_t
     # The graphics it knows are the app's twelve: the sticker ones are back, the fuse is new; the hook is no graphics
     assert list(looks.INTROS) == ["slam", "bands", "glitch", "neon", "rush", "sticker", "split", "arcade", "news", "shatter", "countdown", "fuse", "sunset", "miami", "wanted", "cover"]
     assert "hook" not in looks.INTROS and all(set(names) == {"hook", *looks.INTROS} for names in looks.INTRO_NAMES.values())
+
+
+def test_the_tracks_that_go_with_the_game_of_the_live_are_said_to_be_its_sounds():
+    model = Eyes({"kind": "hype", "music": "hurricane", "why": "", "intros": []})
+    musics = [*MUSICS, {"key": "hurricane", "name": "Flower In A Hurricane", "kinds": ["hype"], "about": "Electro, a slow build.", "of_game": True}]
+    looks.choose_sound({**VIDEO, "game": "Grand Theft Auto VI"}, musics, language="fr", client=model)
+    shown = model.seen[0]["messages"][0]["content"]
+    # (its name says nothing of the game: the streamer said it is one of its sounds)
+    assert "[hurricane] Flower In A Hurricane (for: hype). Electro, a slow build. ♪ A sound of this live's game: a natural choice for this video." in shown
+    assert shown.count("♪ A sound of this live's game") == 1
+
+
+def test_what_is_said_in_an_imported_video_is_heard_once_or_said_to_have_failed(tmp_path, monkeypatch):
+    from app.services import llm_analyzer, media_library, subtitle_generator
+
+    video = tmp_path / "m0000000a.mp4"
+    video.write_bytes(b"")
+    made = []
+
+    def ffmpeg(args, **kwargs):
+        # (the sound is taken out beside the video, and removed whatever happens)
+        made.append(args[-1])
+        open(args[-1], "wb").close()
+
+    monkeypatch.setattr(media_library.subprocess, "run", ffmpeg)
+    monkeypatch.setattr(subtitle_generator, "_fix_timestamps_with_vad", lambda words, audio: [{**w, "start": w["start"] + 0.1} for w in words])
+    monkeypatch.setattr(llm_analyzer, "_transcribe_audio", lambda audio: ("bien joué", 2.0, [], [{"word": "Bien", "start": 0.3, "end": 0.6}, {"word": "joué", "start": 0.6, "end": 1.0}]))
+    assert [w["word"] for w in media_library.words(str(video))] == ["Bien", "joué"]
+    assert media_library.words(str(video))[0]["start"] == 0.4
+    # Nobody speaks: an empty list, which is an answer
+    monkeypatch.setattr(llm_analyzer, "_transcribe_audio", lambda audio: ("", 0.0, [], []))
+    assert media_library.words(str(video)) == []
+    # It could not be listened to: said, not taken for a silent video
+    def broken(audio):
+        raise RuntimeError("no engine")
+
+    monkeypatch.setattr(llm_analyzer, "_transcribe_audio", broken)
+    try:
+        media_library.words(str(video))
+        raise AssertionError("a failure passed for silence")
+    except RuntimeError:
+        pass
+    assert made and not any(os.path.exists(path) for path in made)
 
 
 def test_no_music_and_no_intro_are_kept_as_such_and_a_wrong_answer_is_made_safe():

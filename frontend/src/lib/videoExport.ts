@@ -1,5 +1,5 @@
 import { ensurePieces, getEditEnvironment, startMontageRender, type Compilation, type EditEnvironment } from "./api";
-import { allItems } from "./compilation";
+import { allItems, pieceAsk } from "./compilation";
 import { FPS, buildVideo, covers, pieceVersion, renderRequest, type BuildWith, type BuiltVideo, type Piece } from "./videoBuild";
 
 /**
@@ -23,11 +23,11 @@ export async function prepareVideo(using: BuildWith, video: Compilation): Promis
     if (item.file) states[item.id] = { ready: !!item.ready, file: item.file, file_start: item.file_start ?? null, file_end: item.file_end ?? null, job: item.job ?? using.jobId };
   }
   const todo = items.filter((item) => !covers(states[item.id], item));
-  // Each live cuts its own passages, a few at a time
+  // Each live cuts its own passages, a few at a time (a video of the media library is put in the video's own live)
   for (const live of new Set(todo.map((item) => item.job ?? using.jobId))) {
     const theirs = todo.filter((item) => (item.job ?? using.jobId) === live);
     for (let i = 0; i < theirs.length; i += CUT_BATCH) {
-      const done = await ensurePieces(live, theirs.slice(i, i + CUT_BATCH).map(({ id, start, end, like }) => ({ id, start, end, ...(like ? { like } : {}) })));
+      const done = await ensurePieces(live, theirs.slice(i, i + CUT_BATCH).map(({ fit: _rough, ...item }) => pieceAsk(item)));
       for (const { id, tight: _found, ...state } of done.pieces) states[id] = { ...state, job: live };
     }
   }

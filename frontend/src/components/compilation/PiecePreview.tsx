@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Loader2, Pause, Play, Plus } from "lucide-react";
+import { Film, Loader2, Pause, Play, Plus } from "lucide-react";
 import { clipThumbUrl, clipUrl, type CompilationItem, type PieceState, type TranscriptWord } from "../../lib/api";
 import { liveClock } from "../../lib/compilation";
 import { dragRatio } from "../../lib/drag";
@@ -32,6 +32,8 @@ interface Props {
   hush?: number;
   /** It started playing */
   onPlay?: () => void;
+  /** It is a video of the media library, not a moment of a live: its name, and where it ends (its own seconds) */
+  media?: { name: string; seconds: number };
 }
 
 const FRAMES = 8;
@@ -44,7 +46,7 @@ const MORE = 5;
  * and its two handles move the cut inside the clip (a few seconds wider than
  * the moment). "+" on a side gives 5 s more of the live.
  */
-export default function PiecePreview({ jobId, item, piece, cutting, words, onChange, templates, template, videoTemplate, onTemplate, autoPlay = true, hush, onPlay }: Props) {
+export default function PiecePreview({ jobId, item, piece, cutting, words, onChange, templates, template, videoTemplate, onTemplate, autoPlay = true, hush, onPlay, media }: Props) {
   const { t } = useTranslation();
   const videoRef = useRef<HTMLVideoElement>(null);
   const stripRef = useRef<HTMLDivElement>(null);
@@ -89,14 +91,16 @@ export default function PiecePreview({ jobId, item, piece, cutting, words, onCha
 
   const pct = (time: number) => `${Math.min(100, Math.max(0, (time / length) * 100))}%`;
   const more = (side: "start" | "end") => {
-    const label = t(side === "start" ? "compilation.moreBefore" : "compilation.moreAfter");
+    // (an imported video has nothing before its first picture nor after its last)
+    const label = t(media ? (side === "start" ? "media.moreBefore" : "media.moreAfter") : side === "start" ? "compilation.moreBefore" : "compilation.moreAfter");
+    const last = media ? media.seconds : Infinity;
     return (
       <Tooltip content={label}>
         <button
           type="button"
           aria-label={label}
-          disabled={cutting || (side === "start" && item.start <= 0)}
-          onClick={() => (side === "start" ? onChange(Math.max(0, item.start - MORE), item.end) : onChange(item.start, item.end + MORE))}
+          disabled={cutting || (side === "start" && item.start <= 0) || (side === "end" && item.end >= last - 0.01)}
+          onClick={() => (side === "start" ? onChange(Math.max(0, item.start - MORE), item.end) : onChange(item.start, Math.min(last, item.end + MORE)))}
           className="btn btn-glass btn-icon w-7 h-7 rounded-full flex-none"
         >
           <Plus className="w-3.5 h-3.5" strokeWidth={2.4} />
@@ -153,7 +157,14 @@ export default function PiecePreview({ jobId, item, piece, cutting, words, onCha
             {playing ? <Pause className="w-4 h-4" fill="currentColor" /> : <Play className="w-4 h-4 translate-x-[1px]" fill="currentColor" />}
           </button>
         )}
-        <span className="absolute top-3 left-3 chip glass-chip text-white h-[26px] mono">{liveClock(item.start)}</span>
+        {media ? (
+          <span className="absolute top-3 left-3 chip glass-chip text-white h-[26px] max-w-[60%]">
+            <Film className="w-3.5 h-3.5 flex-none" />
+            <span className="truncate">{media.name}</span>
+          </span>
+        ) : (
+          <span className="absolute top-3 left-3 chip glass-chip text-white h-[26px] mono">{liveClock(item.start)}</span>
+        )}
         <span className="absolute top-3 right-3 chip glass-chip text-white h-[26px] mono">{(item.end - item.start).toFixed(1)} s</span>
       </div>
 

@@ -36,6 +36,11 @@ export interface MusicTrack {
   /** One the streamer added themselves (kept in the data folder), with the description they see and can change */
   own?: boolean
   description?: string
+  /**
+   * The games' looks it goes with, as the streamer says (see UNIVERSE_SOUNDS): a track of the game's
+   * radio, a song that has its mood. Absent: told by its name alone; empty: none, whatever it is called.
+   */
+  universes?: string[]
 }
 
 /** What a video is, for choosing its music: the streamer can have a favourite for each */
@@ -99,6 +104,28 @@ export function removeOwnFile(id: string): void {
 export function musicTracks(): MusicTrack[] {
   const shipped = shippedTracks()
   return [...shipped, ...ownTracks().filter((track) => !shipped.some((s) => s.id === track.id))]
+}
+
+/**
+ * What says a track belongs to a game's world when the streamer said nothing: its name (a theme of
+ * the game, a place of it), or being one that ships and sounds like it. The app has the same
+ * (frontend/src/lib/universes.ts, kept equal by a test).
+ */
+export const UNIVERSE_SOUNDS: Record<string, { names: RegExp; shipped: string[] }> = {
+  gta: { names: /grand theft auto|\bgta\b|vice city|san andreas|liberty city|los santos|leonida/i, shipped: ['synthwave'] },
+}
+
+/** The looks a track is said to go with, as sent: known ones, each once */
+export function parseUniverses(raw: unknown): string[] {
+  return [...new Set((Array.isArray(raw) ? raw : []).filter((id): id is string => typeof id === 'string' && id in UNIVERSE_SOUNDS))]
+}
+
+/** A track that goes with a game's look: the streamer says so, else its name does */
+export function soundsLike(track: Pick<MusicTrack, 'id' | 'name' | 'universes'>, universe: string | undefined): boolean {
+  const known = universe ? UNIVERSE_SOUNDS[universe] : undefined
+  if (!known) return false
+  if (Array.isArray(track.universes)) return track.universes.includes(universe!)
+  return known.shipped.includes(track.id) || known.names.test(track.name)
 }
 
 /** The kinds of video a track is said to suit, as sent: known kinds, three at most */

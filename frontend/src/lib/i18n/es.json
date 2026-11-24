@@ -770,7 +770,9 @@
     "musicMomentListen": "Escuchar la llegada",
     "musicMomentListenHelp": "Reproduce la música {{seconds}} s antes de su momento fuerte",
     "musicBuild": "Sube durante la intro",
-    "musicBuildHelp": "Con una intro, la música arranca antes de su momento fuerte, que cae justo cuando empieza el vídeo."
+    "musicBuildHelp": "Con una intro, la música arranca antes de su momento fuerte, que cae justo cuando empieza el vídeo.",
+    "musicUniverse": "Sonido {{name}}",
+    "musicUniverseHelp": "Un sonido de {{name}}: sale primero en los vídeos con el look {{name}}, y la IA lo sabe."
   },
   "project": {
     "steps": "Pasos del proyecto",
@@ -2408,5 +2410,49 @@
     "changing": "La IA está cambiando el vídeo…",
     "ideaOf": "Idea de la IA · índice {{score}}",
     "rewrite": "Cambiar la petición"
+  },
+  "media": {
+    "title": "Mediateca",
+    "hint": "Tus propios vídeos (una outro, un meme, una reacción grabada con el móvil), para poner en cualquier vídeo como un pasaje.",
+    "count_one": "{{count}} vídeo",
+    "count_other": "{{count}} vídeos",
+    "import": "Importar un vídeo",
+    "importHint": "Un vídeo tuyo, de tu mediateca o de un archivo, añadido como pasaje",
+    "importFile": "Importar vídeos",
+    "importAndAdd": "Importar un archivo y añadirlo",
+    "importing": "Importando {{done}}/{{of}}…",
+    "importingHint": "Conversión, y luego escucha de lo que se dice.",
+    "dropHint": "Haz clic o suelta archivos aquí. {{minutes}} min como máximo por vídeo.",
+    "dropHere": "Suelta aquí tus vídeos",
+    "empty": "Nada por ahora. Un vídeo importado aquí aparece en todos tus montajes.",
+    "add": "Añadir",
+    "addNamed": "Añadir {{name}} al vídeo",
+    "added_one": "Vídeo añadido a los pasajes",
+    "added_other": "{{count}} vídeos añadidos a los pasajes",
+    "used_one": "en el vídeo",
+    "used_other": "{{count}} veces en el vídeo",
+    "imported_one": "Vídeo importado",
+    "imported_other": "{{count}} vídeos importados",
+    "refused": {
+      "not_video": "{{name}} no es un vídeo que Cuttie pueda leer.",
+      "too_long": "{{name}} es demasiado largo: {{minutes}} min como máximo.",
+      "full": "La mediateca está llena: quita antes un vídeo.",
+      "failed": "No se pudo importar {{name}}."
+    },
+    "name": "Nombre del vídeo",
+    "rename": "Renombrar",
+    "renameNamed": "Renombrar {{name}}",
+    "renamed": "Vídeo renombrado",
+    "remove": "Quitar",
+    "removeNamed": "Quitar {{name}}",
+    "removeTitle": "¿Quitar «{{name}}»?",
+    "removeBody": "Sale de la mediateca. Los vídeos que ya lo usan lo conservan.",
+    "removed": "Vídeo quitado de la mediateca",
+    "playNamed": "Reproducir {{name}}",
+    "stopNamed": "Detener {{name}}",
+    "passage": "Importado",
+    "moreBefore": "5 s más al principio",
+    "moreAfter": "5 s más al final",
+    "whole": "El vídeo importado ya está entero por ese lado."
   }
 }

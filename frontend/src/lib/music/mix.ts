@@ -41,6 +41,11 @@ export interface MusicTrack {
   /** One the streamer added: its description is theirs (the AI wrote a first one, they can change it) */
   own?: boolean;
   description?: string;
+  /**
+   * The games' looks it goes with, as the streamer says (see universes.ts): a track of the game's
+   * radio, a song that has its mood. Absent: told by its name alone; empty: none, whatever it is called.
+   */
+  universes?: string[];
 }
 
 /** The tracks that ship with the app (the streamer's own come from the API: see library.ts) */

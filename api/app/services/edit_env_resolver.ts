@@ -3,7 +3,7 @@
  * Extracted from ClipsController.editEnv() so it can be reused for batch renders.
  */
 
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import path from 'node:path'
@@ -213,7 +213,8 @@ export function chatInClip(jobId: string, clipFilename: string, allChat: ChatLin
     }
   }
   const meta = allChat.length > 0 ? readClipMeta(jobId, clipFilename) : null
-  if (!meta) return []
+  // (a video of the media library was never on the stream: nobody wrote while it ran)
+  if (!meta || meta.media) return []
   return allChat
     .filter((m) => m.timestamp >= meta.vod_start && m.timestamp <= meta.vod_end)
     .map((m) => ({
@@ -272,12 +273,15 @@ export async function resolveEditEnv(
   const silentPiece = (clipFilename.startsWith('piece_') || clipFilename.startsWith('flat_')) && existsSync(wordsPath)
 
   // Lazy transcription fallback — the worker transcribes the clip and caches <clip>_words.json
+  // (`heardNothing`: it answered, with no words)
+  let heardNothing = false
   if (words.length === 0 && !silentPiece && existsSync(path.join(CLIPS_BASE, jobId, clipFilename))) {
     const MAX_RETRIES = 2
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
       try {
         logger.info('Whisper transcription attempt %d/%d for %s/%s...', attempt, MAX_RETRIES, jobId, clipFilename)
         words = await transcribeClipWords(jobId, clipFilename)
+        heardNothing = words.length === 0
         logger.info('Whisper done for %s/%s: %d words', jobId, clipFilename, words.length)
         if (words.length > 0) break
         logger.warn('Whisper returned 0 words for %s/%s (attempt %d/%d)', jobId, clipFilename, attempt, MAX_RETRIES)
@@ -292,6 +296,22 @@ export async function resolveEditEnv(
   }
 
   const chatMessages = chatInClip(jobId, clipFilename, shared.allChat)
+
+  // A video of the streamer's media library: its own size, and no webcam of the live in it
+  if (readClipMeta(jobId, clipFilename)?.media) {
+    // Listened to and nobody speaks: said once, not asked again each time it is shown
+    if (words.length === 0 && heardNothing && !existsSync(wordsPath)) writeFileSync(wordsPath, '[]')
+    const { width, height } = await getClipDimensions(jobId, clipFilename)
+    return {
+      clip_width: width,
+      clip_height: height,
+      facecam: null,
+      cam: { rect: null, source: null, moved: false, visible: false },
+      dominant_color: shared.dominantColor,
+      words,
+      chat_messages: [],
+    }
+  }
 
   const { rect, source, moved } = shared.facecam
   const name = path.basename(clipFilename)

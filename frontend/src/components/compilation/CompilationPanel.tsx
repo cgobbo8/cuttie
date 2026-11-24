@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from "react";
 import { useTranslation } from "react-i18next";
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Blend, Check, ScanFace, ChevronRight, Clapperboard, Eye, EyeOff, FolderInput, Layers, Loader2, Music2, Palette, Pause, Play, Plus, Search, Sparkles, Trash2, Type, X, Zap, LayoutTemplate, type LucideIcon } from "lucide-react";
-import type { Compilation, CompilationItem, CompilationSection, TwitchStoryboard } from "../../lib/api";
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Blend, Check, ScanFace, ChevronRight, Clapperboard, Eye, EyeOff, Film, FolderInput, Layers, Loader2, Music2, Palette, Pause, Play, Plus, Search, Sparkles, Trash2, Type, X, Zap, LayoutTemplate, type LucideIcon } from "lucide-react";
+import { mediaThumbUrl, type Compilation, type CompilationItem, type CompilationSection, type TwitchStoryboard } from "../../lib/api";
 import {
   PLAIN_CUT,
   addSection,
@@ -68,6 +68,8 @@ interface Props {
   onDelete: () => void;
   /** Passages looked for in the live by hand (the passages give their place to the search) */
   onSearch?: () => void;
+  /** A video of the streamer's own is added as a passage (from their media library, or a file) */
+  onImport?: () => void;
   /** Passages asked of the assistant (its panel opens, ready for what to look for) */
   onAskAi?: () => void;
   /** A template's name, by key */
@@ -208,6 +210,7 @@ export default function CompilationPanel({
   exporting,
   onDelete,
   onSearch,
+  onImport,
   onAskAi,
   templateName,
   looking,
@@ -529,7 +532,7 @@ export default function CompilationPanel({
                   "leaving" in item ? (
                     <li key={`gone-${item.item.id}`} aria-hidden className="passage-leave overflow-hidden flex items-center gap-2 p-1.5 rounded-[10px]">
                       <span className="w-[64px] aspect-video rounded-[6px] flex-none bg-white/[0.05]" />
-                      <span className="flex-1 min-w-0 text-[12.5px] leading-snug text-ink-3 line-through truncate">{item.item.text || liveClock(item.item.start)}</span>
+                      <span className="flex-1 min-w-0 text-[12.5px] leading-snug text-ink-3 line-through truncate">{item.item.text || (item.item.media ? item.item.why : "") || liveClock(item.item.start)}</span>
                     </li>
                   ) : (
                   <PassageRow
@@ -543,8 +546,8 @@ export default function CompilationPanel({
                     dragged={!!drag?.ids.includes(item.id)}
                     dropBefore={drag?.drop?.section === section.id && drag.drop.before === item.id}
                     dropAfter={drag?.drop?.section === section.id && drag.drop.before === null && section.items[section.items.length - 1].id === item.id}
-                    frames={storyboards[item.job ?? home]}
-                    live={liveNumbers ? (liveNumbers[item.job ?? home] ?? "?") : null}
+                    frames={item.media ? undefined : storyboards[item.job ?? home]}
+                    live={liveNumbers && !item.media ? (liveNumbers[item.job ?? home] ?? "?") : null}
                     cutting={cutting.has(item.id)}
                     ownLook={item.template && item.template !== compilation.template ? templateName(item.template) : null}
                     // How it comes in, when that is not as the rest of the video does (never the video's first passage: nothing comes before it)
@@ -585,7 +588,7 @@ export default function CompilationPanel({
         );
       })}
 
-      {(!single || onSearch || onAskAi) && (
+      {(!single || onSearch || onAskAi || onImport) && (
         <div className="flex flex-wrap gap-1.5">
           {onAskAi && (
             <button onClick={onAskAi} className="btn btn-sm bg-accent-soft text-accent hover:bg-accent/25 transition-colors">
@@ -595,6 +598,11 @@ export default function CompilationPanel({
           {onSearch && (
             <button onClick={onSearch} className="btn btn-ghost btn-sm">
               <Search className="w-[15px] h-[15px]" /> {t("compilation.search")}
+            </button>
+          )}
+          {onImport && (
+            <button onClick={onImport} title={t("media.importHint")} className="btn btn-ghost btn-sm">
+              <Film className="w-[15px] h-[15px]" /> {t("media.import")}
             </button>
           )}
           {!single && (
@@ -1045,8 +1053,17 @@ function PassageRow({ item, fresh, shown, playing, picked, picking, dragged, dro
         {dropAfter && <span aria-hidden className="drop-line -bottom-[2px]" />}
         {playing && <span aria-hidden className="absolute left-0 top-2 bottom-2 w-[3px] rounded-full bg-accent shadow-[0_0_10px_var(--color-accent-glow)]" />}
         <button type="button" onClick={(e) => (e.stopPropagation(), onOpen(e))} className="flex-1 min-w-0 flex items-center gap-2.5 text-left">
-          <span className={`relative w-[64px] aspect-video rounded-[6px] overflow-hidden flex-none bg-white/[0.05] ${ownLook ? "ring-2 ring-accent" : ""}`} style={frames ? tileStyle(frames, frameAt(frames, item.start)) : undefined}>
+          <span
+            className={`relative w-[64px] aspect-video rounded-[6px] overflow-hidden flex-none bg-white/[0.05] ${ownLook ? "ring-2 ring-accent" : ""}`}
+            // A video of the media library shows its own picture (whole: it may be upright); a moment of a live, the live's frame there
+            style={item.media ? { backgroundImage: `url("${mediaThumbUrl(item.media)}")`, backgroundSize: "contain", backgroundPosition: "center", backgroundRepeat: "no-repeat", backgroundColor: "#000" } : frames ? tileStyle(frames, frameAt(frames, item.start)) : undefined}
+          >
             {live !== null && <span className="live-dot absolute bottom-0.5 left-0.5">{live}</span>}
+            {item.media && (
+              <span aria-hidden className="absolute bottom-0.5 left-0.5 w-[15px] h-[15px] grid place-items-center rounded-[4px] bg-black/70 text-white">
+                <Film className="w-2.5 h-2.5" strokeWidth={2.4} />
+              </span>
+            )}
             {cutting && (
               <span className="absolute inset-0 grid place-items-center bg-black/55">
                 <Loader2 className="w-3.5 h-3.5 spinner text-white" />
@@ -1064,7 +1081,8 @@ function PassageRow({ item, fresh, shown, playing, picked, picking, dragged, dro
                 </span>
               )}
               <span className={`truncate ${playing ? "text-accent" : ""}`}>
-                {liveClock(item.start)} · {(item.end - item.start).toFixed(1)} s
+                {/* Where it is from: the hour in the live, or « imported » (its own name is the line above until its words are known) */}
+                {item.media ? t("media.passage") : liveClock(item.start)} · {(item.end - item.start).toFixed(1)} s
               </span>
             </span>
           </span>

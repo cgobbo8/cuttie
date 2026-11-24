@@ -1,3 +1,4 @@
+import { findMedia, mediaItems, mediaWords } from '#services/media_library'
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { randomBytes, randomUUID } from 'node:crypto'
 import path from 'node:path'
@@ -200,6 +201,11 @@ export async function assistantTool(userId: number, tool: string, args: Record<s
     return { lives: rows }
   }
 
+  // The streamer's media library: videos of their own that any video can take as a passage
+  if (tool === 'media') {
+    return { videos: mediaItems().map((m) => ({ id: m.id, name: m.name, seconds: m.seconds, upright: m.height > m.width, spoken: (mediaWords(m.id)?.length ?? 0) > 0 })) }
+  }
+
   if (tool === 'videos') {
     const jobs = args.job ? [await ownJob(userId, args.job)].filter((job): job is Job => !!job) : await Job.query().where('user_id', userId).where('status', 'DONE').orderBy('created_at', 'desc')
     if (args.job && jobs.length === 0) return { error: 'no such live' }
@@ -244,7 +250,15 @@ export async function assistantTool(userId: number, tool: string, args: Record<s
       source: sourceOf(c),
       seconds: videoSeconds(c),
       ...(c.suggestion && isWaiting(c) ? { idea: { pitch: c.suggestion.pitch, moments: c.suggestion.moments, brief: c.brief ?? '', target: c.target } } : {}),
-      parts: c.sections.map((s) => ({ title: s.title, passages: s.items.map((item) => ({ id: item.id, start: item.start, end: item.end, text: item.text, ...(item.job ? { job: item.job } : {}) })) })),
+      parts: c.sections.map((s) => ({
+        title: s.title,
+        passages: s.items.map((item) =>
+          item.media
+            ? // A video of the streamer's own, not a moment of a live: no hour of a live to give, its name and how long it plays
+              { id: item.id, imported: findMedia(item.media)?.name ?? (item.why || 'imported video'), seconds: Math.round((item.end - item.start) * 10) / 10, text: item.text }
+            : { id: item.id, start: item.start, end: item.end, text: item.text, ...(item.job ? { job: item.job } : {}) }
+        ),
+      })),
       look: {
         universe: c.universe ?? null,
         template: c.template,

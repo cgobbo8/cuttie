@@ -343,7 +343,7 @@ def choose_sound(
 
     `video`: {"title", "parts": [titles], "seconds", "passages": how many, "said": [what is said in some of them, in the video's order],
     "lengths": [how long each of those lasts, seconds]};
-    `musics`: {"key", "name", "kinds", "about"} (the tracks that can be played); `favourites`: the streamer's
+    `musics`: {"key", "name", "kinds", "about", "of_game": it is a sound of the live's game} (the tracks that can be played); `favourites`: the streamer's
     favourite track for a kind of video ({kind: key}); `preferred_intro`: the intro they prefer (a jingle, or "hook" with
     `preferred_look`, the graphics they like it framed with); `asked`: what
     they asked for the video, in their words; `recent_intros`: the intros the AI gave their last videos, the
@@ -385,6 +385,8 @@ def choose_sound(
     tracks = "\n".join(
         f"[{m['key']}] {m.get('name') or m['key']} (for: {', '.join(m.get('kinds') or []) or 'any'}). {' '.join(str(m['about']).split())[:300]}"
         + (f" ★ The streamer's favourite for: {', '.join(liked[m['key']])}." if liked[m["key"]] else "")
+        # (a track of the game's world: its radio, its themes, a song the streamer says has its mood)
+        + (" ♪ A sound of this live's game: a natural choice for this video." if m.get("of_game") else "")
         for m in musics
     )
     parts = [str(p).strip()[:80] for p in (video.get("parts") or []) if str(p).strip()][:12]

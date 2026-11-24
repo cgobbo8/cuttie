@@ -235,6 +235,8 @@ class SoundMusic(BaseModel):
     name: str = ""
     kinds: list[str] = []
     about: str = ""
+    # A sound of the game the video is dressed in (its name says so, or the streamer does)
+    of_game: bool = False
 
 
 class SoundRequest(BaseModel):
@@ -266,6 +268,11 @@ class MusicMomentRequest(BaseModel):
     # One of the streamer's tracks (in <data dir>/musics), and about where its strong moment is (seconds)
     path: str
     at: float
+
+
+class MediaWordsRequest(BaseModel):
+    # A video of the streamer's media library (in <data dir>/media)
+    path: str
 
 
 class TemplateUsageRequest(BaseModel):
@@ -725,6 +732,22 @@ def music_moment(req: MusicMomentRequest) -> dict:
         return music_library.moment(path, req.at)
     except Exception as e:
         raise HTTPException(status_code=422, detail="this track could not be read") from e
+
+
+@app.post("/media/words", dependencies=[Depends(require_secret)])
+def media_words(req: MediaWordsRequest) -> dict:
+    """What is said in a video the streamer imported, word by word (an empty list: nobody speaks in it)."""
+    from app.services import media_library, paths
+
+    folder = os.path.realpath(os.path.join(paths.DATA_DIR, "media"))
+    path = os.path.realpath(req.path)
+    # Only a video of the media library: nothing else on the machine is read
+    if os.path.dirname(path) != folder or not path.endswith(".mp4") or not os.path.isfile(path):
+        raise HTTPException(status_code=400, detail="not a video of the media library")
+    try:
+        return {"words": media_library.words(path)}
+    except Exception as e:
+        raise _ai_errors(e) from e
 
 
 @app.post("/sound", dependencies=[Depends(require_secret)])

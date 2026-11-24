@@ -103,6 +103,13 @@ router
         router.put('/musics/:id', [() => import('#controllers/musics_controller'), 'update'])
         router.delete('/musics/:id', [() => import('#controllers/musics_controller'), 'destroy'])
         router.get('/jobs/:id/loudness', [() => import('#controllers/musics_controller'), 'level'])
+        // The media library: videos of the streamer's own, to use as passages
+        router.get('/media', [() => import('#controllers/media_controller'), 'index'])
+        router.post('/media', [() => import('#controllers/media_controller'), 'store'])
+        router.put('/media/:id', [() => import('#controllers/media_controller'), 'update'])
+        router.delete('/media/:id', [() => import('#controllers/media_controller'), 'destroy'])
+        router.get('/media/:id/file', [() => import('#controllers/media_controller'), 'file'])
+        router.get('/media/:id/thumb', [() => import('#controllers/media_controller'), 'thumb'])
         // What the streamer writes for the AI about themselves and their streams
         router.get('/notes', [() => import('#controllers/notes_controller'), 'index'])
         router.post('/notes', [() => import('#controllers/notes_controller'), 'store'])

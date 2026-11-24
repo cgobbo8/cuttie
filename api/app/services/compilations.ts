@@ -14,6 +14,7 @@ import { copyFileSync, existsSync, readdirSync, rmSync, statSync, linkSync } fro
 import path from 'node:path'
 import { dropClipCaches, readClipMeta } from '#services/clip_extend'
 import { clipDir } from '#services/data_paths'
+import { findMedia, isMediaId } from '#services/media_library'
 import { findMusic } from '#services/musics'
 
 export interface CompilationItem {
@@ -41,6 +42,11 @@ export interface CompilationItem {
   transition?: string
   /** The AI named it as the moment the video can open on, as a teaser of what is coming */
   opening?: boolean
+  /**
+   * A video of the streamer's media library (services/media_library.ts), not a moment of a live:
+   * its times are that video's own seconds, its clip is that video's file. Never with `job`.
+   */
+  media?: string
 }
 
 export interface CompilationSection {
@@ -342,10 +348,14 @@ const text = (value: unknown, max: number) => (typeof value === 'string' ? value
 const hundredth = (s: number) => Math.round(s * 100) / 100
 
 function parseItem(raw: any, liveDuration: number, others?: Map<string, number>): CompilationItem | null {
+  // A video of the media library: its own length bounds it (one that left the library keeps the clip it had)
+  const media = isMediaId(raw?.media) ? (raw.media as string) : undefined
+  if (raw?.media && !media) return null
   // From another live: one of the compilation's, with that live's length
-  const job = isJobId(raw?.job) && others?.has(raw.job) ? (raw.job as string) : undefined
+  const job = !media && isJobId(raw?.job) && others?.has(raw.job) ? (raw.job as string) : undefined
   if (raw?.job && !job) return null
   if (job) liveDuration = others!.get(job) ?? 0
+  if (media) liveDuration = findMedia(media)?.seconds ?? 0
   const start = Number(raw?.start)
   const end = Number(raw?.end)
   if (!isPieceId(raw?.id) || !Number.isFinite(start) || !Number.isFinite(end) || start < 0) return null
@@ -362,6 +372,7 @@ function parseItem(raw: any, liveDuration: number, others?: Map<string, number>)
     ...(parseFit(raw.fit) ? { fit: parseFit(raw.fit)! } : {}),
     ...(Number.isFinite(raw.score) && raw.score >= 0 && raw.score <= 1 ? { score: Math.round(raw.score * 100) / 100 } : {}),
     ...(job ? { job } : {}),
+    ...(media ? { media } : {}),
     // "cut": a plain cut where the rest of the video has a transition
     ...(isTransition(raw.transition) || raw.transition === 'cut' ? { transition: raw.transition } : {}),
     // The AI named it as the moment the video can open on (what a "hook" intro plays unless the streamer chose another)
@@ -599,14 +610,15 @@ export function movedTo(c: Compilation, to: string): Compilation | null {
   const sections = c.sections.map((s) => ({
     ...s,
     items: s.items
-      .filter((item) => item.job)
+      // (a video of the media library is nobody's live: it follows the compilation)
+      .filter((item) => item.job || item.media)
       .map((item) => {
         if (item.job !== to) return item
         const { job: _its, ...own } = item
         return own
       }),
   }))
-  if (!sections.some((s) => s.items.length > 0)) return null
+  if (!sections.some((s) => s.items.some((item) => !item.media))) return null
   const left = lives.filter((id) => id !== to)
   return { ...rest, sections, ...(left.length > 0 ? { lives: left } : {}) }
 }
@@ -650,7 +662,8 @@ export function piecesToRestore(jobId: string, compilations: Compilation[]): { f
   const pieces: { filename: string; start: number; end: number }[] = []
   for (const item of compilations.flatMap((c) => c.sections.flatMap((s) => s.items))) {
     const meta = readClipMeta(jobId, pieceFile(item.id))
-    if (meta) pieces.push({ filename: pieceFile(item.id), start: meta.vod_start, end: meta.vod_end })
+    // (a video of the media library is not in the live: its clip comes back from the library when the passage is next used)
+    if (meta && !meta.media) pieces.push({ filename: pieceFile(item.id), start: meta.vod_start, end: meta.vod_end })
   }
   return pieces
 }

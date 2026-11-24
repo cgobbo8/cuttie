@@ -9,7 +9,7 @@ import type { MusicTrack } from "./music/mix";
 import { introOf, montageIntro, montageMusic, type SoundPiece } from "./music/sound";
 import { clipTemplateContext } from "./templateContext";
 import { buildAny, defaultTemplateKey, findCustom, hookOf, isBuiltIn, type TemplateKey } from "./templateKeys";
-import { isHookStyle, titleCard, type TemplateSpec } from "./templateSpec";
+import { isChatChoice, isHookStyle, titleCard, type TemplateSpec } from "./templateSpec";
 
 /**
  * A video as Remotion plays it, built from its passages and its look: what the montage shows
@@ -75,6 +75,8 @@ export function buildVideo({ jobId, kit, channel, customs, game, musics, t }: Bu
     const keys = items.map((item) => (item.template && (isBuiltIn(item.template) || findCustom(item.template, customs)) ? item.template : templateKey));
     // How the video writes its titles, when it says so (else each template writes them its own way)
     const written = isHookStyle(all.titleStyle) ? all.titleStyle : null;
+    // Whether it shows the Twitch chat on every passage or on none, when it says so (else as each template does)
+    const chat = isChatChoice(all.chat) ? all.chat : null;
     for (const item of items) {
       const piece = states[item.id];
       const env = piece && known[pieceVersion(piece)];
@@ -111,7 +113,7 @@ export function buildVideo({ jobId, kit, channel, customs, game, musics, t }: Bu
     }
     const montage = buildMontage(
       cuts,
-      (c, index) => buildAny(index >= 0 ? keys[index] : templateKey, c, customs, written),
+      (c, index) => buildAny(index >= 0 ? keys[index] : templateKey, c, customs, written, chat),
       FPS,
       (total) =>
         source.titles
@@ -141,7 +143,7 @@ export function buildVideo({ jobId, kit, channel, customs, game, musics, t }: Bu
       // Cut out of a longer passage by the app: it starts on a word, not inside one
       const start = moment.auto && raw > floor + 0.05 ? hookStart(ctx.words, raw, floor) : raw;
       const end = moment.end - piece.file_start;
-      const [segment] = buildMontage([{ ctx, start, end }], (c) => buildAny(keys[hookAt], c, customs, written), FPS).segments;
+      const [segment] = buildMontage([{ ctx, start, end }], (c) => buildAny(keys[hookAt], c, customs, written, chat), FPS).segments;
       const top = Math.max(0, ...segment.layers.map((p) => p.z)) + 1;
       // (there on the very first picture, the video's cover, and until the cut to the video: no entrance, no exit of its own)
       const cover = titleCard(ctx, hookOf(keys[hookAt], ctx, customs, written), all.intro?.title?.trim() || all.name, 0, segment.from + segment.duration + 1, "hook");

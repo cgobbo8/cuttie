@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { TemplateContext } from "./templates";
-import { buildFromSpec, dragBox, fitPlate } from "./templateSpec";
+import { buildFromSpec, chatOf, chatPlace, dragBox, fitPlate, withChat } from "./templateSpec";
 import { buildTemplate, builtInSpec, specFromLayout, upgradeTemplate } from "./builtinTemplates";
 
 const ctx: TemplateContext = {
@@ -510,5 +510,44 @@ describe("a title on the GTA plate", () => {
     expect(text.text!.fontSize).toBe(fitted.size);
     expect(plate.transform.height).toBe(fitted.height);
     expect(text.transform.height).toBe(fitted.height - 28);
+  });
+});
+
+describe("the chat a video asks for on every passage", () => {
+  const hits = (a: { x: number; y: number; w: number; h: number }, b: { x: number; y: number; w: number; h: number }) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+
+  it("is found a place that covers nothing read, in every layout, between what the platforms cover", () => {
+    for (const id of ["empile", "signature", "discussion", "plein", "accroche", "sanscam", "gta"] as const) {
+      for (const hasCam of [true, false]) {
+        const spec = builtInSpec(id, { hasCam });
+        const chat = chatPlace(spec);
+        expect(chat.visible, id).toBe(true);
+        expect(hits(chat.box, spec.subtitles.box), `${id} subtitles`).toBe(false);
+        expect(spec.hook.visible && hits(chat.box, spec.hook.box), `${id} title`).toBe(false);
+        expect(chat.box.y, id).toBeGreaterThanOrEqual(200);
+        expect(chat.box.y + chat.box.h, id).toBeLessThanOrEqual(1440);
+        expect(chat.box.x + chat.box.w, id).toBeLessThanOrEqual(930);
+        expect([2, 3]).toContain(chat.max);
+      }
+    }
+    // Stacked (the webcam over the game): low on the game, three messages
+    expect(chatPlace(builtInSpec("gta", { hasCam: true }))).toMatchObject({ box: { x: 60, y: 1210, w: 720, h: 230 }, max: 3 });
+    // The game alone with its subtitles low: above them, and above where the follow button comes at the end
+    expect(chatPlace(builtInSpec("sanscam", { hasCam: false })).box).toEqual({ x: 60, y: 530, w: 720, h: 230 });
+  });
+
+  it("shows it where the template had none, leaves a template that shows it alone, and takes it off when asked", () => {
+    const plain = builtInSpec("empile", { hasCam: true });
+    expect(chatOf(plain).visible).toBe(false);
+    expect(withChat(plain, null)).toBe(plain);
+    const shown = withChat(plain, "on");
+    expect(chatOf(shown)).toEqual(chatPlace(plain));
+    expect(buildFromSpec(shown, { ...ctx, chat: [{ author: "viewer", text: "un tigre ???", timestamp: 2 }] }).filter((l) => l.type === "chat")).toHaveLength(1);
+    // « Discussion » has its own place for it: kept as it is
+    const talk = builtInSpec("discussion", { hasCam: true });
+    expect(withChat(talk, "on")).toBe(talk);
+    expect(chatOf(withChat(talk, "off")).visible).toBe(false);
+    expect(buildFromSpec(withChat(talk, "off"), ctx).some((l) => l.type === "chat")).toBe(false);
+    expect(withChat(plain, "off")).toBe(plain);
   });
 });

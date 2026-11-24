@@ -204,6 +204,52 @@ export const DEFAULT_CHAT: ChatSpec = { visible: false, box: { x: 60, y: 1150, w
 
 export const chatOf = (spec: TemplateSpec): ChatSpec => spec.chat ?? { ...DEFAULT_CHAT, box: { ...DEFAULT_CHAT.box } };
 
+/** What a video says of the Twitch chat: on every passage, on none (nothing said: as each template does) */
+export type ChatChoice = "on" | "off";
+export const CHAT_CHOICES: ChatChoice[] = ["on", "off"];
+export const isChatChoice = (value: unknown): value is ChatChoice => CHAT_CHOICES.includes(value as ChatChoice);
+
+/**
+ * Where the chat goes in a template that has none, so that it covers nothing that is read: a
+ * column of bubbles on the left, as low as it can sit between what the platforms cover (above
+ * y 200, below y 1440) without lying on the subtitles, the title, the webcam or a widget. Three
+ * messages where there is room for them, two in a narrower gap; where nothing is free, the place
+ * that costs least (a widget before the webcam, the webcam before the title, never the subtitles
+ * when it can be helped).
+ */
+export function chatPlace(spec: TemplateSpec): ChatSpec {
+  const hits = (a: Box, b: Box) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+  const inside = (a: Box, b: Box) => a.x >= b.x && a.y >= b.y && a.x + a.w <= b.x + b.w && a.y + a.h <= b.y + b.h;
+  const cost = (box: Box) =>
+    (hits(box, spec.subtitles.box) ? 1000 : 0) +
+    (spec.hook.visible && hits(box, spec.hook.box) ? 600 : 0) +
+    // (a webcam that fills the frame has the game laid over it: the chat can go on that game)
+    (spec.cam.visible && hits(box, spec.cam.box) && !inside(box, spec.game.box) ? 500 : 0) +
+    spec.widgets.reduce((sum, w) => sum + (w.box.h < 400 && hits(box, w.box) ? (w.kind === "follow-button" ? 80 : 200) : 0), 0);
+  let best: { box: Box; max: number; cost: number } | null = null;
+  // The taller column first; of two places that cost the same, the lower one
+  for (const [h, max] of [[230, 3], [160, 2]] as const) {
+    for (let y = 1440 - h; y >= 200; y -= 10) {
+      const box = { x: 60, y, w: 720, h };
+      const price = cost(box);
+      if (!best || price < best.cost) best = { box, max, cost: price };
+      if (price === 0) break;
+    }
+    if (best?.cost === 0) break;
+  }
+  return { visible: true, box: best!.box, size: DEFAULT_CHAT.size, max: best!.max };
+}
+
+/**
+ * A template as a video wants its chat: shown on every passage (where the template shows it,
+ * else at a place found for it), or on none. Nothing said: the template as it is.
+ */
+export function withChat<T extends TemplateSpec>(spec: T, choice: ChatChoice | null | undefined): T {
+  if (choice === "off") return chatOf(spec).visible ? { ...spec, chat: { ...chatOf(spec), visible: false } } : spec;
+  if (choice !== "on" || chatOf(spec).visible) return spec;
+  return { ...spec, chat: chatPlace(spec) };
+}
+
 /** Seconds a chat message stays */
 const CHAT_SECONDS = 5;
 

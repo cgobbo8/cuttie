@@ -1954,7 +1954,16 @@
     "shortenHint": "Brings the video down to that length: its long passages get shorter, then the weakest go.",
     "shortened": "Video brought down to {{length}}",
     "shortenedRemoved_one": "Video brought down to {{length}}: {{count}} passage taken out",
-    "shortenedRemoved_other": "Video brought down to {{length}}: {{count}} passages taken out"
+    "shortenedRemoved_other": "Video brought down to {{length}}: {{count}} passages taken out",
+    "chat": {
+      "label": "Chat",
+      "auto": "Template",
+      "on": "Shown",
+      "off": "Hidden",
+      "autoHint": "As each template does: only some show the chat",
+      "onHint": "The chat's messages are written over every passage of the live",
+      "offHint": "No chat message in the video"
+    }
   },
   "compilations": {
     "title": "Compilations",

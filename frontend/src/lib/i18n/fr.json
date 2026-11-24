@@ -1954,7 +1954,16 @@
     "shortenHint": "Ramène la vidéo à cette durée : ses longs passages raccourcissent, puis les moins forts sortent.",
     "shortened": "Vidéo ramenée à {{length}}",
     "shortenedRemoved_one": "Vidéo ramenée à {{length}} : {{count}} passage retiré",
-    "shortenedRemoved_other": "Vidéo ramenée à {{length}} : {{count}} passages retirés"
+    "shortenedRemoved_other": "Vidéo ramenée à {{length}} : {{count}} passages retirés",
+    "chat": {
+      "label": "Chat",
+      "auto": "Modèle",
+      "on": "Affiché",
+      "off": "Masqué",
+      "autoHint": "Comme chaque modèle le fait : seuls certains affichent le chat",
+      "onHint": "Les messages du chat s'écrivent sur chaque passage du live",
+      "offHint": "Aucun message du chat dans la vidéo"
+    }
   },
   "compilations": {
     "title": "Compilations",

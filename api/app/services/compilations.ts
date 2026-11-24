@@ -95,6 +95,8 @@ export interface Compilation {
   titleStyle?: string
   /** How much its picture moves on what is said: "light" or "strong" (absent: it plays plain) */
   effects?: string
+  /** The Twitch chat written over its passages: "on" (every passage) or "off" (none); absent: as each template does */
+  chat?: string
   /**
    * What the video is made from. All three are the same thing after that (passages, a dressing, an
    * export): a clip is one moment, a sequence a stretch of the live in a row, a compilation passages
@@ -127,6 +129,8 @@ export const sourceOf = (c: Pick<Compilation, 'source' | 'suggestion'>): VideoSo
 export const EFFECT_LEVELS = ['light', 'strong']
 /** The ways a title can be written (frontend/src/lib/templateSpec.ts: HOOK_STYLES) */
 export const TITLE_STYLES = ['outline', 'box', 'brand', 'vice', 'viceplate']
+/** What a video says of the Twitch chat over its passages (frontend/src/lib/templateSpec.ts: CHAT_CHOICES); absent: as each template does */
+export const CHAT_CHOICES = ['on', 'off']
 export const isUniverse = (value: unknown): value is string => typeof value === 'string' && Object.hasOwn(UNIVERSES, value)
 /** The universe of a live's game (undefined: none) */
 export const universeFor = (game: string | null | undefined): string | undefined => Object.keys(UNIVERSES).find((id) => UNIVERSES[id].plays.test(game ?? ''))
@@ -429,6 +433,7 @@ export function parseCompilation(raw: any, liveDuration: number, others?: Map<st
     ...(isUniverse(raw.universe) ? { universe: raw.universe } : {}),
     ...(TITLE_STYLES.includes(raw.titleStyle) ? { titleStyle: raw.titleStyle } : {}),
     ...(EFFECT_LEVELS.includes(raw.effects) ? { effects: raw.effects } : {}),
+    ...(CHAT_CHOICES.includes(raw.chat) ? { chat: raw.chat } : {}),
     ...(isVideoSource(raw.source) && raw.source !== 'compilation' ? { source: raw.source } : {}),
     ...(typeof raw.clip === 'string' && /^[\w.-]{1,120}\.mp4$/.test(raw.clip) ? { clip: raw.clip } : {}),
     ...(raw.passed === true ? { passed: true } : {}),

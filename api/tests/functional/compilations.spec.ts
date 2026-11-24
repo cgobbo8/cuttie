@@ -280,6 +280,11 @@ test.group('Compilations', (group) => {
     assert.notProperty(await save({ effects: undefined }), 'effects')
     assert.notProperty(await save({ effects: 'wild' }), 'effects')
     assert.equal((await save({ effects: 'light' })).effects, 'light')
+    // The chat over its passages: shown on all, on none, or (nothing said) as each template does
+    assert.equal((await save({ chat: 'on' })).chat, 'on')
+    assert.equal((await save({ chat: 'off' })).chat, 'off')
+    assert.notProperty(await save({ chat: 'sometimes' }), 'chat')
+    assert.notProperty(await save({}), 'chat')
   })
 
   test('a video says what it is made from: a clip, a sequence or a compilation', async ({ client, assert }) => {

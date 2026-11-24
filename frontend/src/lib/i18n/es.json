@@ -1954,7 +1954,16 @@
     "shortenHint": "Reduce el vídeo a esa duración: los pasajes largos se acortan y luego salen los más flojos.",
     "shortened": "Vídeo reducido a {{length}}",
     "shortenedRemoved_one": "Vídeo reducido a {{length}}: {{count}} pasaje quitado",
-    "shortenedRemoved_other": "Vídeo reducido a {{length}}: {{count}} pasajes quitados"
+    "shortenedRemoved_other": "Vídeo reducido a {{length}}: {{count}} pasajes quitados",
+    "chat": {
+      "label": "Chat",
+      "auto": "Modelo",
+      "on": "Visible",
+      "off": "Oculto",
+      "autoHint": "Como hace cada modelo: solo algunos muestran el chat",
+      "onHint": "Los mensajes del chat se escriben sobre cada pasaje del directo",
+      "offHint": "Ningún mensaje del chat en el vídeo"
+    }
   },
   "compilations": {
     "title": "Compilaciones",

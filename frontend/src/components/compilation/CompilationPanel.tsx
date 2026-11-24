@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from "react";
 import { useTranslation } from "react-i18next";
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Blend, Check, ScanFace, ChevronDown, ChevronRight, Clapperboard, Eye, EyeOff, Film, FolderInput, Layers, Loader2, Music2, Palette, Pause, Play, Plus, Search, Sparkles, Trash2, Type, X, Zap, LayoutTemplate, type LucideIcon } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Blend, Check, ScanFace, ChevronDown, ChevronRight, Clapperboard, Eye, EyeOff, Film, FolderInput, Layers, Loader2, MessagesSquare, Music2, Palette, Pause, Play, Plus, Search, Sparkles, Trash2, Type, X, Zap, LayoutTemplate, type LucideIcon } from "lucide-react";
 import { mediaThumbUrl, type Compilation, type CompilationItem, type CompilationSection, type TwitchStoryboard } from "../../lib/api";
 import {
   PLAIN_CUT,
@@ -33,7 +33,7 @@ import type { MusicTrack } from "../../lib/music/mix";
 import IntroPicker, { type HookMenu, type IntroBrand } from "./IntroPicker";
 import MusicPicker, { useListen } from "./MusicPicker";
 import { dressAs, UNIVERSES, universeOf } from "../../lib/universes";
-import { HOOK_STYLES, isHookStyle, type HookStyle } from "../../lib/templateSpec";
+import { CHAT_CHOICES, HOOK_STYLES, isChatChoice, isHookStyle, type HookStyle } from "../../lib/templateSpec";
 import { EFFECT_LEVELS, isEffectLevel } from "../../lib/effects";
 import type { VideoSource } from "../../lib/videoSources";
 import TransitionPicker from "./TransitionPicker";
@@ -309,6 +309,7 @@ export default function CompilationPanel({
   const single = source === "clip";
   const titleStyle = isHookStyle(compilation.titleStyle) ? compilation.titleStyle : null;
   const effects = isEffectLevel(compilation.effects) ? compilation.effects : null;
+  const chat = isChatChoice(compilation.chat) ? compilation.chat : null;
   // The intro is part of the video: it counts in its length
   const opening = openingSeconds(compilation, trackOf(musics, compilation.music?.track)?.bpm);
   const total = compilationLength(compilation) + opening;
@@ -786,6 +787,25 @@ export default function CompilationPanel({
               <LookRow icon={Palette} label={t("compilation.titleStyle.label")} value={titleStyle ? t(TITLE_STYLE_NAMES[titleStyle]) : t("compilation.titleStyle.template")} onOpen={() => setMenu("titles")}>
                 <TitleSample style={titleStyle} small />
                 <span className="truncate">{titleStyle ? t(TITLE_STYLE_NAMES[titleStyle]) : t("compilation.titleStyle.template")}</span>
+              </LookRow>
+              {/* The Twitch chat written over the passages: as each template does (only some show it), on every passage, on none */}
+              <LookRow icon={MessagesSquare} label={t("compilation.chat.label")}>
+                <span role="group" aria-label={t("compilation.chat.label")} className="seg">
+                  {[null, ...CHAT_CHOICES].map((choice) => (
+                    <button
+                      key={choice ?? "auto"}
+                      type="button"
+                      aria-pressed={chat === choice}
+                      title={t(`compilation.chat.${choice ?? "auto"}Hint`)}
+                      onClick={() => {
+                        const { chat: _before, ...rest } = compilation;
+                        onChange(choice ? { ...rest, chat: choice } : rest);
+                      }}
+                    >
+                      {t(`compilation.chat.${choice ?? "auto"}`)}
+                    </button>
+                  ))}
+                </span>
               </LookRow>
             </LookGroup>
 

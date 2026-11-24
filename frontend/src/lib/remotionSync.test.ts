@@ -5,7 +5,7 @@ import { INTRO_IDS, INTRO_SOUND_IDS, introSpan, JINGLE_IDS } from "./intro/intro
 import { MUSIC_KINDS } from "./music/mix";
 import { TRANSITION_IDS } from "./transitions";
 import { UNIVERSES } from "./universes";
-import { HOOK_STYLES } from "./templateSpec";
+import { CHAT_CHOICES, HOOK_STYLES } from "./templateSpec";
 import { EFFECT_LEVELS } from "./effects";
 
 /** The server renderer must draw exactly what the editor shows (scripts/sync-remotion.mjs) */
@@ -80,6 +80,7 @@ describe("editor and server renderer stay in sync", () => {
     const service = readFileSync(path.join(root, "api/app/services/compilations.ts"), "utf8");
     const kit = readFileSync(path.join(root, "api/app/services/brand_kit.ts"), "utf8");
     expect(service.match(/export const TITLE_STYLES = \[([^\]]+)\]/)?.[1].match(/\w+/g)).toEqual(HOOK_STYLES);
+    expect(service.match(/export const CHAT_CHOICES = \[([^\]]+)\]/)?.[1].match(/\w+/g)).toEqual(CHAT_CHOICES);
     // (and a template of the streamer's can be saved with each of them)
     for (const style of HOOK_STYLES) expect(kit, style).toContain(`'${style}'`);
   });

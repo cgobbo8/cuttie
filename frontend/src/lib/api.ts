@@ -1814,6 +1814,8 @@ export interface Compilation {
   lives?: string[];
   /** How much its picture moves on what is said: "light" or "strong" (see lib/effects.ts; absent: it plays plain) */
   effects?: string;
+  /** The Twitch chat written over its passages: "on" (every passage), "off" (none); absent: as each template does */
+  chat?: string;
   /** What it is made from: a clip, a sequence or a compilation (see lib/videoSources.ts; absent: a compilation) */
   source?: string;
   /** The clip of the analysis it was opened from (a clip video only) */

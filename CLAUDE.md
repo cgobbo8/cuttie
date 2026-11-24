@@ -607,6 +607,17 @@ Demande de Corentin (23/11/2026) : pouvoir cacher le titre d'une partie « pour 
 - Vérifié (23/11/2026, instance jetable, compilation de 3 parties sur un clip synthétique, live « Grand Theft Auto VI ») : créée habillée GTA avec `titleStyle: "viceplate"` ; export réel de 41,9 s à -14,7 LUFS : « le plan » et « la fuite » sur l'encadré GTA à 2,2 s et 27,95 s, rien au début de la partie dont le titre est caché ; « Ta couleur » choisi dans le menu : le titre passe sur un bandeau à la couleur de la chaîne dans l'aperçu ; « Ouvrir dans l'éditeur » : deux titres sur trois dans les calques, dans ce style.
 - Limites : pas de style par partie (un seul pour la vidéo) ; l'encadré prend la boîte que le modèle donne à son titre, haute dans certains modèles (pas regardé modèle par modèle) ; un clip classique (Monter) écrit toujours son accroche comme son modèle.
 
+## Chat dans une vidéo
+
+Question de Corentin (24/11/2026) : « il n'y a rien sur le chat dans le nouvel onglet habillage. On voit plus le chat maintenant, si ? ». Le chat n'était écrit que par le modèle « Discussion RP » (et les modèles perso qui ont un bloc chat) ; rien ne permettait de l'avoir ailleurs.
+
+- **Réglage** (`compilation.chat`, ligne « Chat » de l'habillage, groupe Texte) : « Modèle » (absent : comme chaque modèle le fait), « Affiché » (`"on"` : sur chaque passage), « Masqué » (`"off"` : sur aucun). L'API tient la même liste (`compilations.CHAT_CHOICES`, égale à `templateSpec.CHAT_CHOICES` par un test). `buildAny(key, ctx, customs, titles, chat)` l'applique à chaque passage (`templateSpec.withChat`).
+- **Où il se pose** dans un modèle qui n'en avait pas (`templateSpec.chatPlace`) : une colonne de bulles à gauche (x 60 à 780), le plus bas possible entre ce que les plateformes couvrent (y 200 à 1440), sans toucher les sous-titres, le titre, la cam ni un widget ; trois messages là où il y a la place (230 px), deux dans un intervalle plus étroit (160 px) ; sinon l'endroit qui coûte le moins. Empilé et GTA : en bas du jeu (y 1210) ; jeu seul : au-dessus des sous-titres. Un modèle qui a déjà son chat le garde où il est.
+- Un passage fait d'une vidéo importée n'a pas de chat (rien n'a été écrit pendant qu'elle jouait).
+- Vérifié à l'écran et sur un export réel (instance de test, habillage GTA) : la bulle « viewer_un un tigre ??? » en bas à gauche du jeu, au bon moment.
+- Limites : regardé sur l'habillage GTA seulement (les autres places ne sont couvertes que par le test : aucune ne touche sous-titres ni titre) ; pas de réglage de taille ni de place hors de l'éditeur de modèles ; l'assistant ne sait pas encore le régler (`set_look`) ; pas repris dans l'éditeur à calques.
+
+
 ## Intro calée sur la musique
 
 Demande de Corentin : « la synergie entre la musique et l'intro, c'est super important ».
@@ -721,7 +732,7 @@ L'editeur a calques (`RemotionEditor`) travaille sur un clip : une video, une ho
 | `/api/jobs/{id}/sound`                | POST    | Token    | L'IA dit le type de la video, choisit sa musique, son intro (ou aucune) et sa transition en partant des favorites de la DA, et nomme le passage sur lequel elle pourrait s'ouvrir (`teaser`) ; rien n'est enregistre |
 | `/api/jobs/{id}/looks`                | POST    | Token    | L'IA regarde les passages decoupes et choisit le modele de chacun (409 : rien de decoupe) |
 | `/api/jobs/{id}/compilations`         | GET/POST | Token   | Compilations du live             |
-| `/api/jobs/{id}/compilations/{compId}` | PUT/DELETE | Token | Enregistrer / supprimer une compilation (`sections[].hidden` : titre de la partie pas écrit dans la vidéo ; `titleStyle` : comment elle écrit ses titres ; `universe` : le look d'un jeu) |
+| `/api/jobs/{id}/compilations/{compId}` | PUT/DELETE | Token | Enregistrer / supprimer une compilation (`sections[].hidden` : titre de la partie pas écrit dans la vidéo ; `titleStyle` : comment elle écrit ses titres ; `universe` : le look d'un jeu ; `chat` : le chat écrit sur tous les passages, sur aucun, ou comme chaque modèle) |
 | `/api/jobs/{id}/compilations/from-clip`  | POST    | Token    | Un clip de l'analyse ouvert comme une video (`{ clip }`) : un passage, son titre, le meme habillage ; rouvert, la meme video |
 | `/api/jobs/{id}/compilations/{compId}/duplicate` | POST | Token | Copie d'une compilation, avec ses propres clips (fichiers copies) |
 | `/api/jobs/{id}/compilations/{compId}/flatten` | POST | Token | La compilation collee en un seul clip pour l'editeur a calques (409 : un passage n'est pas decoupe) |

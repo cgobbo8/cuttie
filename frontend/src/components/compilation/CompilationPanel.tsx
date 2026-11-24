@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Blend, Check, ScanFace, ChevronDown, ChevronRight, Clapperboard, Eye, EyeOff, Film, FolderInput, FolderPlus, Layers, Loader2, MessagesSquare, MonitorPlay, Music2, Palette, Pause, Play, Plus, Sparkles, TextSearch, Trash2, Type, X, Zap, LayoutTemplate, type LucideIcon } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Blend, Check, ScanFace, ChevronDown, ChevronRight, Clapperboard, Eye, EyeOff, Film, FolderInput, FolderPlus, Layers, Loader2, MessagesSquare, MonitorPlay, Music2, Radio, Palette, Pause, Play, Plus, Sparkles, TextSearch, Trash2, Type, X, Zap, LayoutTemplate, type LucideIcon } from "lucide-react";
 import { mediaThumbUrl, type Compilation, type CompilationItem, type CompilationSection, type TwitchStoryboard } from "../../lib/api";
 import {
   PLAIN_CUT,
@@ -78,6 +78,8 @@ interface Props {
   onImport?: () => void;
   /** The live gone through by hand, to pick a stretch of it as a passage */
   onBrowse?: () => void;
+  /** One more live for the video to take passages from (absent: none can be added) */
+  onOtherLive?: () => void;
   /** The passages picked in the whole montage (the timeline shows and changes the same ones); without it, the list keeps its own */
   selection?: Picked;
   /** What the look panel sets: the whole video's look, or what belongs to the passage open (or picked) alone */
@@ -225,6 +227,7 @@ export default function CompilationPanel({
   onSearch,
   onImport,
   onBrowse,
+  onOtherLive,
   selection,
   scope,
   onScope,
@@ -335,6 +338,7 @@ export default function CompilationPanel({
     ...(onAskAi ? [{ id: "ai", icon: "assistant" as const, name: t("compilation.addWay.ai"), hint: t("compilation.addWay.aiHint"), from: "live" as const, run: onAskAi }] : []),
     ...(onSearch ? [{ id: "words", icon: TextSearch, name: t("compilation.addWay.words"), hint: t("compilation.addWay.wordsHint"), from: "live" as const, run: onSearch }] : []),
     ...(onBrowse ? [{ id: "browse", icon: MonitorPlay, name: t("compilation.addWay.browse"), hint: t("compilation.addWay.browseHint"), from: "live" as const, run: onBrowse }] : []),
+    ...(onOtherLive ? [{ id: "live", icon: Radio, name: t("compilation.addWay.live"), hint: t("compilation.addWay.liveHint"), from: "other" as const, run: onOtherLive }] : []),
     ...(onImport ? [{ id: "import", icon: Film, name: t("compilation.addWay.import"), hint: t("compilation.addWay.importHint"), from: "own" as const, run: onImport }] : []),
   ];
   const titleStyle = isHookStyle(compilation.titleStyle) ? compilation.titleStyle : null;
@@ -1247,8 +1251,8 @@ interface AddWay {
   icon: LucideIcon | "assistant";
   name: string;
   hint: string;
-  /** Where it takes them: in the live, or among the streamer's own videos */
-  from: "live" | "own";
+  /** Where it takes them: in the live (or the lives) of the video, in another live, or among the streamer's own videos */
+  from: "live" | "other" | "own";
   run: () => void;
 }
 
@@ -1299,7 +1303,7 @@ function AddMenu({ ways, into, lives, anchor, onClose }: { ways: AddWay[]; into:
     const at = rows.indexOf(document.activeElement as HTMLButtonElement);
     rows[(at + (e.key === "ArrowDown" ? 1 : -1) + rows.length) % rows.length]?.focus();
   };
-  const groups = (["live", "own"] as const).map((from) => ({ from, ways: ways.filter((way) => way.from === from) })).filter((group) => group.ways.length > 0);
+  const groups = (["live", "other", "own"] as const).map((from) => ({ from, ways: ways.filter((way) => way.from === from) })).filter((group) => group.ways.length > 0);
   return createPortal(
     <div
       ref={box}

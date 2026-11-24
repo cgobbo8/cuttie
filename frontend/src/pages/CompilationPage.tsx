@@ -1316,7 +1316,7 @@ export default function CompilationPage() {
       next = made.compilation;
       section = next.sections.find((one) => one.id === made.id)!;
     }
-    // A passage of another live: the video takes from that live too (a compilation only, a few lives at most)
+    // A passage of another live: the video takes from that live too (a few lives at most)
     const lives = [...(next.lives ?? [])];
     const refused: string[] = [];
     const items: CompilationItem[] = [];
@@ -1324,7 +1324,7 @@ export default function CompilationPage() {
       if (!passage || !Number.isFinite(passage.start) || !Number.isFinite(passage.end) || passage.end <= passage.start) continue;
       const other = passage.job && passage.job !== jobId ? passage.job : undefined;
       if (other && !lives.includes(other)) {
-        if (sourceOf(next) !== "compilation" || lives.length >= MAX_OTHER_LIVES || !liveInfo(other)) {
+        if (lives.length >= MAX_OTHER_LIVES || !liveInfo(other)) {
           refused.push(`${passage.start}: a passage of another live can't go into this video`);
           continue;
         }
@@ -1718,7 +1718,7 @@ export default function CompilationPage() {
     return when ? plainDate(when, i18n.language) : "";
   };
   // Another live to take passages from: one already analysed, or one of the channel's that can be analysed from the picker
-  const canAddLive = source === "compilation" && liveIds.length <= MAX_OTHER_LIVES && (library.some((live) => !liveIds.includes(live.job_id)) || (channel?.vods ?? []).some((vod) => !vod.recording && vod.job?.status !== "DONE"));
+  const canAddLive = liveIds.length <= MAX_OTHER_LIVES && (library.some((live) => !liveIds.includes(live.job_id)) || (channel?.vods ?? []).some((vod) => !vod.recording && vod.job?.status !== "DONE"));
   const addLive = (id: string) => {
     setAddingLive(false);
     const there = liveIds.includes(id);
@@ -1788,6 +1788,17 @@ export default function CompilationPage() {
       setSearching(false);
       setSide("passages");
     },
+    // One more live, asked for from the menu itself: once picked, it is the one gone through
+    onOtherLive: canAddLive
+      ? () =>
+          askLive().then((picked) => {
+            if (!picked) return;
+            playerRef.current?.pause();
+            setHush((n) => n + 1);
+            browseTail.current = null;
+            setBrowsing({ job: picked, at: null, near: null });
+          })
+      : undefined,
     // The live gone through by hand, nothing else playing: it opens on the passage open underneath, else where the
     // live was left the last time, else on the passage the video is on
     onBrowse: () => {

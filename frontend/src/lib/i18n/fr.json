@@ -1981,7 +1981,8 @@
     "addFrom": {
       "live": "Dans le live",
       "own": "Dans tes fichiers",
-      "lives": "Dans tes {{n}} lives"
+      "lives": "Dans tes {{n}} lives",
+      "other": "Dans un autre live"
     },
     "addInto": "Ils iront dans « {{part}} »",
     "addWay": {
@@ -1992,7 +1993,9 @@
       "browse": "Parcourir le live",
       "browseHint": "Va à une heure, prends le passage toi-même",
       "import": "Importer une vidéo",
-      "importHint": "Un fichier, ou ta médiathèque"
+      "importHint": "Un fichier, ou ta médiathèque",
+      "live": "Ajouter un live",
+      "liveHint": "Pour y chercher et le parcourir aussi"
     },
     "handPicked": "Passage choisi à la main"
   },

@@ -1981,7 +1981,8 @@
     "addFrom": {
       "live": "Del directo",
       "own": "De tus archivos",
-      "lives": "De tus {{n}} directos"
+      "lives": "De tus {{n}} directos",
+      "other": "De otro directo"
     },
     "addInto": "Irán a «{{part}}»",
     "addWay": {
@@ -1992,7 +1993,9 @@
       "browse": "Recorrer el directo",
       "browseHint": "Ve a una hora y toma el pasaje a mano",
       "import": "Importar un vídeo",
-      "importHint": "Un archivo o tu mediateca"
+      "importHint": "Un archivo o tu mediateca",
+      "live": "Añadir un directo",
+      "liveHint": "Para buscar en él y recorrerlo también"
     },
     "handPicked": "Pasaje elegido a mano"
   },

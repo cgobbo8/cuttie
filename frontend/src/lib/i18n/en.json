@@ -1981,7 +1981,8 @@
     "addFrom": {
       "live": "From the live",
       "own": "From your files",
-      "lives": "From your {{n}} lives"
+      "lives": "From your {{n}} lives",
+      "other": "From another live"
     },
     "addInto": "They go into “{{part}}”",
     "addWay": {
@@ -1992,7 +1993,9 @@
       "browse": "Browse the live",
       "browseHint": "Go to a time, take the passage yourself",
       "import": "Import a video",
-      "importHint": "A file, or your media library"
+      "importHint": "A file, or your media library",
+      "live": "Add a live",
+      "liveHint": "To search it and browse it too"
     },
     "handPicked": "Passage picked by hand"
   },

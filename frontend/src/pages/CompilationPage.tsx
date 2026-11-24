@@ -1470,7 +1470,14 @@ export default function CompilationPage() {
       </div>
     );
   }
-  const rail = <VideoRail jobId={jobId} entries={entries} videos={compilations} current={compilation} onOpenVideo={openVideo} onOpenClip={openClip} onAdd={(kind) => startNew(kind)} opening={openingClip} exported={exported} />;
+  // What the AI is building right now: behind the pages (an idea kept from the live's page), or here (asked of the assistant)
+  const buildingNow = new Map<string, string>();
+  for (const build of builds) {
+    if (build.job !== jobId || build.state === "done" || build.state === "failed") continue;
+    buildingNow.set(build.id, build.state === "cutting" ? t("live.buildCutting") : build.state === "waiting" ? t("live.buildWaiting") : stepText(t, build.step));
+  }
+  if (working) buildingNow.set(working.id, working.lines[working.lines.length - 1] ?? "");
+  const rail = <VideoRail jobId={jobId} entries={entries} videos={compilations} current={compilation} onOpenVideo={openVideo} onOpenClip={openClip} onAdd={(kind) => startNew(kind)} opening={openingClip} exported={exported} building={buildingNow} />;
   // Nothing kept from this live yet: there is nothing to edit
   if (!compilation) {
     return (

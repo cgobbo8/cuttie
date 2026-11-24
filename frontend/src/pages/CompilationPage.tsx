@@ -118,7 +118,7 @@ import TemplateSketch from "../components/montage/TemplateSketch";
 import VideoTimeline from "../components/montage/VideoTimeline";
 import AiCutButton from "../components/project/AiCutButton";
 import LivePicker from "../components/compilation/LivePicker";
-import CompilationPanel from "../components/compilation/CompilationPanel";
+import CompilationPanel, { type LookScope } from "../components/compilation/CompilationPanel";
 import DescribeVideo from "../components/compilation/DescribeVideo";
 import PiecePreview from "../components/compilation/PiecePreview";
 import SearchPanel from "../components/compilation/SearchPanel";
@@ -186,6 +186,8 @@ export default function CompilationPage() {
   const [searching, setSearching] = useState(false);
   // The media library takes the place of the passages while a video of the streamer's own is picked there
   const [importing, setImporting] = useState(false);
+  // What the look panel sets: the whole video's look, or what belongs to the passage open (or picked) alone
+  const [lookScope, setLookScope] = useState<LookScope>("video");
   const { media: ownVideos } = useMedia();
   // On a window too narrow for the three panels: the one shown beside the video
   const [side, setSide] = useState<"passages" | "look">("passages");
@@ -1730,6 +1732,8 @@ export default function CompilationPage() {
       setSide("passages");
     },
     selection,
+    scope: lookScope,
+    onScope: setLookScope,
     // Passages asked of the assistant: its panel opens on a field made for that (what to look for, where they go)
     onAskAi: () => assistant.compose({ kind: "passages", parts: compilation.sections.map((section) => section.title.trim()).filter(Boolean) }),
     templateName,
@@ -2046,11 +2050,24 @@ export default function CompilationPage() {
             words={wordsKey ? words[wordsKey] : undefined}
             media={shownItem.media ? { name: mediaOf(ownVideos, shownItem.media)?.name ?? shownItem.why, seconds: lastOf(shownItem) } : undefined}
             onChange={(start, end) => recut(shownItem, start, end)}
-            // A passage of the compilation can be shown in a template of its own
-            templates={inCompilation ? templates : undefined}
-            template={shownItem.template ?? null}
-            videoTemplate={templateName(templateKey)}
-            onTemplate={(key) => change(updateItem(compilation, shownItem.id, { template: key }))}
+            // A passage of the video can be shown in a layout of its own: said here, set in the look panel (« Ce passage »)
+            look={
+              inCompilation
+                ? {
+                    name: shownItem.template ? templateName(shownItem.template) : t("compilation.sameAsVideo", { name: templateName(templateKey) }),
+                    own: !!shownItem.template,
+                    onOpen: () => {
+                      setLookScope("passage");
+                      setSide("look");
+                      // (the panel is beside the video, above: brought into view, clear of the bar that floats over the page)
+                      window.requestAnimationFrame(() => {
+                        const panel = document.querySelector('[data-area="look"]');
+                        if (panel) window.scrollTo({ top: Math.max(0, panel.getBoundingClientRect().top + window.scrollY - 124), behavior: "smooth" });
+                      });
+                    },
+                  }
+                : undefined
+            }
             // One sound at a time: it does not start over the whole video, and stops when that one plays
             autoPlay={!videoPlaying}
             hush={hush}

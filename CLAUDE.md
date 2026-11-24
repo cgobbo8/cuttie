@@ -352,6 +352,18 @@ Demandes de Corentin (24/11/2026) : la timeline « manque un peu d'interactivit�
 - Limites : le Montage IA sur plusieurs passages n'a pas tourné avec le vrai modèle ; pas de rognage d'un passage en tirant son bord dans la timeline (ça se fait dessous, dans le passage ouvert) ; la vidéo repart du début après un déplacement (le lecteur est recréé) ; pas de zoom ni de défilement de la timeline (un passage très court dans une longue vidéo est étroit) ; pas essayé au doigt sur un écran tactile.
 
 
+### Ce qui vaut pour un passage, ce qui vaut pour toute la vidéo
+
+Demande de Corentin (24/11/2026) : « il faudrait que ce soit clair dans les paramètres ce qui affecte uniquement un segment de la vidéo et ce qui affecte l'habillage de toute la vidéo ».
+
+- **Deux portées, dites en tête du panneau Habillage** (`CompilationPanel`, `LookScope`) : « Toute la vidéo » (univers, modèle, webcam, titres, style des titres, chat, effets, transitions, ouverture, musique) et « Ce passage » (le passage ouvert, ou « N passages » quand plusieurs sont sélectionnés). Les deux listes ne se mélangent jamais ; un point sur l'onglet dit que le passage a quelque chose à lui.
+- **« Ce passage »** : son modèle (`item.template`, « Comme la vidéo (GTA) » par défaut : `compilation.setTemplate`) et son arrivée (`item.transition`, pas pour le premier passage de la vidéo), « Remettre comme la vidéo », et une ligne qui dit que le reste se règle pour toute la vidéo. Sans passage choisi : « Clique un passage, dans la liste ou sur la timeline ». Un réglage ouvert depuis cet onglet le dit dans son fil (« Habillage / Ce passage · Modèle »).
+- **Sous le passage ouvert**, le sélecteur « Mise en page de ce passage » est devenu un bouton qui ouvre cet onglet, à côté de la vidéo qu'il change (une seule place pour ce réglage).
+- **Trouvé en vérifiant** : le bandeau GTA de la jointure restait en travers d'un passage monté dans une autre mise en page (tous les widgets du modèle de la vidéo étaient posés sur toute la vidéo). Le décor propre à une mise en page (`gta-seam`, `gta-frame`, `gta-sky` : `montage.LAYOUT_DECOR`) reste maintenant avec chaque passage monté dans cette mise en page ; étoiles, étiquette et encadré du titre restent sur toute la vidéo.
+- Vérifié à l'écran (instance de test) : les deux onglets, le modèle « Action » donné à un passage (pastille dans la liste, point sur l'onglet, plus de bandeau en travers), le bouton sous le passage qui ouvre l'onglet.
+- Limites : seuls le modèle et l'arrivée sont propres à un passage (pas de titre, d'effets ni de chat par passage) ; la transition d'un passage se règle aussi depuis sa ligne dans la liste (deux entrées pour le même réglage) ; pas rejoué sur un export réel.
+
+
 ### L'assistant
 
 - **Worker** (`backend/app/services/assistant.py`, `assistant_tools.py`) : un agent LangChain deepagents (`create_deep_agent`, sans ses outils de fichiers ni de liste de tâches), modèle par OpenRouter (`CUTTIE_AGENT_MODEL`, défaut : celui qui cherche ; `CUTTIE_AGENT_MAX_COST` 0,05 $ et `CUTTIE_AGENT_MAX_STEPS` 24 par demande), conversation gardée dans `<data dir>/assistant/threads.sqlite`. Ses outils : lire un live (les outils de la recherche : `live_tools`), `find_moments` et `find_video_ideas` (les recherches existantes), `list_lives` / `list_clips` / `list_videos` / `get_video`, `list_imported_videos` (la médiathèque), `keep_clip`, `analyse_live` (demande l'accord d'abord), `show` (des cartes dans la réponse), et les actions faites par l'app à l'écran : `open`, `build_video`, `change_video`, `add_passages`, `add_imported_videos`, `cut_clip`, `set_look`, `export_videos`. Une action pour l'app ou une demande d'accord interrompt la conversation (`interrupt`) jusqu'à la réponse.

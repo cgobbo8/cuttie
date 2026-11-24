@@ -1963,6 +1963,19 @@
       "autoHint": "Como hace cada modelo: solo algunos muestran el chat",
       "onHint": "Los mensajes del chat se escriben sobre cada pasaje del directo",
       "offHint": "Ningún mensaje del chat en el vídeo"
+    },
+    "scope": {
+      "label": "A qué se aplican estos ajustes",
+      "video": "Todo el vídeo",
+      "passage": "Este pasaje",
+      "passages_one": "{{count}} pasaje",
+      "passages_other": "{{count}} pasajes",
+      "none": "Haz clic en un pasaje, en la lista o en la línea de tiempo: lo que es propio de él se ajusta aquí.",
+      "arrival": "Entrada",
+      "several": "No son iguales",
+      "reset": "Volver a lo del vídeo",
+      "rest": "Títulos, chat, efectos, apertura y música se ajustan para todo el vídeo.",
+      "open": "Abre los ajustes de este pasaje solo, junto al vídeo"
     }
   },
   "compilations": {

@@ -291,8 +291,25 @@ describe("montage for Remotion", () => {
       expect(content.some((l) => l.type === "gameplay" && !l.video?.background)).toBe(true);
       expect(overlays.every((l) => l.type === "widget" || l.type === "text" || l.type === "shape")).toBe(true);
       expect(overlays.some((l) => l.subtitle || l.video || l.chat)).toBe(false);
-      expect(content.some((l) => l.name === "Accroche" || l.type === "widget")).toBe(false);
+      // (but for a layout's own decor, which is drawn on its pictures and stays with them)
+      expect(content.some((l) => l.name === "Accroche" || (l.type === "widget" && l.widget?.widgetId !== "gta-seam"))).toBe(false);
     }
+  });
+
+  it("keeps a layout's own decor with the passages shown in that layout, not over the whole video", () => {
+    // A GTA video whose second passage is shown full frame (an upright imported video, say)
+    const keys = ["gta", "plein"] as const;
+    const montage = buildMontage([{ ctx, start: 0, end: 4 }, { ctx, start: 10, end: 14 }], (c, index) => buildTemplate(index >= 0 ? keys[index] : "gta", c));
+    const kinds = (layers: { layer: { widget?: { widgetId: string } } }[]) => layers.flatMap((p) => (p.layer.widget ? [p.layer.widget.widgetId] : []));
+    // The strip on the seam of the webcam and the game is on the first passage only: it would cut the second's picture in two
+    expect(kinds(montage.segments[0].layers)).toEqual(["gta-seam"]);
+    expect(kinds(montage.segments[1].layers)).toEqual([]);
+    expect(kinds(montage.overlays)).not.toContain("gta-seam");
+    // What follows the whole video stays over all of it: the title's plate, the channel's tag, the stars
+    expect(kinds(montage.overlays)).toEqual(["gta-plate", "gta-tag", "gta-wanted"]);
+    // ...and it is there from its passage's first picture
+    const seam = montage.segments[0].layers.find((p) => p.layer.widget?.widgetId === "gta-seam")!;
+    expect(seam.layer.animations ?? []).toEqual([]);
   });
 
   it("lets each piece have its own template, the hook and widgets coming from the video's", () => {

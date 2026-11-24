@@ -9,6 +9,7 @@ import {
   placeItems,
   removeItems,
   setTransition,
+  setTemplate,
   setVideoTransition,
   transitionsOf,
   addItems,
@@ -819,5 +820,19 @@ describe("the tools on several passages at once", () => {
     expect(all.slice(0, 2).map((i) => i.text)).toEqual(["un", "deux"]);
     // Nothing to cut: the same video
     expect(cutItems(c, []).compilation).toBe(c);
+  });
+});
+
+describe("what belongs to one passage, not to the whole video", () => {
+  it("shows the picked passages in a template of their own, or as the video again", () => {
+    const c = { template: "empile" as string | null, sections: [section("s1", [item("aaaaaaaaaa", 0, 5), item("bbbbbbbbbb", 10, 15), item("cccccccccc", 20, 25)])] };
+    const own = setTemplate(c, ["aaaaaaaaaa", "cccccccccc"], "plein");
+    expect(allItems(own).map((i) => i.template)).toEqual(["plein", undefined, "plein"]);
+    // The video's own template is nothing of their own: they follow the video
+    expect(allItems(setTemplate(own, ["aaaaaaaaaa"], "empile"))[0]).not.toHaveProperty("template");
+    expect(allItems(setTemplate(own, ["aaaaaaaaaa", "cccccccccc"], null)).every((i) => !("template" in i))).toBe(true);
+    // The others are left as they are, and the video's template is not touched
+    expect(setTemplate(own, ["bbbbbbbbbb"], "sanscam").template).toBe("empile");
+    expect(allItems(setTemplate(own, ["bbbbbbbbbb"], "sanscam")).map((i) => i.template)).toEqual(["plein", "sanscam", "plein"]);
   });
 });

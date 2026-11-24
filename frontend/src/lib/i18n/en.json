@@ -1963,6 +1963,19 @@
       "autoHint": "As each template does: only some show the chat",
       "onHint": "The chat's messages are written over every passage of the live",
       "offHint": "No chat message in the video"
+    },
+    "scope": {
+      "label": "What these settings are for",
+      "video": "Whole video",
+      "passage": "This passage",
+      "passages_one": "{{count}} passage",
+      "passages_other": "{{count}} passages",
+      "none": "Click a passage, in the list or on the timeline: what is its own is set here.",
+      "arrival": "Arrival",
+      "several": "Not the same",
+      "reset": "Back to the video's",
+      "rest": "Titles, chat, effects, opening and music are set for the whole video.",
+      "open": "Opens the settings of this passage alone, beside the video"
     }
   },
   "compilations": {

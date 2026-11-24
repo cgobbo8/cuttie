@@ -609,6 +609,23 @@ export function applyLooks<T extends Pick<Compilation, "sections" | "template">>
   };
 }
 
+/**
+ * The template these passages are shown in: one of their own, or (null) the video's again. One
+ * that would only repeat the video's is not kept: the passage follows the video.
+ */
+export function setTemplate<T extends Pick<Compilation, "sections" | "template">>(c: T, ids: Iterable<string>, template: string | null): T {
+  const picked = new Set(ids);
+  const same = template === null || template === c.template;
+  return mapSections(c, (s) => ({
+    ...s,
+    items: s.items.map((item) => {
+      if (!picked.has(item.id)) return item;
+      const { template: _own, ...rest } = item;
+      return same ? rest : { ...rest, template: template! };
+    }),
+  }));
+}
+
 /** Every passage back to the video's template */
 export function clearLooks<T extends Pick<Compilation, "sections">>(c: T): T {
   return mapSections(c, (s) => ({ ...s, items: s.items.map(({ template: _own, ...rest }) => rest) }));

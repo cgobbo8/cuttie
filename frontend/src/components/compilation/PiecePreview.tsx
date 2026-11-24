@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Film, Loader2, Pause, Play, Plus } from "lucide-react";
+import { ChevronRight, Film, Loader2, Pause, Play, Plus } from "lucide-react";
 import { clipThumbUrl, clipUrl, type CompilationItem, type PieceState, type TranscriptWord } from "../../lib/api";
 import { liveClock } from "../../lib/compilation";
 import { dragRatio } from "../../lib/drag";
@@ -19,13 +19,11 @@ interface Props {
   words?: TranscriptWord[];
   /** New bounds of the moment, live seconds (the clip is cut again when they leave it) */
   onChange: (start: number, end: number) => void;
-  /** Templates this passage can be shown in (only for a passage of the compilation) */
-  templates?: { key: string; name: string }[];
-  /** Its own template, null: the video's */
-  template?: string | null;
-  /** The video's template, by name */
-  videoTemplate?: string;
-  onTemplate?: (key: string | null) => void;
+  /**
+   * How this passage is shown (only for a passage of the video): the name of its layout, whether it
+   * is its own or the video's, and what opens the settings of this passage alone (the look panel)
+   */
+  look?: { name: string; own: boolean; onOpen: () => void };
   /** Plays as soon as it is there (not while the whole video plays next to it) */
   autoPlay?: boolean;
   /** Changes when something else starts playing: this one stops */
@@ -46,7 +44,7 @@ const MORE = 5;
  * and its two handles move the cut inside the clip (a few seconds wider than
  * the moment). "+" on a side gives 5 s more of the live.
  */
-export default function PiecePreview({ jobId, item, piece, cutting, words, onChange, templates, template, videoTemplate, onTemplate, autoPlay = true, hush, onPlay, media }: Props) {
+export default function PiecePreview({ jobId, item, piece, cutting, words, onChange, look, autoPlay = true, hush, onPlay, media }: Props) {
   const { t } = useTranslation();
   const videoRef = useRef<HTMLVideoElement>(null);
   const stripRef = useRef<HTMLDivElement>(null);
@@ -235,23 +233,20 @@ export default function PiecePreview({ jobId, item, piece, cutting, words, onCha
         {more("end")}
       </div>
 
-      {/* The template of this passage alone, when it shouldn't look like the rest of the video */}
-      {templates && onTemplate && (
-        <label className="flex items-center gap-3 pt-3 px-0.5">
+      {/* How this passage alone is shown: said here, set in the look panel (« Ce passage »), next to the video it changes */}
+      {look && (
+        <div className="flex items-center gap-3 pt-3 px-0.5">
           <span className="text-[13px] text-ink-2 flex-none">{t("compilation.itemTemplate")}</span>
-          <select
-            value={template && templates.some((tpl) => tpl.key === template) ? template : ""}
-            onChange={(e) => onTemplate(e.target.value || null)}
-            className="select-arrow flex-1 min-w-0 h-9 px-2.5 rounded-[10px] bg-black/30 border border-white/10 text-[13px] text-white outline-none focus:border-accent-line [color-scheme:dark]"
+          <button
+            type="button"
+            onClick={look.onOpen}
+            title={t("compilation.scope.open")}
+            className="flex-1 min-w-0 h-9 pl-2.5 pr-2 rounded-[10px] bg-black/30 border border-white/10 hover:border-white/20 focus-visible:border-accent-line outline-none flex items-center gap-2 text-left text-[13px] transition-colors"
           >
-            <option value="">{t("compilation.sameAsVideo", { name: videoTemplate ?? "" })}</option>
-            {templates.map((tpl) => (
-              <option key={tpl.key} value={tpl.key}>
-                {tpl.name}
-              </option>
-            ))}
-          </select>
-        </label>
+            <span className={`flex-1 min-w-0 truncate ${look.own ? "text-white" : "text-ink-2"}`}>{look.name}</span>
+            <ChevronRight className="w-3.5 h-3.5 flex-none text-ink-4" />
+          </button>
+        </div>
       )}
     </div>
   );

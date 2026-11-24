@@ -1963,6 +1963,19 @@
       "autoHint": "Comme chaque modèle le fait : seuls certains affichent le chat",
       "onHint": "Les messages du chat s'écrivent sur chaque passage du live",
       "offHint": "Aucun message du chat dans la vidéo"
+    },
+    "scope": {
+      "label": "Ce que règlent ces réglages",
+      "video": "Toute la vidéo",
+      "passage": "Ce passage",
+      "passages_one": "{{count}} passage",
+      "passages_other": "{{count}} passages",
+      "none": "Clique un passage, dans la liste ou sur la timeline : ce qui lui est propre se règle ici.",
+      "arrival": "Arrivée",
+      "several": "Pas les mêmes",
+      "reset": "Remettre comme la vidéo",
+      "rest": "Titres, chat, effets, ouverture et musique se règlent pour toute la vidéo.",
+      "open": "Ouvre les réglages de ce passage seul, à côté de la vidéo"
     }
   },
   "compilations": {

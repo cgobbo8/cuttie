@@ -287,9 +287,17 @@ export interface MontageCut {
   transition?: string;
 }
 
-/** Layers that live on the montage's clock: the hook line (the video's cover) and the widgets */
+/**
+ * Widgets drawn on a layout's own geometry: a strip on the seam of its two pictures, a frame round
+ * one of them, a backdrop behind them. They belong to each passage shown in that layout (a strip
+ * across a passage shown full frame would cut its picture in two), not to the whole video.
+ */
+const LAYOUT_DECOR = new Set(["gta-seam", "gta-frame", "gta-sky"]);
+
+/** Layers that live on the montage's clock: the hook line (the video's cover) and the widgets (but a layout's own decor, which stays with its passages) */
 export function isOverlayLayer(layer: Layer): boolean {
-  return layer.type === "widget" || layer.id === "tpl-accroche" || layer.id === "tpl-fond-de-l-accroche";
+  if (layer.type === "widget") return !LAYOUT_DECOR.has(layer.widget?.widgetId ?? "");
+  return layer.id === "tpl-accroche" || layer.id === "tpl-fond-de-l-accroche";
 }
 
 /** A word belongs to the piece that plays most of it */

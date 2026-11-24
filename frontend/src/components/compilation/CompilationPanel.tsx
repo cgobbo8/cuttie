@@ -20,6 +20,7 @@ import {
   removeSection,
   sectionLength,
   setTransition,
+  setTemplate,
   setVideoTransition,
   showTitle,
 } from "../../lib/compilation";
@@ -37,6 +38,9 @@ import { CHAT_CHOICES, HOOK_STYLES, isChatChoice, isHookStyle, type HookStyle } 
 import { EFFECT_LEVELS, isEffectLevel } from "../../lib/effects";
 import type { VideoSource } from "../../lib/videoSources";
 import TransitionPicker from "./TransitionPicker";
+
+/** What the look panel sets: the whole video's look, or what belongs to one passage alone */
+export type LookScope = "video" | "passage";
 
 interface Props {
   /**
@@ -72,6 +76,9 @@ interface Props {
   onImport?: () => void;
   /** The passages picked in the whole montage (the timeline shows and changes the same ones); without it, the list keeps its own */
   selection?: Picked;
+  /** What the look panel sets: the whole video's look, or what belongs to the passage open (or picked) alone */
+  scope?: LookScope;
+  onScope?: (scope: LookScope) => void;
   /** Passages asked of the assistant (its panel opens, ready for what to look for) */
   onAskAi?: () => void;
   /** A template's name, by key */
@@ -214,6 +221,8 @@ export default function CompilationPanel({
   onSearch,
   onImport,
   selection,
+  scope,
+  onScope,
   onAskAi,
   templateName,
   looking,
@@ -249,7 +258,15 @@ export default function CompilationPanel({
   const ids = allItems(compilation).map((item) => item.id);
 
   // What is open: the list of parts to move the picked passages to, or the transitions (of the video, of the picked ones, of one passage)
-  const [menu, setMenu] = useState<"move" | "video" | "picked" | "intro" | "music" | "template" | "universe" | "titles" | "effects" | "shorten" | { item: string } | null>(null);
+  const [menu, setMenu] = useState<"move" | "video" | "picked" | "intro" | "music" | "template" | "universe" | "titles" | "effects" | "shorten" | "passageTemplate" | "passageTransition" | { item: string } | null>(null);
+  // Two kinds of settings, never mixed: the whole video's look, and what belongs to one passage alone
+  const [ownScope, setOwnScope] = useState<LookScope>("video");
+  const lookScope = scope ?? ownScope;
+  const setLookScope = (next: LookScope) => {
+    setMenu(null);
+    if (onScope) onScope(next);
+    else setOwnScope(next);
+  };
   const partName = (section: CompilationSection, among = compilation.sections) => section.title.trim() || t("compilation.partN", { n: among.indexOf(section) + 1 });
   const moveTo = (sectionId: string | null) => {
     setMenu(null);
@@ -350,6 +367,16 @@ export default function CompilationPanel({
       })
     : t("compilation.intro.none");
   // Every template there is to pick from: the look's own first
+  // What a passage's own settings are for: the passages picked together, else the one open
+  const targetIds = pickedIds.length > 0 ? pickedIds : selectedItem && ids.includes(selectedItem) ? [selectedItem] : [];
+  const targets = allItems(compilation).filter((item) => targetIds.includes(item.id));
+  // (the video's first passage comes in after nothing: it has no arrival to set)
+  const arriving = targets.filter((item) => item.id !== firstId);
+  const arrivals = new Set(arriving.map((item) => item.transition ?? null));
+  const looks = new Set(targets.map((item) => item.template ?? null));
+  const videoLook = compilation.template ? templateName(compilation.template) : t("compilation.defaultTemplate");
+  // (how a passage's own settings name what they are for: « Ce passage », « 3 passages »)
+  const scopeName = targets.length > 1 ? t("compilation.scope.passages", { count: targets.length }) : t("compilation.scope.passage");
   const offered = universe ? [...templates].sort((a, b) => Number(b.key === universe.template) - Number(a.key === universe.template)) : templates;
   const tile = (key: string, chosen: boolean, onPick: () => void, picture: ReactNode, name: string) => (
     <button key={key} type="button" aria-pressed={chosen} onClick={onPick} className={`relative min-w-0 flex flex-col items-stretch gap-1.5 p-1.5 rounded-[11px] border transition-colors ${chosen ? "border-accent bg-accent-soft" : "border-white/[0.07] hover:border-white/20"}`}>
@@ -396,6 +423,33 @@ export default function CompilationPanel({
               </div>
             ),
           }
+        : menu === "passageTemplate" && targets.length > 0
+          ? {
+              // (said with what it is for: this passage, not the video)
+              label: `${scopeName} · ${t("compilation.template")}`,
+              body: (
+                <div role="group" aria-label={t("compilation.itemTemplate")} className="grid grid-cols-4 gap-1.5">
+                  {tile("video", targets.every((item) => !item.template), () => onChange(setTemplate(compilation, targetIds, null)), <span className="block mx-auto w-[62px] h-[110px] rounded-[7px] overflow-hidden bg-white/[0.06]">{sketch?.(compilation.template ?? null, 62)}</span>, t("compilation.transition.asVideo"))}
+                  {offered.map((tpl) =>
+                    tile(tpl.key, targets.every((item) => item.template === tpl.key), () => onChange(setTemplate(compilation, targetIds, tpl.key)), <span className="block mx-auto w-[62px] h-[110px] rounded-[7px] overflow-hidden bg-white/[0.06]">{sketch?.(tpl.key, 62)}</span>, tpl.name),
+                  )}
+                </div>
+              ),
+            }
+          : menu === "passageTransition" && arriving.length > 0
+            ? {
+                label: `${scopeName} · ${t("compilation.scope.arrival")}`,
+                body: (
+                  <TransitionPicker
+                    inline
+                    title={t(arriving.length > 1 ? "compilation.transition.picked" : "compilation.transition.before", { count: arriving.length })}
+                    value={arrivals.size === 1 ? [...arrivals][0] : ""}
+                    video={compilation.transition ?? null}
+                    onPick={(value) => onChange(setTransition(compilation, arriving.map((item) => item.id), value))}
+                    onClose={() => setMenu(null)}
+                  />
+                ),
+              }
         : menu === "video"
           ? { label: t("compilation.transition.label"), body: <TransitionPicker inline title={t("compilation.transition.video")} value={compilation.transition ?? PLAIN_CUT} onPick={(value) => onChange(setVideoTransition(compilation, value))} onClose={() => setMenu(null)} /> }
           : menu === "intro" && brand
@@ -707,6 +761,56 @@ export default function CompilationPanel({
         ) : (
           <>
             <span className="px-1 text-[13.5px] font-[620] text-white">{t("compilation.dress.label")}</span>
+            {/* What these settings are for, said first: the whole video, or one passage alone (the one open, the ones picked) */}
+            <div role="tablist" aria-label={t("compilation.scope.label")} className="seg w-full [&>button]:flex-1">
+              <button type="button" role="tab" aria-selected={lookScope === "video"} onClick={() => setLookScope("video")}>
+                {t("compilation.scope.video")}
+              </button>
+              <button type="button" role="tab" aria-selected={lookScope === "passage"} onClick={() => setLookScope("passage")}>
+                {scopeName}
+                {/* (it has something of its own) */}
+                {targets.some((item) => item.template || (item.id !== firstId && item.transition !== undefined)) && <span aria-hidden className="ml-1.5 inline-block w-1.5 h-1.5 rounded-full bg-accent align-middle" />}
+              </button>
+            </div>
+            {lookScope === "passage" ? (
+              targets.length === 0 ? (
+                <p className="px-3 py-7 text-center text-[12.5px] leading-snug text-ink-3">{t("compilation.scope.none")}</p>
+              ) : (
+                <>
+                  {/* Which passage these are for */}
+                  <p className="px-1 min-w-0 flex items-baseline gap-2 text-[13px]">
+                    <span className="flex-1 min-w-0 truncate text-white">{targets.length > 1 ? t("compilation.pickedCount", { count: targets.length }) : targets[0].text || targets[0].why || liveClock(targets[0].start)}</span>
+                    <span className="mono flex-none text-[11.5px] text-ink-3">{targets.reduce((sum, item) => sum + (item.end - item.start), 0).toFixed(1)} s</span>
+                  </p>
+                  <LookGroup label={t("compilation.dress.group.picture")}>
+                    <LookRow icon={LayoutTemplate} label={t("compilation.template")} value={looks.size > 1 ? t("compilation.scope.several") : targets[0].template ? templateName(targets[0].template) : t("compilation.sameAsVideo", { name: videoLook })} onOpen={() => setMenu("passageTemplate")}>
+                      {looks.size === 1 && <span className="flex-none w-[18px] h-[32px] rounded-[4px] overflow-hidden bg-white/[0.06]">{sketch?.(targets[0].template ?? compilation.template ?? null, 18)}</span>}
+                      <span className="truncate">{looks.size > 1 ? t("compilation.scope.several") : targets[0].template ? templateName(targets[0].template) : t("compilation.sameAsVideo", { name: videoLook })}</span>
+                    </LookRow>
+                  </LookGroup>
+                  {arriving.length > 0 && (
+                    <LookGroup label={t("compilation.dress.group.motion")}>
+                      <LookRow
+                        icon={Blend}
+                        label={t("compilation.scope.arrival")}
+                        value={arrivals.size > 1 ? t("compilation.scope.several") : arriving[0].transition !== undefined ? transitionName(arriving[0].transition) : t("compilation.sameAsVideo", { name: transitionName(compilation.transition) })}
+                        onOpen={() => setMenu("passageTransition")}
+                      >
+                        <span className="truncate">{arrivals.size > 1 ? t("compilation.scope.several") : arriving[0].transition !== undefined ? transitionName(arriving[0].transition) : t("compilation.sameAsVideo", { name: transitionName(compilation.transition) })}</span>
+                      </LookRow>
+                    </LookGroup>
+                  )}
+                  {targets.some((item) => item.template || (item.id !== firstId && item.transition !== undefined)) && (
+                    <button type="button" onClick={() => onChange(setTransition(setTemplate(compilation, targetIds, null), targetIds, null))} className="self-start btn btn-ghost btn-sm text-ink-2">
+                      {t("compilation.scope.reset")}
+                    </button>
+                  )}
+                  {/* The rest is not a passage's to set */}
+                  <p className="px-1 text-[12px] leading-snug text-ink-3">{t("compilation.scope.rest")}</p>
+                </>
+              )
+            ) : (
+            <>
             {/* A whole look in one click: the channel's own, a game's, or the AI's choice for this video */}
             <div className="grid grid-cols-3 gap-1.5">
               {[null, ...UNIVERSES].map((one) => {
@@ -876,6 +980,8 @@ export default function CompilationPanel({
                 <Sparkles className="w-3.5 h-3.5 mt-px flex-none text-accent" />
                 <span className={noteOpen ? "" : "line-clamp-2"}>{aiNote}</span>
               </button>
+            )}
+            </>
             )}
           </>
         )}

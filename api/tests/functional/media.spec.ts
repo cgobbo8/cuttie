@@ -188,11 +188,14 @@ test.group('The media library', (group) => {
     assert.deepEqual((env.body() as any).cam, { rect: null, source: null, moved: false, visible: false })
     assert.deepEqual((env.body() as any).words.map((w: any) => w.word), ['Bien', 'joué'])
 
-    // The AI's cut is asked of the engine for it as for a clip (not running here), never for a piece of the live
-    ;(await client.post(`/api/clips/${job.id}/piece_mediapiece.mp4/suggest-cut`).loginAs(user).json({ current: [[0.5, 3]] })).assertStatus(503)
+    // The AI's cut is asked of the engine (not running here) for a passage's clip as for a clip of the analysis:
+    // an imported video, a moment of the live; never for a file that is neither
+    ;(await client.post(`/api/clips/${job.id}/piece_mediapiece.mp4/suggest-cut`).loginAs(user).json({ within: [0.5, 3] })).assertStatus(503)
     writeFileSync(path.join(dir, 'piece_livepiece1.mp4'), '')
     writeFileSync(path.join(dir, 'piece_livepiece1_meta.json'), JSON.stringify({ vod_start: 100, vod_end: 110, settled: true }))
-    ;(await client.post(`/api/clips/${job.id}/piece_livepiece1.mp4/suggest-cut`).loginAs(user).json({})).assertStatus(404)
+    ;(await client.post(`/api/clips/${job.id}/piece_livepiece1.mp4/suggest-cut`).loginAs(user).json({ within: [2, 8], summary: 'c’est calme' })).assertStatus(503)
+    ;(await client.post(`/api/clips/${job.id}/piece_nosuchone1.mp4/suggest-cut`).loginAs(user).json({})).assertStatus(404)
+    ;(await client.post(`/api/clips/${job.id}/facecam.json/suggest-cut`).loginAs(user).json({})).assertStatus(404)
 
     // Clips freed then taken back: this one is not cut from the live again (it comes back from the library)
     const kept = { sections: [{ items: [{ id: 'mediapiece' }, { id: 'livepiece1' }] }] } as unknown as Compilation

@@ -889,7 +889,8 @@
       "clip": "Clips",
       "sequence": "Secuencias",
       "compilation": "Compilaciones"
-    }
+    },
+    "aiCutHintMany": "La IA conserva lo esencial de cada pasaje seleccionado. Menos de un céntimo por pasaje, y se puede deshacer."
   },
   "montage": {
     "title": "Viste tus clips",
@@ -1014,7 +1015,14 @@
     "silencesOut_other": "Silencios quitados: {{count}} pasajes",
     "side": {
       "passages": "Pasajes"
-    }
+    },
+    "playhead": "Cabezal de reproducción",
+    "noSilenceMany": "No hay silencios que quitar en estos pasajes.",
+    "silencesOutMany_one": "Silencios quitados en {{count}} pasaje",
+    "silencesOutMany_other": "Silencios quitados en {{count}} pasajes",
+    "silencesHintMany": "Quita los silencios de los pasajes seleccionados",
+    "aiCutMany_one": "Montaje IA: {{count}} pasaje recortado",
+    "aiCutMany_other": "Montaje IA: {{count}} pasajes recortados"
   },
   "exportStep": {
     "title": "Tus clips están listos",
@@ -1562,7 +1570,6 @@
     "moments_other": "{{count}} trozos",
     "inCompilation_one": "{{count}} en el vídeo",
     "inCompilation_other": "{{count}} en el vídeo",
-    "fit": "Ajustar a {{length}}",
     "titles": "Títulos de las partes",
     "titlesHint": "Cada parte se abre con el título",
     "titleHide": "No escribir este título en el vídeo",
@@ -1942,7 +1949,12 @@
       "clip": "Ej.: hacia las 3 h, salgo del hidroavión y muero en la hélice.",
       "sequence": "Ej.: la misión del yate, desde la llegada en moto de agua hasta la huida en aerodeslizador."
     },
-    "addWithAi": "Añadir con la IA"
+    "addWithAi": "Añadir con la IA",
+    "shorten": "Acortar a…",
+    "shortenHint": "Reduce el vídeo a esa duración: los pasajes largos se acortan y luego salen los más flojos.",
+    "shortened": "Vídeo reducido a {{length}}",
+    "shortenedRemoved_one": "Vídeo reducido a {{length}}: {{count}} pasaje quitado",
+    "shortenedRemoved_other": "Vídeo reducido a {{length}}: {{count}} pasajes quitados"
   },
   "compilations": {
     "title": "Compilaciones",

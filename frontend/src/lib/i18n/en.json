@@ -889,7 +889,8 @@
       "clip": "Clips",
       "sequence": "Sequences",
       "compilation": "Compilations"
-    }
+    },
+    "aiCutHintMany": "The AI keeps what matters of each picked passage. Less than a cent per passage, and it can be undone."
   },
   "montage": {
     "title": "Dress up your clips",
@@ -1014,7 +1015,14 @@
     "silencesOut_other": "Blanks taken out: {{count}} passages",
     "side": {
       "passages": "Passages"
-    }
+    },
+    "playhead": "Playhead",
+    "noSilenceMany": "No silence to take out of these passages.",
+    "silencesOutMany_one": "Silences taken out of {{count}} passage",
+    "silencesOutMany_other": "Silences taken out of {{count}} passages",
+    "silencesHintMany": "Takes the silences out of the picked passages",
+    "aiCutMany_one": "AI cut: {{count}} passage cut again",
+    "aiCutMany_other": "AI cut: {{count}} passages cut again"
   },
   "exportStep": {
     "title": "Your clips are ready",
@@ -1562,7 +1570,6 @@
     "moments_other": "{{count}} parts",
     "inCompilation_one": "{{count}} in the video",
     "inCompilation_other": "{{count}} in the video",
-    "fit": "Fit to {{length}}",
     "titles": "Part titles",
     "titlesHint": "Each section opens with its title",
     "titleHide": "Don't write this title in the video",
@@ -1942,7 +1949,12 @@
       "clip": "E.g. around 3 h in, I step out of the seaplane and die in the propeller.",
       "sequence": "E.g. the yacht mission, from the jet-ski arrival to the airboat escape."
     },
-    "addWithAi": "Add with the AI"
+    "addWithAi": "Add with the AI",
+    "shorten": "Shorten to…",
+    "shortenHint": "Brings the video down to that length: its long passages get shorter, then the weakest go.",
+    "shortened": "Video brought down to {{length}}",
+    "shortenedRemoved_one": "Video brought down to {{length}}: {{count}} passage taken out",
+    "shortenedRemoved_other": "Video brought down to {{length}}: {{count}} passages taken out"
   },
   "compilations": {
     "title": "Compilations",

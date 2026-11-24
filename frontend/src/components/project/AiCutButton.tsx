@@ -15,13 +15,15 @@ interface Props {
   onCut: () => void;
   /** Back to the cut the analysis advised, when the clip is cut otherwise */
   onReset?: () => void;
+  /** Several passages are picked: it cuts each of them */
+  many?: boolean;
 }
 
 /**
  * Everything the AI does to a clip's cut, in one control: the button cuts, and what hangs
  * from it says how long (its menu), and takes the cut back to the one the analysis advised.
  */
-export default function AiCutButton({ busy, disabled, target, onTarget, onCut, onReset }: Props) {
+export default function AiCutButton({ busy, disabled, target, onTarget, onCut, onReset, many = false }: Props) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
@@ -58,7 +60,7 @@ export default function AiCutButton({ busy, disabled, target, onTarget, onCut, o
 
   return (
     <div ref={box} className="relative inline-flex items-center h-7 -ml-1 rounded-[9px] bg-accent-soft">
-      <Tooltip content={t("project.aiCutHint")}>
+      <Tooltip content={t(many ? "project.aiCutHintMany" : "project.aiCutHint")}>
         <button type="button" onClick={onCut} disabled={disabled || busy} className="h-7 pl-2 pr-1.5 inline-flex items-center gap-1.5 rounded-l-[9px] text-[12.5px] font-medium text-white disabled:opacity-50">
           {busy ? <Loader2 className="w-3.5 h-3.5 spinner" /> : <WandSparkles className="w-3.5 h-3.5 text-accent" />}
           {t("project.aiCut")}

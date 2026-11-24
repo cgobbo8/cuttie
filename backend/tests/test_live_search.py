@@ -285,6 +285,37 @@ def test_a_clip_s_words_become_sentences_and_the_ai_keeps_parts(monkeypatch):
     assert "45 to 90 seconds in all" in prompts[0] and "15 to 45" not in prompts[0]
 
 
+def test_the_ai_s_montage_of_one_stretch_of_a_clip_sees_that_stretch_alone(monkeypatch):
+    # A file of a minute; the passage plays 20.0-30.0 of it
+    words = [
+        {"word": "Avant.", "start": 5.0, "end": 5.5},
+        {"word": "Regarde", "start": 21.0, "end": 21.4},
+        {"word": "ça.", "start": 21.5, "end": 21.8},
+        {"word": "Voilà.", "start": 27.0, "end": 27.6},
+        {"word": "Après.", "start": 40.0, "end": 40.5},
+    ]
+    prompts = []
+
+    def answer(prompt, **kwargs):
+        prompts.append(prompt)
+        # (it answers on the clock it was shown: the stretch's own, from 0)
+        return llm_text.Answer(json.dumps({"parts": [{"start": 1.0, "end": 1.8}, {"start": 7.0, "end": 7.6}], "note": "Deux phrases"}), 300, 50, 0.001, 1.0)
+
+    monkeypatch.setattr(ls.llm_text, "complete", answer)
+    cut = ls.suggest_cut(words, 60.0, summary="Le passage", within=[20.0, 30.0])
+    # Only what is said in the stretch is shown, timed from its start; what is kept comes back on the file's clock, inside the stretch
+    assert "Regarde ça." in prompts[0] and "Voilà." in prompts[0] and "Avant." not in prompts[0] and "Après." not in prompts[0]
+    assert "[1.0-1.8]" in prompts[0] and "[7.0-7.6]" in prompts[0]
+    assert cut["note"] == "Deux phrases" and len(cut["parts"]) == 2
+    assert all(20.0 <= start < end <= 30.0 for start, end in cut["parts"])
+    assert abs(cut["parts"][0][0] - 20.85) < 0.01 and abs(cut["parts"][1][1] - 27.85) < 0.01
+    # A stretch where nobody speaks, or that is no stretch at all: nothing to cut on
+    with pytest.raises(ls.NoTranscript):
+        ls.suggest_cut(words, 60.0, within=[45.0, 55.0])
+    with pytest.raises(ls.NoTranscript):
+        ls.suggest_cut(words, 60.0, within=[20.0, 20.2])
+
+
 def test_the_ai_s_montage_aims_for_the_length_the_streamer_gives(monkeypatch):
     words = [{"word": "Regarde", "start": 1.0, "end": 1.4}, {"word": "ça.", "start": 1.5, "end": 1.8}]
     asked = []

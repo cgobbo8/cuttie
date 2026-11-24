@@ -150,33 +150,35 @@ export default class ClipsController {
   }
 
   /**
-   * POST /api/clips/:jobId/:filename/suggest-cut { wish?, target?, current? } — the parts of the clip
+   * POST /api/clips/:jobId/:filename/suggest-cut { wish?, target?, within?, summary? } — the parts of the clip
    * the AI would keep for a tight video (clip seconds). Nothing is saved: the app
-   * shows them as pieces the streamer can change or take back. A clip of the analysis, or a
-   * passage made of a video of the media library (`current`: the part of it the passage plays).
+   * shows them as pieces the streamer can change or take back. A clip of the analysis, or the
+   * clip of a video's passage (piece_<id>.mp4, a moment of the live or an imported video):
+   * `within` is then the part of its file the passage plays, the only one the AI cuts, and
+   * `summary` what is said of it (its text).
    */
   async suggestCut({ params, request, response, auth }: HttpContext) {
     const job = await verifyJobOwnership(params.jobId, auth)
     if (!job) return response.notFound({ error: 'clip not found' })
     const filename = path.basename(params.filename)
     const hp = (job.hotPoints ?? []).find((h: any) => h?.clip_filename === filename)
-    // A video the streamer imported, used as a passage: cut on its words like a clip
-    const imported = hp ? null : findMedia(readClipMeta(job.id, filename)?.media)
-    if (!hp && !(imported && /^piece_[a-z0-9]{6,24}\.mp4$/.test(filename))) return response.notFound({ error: 'clip not found' })
+    // The clip of a video's passage (a moment of the live, a video the streamer imported): cut on its words like a clip
+    const piece = hp || !/^piece_[a-z0-9]{6,24}\.mp4$/.test(filename) ? null : readClipMeta(job.id, filename)
+    if (!hp && !piece) return response.notFound({ error: 'clip not found' })
     const choice = job.selection?.[filename]
-    const sent = request.input('current')
-    const current: [number, number][] = hp
-      ? (choice?.segments ?? (choice?.trim ? [choice.trim] : suggestedCut(hp) ? [suggestedCut(hp)!] : []))
-      : (Array.isArray(sent) ? sent : [])
-          .slice(0, 20)
-          .map((part: unknown): [number, number] => (Array.isArray(part) ? [Number(part[0]), Number(part[1])] : [Number.NaN, Number.NaN]))
-          .filter(([a, b]: [number, number]) => Number.isFinite(a) && Number.isFinite(b) && a >= 0 && b > a)
+    const current: [number, number][] = hp ? (choice?.segments ?? (choice?.trim ? [choice.trim] : suggestedCut(hp) ? [suggestedCut(hp)!] : [])) : []
+    // The part of its file a passage plays: the only one to cut (a passage is often a few seconds of a wider clip)
+    const sent = request.input('within')
+    const [from, to] = Array.isArray(sent) && sent.length === 2 ? sent.map(Number) : [Number.NaN, Number.NaN]
+    const within: [number, number] | undefined = piece && Number.isFinite(from) && Number.isFinite(to) && from >= 0 && to - from >= 0.5 ? [from, to] : undefined
+    const said = String(request.input('summary') ?? '').trim().slice(0, 300)
     // The length the streamer aims for (seconds); anything else: left to the AI
     const asked = Number(request.input('target'))
     const target = Number.isFinite(asked) && asked >= 10 ? Math.min(180, Math.round(asked)) : undefined
     try {
       const answer = await suggestClipCut(job.id, filename, {
-        summary: hp ? [hp.clip_name, hp.llm?.summary].filter(Boolean).join(' — ') : imported!.name,
+        summary: hp ? [hp.clip_name, hp.llm?.summary].filter(Boolean).join(' — ') : said || (findMedia(piece!.media)?.name ?? ''),
+        ...(within ? { within } : {}),
         current,
         wish: String(request.input('wish') ?? '').trim().slice(0, 300),
         ...(target ? { target } : {}),

@@ -288,6 +288,8 @@ class CutRequest(BaseModel):
     current: list[list[float]] = []
     wish: str = ""
     target: float | None = None
+    # Only this stretch of the clip is to be cut ([start, end], clip seconds): a passage that plays part of its file
+    within: list[float] | None = None
 
 
 class VodFacecamRequest(BaseModel):
@@ -798,6 +800,7 @@ def clip_suggest_cut(job_id: str, clip_filename: str, req: CutRequest) -> dict:
         return live_search.suggest_cut(
             words if isinstance(words, list) else [], _duration(clip_path), req.summary[:600], req.current[:20], req.wish[:300],
             target=live_search.cut_target(req.target),
+            within=req.within if req.within and len(req.within) == 2 and req.within[1] > req.within[0] >= 0 else None,
         )
     except Exception as e:
         raise _ai_errors(e) from e

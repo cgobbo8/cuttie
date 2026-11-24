@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from "react";
 import { useTranslation } from "react-i18next";
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Blend, Check, ScanFace, ChevronRight, Clapperboard, Eye, EyeOff, Film, FolderInput, Layers, Loader2, Music2, Palette, Pause, Play, Plus, Search, Sparkles, Trash2, Type, X, Zap, LayoutTemplate, type LucideIcon } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Blend, Check, ScanFace, ChevronDown, ChevronRight, Clapperboard, Eye, EyeOff, Film, FolderInput, Layers, Loader2, Music2, Palette, Pause, Play, Plus, Search, Sparkles, Trash2, Type, X, Zap, LayoutTemplate, type LucideIcon } from "lucide-react";
 import { mediaThumbUrl, type Compilation, type CompilationItem, type CompilationSection, type TwitchStoryboard } from "../../lib/api";
 import {
   PLAIN_CUT,
@@ -8,7 +8,6 @@ import {
   allItems,
   compilationLength,
   fitToTarget,
-  itemsBetween,
   openingSeconds,
   liveClock,
   moveItem,
@@ -26,6 +25,7 @@ import {
 } from "../../lib/compilation";
 import { clock } from "../../lib/format";
 import { frameAt, tileStyle } from "../../lib/storyboard";
+import { usePicked, type Picked } from "../../lib/usePicked";
 import { useToast } from "../Toast";
 import { hookLook, isIntro } from "../../lib/intro/intros";
 import { trackOf } from "../../lib/music/library";
@@ -70,6 +70,8 @@ interface Props {
   onSearch?: () => void;
   /** A video of the streamer's own is added as a passage (from their media library, or a file) */
   onImport?: () => void;
+  /** The passages picked in the whole montage (the timeline shows and changes the same ones); without it, the list keeps its own */
+  selection?: Picked;
   /** Passages asked of the assistant (its panel opens, ready for what to look for) */
   onAskAi?: () => void;
   /** A template's name, by key */
@@ -211,6 +213,7 @@ export default function CompilationPanel({
   onDelete,
   onSearch,
   onImport,
+  selection,
   onAskAi,
   templateName,
   looking,
@@ -240,35 +243,13 @@ export default function CompilationPanel({
 
   /* ── Several passages picked: moved, put in another part, taken out together ── */
 
-  const [picked, setPicked] = useState<Set<string>>(new Set());
-  // The passage last ticked: Shift + click picks all from it to the one clicked
-  const anchor = useRef<string | null>(null);
+  // (the montage's own selection when it gives one: the timeline picks the same passages; else this list's)
+  const ownPicked = usePicked(selection ? null : compilation);
+  const { picked, ids: pickedIds, toggle, clear: clearPicked } = selection ?? ownPicked;
   const ids = allItems(compilation).map((item) => item.id);
-  const order = ids.join(",");
-  // A passage that left the video is no longer picked
-  useEffect(() => {
-    setPicked((prev) => ([...prev].every((id) => ids.includes(id)) ? prev : new Set([...prev].filter((id) => ids.includes(id)))));
-  }, [order]); // eslint-disable-line react-hooks/exhaustive-deps
-  const pickedIds = ids.filter((id) => picked.has(id));
-  const toggle = (id: string, range = false) => {
-    setPicked((prev) => {
-      const next = new Set(prev);
-      if (range && anchor.current && anchor.current !== id) for (const between of itemsBetween(compilation, anchor.current, id)) next.add(between);
-      else if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-    anchor.current = id;
-  };
-  useEffect(() => {
-    if (picked.size === 0) return;
-    const escape = (e: KeyboardEvent) => e.key === "Escape" && !(e.target as HTMLElement).closest?.("input, textarea, [role=dialog]") && setPicked(new Set());
-    document.addEventListener("keydown", escape);
-    return () => document.removeEventListener("keydown", escape);
-  }, [picked.size]);
 
   // What is open: the list of parts to move the picked passages to, or the transitions (of the video, of the picked ones, of one passage)
-  const [menu, setMenu] = useState<"move" | "video" | "picked" | "intro" | "music" | "template" | "universe" | "titles" | "effects" | { item: string } | null>(null);
+  const [menu, setMenu] = useState<"move" | "video" | "picked" | "intro" | "music" | "template" | "universe" | "titles" | "effects" | "shorten" | { item: string } | null>(null);
   const partName = (section: CompilationSection, among = compilation.sections) => section.title.trim() || t("compilation.partN", { n: among.indexOf(section) + 1 });
   const moveTo = (sectionId: string | null) => {
     setMenu(null);
@@ -344,8 +325,17 @@ export default function CompilationPanel({
   };
   const aiNote = [soundNote, looksNote].filter(Boolean).join(" ");
   const [noteOpen, setNoteOpen] = useState(false);
-  const target = compilation.target;
-  const over = !!target && total > target * 1.05;
+  // The lengths the video can be brought down to: those it is longer than
+  const shorter = TARGETS.filter((seconds) => total > seconds * 1.05);
+  /** The video brought down to a length at once: its long passages shortened, then its weakest ones taken out (Ctrl+Z takes it back) */
+  const shortenTo = (seconds: number) => {
+    setMenu(null);
+    const fitted = fitToTarget(compilation, seconds - opening);
+    // (what the AI aims for when it is asked to change this video)
+    onChange({ ...fitted, target: seconds });
+    const removed = count - allItems(fitted).length;
+    toast.success(t(removed > 0 ? "compilation.shortenedRemoved" : "compilation.shortened", { length: clock(compilationLength(fitted) + opening), count: removed }));
+  };
   const iconButton = "btn btn-ghost btn-icon w-7 h-7 text-ink-3 hover:text-white disabled:opacity-25";
   const miniButton = "btn btn-ghost btn-icon btn-mini text-ink-2 hover:text-white disabled:opacity-25";
   const own = ownTransitions(compilation);
@@ -643,7 +633,7 @@ export default function CompilationPanel({
             >
               <Trash2 className="w-3.5 h-3.5" />
             </button>
-            <button onClick={() => setPicked(new Set())} aria-label={t("compilation.clearPicked")} title={t("compilation.clearPicked")} className={miniButton}>
+            <button onClick={clearPicked} aria-label={t("compilation.clearPicked")} title={t("compilation.clearPicked")} className={miniButton}>
               <X className="w-3.5 h-3.5" />
             </button>
           </span>
@@ -684,25 +674,19 @@ export default function CompilationPanel({
         </div>
       )}
 
-      {/* Length: what it makes, what is aimed for */}
-        <div className="mt-1 pt-3 border-t border-white/[0.08]">
-          <div className="flex items-baseline justify-between gap-2">
-            <span className="text-[13px] text-ink-2">
-              <span className={`mono font-semibold ${over ? "text-[#F5B14C]" : "text-white"}`}>{clock(total)}</span> · {t("compilation.moments", { count })}
+      {/* How long the video is; and, when it can be, one action that brings it down to a length (its weakest passages go) */}
+        <div className="mt-1 pt-3 border-t border-white/[0.08] flex items-center justify-between gap-2">
+          <span className="text-[13px] text-ink-2">
+            <span className="mono font-semibold text-white">{clock(total)}</span> · {t("compilation.moments", { count })}
+          </span>
+          {shorter.length > 0 && (
+            <span className="relative">
+              <button onClick={() => setMenu(menu === "shorten" ? null : "shorten")} aria-haspopup="menu" aria-expanded={menu === "shorten"} title={t("compilation.shortenHint")} className="btn btn-glass btn-sm h-7 pl-2.5 pr-2">
+                {t("compilation.shorten")} <ChevronDown className="w-3.5 h-3.5 text-ink-3" />
+              </button>
+              {menu === "shorten" && <ShortenMenu lengths={shorter} onPick={shortenTo} onClose={() => setMenu(null)} />}
             </span>
-            {over && (
-              <button onClick={() => onChange(fitToTarget(compilation, target! - opening))} className="btn btn-glass btn-sm h-7 px-2.5">
-                {t("compilation.fit", { length: clock(target!) })}
-              </button>
-            )}
-          </div>
-          <div role="group" aria-label={t("compilation.length")} className="seg mt-2">
-            {TARGETS.map((seconds) => (
-              <button key={seconds} aria-pressed={target === seconds} onClick={() => onChange({ ...compilation, target: target === seconds ? null : seconds })}>
-                {t(`compilation.target.${seconds}`)}
-              </button>
-            ))}
-          </div>
+          )}
         </div>
       </>
       )}
@@ -1120,6 +1104,32 @@ function PassageRow({ item, fresh, shown, playing, picked, picking, dragged, dro
         {picker}
       </li>
     </>
+  );
+}
+
+/** The lengths a video can be brought down to */
+function ShortenMenu({ lengths, onPick, onClose }: { lengths: number[]; onPick: (seconds: number) => void; onClose: () => void }) {
+  const { t } = useTranslation();
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const outside = (e: PointerEvent) => !box.current?.parentElement?.contains(e.target as Node) && onClose();
+    const escape = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    document.addEventListener("pointerdown", outside, true);
+    document.addEventListener("keydown", escape);
+    return () => {
+      document.removeEventListener("pointerdown", outside, true);
+      document.removeEventListener("keydown", escape);
+    };
+  }, [onClose]);
+  return (
+    <div ref={box} role="menu" aria-label={t("compilation.shorten")} className="absolute z-40 right-0 bottom-full mb-2 w-[196px] p-1.5 rounded-[13px] bg-[#171a18]/[0.98] border border-white/[0.12] shadow-[0_24px_60px_-18px_rgba(0,0,0,0.9)]">
+      <p className="px-2.5 pt-1 pb-1.5 text-[11.5px] leading-snug text-ink-3">{t("compilation.shortenHint")}</p>
+      {lengths.map((seconds) => (
+        <button key={seconds} role="menuitem" onClick={() => onPick(seconds)} className="w-full flex items-center h-9 px-2.5 rounded-[8px] text-left text-[13px] text-white hover:bg-white/[0.08]">
+          {t(`compilation.target.${seconds}`)}
+        </button>
+      ))}
+    </div>
   );
 }
 

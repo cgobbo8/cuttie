@@ -2026,11 +2026,12 @@ export async function ensurePieces(
 export async function suggestClipCut(
   jobId: string,
   filename: string,
-  // (`current`: for a passage made of an imported video, the part of its file it plays now, clip seconds)
-  { wish = "", target = null, current }: { wish?: string; target?: number | null; current?: [number, number][] } = {},
+  // (for a passage of a video — `filename` is then its piece — `within`: the part of its file it plays, clip seconds,
+  // the only one the AI cuts; `summary`: what is said in it)
+  { wish = "", target = null, within, summary }: { wish?: string; target?: number | null; within?: [number, number]; summary?: string } = {},
 ): Promise<{ parts: [number, number][]; note: string; cost: number; origin?: number }> {
   // (`origin`: where the clip's file starts in the live, seconds: what places its parts in the live)
-  return liveJson(await postJson(`${BASE}/clips/${jobId}/${encodeURIComponent(filename)}/suggest-cut`, { wish, ...(target ? { target } : {}), ...(current ? { current } : {}) }));
+  return liveJson(await postJson(`${BASE}/clips/${jobId}/${encodeURIComponent(filename)}/suggest-cut`, { wish, ...(target ? { target } : {}), ...(within ? { within } : {}), ...(summary ? { summary } : {}) }));
 }
 
 // ── The assistant ───────────────────────────────────────

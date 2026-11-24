@@ -1236,10 +1236,25 @@ def _cut_off(parts: list[list[float]], target: float, clip_seconds: float) -> st
 
 def suggest_cut(
     words: list[dict], clip_seconds: float, summary: str = "", current: list[list[float]] | None = None, wish: str = "", target: float | None = None,
+    within: list[float] | None = None,
 ) -> dict:
     """The parts of a clip worth keeping, for a tight video: [[start, end], ...] in clip seconds.
     `target`: the length the streamer aims for (seconds), None when left free. A montage more than a
-    quarter away from it is sent back to the model once, and the nearer of the two is kept."""
+    quarter away from it is sent back to the model once, and the nearer of the two is kept.
+    `within`: [start, end] in clip seconds, when only that stretch is to be cut (a passage of a video
+    that plays part of its file): the model is shown that stretch alone, as if it were the whole clip,
+    and the parts it keeps are given back on the file's own clock, inside the stretch."""
+    if within:
+        start, end = max(0.0, float(within[0])), min(float(clip_seconds), float(within[1]))
+        if end - start < 0.5:
+            raise NoTranscript("clip")
+        said = [
+            {**word, "start": round(max(0.0, float(word["start"]) - start), 3), "end": round(min(end - start, float(word["end"]) - start), 3)}
+            for word in words
+            if isinstance(word, dict) and start <= (float(word.get("start", 0)) + float(word.get("end", 0))) / 2 <= end
+        ]
+        cut = suggest_cut(said, end - start, summary, None, wish, target)
+        return {**cut, "parts": [[round(a + start, 2), round(b + start, 2)] for a, b in cut["parts"]]}
     lines = clip_lines(words)
     if not lines:
         raise NoTranscript("clip")

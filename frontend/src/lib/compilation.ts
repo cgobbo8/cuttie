@@ -297,6 +297,25 @@ export function cutItem<T extends Pick<Compilation, "sections">>(c: T, itemId: s
   };
 }
 
+/**
+ * Several passages each cut into pieces in one change of the video (the tools worked on all the
+ * picked ones): `ids`, every passage that came of it, in the order they were given; `cut`, how
+ * many passages were really cut.
+ */
+export function cutItems<T extends Pick<Compilation, "sections">>(c: T, cuts: { id: string; pieces: [number, number][]; texts?: string[] }[]): { compilation: T; ids: string[]; cut: number } {
+  let next = c;
+  const ids: string[] = [];
+  let cut = 0;
+  for (const { id, pieces, texts } of cuts) {
+    const done = cutItem(next, id, pieces, texts);
+    if (done.ids.length === 0) continue;
+    next = done.compilation;
+    ids.push(...done.ids);
+    cut++;
+  }
+  return { compilation: next, ids, cut };
+}
+
 /** A passage cut in two at a time of the live (nothing when that leaves a piece too short to be one) */
 export function splitItem<T extends Pick<Compilation, "sections">>(c: T, itemId: string, at: number, texts?: [string, string]): { compilation: T; ids: string[] } {
   const item = allItems(c).find((one) => one.id === itemId);

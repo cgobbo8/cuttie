@@ -889,7 +889,8 @@
       "clip": "Clips",
       "sequence": "Séquences",
       "compilation": "Compilations"
-    }
+    },
+    "aiCutHintMany": "L'IA garde l'essentiel de chaque passage sélectionné. Moins d'un centime par passage, et ça s'annule."
   },
   "montage": {
     "title": "Habille tes clips",
@@ -1014,7 +1015,14 @@
     "silencesOut_other": "Blancs retirés : {{count}} passages",
     "side": {
       "passages": "Passages"
-    }
+    },
+    "playhead": "Tête de lecture",
+    "noSilenceMany": "Aucun blanc à retirer dans ces passages.",
+    "silencesOutMany_one": "Blancs retirés dans {{count}} passage",
+    "silencesOutMany_other": "Blancs retirés dans {{count}} passages",
+    "silencesHintMany": "Retire les blancs des passages sélectionnés",
+    "aiCutMany_one": "Montage IA : {{count}} passage recoupé",
+    "aiCutMany_other": "Montage IA : {{count}} passages recoupés"
   },
   "exportStep": {
     "title": "Tes clips sont prêts",
@@ -1562,7 +1570,6 @@
     "moments_other": "{{count}} passages",
     "inCompilation_one": "{{count}} dans la vidéo",
     "inCompilation_other": "{{count}} dans la vidéo",
-    "fit": "Ajuster à {{length}}",
     "titles": "Titres des parties",
     "titlesHint": "Chaque partie s'ouvre sur son titre",
     "titleHide": "Ne pas écrire ce titre dans la vidéo",
@@ -1942,7 +1949,12 @@
       "clip": "Ex. : vers 3 h, je sors de l'hydravion et je meurs dans l'hélice.",
       "sequence": "Ex. : la mission du yacht, de l'arrivée en jet-ski jusqu'à la fuite en hydroglisseur."
     },
-    "addWithAi": "Ajouter avec l'IA"
+    "addWithAi": "Ajouter avec l'IA",
+    "shorten": "Raccourcir à…",
+    "shortenHint": "Ramène la vidéo à cette durée : ses longs passages raccourcissent, puis les moins forts sortent.",
+    "shortened": "Vidéo ramenée à {{length}}",
+    "shortenedRemoved_one": "Vidéo ramenée à {{length}} : {{count}} passage retiré",
+    "shortenedRemoved_other": "Vidéo ramenée à {{length}} : {{count}} passages retirés"
   },
   "compilations": {
     "title": "Compilations",

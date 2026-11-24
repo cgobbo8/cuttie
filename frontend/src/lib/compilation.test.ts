@@ -51,6 +51,7 @@ import {
   tightened,
   updateItem,
   cutItem,
+  cutItems,
   extendItem,
   recutVideo,
   splitItem,
@@ -793,5 +794,30 @@ describe("a video of the media library as a passage", () => {
     // The AI gives nothing back: the imported videos are still a video
     const emptied = revisedSections(c, { title: "", sections: [] }, 3600);
     expect(emptied.sections.flatMap((s) => s.items.map((item) => item.id))).toEqual(["mmmmmmmmm0", "mmmmmmmmm1", "mmmmmmmmm2", "mmmmmmmmm3"]);
+  });
+});
+
+describe("the tools on several passages at once", () => {
+  it("cuts each of them into its pieces in one change, and says what came of it", () => {
+    const c = { sections: [section("s1", [item("aaaaaaaaaa", 100, 120), item("bbbbbbbbbb", 200, 210), item("cccccccccc", 300, 330)])] };
+    const { compilation: next, ids: made, cut } = cutItems(c, [
+      { id: "aaaaaaaaaa", pieces: [[101, 104], [110, 118]], texts: ["un", "deux"] },
+      // (pieces too short to be passages: this one stays as it is)
+      { id: "bbbbbbbbbb", pieces: [[200, 200.1]] },
+      { id: "cccccccccc", pieces: [[300, 310], [315, 320], [322, 329]] },
+      { id: "nobodyhere", pieces: [[1, 5]] },
+    ]);
+    expect(cut).toBe(2);
+    const all = allItems(next);
+    expect(all.map((i) => [i.start, i.end])).toEqual([[101, 104], [110, 118], [200, 210], [300, 310], [315, 320], [322, 329]]);
+    // Each keeps its place and its id; what was made of it follows, made out of it
+    expect(all[0].id).toBe("aaaaaaaaaa");
+    expect(all[1].like).toBe("aaaaaaaaaa");
+    expect(all[2].id).toBe("bbbbbbbbbb");
+    expect(all.slice(4).every((i) => i.like === "cccccccccc")).toBe(true);
+    expect(made).toEqual([all[0].id, all[1].id, all[3].id, all[4].id, all[5].id]);
+    expect(all.slice(0, 2).map((i) => i.text)).toEqual(["un", "deux"]);
+    // Nothing to cut: the same video
+    expect(cutItems(c, []).compilation).toBe(c);
   });
 });

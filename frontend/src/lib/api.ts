@@ -1149,6 +1149,8 @@ export interface EditEnvironment {
   words: TranscriptWord[];
   /** `emotes`: the emote names in a message (chats downloaded since they are kept) */
   chat_messages: { author: string; text: string; timestamp: number; emotes?: string[] }[];
+  /** Where the clip's sound jumps well above its usual level (seconds), and by how much (dB): someone shouts */
+  shouts?: { at: number; over: number }[];
 }
 
 /** Webcam framing for one live: a rectangle, false (no cam on this live) or null (automatic) */

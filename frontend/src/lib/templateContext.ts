@@ -76,6 +76,7 @@ export function clipTemplateContext({
     frameH: env?.clip_height ?? 1080,
     facecam,
     words: env?.words ?? [],
+    ...(env?.shouts?.length ? { shouts: env.shouts } : {}),
     chat: chatForClip(env?.chat_messages ?? []),
     startAt,
     endAt,

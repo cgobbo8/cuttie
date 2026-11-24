@@ -24,6 +24,8 @@ import {
   type SeenPerson,
 } from '#services/facecam_resolver'
 
+import { clipShouts, type Shout } from '#services/clip_shouts'
+
 const execFileAsync = promisify(execFile)
 
 export interface EditEnvironment {
@@ -36,6 +38,8 @@ export interface EditEnvironment {
   dominant_color: { r: number; g: number; b: number } | null
   words: { word: string; start: number; end: number }[]
   chat_messages: ChatLine[]
+  /** Where the clip's sound jumps well above its usual level (see clip_shouts.ts): the montage's effects come closer there */
+  shouts: Shout[]
 }
 
 /** A chat message; `emotes` lists the emote names in its text (chats downloaded since they're kept) */
@@ -260,6 +264,8 @@ export async function resolveEditEnv(
   shared: JobSharedData,
 ): Promise<EditEnvironment> {
   const base = path.basename(clipFilename, path.extname(clipFilename))
+  // Where someone shouts in it (measured once, kept beside the clip)
+  const shouts = await clipShouts(path.join(CLIPS_BASE, jobId, clipFilename))
 
   // Words (per-clip)
   const wordsPath = path.join(CLIPS_BASE, jobId, `${base}_words.json`)
@@ -310,6 +316,7 @@ export async function resolveEditEnv(
       dominant_color: shared.dominantColor,
       words,
       chat_messages: [],
+      shouts,
     }
   }
 
@@ -325,5 +332,6 @@ export async function resolveEditEnv(
     dominant_color: shared.dominantColor,
     words,
     chat_messages: chatMessages,
+    shouts,
   }
 }

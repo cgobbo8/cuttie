@@ -227,15 +227,19 @@ describe("montage for Remotion", () => {
     // No level: the montage as it was
     expect(withEffects(montage, cuts, null).segments.every((segment) => !("effects" in segment))).toBe(true);
     const lively = withEffects(montage, cuts, "light");
-    // The first piece punches in where « regarde le tigre! » starts, 1 s into it (said at 6 s of a clip played from 5 s)
-    expect(lively.segments[0].effects).toEqual([{ kind: "punch", at: 0.95, for: 0.8, amount: 1.08 }]);
-    // The second plays a little closer, and punches on its own line
-    expect(lively.segments[1].effects!.map((e) => [e.kind, e.at])).toEqual([["zoom", 0], ["punch", 0.95]]);
+    // The first piece comes closer where « regarde le tigre! » starts, 1 s into it (said at 6 s of a clip played from 5 s)
+    expect(lively.segments[0].effects).toEqual([{ kind: "punch", at: 0.95, for: 1.3, amount: 1.08 }]);
+    // The second plays a little closer; its own line comes 4 s after the first on the video's clock: too soon for another move
+    expect(lively.segments[1].effects!.map((e) => [e.kind, e.at])).toEqual([["zoom", 0]]);
     // Its layers, its place and its length are untouched
     expect(lively.segments.map(({ effects: _effects, ...rest }) => rest)).toEqual(montage.segments);
     // A clip's key moments, in its own seconds, take over from the words; one outside the piece is left out
     const named = withEffects(montage, cuts, "light", [[7.5, 20], undefined]);
-    expect(named.segments[0].effects).toEqual([{ kind: "punch", at: 2.45, for: 0.8, amount: 1.08 }]);
+    expect(named.segments[0].effects).toEqual([{ kind: "punch", at: 2.45, for: 1.3, amount: 1.08 }]);
+    // Where someone shouts in the clip (its own seconds): the webcam comes closer there, on the piece's clock; a shout outside the piece is not its
+    const loud = { ...said, shouts: [{ at: 6.8, over: 12 }, { at: 20, over: 18 }] };
+    const shouted = withEffects(montage, [{ ctx: loud, start: 5, end: 9 }, { ctx: loud, start: 30, end: 34 }], "light");
+    expect(shouted.segments[0].effects).toEqual([{ kind: "punch", at: 1.75, for: 1.7, amount: 1.16, on: "cam" }]);
     // To the renderer, a piece says its effects; chosen again, the level replaces what was placed
     expect(renderPieces(lively, ["a.mp4", "b.mp4"])[0].effects).toEqual(lively.segments[0].effects);
     expect(renderPieces(montage, ["a.mp4", "b.mp4"])[0]).not.toHaveProperty("effects");

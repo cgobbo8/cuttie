@@ -367,14 +367,16 @@ export function buildMontage(
 }
 
 /**
- * A montage with its effects at a level (none: as it was): each piece's words, on its own clock, say
- * where a line lands; `beats[i]`: the instants of piece `i` that someone named (clip seconds).
+ * A montage with its effects at a level (none: as it was): each piece's words and the instants someone
+ * shouts in it, on its own clock, say where the picture moves; `beats[i]`: the instants of piece `i`
+ * that someone named (clip seconds).
  */
 export function withEffects(montage: MontageProps, cuts: MontageCut[], level: EffectLevel | null | undefined, beats: (number[] | undefined)[] = []): MontageProps {
   const placed = placeEffects(
     montage.segments.map((segment, i) => ({
       duration: segment.duration,
       words: wordsIn(cuts[i]?.ctx.words ?? [], segment.from, segment.from + segment.duration).map((word) => ({ ...word, start: word.start - segment.from, end: word.end - segment.from })),
+      shouts: (cuts[i]?.ctx.shouts ?? []).filter((shout) => shout.at >= segment.from && shout.at <= segment.from + segment.duration).map((shout) => ({ ...shout, at: Math.round((shout.at - segment.from) * 100) / 100 })),
       beats: beats[i]?.map((at) => at - segment.from).filter((at) => at >= 0 && at <= segment.duration),
     })),
     level,

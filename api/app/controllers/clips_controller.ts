@@ -146,6 +146,8 @@ export default class ClipsController {
       },
       words: env.words,
       chat_messages: env.chat_messages,
+      // Where someone shouts in it: the montage's effects bring the webcam closer there
+      shouts: env.shouts,
     })
   }
 

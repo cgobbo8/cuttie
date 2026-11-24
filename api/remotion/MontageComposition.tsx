@@ -74,10 +74,13 @@ const FILL = { position: "absolute", inset: 0, isolation: "isolate" } as const;
 const BARE = { display: "contents" } as const;
 
 /** A piece's layers, on its clip's clock (`silent`: a picture held still makes no sound) */
+/** What an effect does right now to a piece's webcam and to its other pictures (a move can be the webcam's alone) */
+type Moved = { cam?: string; game?: string };
+
 /** A layer an effect moves: a picture of the live (the game, the webcam, the blurred backdrop), set straight */
 const isPicture = (layer: Layer) => (layer.type === "gameplay" || layer.type === "facecam") && !layer.transform.rotation;
 
-const Layers: React.FC<{ segment: MontageSegment; silent?: boolean; moved?: string }> = ({ segment, silent = false, moved }) => {
+const Layers: React.FC<{ segment: MontageSegment; silent?: boolean; moved?: Moved }> = ({ segment, silent = false, moved }) => {
   const { fps, width, height } = useVideoConfig();
   const audible = silent ? undefined : audibleLayerId(segment.layers.map((p) => p.layer));
   return (
@@ -86,11 +89,13 @@ const Layers: React.FC<{ segment: MontageSegment; silent?: boolean; moved?: stri
         if (!layer.visible) return null;
         // (each picture moves inside its own box, at its own place in the stack: see the app's MontageComposition)
         const box = layer.transform;
-        const on = !!moved && isPicture(layer);
+        // (a move made for the webcam, the face, leaves the game alone: each picture has its own)
+        const transform = isPicture(layer) ? (layer.type === "facecam" ? moved?.cam : moved?.game) : undefined;
+        const on = !!transform;
         const clip = `inset(${box.y}px ${width - box.x - box.width}px ${height - box.y - box.height}px ${box.x}px round ${layer.style?.borderRadius ?? 0}px)`;
         return (
           <div key={layer.id} style={on ? { position: "absolute", inset: 0, zIndex: z + 1, clipPath: clip } : BARE}>
-            <div style={on ? { position: "absolute", inset: 0, transform: moved, transformOrigin: `${box.x + box.width / 2}px ${box.y + box.height / 2}px` } : BARE}>
+            <div style={on ? { position: "absolute", inset: 0, transform, transformOrigin: `${box.x + box.width / 2}px ${box.y + box.height * (layer.type === "facecam" ? 0.42 : 0.5)}px` } : BARE}>
               <ResolvedLayer layer={layer} z={z + 1} muted={layer.id !== audible} />
             </div>
           </div>
@@ -112,7 +117,8 @@ const Piece: React.FC<{ segment: MontageSegment; before?: MontageSegment; next?:
   const going = !coming && isTransition(next?.transition) ? transitionAt(next.transition, frame - framesOf(segment.duration, fps), fps) : null;
   const now = coming ?? going;
   // What moves its picture while it plays (a transition has the picture to itself)
-  const moved = now ? null : effectAt(segment.effects, frame, fps);
+  const hasCam = segment.layers.some(({ layer }) => layer.type === "facecam" && isPicture(layer));
+  const moved: Moved | undefined = now ? undefined : { cam: effectAt(segment.effects, frame, fps, "cam")?.transform, game: effectAt(segment.effects, frame, fps, hasCam ? "game" : "all")?.transform };
   return (
     <>
       {coming?.held && before && (
@@ -123,7 +129,7 @@ const Piece: React.FC<{ segment: MontageSegment; before?: MontageSegment; next?:
         </div>
       )}
       <div style={now ? { ...FILL, ...lookStyle(now.piece, width) } : BARE}>
-        <Layers segment={segment} moved={moved?.transform} />
+        <Layers segment={segment} moved={moved} />
       </div>
       {now && now.flash > 0 && <div style={{ ...FILL, background: "#fff", opacity: now.flash }} />}
     </>

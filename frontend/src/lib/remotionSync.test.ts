@@ -66,13 +66,15 @@ describe("editor and server renderer stay in sync", () => {
     expect(read("api/remotion/effects.ts")).toBe(read("frontend/src/lib/effects.ts"));
     expect(read("api/app/services/compilations.ts").match(/export const EFFECT_LEVELS = \[([^\]]+)\]/)?.[1].match(/\w+/g)).toEqual(EFFECT_LEVELS);
     // (the export's composition applies them as the preview's does)
-    for (const file of ["api/remotion/MontageComposition.tsx", "frontend/src/components/remotion-editor/MontageComposition.tsx"]) expect(read(file), file).toContain("effectAt(segment.effects, frame, fps)");
+    for (const file of ["api/remotion/MontageComposition.tsx", "frontend/src/components/remotion-editor/MontageComposition.tsx"]) expect(read(file), file).toContain('effectAt(segment.effects, frame, fps, "cam")');
     // (each picture moves inside its own box, at its own place in the stack, on both sides: moved as one box, a
     // piece went under what a layout draws between its layers and came out black; moved whole, it left its frame)
     for (const file of ["api/remotion/MontageComposition.tsx", "frontend/src/components/remotion-editor/MontageComposition.tsx"]) {
       expect(read(file), file).toContain('{ position: "absolute", inset: 0, zIndex: z + 1, clipPath: clip }');
-      expect(read(file), file).toContain("const on = !!moved && isPicture(layer);");
-      expect(read(file), file).toContain("moved={moved?.transform}");
+      // (the webcam and the game are each asked what moves them: a move made for the face leaves the game alone)
+      expect(read(file), file).toContain('const transform = isPicture(layer) ? (layer.type === "facecam" ? moved?.cam : moved?.game) : undefined;');
+      expect(read(file), file).toContain('effectAt(segment.effects, frame, fps, hasCam ? "game" : "all")');
+      expect(read(file), file).toContain("moved={moved}");
     }
   });
 

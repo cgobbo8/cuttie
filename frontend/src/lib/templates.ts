@@ -38,6 +38,8 @@ export interface TemplateContext {
   /** Webcam overlay in clip pixels, null = none */
   facecam: Rect | null;
   words: SubtitleWord[];
+  /** Where someone shouts in the clip, clip seconds (the montage's effects come closer there) */
+  shouts?: { at: number; over: number }[];
   /** Twitch chat during the clip, clip seconds (commands and bots left out) */
   chat?: ChatMessage[];
   /** Trimmed range of the clip, in clip seconds (the render keeps clip time) */

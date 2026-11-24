@@ -12,6 +12,9 @@ const FILL = { position: "absolute", inset: 0, isolation: "isolate" } as const;
 /** No box the rest of the time: the layers stack among the overlays as if it was not there */
 const BARE = { display: "contents" } as const;
 
+/** What an effect does right now to a piece's webcam and to its other pictures (a move can be the webcam's alone) */
+type Moved = { cam?: string; game?: string };
+
 /** A layer an effect moves: a picture of the live (the game, the webcam, the blurred backdrop), set straight */
 const isPicture = (layer: MontageSegment["layers"][number]["layer"]) => (layer.type === "gameplay" || layer.type === "facecam") && !layer.transform.rotation;
 
@@ -24,18 +27,20 @@ const isPicture = (layer: MontageSegment["layers"][number]["layer"]) => (layer.t
  * picture grew out of its frame. The boxes are always there (no box at all while nothing moves): a
  * layer is never mounted again when an effect starts or ends, which would restart its video in the preview.
  */
-function Layers({ segment, silent = false, moved }: { segment: MontageSegment; silent?: boolean; moved?: string }) {
+function Layers({ segment, silent = false, moved }: { segment: MontageSegment; silent?: boolean; moved?: Moved }) {
   const { fps, width, height } = useVideoConfig();
   const audible = silent ? undefined : audibleLayerId(segment.layers.map((p) => p.layer));
   return (
     <Sequence from={-Math.round(segment.from * fps)} layout="none">
       {segment.layers.map(({ layer, z }) => {
         const box = layer.transform;
-        const on = !!moved && isPicture(layer);
+        // (a move made for the webcam, the face, leaves the game alone: each picture has its own)
+        const transform = isPicture(layer) ? (layer.type === "facecam" ? moved?.cam : moved?.game) : undefined;
+        const on = !!transform;
         const clip = `inset(${box.y}px ${width - box.x - box.width}px ${height - box.y - box.height}px ${box.x}px round ${layer.style?.borderRadius ?? 0}px)`;
         return (
           <div key={layer.id} style={on ? { position: "absolute", inset: 0, zIndex: z + 1, clipPath: clip } : BARE}>
-            <div style={on ? { position: "absolute", inset: 0, transform: moved, transformOrigin: `${box.x + box.width / 2}px ${box.y + box.height / 2}px` } : BARE}>
+            <div style={on ? { position: "absolute", inset: 0, transform, transformOrigin: `${box.x + box.width / 2}px ${box.y + box.height * (layer.type === "facecam" ? 0.42 : 0.5)}px` } : BARE}>
               <LayerBox layer={layer} z={z + 1} audible={layer.id === audible} />
             </div>
           </div>
@@ -57,7 +62,8 @@ function Piece({ segment, before, next }: { segment: MontageSegment; before?: Mo
   const going = !coming && isTransition(next?.transition) ? transitionAt(next.transition, frame - framesOf(segment.duration, fps), fps) : null;
   const now = coming ?? going;
   // What moves its picture while it plays (a transition has the picture to itself)
-  const moved = now ? null : effectAt(segment.effects, frame, fps);
+  const hasCam = segment.layers.some(({ layer }) => layer.type === "facecam" && isPicture(layer));
+  const moved: Moved | undefined = now ? undefined : { cam: effectAt(segment.effects, frame, fps, "cam")?.transform, game: effectAt(segment.effects, frame, fps, hasCam ? "game" : "all")?.transform };
   return (
     <>
       {coming?.held && before && (
@@ -68,7 +74,7 @@ function Piece({ segment, before, next }: { segment: MontageSegment; before?: Mo
         </div>
       )}
       <div style={now ? { ...FILL, ...lookStyle(now.piece, width) } : BARE}>
-        <Layers segment={segment} moved={moved?.transform} />
+        <Layers segment={segment} moved={moved} />
       </div>
       {now && now.flash > 0 && <div style={{ ...FILL, background: "#fff", opacity: now.flash }} />}
     </>

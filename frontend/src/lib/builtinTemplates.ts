@@ -112,6 +112,10 @@ const allAlong = (id: string, kind: WidgetKind, box: Box, enter: EnterId): Extra
  * at in November 2026: the face cam big on top of the game or no cam at all, never a small one in a corner; a
  * title on the first frame; 4 words of subtitles at most, white with a black outline), in the pack's own
  * look: a strip of sunset on the seam, heavy small letters, six stars that light up as the clip plays.
+ *
+ * The content comes first, as in « Empilé »: the two pictures fill the frame whatever the webcam's size, and
+ * the pack is a thin touch laid over them. (A first version framed a small webcam and the game as two cards on
+ * a Vice City sky: half the frame was decor. Its frame and its sky remain as widgets for a template of one's own.)
  */
 const GTA: Layout = {
   background: "color",
@@ -128,27 +132,6 @@ const GTA: Layout = {
   extras: [allAlong("w-seam", "gta-seam", { x: 0, y: 742, w: 1080, h: 34 }, "none"), allAlong("w-wanted", "gta-wanted", { x: 600, y: 218, w: 420, h: 66 }, "slideRight")],
   // The seam covers the join of the two pictures; the words go over it
   order: ["cam", "game", "widget:w-seam", "chat", "subtitles", "hook"],
-};
-
-/*
- * The same look when the webcam is small in the stream (enlarged to the full width it would be soft): the
- * webcam and the game as two framed panels in front of an evening in Vice City, the title in its plate
- * astride them. Chosen by itself from the webcam's width (`layoutFor`).
- */
-const GTA_CARDS: Layout = {
-  ...GTA,
-  cam: { box: { x: 232, y: 314, w: 616, h: 476 }, frame: frame(0) },
-  game: { box: { x: 52, y: 892, w: 976, h: 549 }, frame: frame(0) },
-  subtitles: { ...GTA.subtitles, box: { x: 150, y: 1250, w: 780, h: 170 }, size: 64 },
-  hook: { ...GTA.hook, box: { x: 110, y: 770, w: 860, h: 170 }, size: 56 },
-  extras: [
-    allAlong("w-sky", "gta-sky", { x: 0, y: 0, w: 1080, h: 1920 }, "none"),
-    allAlong("w-frame-cam", "gta-frame", { x: 210, y: 292, w: 660, h: 520 }, "none"),
-    allAlong("w-frame-game", "gta-frame", { x: 30, y: 870, w: 1020, h: 593 }, "none"),
-    allAlong("w-wanted", "gta-wanted", { x: 600, y: 218, w: 420, h: 66 }, "slideRight"),
-  ],
-  // The sky behind everything, each frame under its picture
-  order: ["widget:w-sky", "widget:w-frame-cam", "cam", "widget:w-frame-game", "game", "chat", "subtitles", "hook"],
 };
 
 /*
@@ -271,10 +254,8 @@ const WITHOUT_CAM: Partial<Record<TemplateId, Layout>> = {
 };
 
 /** A layout for this clip: the stacked ones fall back on "Sans cam" with their own lettering */
-function layoutFor(id: TemplateId, hasCam: boolean, camWidth = 0): Layout {
+function layoutFor(id: TemplateId, hasCam: boolean): Layout {
   const l = LAYOUTS[id];
-  // The GTA layout with a small webcam: two framed panels instead of the webcam enlarged to the full width
-  if (id === "gta" && hasCam && camWidth > 0 && camWidth * 2 < 1080) return GTA_CARDS;
   if (hasCam || !l.cam) return l;
   const own = WITHOUT_CAM[id];
   if (own) return own;
@@ -288,8 +269,6 @@ const SPARE_CAM = { box: { x: 230, y: 210, w: 620, h: 560 }, frame: frame(48, 6,
 export interface BuiltInOptions {
   /** The clip has a webcam (layouts built around it move things around without one) */
   hasCam?: boolean;
-  /** How wide that webcam is in the stream's picture, clip pixels (a small one is not enlarged to the full width) */
-  camWidth?: number;
   subtitleStyle?: SubtitleStyle;
   /** The channel's widgets: shown or not, and when */
   widget?: { enabled: boolean; timing: WidgetTimingKind };
@@ -322,7 +301,7 @@ function subtitlesSpec(s: Subtitles, style: SubtitleStyle): TemplateSpec["subtit
 
 /** One of the 7 layouts as an element template */
 export function builtInSpec(id: TemplateId, o: BuiltInOptions = {}): TemplateSpec {
-  const l = layoutFor(id, o.hasCam !== false, o.camWidth);
+  const l = layoutFor(id, o.hasCam !== false);
   const widget = o.widget ?? { enabled: true, timing: "start" };
   const widgets: SpecWidget[] = [];
   if (widget.enabled && l.brand) {
@@ -371,7 +350,6 @@ export function buildTemplate(id: TemplateId, ctx: TemplateContext, look?: Templ
 export function specFor(id: TemplateId, ctx: TemplateContext, look?: TemplateLook): TemplateSpec {
   return builtInSpec(id, {
     hasCam: !!ctx.facecam,
-    camWidth: ctx.facecam?.w,
     subtitleStyle: ctx.subtitleStyle,
     widget: { enabled: ctx.widget.enabled && !!ctx.login, timing: ctx.widget.timing },
     look,

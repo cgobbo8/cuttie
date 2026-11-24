@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { TemplateContext } from "./templates";
-import { buildFromSpec, dragBox } from "./templateSpec";
+import { buildFromSpec, dragBox, fitPlate } from "./templateSpec";
 import { buildTemplate, builtInSpec, specFromLayout, upgradeTemplate } from "./builtinTemplates";
 
 const ctx: TemplateContext = {
@@ -472,5 +472,43 @@ describe("what the apps cover", () => {
         }
       }
     }
+  });
+});
+
+describe("a title on the GTA plate", () => {
+  const box = { width: 860, height: 190 };
+  it("keeps the template's size while it sits on one or two lines", () => {
+    expect(fitPlate("il y a quoi sur le parking ?", 60, box)).toEqual({ size: 60, lines: 2, height: 190 });
+    expect(fitPlate("le tigre", 60, box)).toEqual({ size: 60, lines: 1, height: 190 });
+  });
+
+  it("is written smaller to stay on two lines, never under 44 px", () => {
+    const fitted = fitPlate("il a failli mourir en sortant de l'hydravion", 60, box);
+    expect(fitted.lines).toBe(2);
+    expect(fitted.size).toBeLessThan(60);
+    expect(fitted.size).toBeGreaterThanOrEqual(44);
+    expect(fitted.height).toBe(190);
+  });
+
+  it("goes on three lines at its smallest when it is too long, on a plate grown to hold them", () => {
+    const long = fitPlate("il sort de l'hydravion pour récupérer la valise et meurt dans l'hélice devant tout le monde", 60, box);
+    expect(long.size).toBe(44);
+    expect(long.lines).toBeGreaterThanOrEqual(3);
+    // The letters never run over the plate's edges: it is as tall as its lines and their air
+    expect(long.height).toBeGreaterThanOrEqual(long.lines * long.size + 40);
+    expect(long.height).toBeGreaterThanOrEqual(190);
+    // A word wider than the plate cannot be helped: it is drawn at the smallest size, the plate as it was
+    expect(fitPlate("anticonstitutionnellementvraimenttroplong", 60, { width: 400, height: 190 })).toEqual({ size: 44, lines: 2, height: 190 });
+  });
+
+  it("is what the layers of a title are built with: the text at the fitted size, the plate as tall", () => {
+    const title = "il sort de l'hydravion pour récupérer la valise et meurt dans l'hélice devant tout le monde";
+    const layers = buildTemplate("gta", { ...ctx, hook: title });
+    const plate = layers.find((l) => l.widget?.widgetId === "gta-plate")!;
+    const text = layers.find((l) => l.type === "text" && l.text?.content === title)!;
+    const fitted = fitPlate(title, 60, { width: plate.transform.width, height: 190 });
+    expect(text.text!.fontSize).toBe(fitted.size);
+    expect(plate.transform.height).toBe(fitted.height);
+    expect(text.transform.height).toBe(fitted.height - 28);
   });
 });

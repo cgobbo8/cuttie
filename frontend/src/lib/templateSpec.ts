@@ -255,6 +255,50 @@ export function restyled<T extends TemplateSpec["hook"]>(hook: T, style: HookSty
 /** How far the pack's title box is tilted, degrees: a title is never set straight on a cover */
 const PLATE_TILT = -2;
 
+/**
+ * How wide the pack's lettering sets each letter, in ems (Rammetto One as the app draws it, measured
+ * there: heavy letters, half as wide again as a text font's). What is not listed is a letter of the
+ * usual width.
+ */
+const PLATE_EMS: Record<string, number> = { " ": 0.25, i: 0.4, l: 0.4, j: 0.5, r: 0.52, f: 0.55, t: 0.55, s: 0.59, c: 0.61, e: 0.73, v: 0.72, z: 0.72, k: 0.75, x: 0.75, o: 0.77, m: 1.17, w: 1.02, "1": 0.56, "?": 0.56, "-": 0.49 };
+const plateEms = (word: string): number =>
+  [...word.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()].reduce((sum, ch) => sum + (PLATE_EMS[ch] ?? (/[.,:;!'’`|]/.test(ch) ? 0.38 : /[0-9]/.test(ch) ? 0.88 : 0.84)), 0);
+/** The lines a title takes in the pack's lettering at a size, in a box this wide (Infinity: a word alone is wider than the box) */
+function plateLines(text: string, size: number, width: number): number {
+  // (a little narrower than the box: an estimate must not be the one line too short)
+  const room = (width * 0.96) / size;
+  let lines = 1;
+  let used = 0;
+  for (const word of text.trim().split(/\s+/).filter(Boolean)) {
+    const wide = plateEms(word);
+    if (wide > room) return Infinity;
+    if (used > 0 && used + PLATE_EMS[" "] + wide > room) {
+      lines++;
+      used = wide;
+    } else used += (used > 0 ? PLATE_EMS[" "] : 0) + wide;
+  }
+  return lines;
+}
+/** The smallest a title is written on its plate, and how much air the plate keeps above and under it (frame pixels) */
+const PLATE_SMALLEST = 44;
+const PLATE_AIR = 46;
+
+/**
+ * A title set on the pack's plate so that it sits well in it: on one or two lines, at the size the
+ * template gives when that fits, smaller when it takes that to stay on two lines (never under 44 px).
+ * A title too long even so goes on three lines or more at that smallest size, and the plate grows
+ * under it to hold them, instead of the letters running over its edges.
+ */
+export function fitPlate(text: string, size: number, box: { width: number; height: number }): { size: number; lines: number; height: number } {
+  const inner = box.width - 128;
+  let fitted = Math.round(size);
+  while (fitted > PLATE_SMALLEST && plateLines(text, fitted, inner) > 2) fitted -= 2;
+  fitted = Math.max(PLATE_SMALLEST, fitted);
+  // (a word wider than the box cannot be helped by more lines: it is drawn as it is)
+  const lines = Math.min(6, Math.max(1, Number.isFinite(plateLines(text, fitted, inner)) ? plateLines(text, fitted, inner) : 2));
+  return { size: fitted, lines, height: Math.max(box.height, Math.round(lines * fitted + PLATE_AIR)) };
+}
+
 export const BRAND_COLOR_REFS = ["white", "accent", "highlight", "dark", "light"] as const;
 
 export function resolveColor(ref: ColorRef, colors: BrandColors): string {
@@ -346,10 +390,13 @@ export function hookLeavesAt(h: TemplateSpec["hook"], startAt: number, endAt: nu
 }
 
 function hookLayers(ctx: TemplateContext, h: TemplateSpec["hook"]): Layer[] {
-  const t = toTransform(h.box);
-  const layers: Layer[] = [];
+  const whole = toTransform(h.box);
   const plate = h.style === "viceplate";
   const vice = h.style === "vice" || plate;
+  // On the pack's plate a title is fitted: two lines at most when a smaller size allows it, a taller plate when it doesn't
+  const fit = plate ? fitPlate(ctx.hook, h.size, whole) : null;
+  const t = fit ? { ...whole, height: fit.height } : whole;
+  const layers: Layer[] = [];
   const boxed = h.style === "box" || h.style === "brand";
   if (h.style === "box") layers.push(shape("Fond de l'accroche", t, "#FFFFFF", 1, 30, "soft"));
   if (h.style === "brand") layers.push(shape("Fond de l'accroche", t, ctx.colors.accent, 0.94, 26, "soft"));
@@ -368,7 +415,7 @@ function hookLayers(ctx: TemplateContext, h: TemplateSpec["hook"]): Layer[] {
     // (the GTA pack writes in small letters, as the title of that game is)
     content: vice ? ctx.hook.toLowerCase() : ctx.hook,
     fontFamily: `"${fontFamily(h.font)}", system-ui, sans-serif`,
-    fontSize: Math.round(h.size),
+    fontSize: fit ? fit.size : Math.round(h.size),
     color: h.style === "box" ? "#0C0C0E" : h.style === "brand" ? inkOn(ctx.colors.accent) : "#FFFFFF",
     fontWeight: "bold",
     textAlign: "center",
@@ -410,7 +457,9 @@ function widgetAnimations(w: SpecWidget, ctx: TemplateContext): { appearAt: numb
   const anim = (m: Motion, time: number): LayerAnimation => ({ id: uid("anim"), type: m.type, time: Math.max(0, time), duration: m.duration, easing: m.easing });
   // No entrance: it still pops in at its time, not before
   const enter = ENTERS[enterOf(w)] ?? { type: "fadeIn" as const, easing: "linear" as const, duration: 0.01 };
-  const animations = [anim(enter, appearAt)];
+  // (one that is there from the start with no entrance is on the very first picture, the video's cover: nothing to wait for)
+  const there = !ENTERS[enterOf(w)] && appearAt <= ctx.startAt + 0.001;
+  const animations = there ? [] : [anim(enter, appearAt)];
   if (leaveAt !== null) animations.push(anim(EXITS[exitOf(w)], leaveAt));
   return { appearAt, animations };
 }

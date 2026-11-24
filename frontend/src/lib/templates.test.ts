@@ -101,10 +101,16 @@ describe("templates", () => {
     // Without the channel's widgets (switched off, or a streamer who set no channel): what is the layout itself stays
     expect(kinds(buildTemplate("gta", { ...wide, widget: { enabled: false, timing: "start" } }))).toEqual(["gta-seam", "gta-plate", "gta-wanted"]);
     expect(kinds(buildTemplate("gta", { ...wide, login: null }))).toEqual(["gta-seam", "gta-plate", "gta-wanted"]);
-    // A small webcam (enlarged to the full width it would be soft): two framed panels in front of an evening in Vice City
-    expect(kinds(buildTemplate("gta", ctx))).toEqual(["gta-sky", "gta-frame", "gta-frame", "gta-plate", "gta-tag", "gta-wanted"]);
-    const cam = buildTemplate("gta", ctx).find((l) => l.type === "facecam")!;
-    expect(cam.transform.width).toBeLessThan(700);
+    // A small webcam: the same, the content first (the two pictures fill the frame, the pack is a thin touch over them)
+    expect(kinds(buildTemplate("gta", ctx))).toEqual(["gta-seam", "gta-plate", "gta-tag", "gta-wanted"]);
+    const small = buildTemplate("gta", ctx);
+    const cam = small.find((l) => l.type === "facecam")!;
+    const game = small.find((l) => l.type === "gameplay")!;
+    expect([cam.transform.width, game.transform.width]).toEqual([1080, 1080]);
+    // (nothing of the frame is left to decor: the webcam, the game right under it, down to the bottom)
+    expect(cam.transform.height + game.transform.height).toBeGreaterThanOrEqual(1900);
+    // The strip on the seam is there from the very first picture, the video's cover: it has no entrance to wait for
+    expect(small.find((l) => l.widget?.widgetId === "gta-seam")!.animations ?? []).toEqual([]);
     // Nobody in the webcam: the game alone, no seam to cover
     expect(kinds(buildTemplate("gta", { ...ctx, facecam: null, login: null }))).toEqual(["gta-plate", "gta-wanted"]);
     // A follow button says the channel: it goes with its widgets

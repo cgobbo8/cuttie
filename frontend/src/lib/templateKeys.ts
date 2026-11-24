@@ -54,5 +54,5 @@ export function needsWebcam(key: TemplateKey, customs: TemplateSpec[]): boolean 
 /** How a template writes its hook line and where (section titles of a compilation are written the same) */
 export function hookOf(key: TemplateKey, ctx: TemplateContext, customs: TemplateSpec[], titles?: HookStyle | null): TemplateSpec["hook"] {
   const custom = findCustom(key, customs);
-  return restyled((custom ?? builtInSpec(baseOf(key, customs), { hasCam: !!ctx.facecam, camWidth: ctx.facecam?.w, subtitleStyle: ctx.subtitleStyle })).hook, titles);
+  return restyled((custom ?? builtInSpec(baseOf(key, customs), { hasCam: !!ctx.facecam, subtitleStyle: ctx.subtitleStyle })).hook, titles);
 }

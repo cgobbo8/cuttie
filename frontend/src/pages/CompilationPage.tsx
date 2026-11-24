@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { useAssistant, useAssistantActions, useAssistantPlace, type AssistantRun } from "../lib/AssistantContext";
 import { applyLook, lookOf } from "../lib/assistantLook";
 import { building, dropBuild, onBuildEnd, useBuilds } from "../lib/backgroundBuild";
+import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { Player, type PlayerRef } from "@remotion/player";
 import { ArrowLeft, ArrowLeftToLine, ArrowRightToLine, Check, Loader2, Plus, Scissors, Sparkles, Undo2, X } from "lucide-react";
@@ -182,6 +183,8 @@ export default function CompilationPage() {
   const [storyboards, setStoryboards] = useState<Record<string, TwitchStoryboard>>({});
   const [library, setLibrary] = useState<LiveCompilations[]>([]);
   const [addingLive, setAddingLive] = useState(false);
+  // The tool waiting for the live being picked (none: it was asked for from the page itself)
+  const liveAsked = useRef<((id: string | null) => void) | null>(null);
   const [compilations, setCompilations] = useState<Compilation[] | null>(null);
   const [currentId, setCurrentId] = useState<string | null>(null);
   const currentIdRef = useRef(currentId);
@@ -1718,10 +1721,23 @@ export default function CompilationPage() {
   const canAddLive = source === "compilation" && liveIds.length <= MAX_OTHER_LIVES && (library.some((live) => !liveIds.includes(live.job_id)) || (channel?.vods ?? []).some((vod) => !vod.recording && vod.job?.status !== "DONE"));
   const addLive = (id: string) => {
     setAddingLive(false);
-    if (liveIds.includes(id) || liveIds.length > MAX_OTHER_LIVES) return;
-    change({ ...compilation, lives: [...(compilation.lives ?? []), id] });
-    toast.success(t("compilation.lives.added", { name: liveTitle(id) }));
+    const there = liveIds.includes(id);
+    const room = liveIds.length <= MAX_OTHER_LIVES;
+    if (!there && room) {
+      change({ ...compilation, lives: [...(compilation.lives ?? []), id] });
+      toast.success(t("compilation.lives.added", { name: liveTitle(id) }));
+    }
+    // (asked for from a tool: it goes on in that live)
+    liveAsked.current?.(there || room ? id : null);
+    liveAsked.current = null;
   };
+  /** One more live asked for from a tool (the search, the live gone through): the picker opens; answers the live picked, null when none was */
+  const askLive = () =>
+    new Promise<string | null>((resolve) => {
+      liveAsked.current?.(null);
+      liveAsked.current = resolve;
+      setAddingLive(true);
+    });
   const removeLive = (id: string) => {
     const left = (compilation.lives ?? []).filter((other) => other !== id);
     const { lives: _before, ...rest } = compilation;
@@ -1916,6 +1932,7 @@ export default function CompilationPage() {
                 setSearching(false);
                 setResults([]);
               }}
+              onOtherLive={canAddLive ? askLive : undefined}
             />
           </div>
         ) : importing ? (
@@ -2172,6 +2189,7 @@ export default function CompilationPage() {
           }))}
           initial={browsing}
           onAdd={addRange}
+          onOtherLive={canAddLive ? askLive : undefined}
           onClose={() => {
             setBrowsing(null);
             // The passage just picked: the video goes to it, and it opens underneath, where its two ends are set finely
@@ -2200,17 +2218,24 @@ export default function CompilationPage() {
         onConfirm={confirmDelete}
         onCancel={() => setToDelete(false)}
       />
-      {addingLive && (
-        <LivePicker
-          title={t("compilation.lives.pickTitle")}
-          hint={t("compilation.lives.pickHint")}
-          lives={library.filter((live) => !liveIds.includes(live.job_id))}
-          coverOf={(live) => (live.cover_clip ? clipThumbUrl(live.job_id, live.cover_clip, { width: 480 }) : null)}
-          onPick={([id]) => addLive(id)}
-          onClose={() => setAddingLive(false)}
-          onAnalysed={() => listAllCompilations().then(setLibrary).catch(() => {})}
-        />
-      )}
+      {/* (over everything, the live gone through included: the page is inert under that one) */}
+      {addingLive &&
+        createPortal(
+          <LivePicker
+            title={t("compilation.lives.pickTitle")}
+            hint={t("compilation.lives.pickHint")}
+            lives={library.filter((live) => !liveIds.includes(live.job_id))}
+            coverOf={(live) => (live.cover_clip ? clipThumbUrl(live.job_id, live.cover_clip, { width: 480 }) : null)}
+            onPick={([id]) => addLive(id)}
+            onClose={() => {
+              setAddingLive(false);
+              liveAsked.current?.(null);
+              liveAsked.current = null;
+            }}
+            onAnalysed={() => listAllCompilations().then(setLibrary).catch(() => {})}
+          />,
+          document.body,
+        )}
     </div>
   );
 }

@@ -1730,12 +1730,13 @@
     "lives": {
       "add": "Add a live",
       "addHint": "Take passages from another live too: the AI then works on all of them at once",
-      "added": "“{{name}}” added: the AI now searches this live too",
+      "added": "“{{name}}” added to the video: you can search it, browse it, and the AI searches it too",
       "remove": "Remove this live",
       "removeBlocked": "Take its passages out of the video first",
       "searchIn": "Search in",
       "pickTitle": "Which live to add?",
-      "pickHint": "The video can take passages from this live too. When you describe the video or ask for a change, the AI searches all its lives."
+      "pickHint": "The video can take passages from this live too: you can search its words, browse it, and the AI searches all of its lives.",
+      "other": "Another live…"
     },
     "pick": "Select this passage",
     "pickHint": "Select (Shift + click: all up to here). Ctrl + click on a passage selects it too.",
@@ -1979,7 +1980,8 @@
     "addPassages": "Add passages",
     "addFrom": {
       "live": "From the live",
-      "own": "From your files"
+      "own": "From your files",
+      "lives": "From your {{n}} lives"
     },
     "addInto": "They go into “{{part}}”",
     "addWay": {
@@ -2095,7 +2097,8 @@
     "looking": "The AI is looking for compilation ideas in this live…",
     "nothingNew": "The AI has nothing new to propose for this live",
     "proposed_one": "{{count}} compilation idea proposed",
-    "proposed_other": "{{count}} compilation ideas proposed"
+    "proposed_other": "{{count}} compilation ideas proposed",
+    "seeNamed": "See “{{name}}” in its live"
   },
   "notes": {
     "title": "What the AI knows about you",
@@ -2261,8 +2264,6 @@
       "sequence": "E.g. “shorten the middle part”, “add the end of the mission”. Enter to send."
     },
     "keptAll": "Everything you kept, whatever the live.",
-    "ideasInLives_one": "{{count}} idea from the AI is waiting in your lives",
-    "ideasInLives_other": "{{count}} ideas from the AI are waiting in your lives",
     "files": "Exported files",
     "newVideo": "New video",
     "all": "All",
@@ -2275,7 +2276,9 @@
     "noneKept": "Nothing kept here",
     "noneKeptHint": "Open a live: what you keep there (clips, sequences, compilations) comes here.",
     "pickLiveHint": "One live: you choose what to keep from it. Several: a compilation that takes from all of them.",
-    "openLive": "Open this live"
+    "openLive": "Open this live",
+    "ideas": "The AI suggests",
+    "ideasHint": "Nothing is built or paid for until you choose one."
   },
   "assistant": {
     "title": "Assistant",
@@ -2453,7 +2456,8 @@
     "buildWaiting": "Waiting its turn…",
     "buildCutting": "Cutting the passages from the live…",
     "buildStarted": "The AI is building “{{name}}” in the background.",
-    "built": "“{{name}}” is ready in Edit."
+    "built": "“{{name}}” is ready in Edit.",
+    "proposed": "The AI suggests"
   },
   "describe": {
     "title": {

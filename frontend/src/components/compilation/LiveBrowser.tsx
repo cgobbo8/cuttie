@@ -6,6 +6,7 @@ import { LiveError, liveWatchAt, liveWatchUrl, type LiveFailure, type TwitchStor
 import { liveClock } from "../../lib/compilation";
 import { LONGEST_PICK, parseClock, pickedRange, spanText } from "../../lib/liveBrowse";
 import { holds, playStream } from "../../lib/liveStream";
+import LiveChoice from "./LiveChoice";
 import { evenFrames, frameAt, tileStyle } from "../../lib/storyboard";
 
 /** A live that can be gone through */
@@ -28,6 +29,8 @@ interface Props {
   /** A stretch of a live is added to the video; false: it could not be */
   onAdd: (job: string, start: number, end: number) => boolean;
   onClose: () => void;
+  /** One more live asked for from here: answers the live the video now takes from too (null: none was picked); absent: none can be */
+  onOtherLive?: () => Promise<string | null>;
 }
 
 /** Where each live was left, to come back there the next time (as long as the app stays open) */
@@ -45,7 +48,7 @@ const LEAP = 60;
  * ici »), and the stretch between them added to the video. The live is watched in a small
  * rendition; the passage itself is cut from the full one once added, where it can be trimmed.
  */
-export default function LiveBrowser({ lives, initial, onAdd, onClose }: Props) {
+export default function LiveBrowser({ lives, initial, onAdd, onClose, onOtherLive }: Props) {
   const { t, i18n } = useTranslation();
   const [job, setJob] = useState(initial && lives.some((l) => l.job === initial.job) ? initial.job : lives[0].job);
   const live = lives.find((l) => l.job === job) ?? lives[0];
@@ -183,6 +186,9 @@ export default function LiveBrowser({ lives, initial, onAdd, onClose }: Props) {
   keys.current = { goTo, add, mark, toggle, onClose };
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      // (another window opened over this one, to pick a live: the keys are its own)
+      const open = document.querySelectorAll("[role=dialog][aria-modal=true]");
+      if (open[open.length - 1] !== sheet.current) return;
       if (e.key === "Escape") return keys.current.onClose();
       const el = e.target instanceof Element ? e.target : null;
       if (el?.closest("input, textarea, select") || e.metaKey || e.ctrlKey || e.altKey) return;
@@ -256,14 +262,16 @@ export default function LiveBrowser({ lives, initial, onAdd, onClose }: Props) {
           <h2 id="live-browser-title" className="flex-none text-[19px] font-semibold tracking-[-0.02em] text-white">
             {t("browse.title")}
           </h2>
-          {lives.length > 1 ? (
-            <select value={live.job} onChange={(e) => setJob(e.target.value)} aria-label={t("browse.live")} className="select-arrow flex-1 min-w-0 h-9 px-2.5 rounded-[10px] bg-black/30 border border-white/10 text-[13px] text-white outline-none focus:border-accent-line [color-scheme:dark]">
-              {lives.map((one) => (
-                <option key={one.job} value={one.job}>
-                  {one.label}
-                </option>
-              ))}
-            </select>
+          {lives.length > 1 || onOtherLive ? (
+            <LiveChoice
+              lives={lives}
+              value={live.job}
+              onChange={setJob}
+              // (a live picked from here is the one gone through next)
+              onOther={onOtherLive && (() => onOtherLive().then((picked) => picked && setJob(picked)))}
+              label={t("browse.live")}
+              className="flex-1 min-w-0"
+            />
           ) : (
             <span className="flex-1 min-w-0 truncate text-[13px] text-ink-3">{live.label}</span>
           )}

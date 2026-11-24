@@ -1730,12 +1730,13 @@
     "lives": {
       "add": "Ajouter un live",
       "addHint": "Prendre aussi des passages d'un autre live : l'IA travaille alors sur tous à la fois",
-      "added": "« {{name}} » ajouté : l'IA cherche maintenant dans ce live aussi",
+      "added": "« {{name}} » ajouté à la vidéo : tu peux y chercher, le parcourir, et l'IA y cherche aussi",
       "remove": "Retirer ce live",
       "removeBlocked": "Retire d'abord ses passages de la vidéo",
       "searchIn": "Chercher dans",
       "pickTitle": "Quel live ajouter ?",
-      "pickHint": "La vidéo pourra prendre des passages de ce live aussi. Quand tu décris la vidéo ou demandes un changement, l'IA cherche dans tous ses lives."
+      "pickHint": "La vidéo pourra prendre des passages de ce live aussi : tu peux y chercher des mots, le parcourir, et l'IA cherche dans tous ses lives.",
+      "other": "Un autre live…"
     },
     "pick": "Sélectionner ce passage",
     "pickHint": "Sélectionner (Maj + clic : tous jusqu'ici). Ctrl + clic sur un passage le sélectionne aussi.",
@@ -1979,7 +1980,8 @@
     "addPassages": "Ajouter des passages",
     "addFrom": {
       "live": "Dans le live",
-      "own": "Dans tes fichiers"
+      "own": "Dans tes fichiers",
+      "lives": "Dans tes {{n}} lives"
     },
     "addInto": "Ils iront dans « {{part}} »",
     "addWay": {
@@ -2095,7 +2097,8 @@
     "looking": "L'IA cherche des idées de compilations dans ce live…",
     "nothingNew": "L'IA n'a rien de nouveau à proposer pour ce live",
     "proposed_one": "{{count}} idée de compilation proposée",
-    "proposed_other": "{{count}} idées de compilation proposées"
+    "proposed_other": "{{count}} idées de compilation proposées",
+    "seeNamed": "Voir « {{name}} » dans son live"
   },
   "notes": {
     "title": "Ce que l'IA sait de toi",
@@ -2261,8 +2264,6 @@
       "sequence": "Ex. : « raccourcis le passage du milieu », « ajoute la fin de la mission ». Entrée pour envoyer."
     },
     "keptAll": "Tout ce que tu as gardé, tous lives confondus.",
-    "ideasInLives_one": "{{count}} idée de l'IA t'attend dans tes lives",
-    "ideasInLives_other": "{{count}} idées de l'IA t'attendent dans tes lives",
     "files": "Fichiers exportés",
     "newVideo": "Nouvelle vidéo",
     "all": "Toutes",
@@ -2275,7 +2276,9 @@
     "noneKept": "Rien de gardé ici",
     "noneKeptHint": "Ouvre un live : ce que tu y gardes (clips, séquences, compilations) arrive ici.",
     "pickLiveHint": "Un live : tu choisis ce que tu en gardes. Plusieurs : une compilation qui prend dans tous.",
-    "openLive": "Ouvrir ce live"
+    "openLive": "Ouvrir ce live",
+    "ideas": "L'IA te propose",
+    "ideasHint": "Rien n'est construit ni payé tant que tu n'en choisis pas une."
   },
   "assistant": {
     "title": "Assistant",
@@ -2453,7 +2456,8 @@
     "buildWaiting": "Attend son tour…",
     "buildCutting": "Découpe les passages dans le live…",
     "buildStarted": "L'IA construit « {{name}} » en arrière-plan.",
-    "built": "« {{name}} » est prête dans Monter."
+    "built": "« {{name}} » est prête dans Monter.",
+    "proposed": "L'IA te propose"
   },
   "describe": {
     "title": {

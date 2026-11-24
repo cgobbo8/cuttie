@@ -668,7 +668,7 @@ export default function CompilationPanel({
               <FolderPlus className="w-[15px] h-[15px]" /> {t("compilation.newSection")}
             </button>
           )}
-          {menu === "add" && <AddMenu anchor={addBar} ways={ways} into={compilation.sections.length > 1 ? partName(compilation.sections.find((section) => section.id === activeSection) ?? compilation.sections[compilation.sections.length - 1]) : null} onClose={() => setMenu(null)} />}
+          {menu === "add" && <AddMenu anchor={addBar} ways={ways} lives={liveNumbers ? Object.keys(liveNumbers).length : 1} into={compilation.sections.length > 1 ? partName(compilation.sections.find((section) => section.id === activeSection) ?? compilation.sections[compilation.sections.length - 1]) : null} onClose={() => setMenu(null)} />}
         </div>
       )}
 
@@ -1257,7 +1257,7 @@ interface AddWay {
  * for by their words, or picked by going through it) and among the streamer's own videos. It
  * opens above its button, or under it when there is no room above.
  */
-function AddMenu({ ways, into, anchor, onClose }: { ways: AddWay[]; into: string | null; anchor: RefObject<HTMLElement | null>; onClose: () => void }) {
+function AddMenu({ ways, into, lives, anchor, onClose }: { ways: AddWay[]; into: string | null; lives: number; anchor: RefObject<HTMLElement | null>; onClose: () => void }) {
   const { t } = useTranslation();
   const box = useRef<HTMLDivElement>(null);
   // Where it sits in the window (the passages scroll in their panel, which would cut it: it is set over the page)
@@ -1311,7 +1311,8 @@ function AddMenu({ ways, into, anchor, onClose }: { ways: AddWay[]; into: string
     >
       {groups.map((group, n) => (
         <div key={group.from} className={n > 0 ? "mt-1 pt-1 border-t border-white/[0.08]" : ""}>
-          <p className="px-2.5 pt-1.5 pb-1 text-[11.5px] text-ink-3">{t(`compilation.addFrom.${group.from}`)}</p>
+          {/* (a video that takes from several lives says so: each way then asks in which one) */}
+          <p className="px-2.5 pt-1.5 pb-1 text-[11.5px] text-ink-3">{group.from === "live" && lives > 1 ? t("compilation.addFrom.lives", { n: lives }) : t(`compilation.addFrom.${group.from}`)}</p>
           {group.ways.map((way) => (
             <button
               key={way.id}

@@ -1730,12 +1730,13 @@
     "lives": {
       "add": "Añadir un directo",
       "addHint": "Tomar también trozos de otro directo: la IA trabaja entonces en todos a la vez",
-      "added": "«{{name}}» añadido: la IA busca ahora también en este directo",
+      "added": "«{{name}}» añadido al vídeo: puedes buscar en él, recorrerlo, y la IA también busca en él",
       "remove": "Quitar este directo",
       "removeBlocked": "Quita primero los trozos que tiene en el vídeo",
       "searchIn": "Buscar en",
       "pickTitle": "¿Qué directo añadir?",
-      "pickHint": "El vídeo podrá tomar trozos de este directo también. Cuando describes el vídeo o pides un cambio, la IA busca en todos los directos."
+      "pickHint": "El vídeo podrá tomar pasajes de este directo también: puedes buscar palabras en él, recorrerlo, y la IA busca en todos sus directos.",
+      "other": "Otro directo…"
     },
     "pick": "Seleccionar este trozo",
     "pickHint": "Seleccionar (Mayús + clic: todos hasta aquí). Ctrl + clic en un trozo también lo selecciona.",
@@ -1979,7 +1980,8 @@
     "addPassages": "Añadir pasajes",
     "addFrom": {
       "live": "Del directo",
-      "own": "De tus archivos"
+      "own": "De tus archivos",
+      "lives": "De tus {{n}} directos"
     },
     "addInto": "Irán a «{{part}}»",
     "addWay": {
@@ -2095,7 +2097,8 @@
     "looking": "La IA busca ideas de compilaciones en este directo…",
     "nothingNew": "La IA no tiene nada nuevo que proponer para este directo",
     "proposed_one": "{{count}} idea de compilación propuesta",
-    "proposed_other": "{{count}} ideas de compilación propuestas"
+    "proposed_other": "{{count}} ideas de compilación propuestas",
+    "seeNamed": "Ver «{{name}}» en su directo"
   },
   "notes": {
     "title": "Lo que la IA sabe de ti",
@@ -2261,8 +2264,6 @@
       "sequence": "Ej.: «acorta la parte del medio», «añade el final de la misión». Intro para enviar."
     },
     "keptAll": "Todo lo que guardaste, de todos los directos.",
-    "ideasInLives_one": "{{count}} idea de la IA te espera en tus directos",
-    "ideasInLives_other": "{{count}} ideas de la IA te esperan en tus directos",
     "files": "Archivos exportados",
     "newVideo": "Nuevo vídeo",
     "all": "Todos",
@@ -2275,7 +2276,9 @@
     "noneKept": "Nada guardado aquí",
     "noneKeptHint": "Abre un directo: lo que guardes allí (clips, secuencias, compilaciones) llega aquí.",
     "pickLiveHint": "Un directo: eliges qué guardar. Varios: una compilación que toma de todos.",
-    "openLive": "Abrir este directo"
+    "openLive": "Abrir este directo",
+    "ideas": "La IA te propone",
+    "ideasHint": "Nada se construye ni se paga hasta que elijas una."
   },
   "assistant": {
     "title": "Asistente",
@@ -2453,7 +2456,8 @@
     "buildWaiting": "Esperando su turno…",
     "buildCutting": "Cortando los pasajes del directo…",
     "buildStarted": "La IA está montando «{{name}}» en segundo plano.",
-    "built": "«{{name}}» está lista en Montar."
+    "built": "«{{name}}» está lista en Montar.",
+    "proposed": "La IA te propone"
   },
   "describe": {
     "title": {

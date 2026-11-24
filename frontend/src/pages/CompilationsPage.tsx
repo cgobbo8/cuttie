@@ -16,10 +16,13 @@ import { openKeptClip } from "../lib/clipVideo";
 import { useChannel } from "../lib/ChannelContext";
 import { copyName, liveWhen, namesKeptWith, plainDate } from "../lib/compilationLibrary";
 import { hoursMinutes, splitVodTitle } from "../lib/format";
-import { waitingIn } from "../lib/suggestions";
+import { building, dropBuild, onBuildEnd, startBuild, useBuilds, type Build } from "../lib/backgroundBuild";
+import { stepText } from "../lib/compilation";
+import { useMusics } from "../lib/music/library";
 import { VIDEO_SOURCES, sourceOf, type VideoSource } from "../lib/videoSources";
 import ClipCard from "../components/compilation/ClipCard";
 import CompilationCard from "../components/compilation/CompilationCard";
+import SuggestionCard from "../components/compilation/SuggestionCard";
 import LivePicker from "../components/compilation/LivePicker";
 import SourceName from "../components/live/SourceName";
 import ConfirmModal from "../components/ConfirmModal";
@@ -62,6 +65,8 @@ export default function CompilationsPage() {
   const vodThumbs = useMemo(() => new Map((channel?.vods ?? []).map((v) => [v.id, v.thumbnail_url])), [channel]);
   const liveCover = (live: LiveCompilations) => (live.cover_clip ? clipThumbUrl(live.job_id, live.cover_clip, { width: 480 }) : (live.vod_id && vodThumbs.get(live.vod_id)) || null);
   const liveTitle = (live: LiveCompilations) => splitVodTitle(live.title).title || t("compilations.untitledLive");
+  /** A live in a few words: its day, its title */
+  const liveName = (live: LiveCompilations) => [liveWhen(live) ? plainDate(liveWhen(live)!, i18n.language) : null, liveTitle(live)].filter(Boolean).join(" · ");
   const liveLine = (live: LiveCompilations) => {
     const when = liveWhen(live);
     return [when ? plainDate(when, i18n.language) : null, live.game, live.duration ? hoursMinutes(live.duration) : null].filter(Boolean).join(" · ");
@@ -101,7 +106,68 @@ export default function CompilationsPage() {
         (source === "all" || source === "clip" ? (live.clips ?? []).filter((clip) => clip.state === "kept").length : 0),
       0,
     );
-  const proposed = waitingIn(lives ?? []);
+
+  /* ── What the AI proposes, all lives together ───────────── */
+
+  // The ideas nobody has had built nor passed on, the most promising first (not among what is exported: none is)
+  const ideas = useMemo(
+    () =>
+      standing === "exported"
+        ? []
+        : (lives ?? [])
+            .flatMap((live) => live.compilations.filter((c) => c.home === live.job_id && c.waiting && !c.passed && c.suggestion && (kind === "all" || sourceOf(c) === kind)).map((c) => ({ live, c })))
+            .sort((a, b) => (b.c.suggestion?.score ?? 0) - (a.c.suggestion?.score ?? 0)),
+    [kind, lives, standing],
+  );
+  const builds = useBuilds();
+  const musics = useMusics();
+  /** An idea is chosen: the AI builds it behind this page, and it joins what is kept when it is ready */
+  const buildIdea = async (live: LiveCompilations, c: CompilationSummary) => {
+    if (busy) return;
+    setBusy(c.id);
+    try {
+      // (the list holds a summary of each video: the idea itself, with what the AI wrote for it, is asked of its live)
+      const video = (await listCompilations(c.home)).find((one) => one.id === c.id);
+      if (!video) throw new Error(t("common.error"));
+      startBuild(c.home, video, { duration: live.duration ?? 0, language: i18n.language.slice(0, 2), tracks: musics.map((track) => track.id) });
+      toast.info(t("live.buildStarted", { name: c.name }));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t("common.error"));
+    } finally {
+      setBusy(null);
+    }
+  };
+  /** ...or passed on: it leaves this page, and stays in its live, where it can be taken back */
+  const passIdea = async (c: CompilationSummary) => {
+    if (busy) return;
+    setBusy(c.id);
+    try {
+      const video = (await listCompilations(c.home)).find((one) => one.id === c.id);
+      if (video) await saveCompilation(c.home, { ...video, passed: true });
+      await load();
+      toast.success(t("suggestions.dismissed"));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t("brand.saveError"));
+    } finally {
+      setBusy(null);
+    }
+  };
+  // A build ended while this page is on screen: the list is read again, and its outcome said
+  useEffect(
+    () =>
+      onBuildEnd((build: Build) => {
+        load().catch(() => {});
+        if (build.state === "done") toast.success(t("live.built", { name: build.name }));
+        else toast.error(build.why === "empty" ? t("compilation.planEmpty") : t(`compilation.failure.${build.why ?? "failed"}`));
+        dropBuild(build.job, build.id);
+      }),
+    [load, t, toast],
+  );
+  /** What a build is doing, in a few words (null: this idea is not being built) */
+  const buildLine = (c: CompilationSummary): string | null => {
+    const build = building(builds, c.home, c.id);
+    return !build ? null : build.state === "waiting" ? t("live.buildWaiting") : build.state === "cutting" ? t("live.buildCutting") : stepText(t, build.step);
+  };
 
   /** A kept clip opened for the first time: it becomes a video like the others, in its montage */
   const openClip = async (jobId: string, filename: string) => {
@@ -165,11 +231,6 @@ export default function CompilationsPage() {
         <div className="min-w-0">
           <h1 className="text-[32px] leading-[1.1] tracking-[-0.03em] font-[650] text-white">{t("videos.title")}</h1>
           <p className="mt-2 text-[13.5px] text-ink-2 max-w-[62ch]">{t("videos.keptAll")}</p>
-          {proposed > 0 && (
-            <p className="mt-1.5 flex items-center gap-1.5 text-[13px] text-accent">
-              <Sparkles className="w-3.5 h-3.5" /> {t("videos.ideasInLives", { count: proposed })}
-            </p>
-          )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Link to="/exports" className="btn btn-ghost btn-sm">
@@ -215,6 +276,35 @@ export default function CompilationsPage() {
               ))}
             </div>
           </div>
+
+          {/* What the AI proposes in every live: an idea chosen here is built behind the page and joins what is kept */}
+          {ideas.length > 0 && (
+            <section className="mt-7" aria-labelledby="videos-ideas">
+              <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1 mb-3">
+                <h2 id="videos-ideas" className="flex items-center gap-1.5 text-[16px] font-[600] tracking-[-0.01em] text-white">
+                  <Sparkles className="w-4 h-4 text-accent" /> {t("videos.ideas")}
+                </h2>
+                <span className="mono text-[12px] text-ink-3">{ideas.length}</span>
+                <p className="text-[12.5px] text-ink-3">{t("videos.ideasHint")}</p>
+              </div>
+              <div className="scroll-row gap-4 pb-1 items-stretch">
+                {ideas.map(({ live, c }) => (
+                  <div key={`${c.home}/${c.id}`} className="flex-none w-[320px] max-w-[86vw] flex">
+                    <SuggestionCard
+                      jobId={c.home}
+                      compilation={c}
+                      fallback={liveCover(live)}
+                      live={liveName(live)}
+                      busy={busy === c.id}
+                      building={buildLine(c)}
+                      onBuild={() => buildIdea(live, c)}
+                      onDismiss={() => passIdea(c)}
+                    />
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
 
           {shown.length === 0 && (
             <section className="mt-8 glass rounded-[20px] p-7 max-w-[560px]">

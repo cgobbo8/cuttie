@@ -27,8 +27,9 @@ describe("a sequence the AI proposed", () => {
         </MemoryRouter>
       </TooltipProvider>,
     );
+    // Its badge says which of the two it is
     expect(screen.getByText("Séquence")).toBeTruthy();
-    expect(screen.queryByText("Idée de l'IA")).toBeNull();
+    expect(screen.queryByText("Compilation")).toBeNull();
     expect(screen.getByText("50:43 d'affilée dans le live (à 3:16:32) · vidéo d'environ 3:00")).toBeTruthy();
   });
 });
@@ -50,7 +51,7 @@ describe("a video the AI proposed", () => {
         </MemoryRouter>
       </TooltipProvider>,
     );
-    expect(screen.getByText("Idée de l'IA")).toBeTruthy();
+    expect(screen.getByText("Compilation")).toBeTruthy();
     expect(screen.queryByText("Séquence")).toBeNull();
     expect(screen.getByRole("heading", { name: "La malédiction du calme" })).toBeTruthy();
     expect(screen.getByText(/revient 25 fois/)).toBeTruthy();
@@ -64,6 +65,45 @@ describe("a video the AI proposed", () => {
     // Not interested: asked to its page, the link is not followed
     fireEvent.click(screen.getByRole("button", { name: "Écarter cette idée" }));
     expect(onDismiss).toHaveBeenCalledTimes(1);
+  });
+
+  it("in a list of every live's ideas, says its live, is built behind the page, and opens in its live to be read whole", () => {
+    const onBuild = vi.fn();
+    const onDismiss = vi.fn();
+    const view = render(
+      <TooltipProvider>
+        <MemoryRouter>
+          <SuggestionCard jobId="live" compilation={card} fallback={null} live="9 nov. · La garde de nuit" onBuild={onBuild} onDismiss={onDismiss} />
+        </MemoryRouter>
+      </TooltipProvider>,
+    );
+    expect(screen.getByText("9 nov. · La garde de nuit")).toBeTruthy();
+    // The card goes to the idea in its live; building it is a button that leaves the page where it is
+    expect(screen.getByRole("link", { name: "Voir « La malédiction du calme » dans son live" }).getAttribute("href")).toBe("/live?video=comp123456");
+    expect(screen.queryByRole("link", { name: /Construire la vidéo/ })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /Construire la vidéo.*0,04 \$/ }));
+    expect(onBuild).toHaveBeenCalledTimes(1);
+
+    // Being built: what the AI does takes the place of the two buttons
+    view.rerender(
+      <TooltipProvider>
+        <MemoryRouter>
+          <SuggestionCard jobId="live" compilation={card} fallback={null} live="9 nov. · La garde de nuit" onBuild={onBuild} onDismiss={onDismiss} building="Lit ce qui se dit vers 1:16:53" />
+        </MemoryRouter>
+      </TooltipProvider>,
+    );
+    expect(screen.getByRole("status").textContent).toBe("Lit ce qui se dit vers 1:16:53");
+    expect(screen.queryByRole("button", { name: /Construire la vidéo/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Écarter cette idée" })).toBeNull();
+    // (nothing to say yet: that the AI is building it)
+    view.rerender(
+      <TooltipProvider>
+        <MemoryRouter>
+          <SuggestionCard jobId="live" compilation={card} fallback={null} onBuild={onBuild} onDismiss={onDismiss} building="" />
+        </MemoryRouter>
+      </TooltipProvider>,
+    );
+    expect(screen.getByRole("status").textContent).toBe("L'IA construit la vidéo");
   });
 
   it("says what the AI noticed and is built from the request it wrote, or from that request rewritten", () => {

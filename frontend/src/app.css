@@ -313,6 +313,48 @@ body::after {
   }
 }
 
+/* What the AI proposes (the ideas at the head of a live's list): a panel lit in the channel's own
+   color, from two corners, a little brighter than the rest of the list so it is seen first */
+.ai-ideas {
+  position: relative;
+  isolation: isolate;
+  background:
+    radial-gradient(120% 100% at 0% 0%, color-mix(in oklab, var(--color-accent) 30%, transparent), transparent 58%),
+    radial-gradient(90% 90% at 100% 100%, color-mix(in oklab, var(--color-accent) 16%, transparent), transparent 62%),
+    rgba(255, 255, 255, 0.035);
+  box-shadow:
+    inset 0 0 0 1px var(--color-accent-line),
+    0 14px 34px -22px var(--color-accent-glow);
+}
+/* (a faint grain of light that drifts across it, slowly: something is at work here) */
+.ai-ideas::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(105deg, transparent 30%, color-mix(in oklab, var(--color-accent) 22%, transparent) 50%, transparent 70%);
+  background-size: 260% 100%;
+  background-position: 120% 0;
+  opacity: 0.55;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .ai-ideas::before {
+    animation: ai-ideas-drift 9s ease-in-out infinite;
+  }
+}
+@keyframes ai-ideas-drift {
+  0%,
+  35% {
+    background-position: 120% 0;
+  }
+  65%,
+  100% {
+    background-position: -20% 0;
+  }
+}
+
 /* A row that scrolls sideways instead of wrapping (the kept videos of a live), fading out where it goes on */
 .scroll-row {
   display: flex;

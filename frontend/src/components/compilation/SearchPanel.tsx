@@ -14,6 +14,7 @@ import {
 import { isNear, liveClock, stepText } from "../../lib/compilation";
 import { frameAt, tileStyle } from "../../lib/storyboard";
 import { useToast } from "../Toast";
+import LiveChoice from "./LiveChoice";
 
 interface Props {
   jobId: string;
@@ -34,6 +35,8 @@ interface Props {
   onResults: (hits: LiveHit[]) => void;
   /** Shown in a window of its own: what closes it */
   onClose?: () => void;
+  /** One more live asked for from here: answers the live the video now takes from too (null: none was picked); absent: none can be */
+  onOtherLive?: () => Promise<string | null>;
 }
 
 const SOURCE_ICON = { voice: Mic, chat: MessageCircle, ai: Sparkles } as const;
@@ -51,7 +54,7 @@ const PROGRESS_EVERY = 1200;
  * at once), or a question the AI answers by reading, listening and checking each passage.
  * Building or changing a whole video is asked of the assistant.
  */
-export default function SearchPanel({ jobId, storyboards, lives, info, previewed, isAdded, onPreview, onAdd, onResults, onClose }: Props) {
+export default function SearchPanel({ jobId, storyboards, lives, info, previewed, isAdded, onPreview, onAdd, onResults, onClose, onOtherLive }: Props) {
   const { t, i18n } = useTranslation();
   const toast = useToast();
   const [query, setQuery] = useState("");
@@ -138,20 +141,16 @@ export default function SearchPanel({ jobId, storyboards, lives, info, previewed
             run("words");
           }}
         >
-          {lives.length > 1 && (
-            <select
-              value={searched}
-              onChange={(e) => setWhere(e.target.value)}
-              aria-label={t("compilation.lives.searchIn")}
-              className="select-arrow w-full h-9 mb-2 px-2.5 rounded-[10px] bg-black/30 border border-white/10 text-[13px] text-white outline-none focus:border-accent-line"
-            >
-              {lives.map((live) => (
-                <option key={live.job} value={live.job}>
-                  {t("compilation.lives.searchIn")} : {live.label}
-                </option>
-              ))}
-            </select>
-          )}
+          <LiveChoice
+            lives={lives}
+            value={searched}
+            onChange={setWhere}
+            // (a live picked from here is the one searched next)
+            onOther={onOtherLive && (() => onOtherLive().then((picked) => picked && setWhere(picked)))}
+            label={t("compilation.lives.searchIn")}
+            prefix={t("compilation.lives.searchIn")}
+            className="w-full mb-2"
+          />
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-3 pointer-events-none" />
             <input

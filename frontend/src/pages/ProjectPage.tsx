@@ -7,6 +7,7 @@ import {
   deleteClip,
   deleteCompilation,
   getStoryboard,
+  getSuggestions,
   listCompilations,
   saveCompilation,
   getJobChat,
@@ -86,6 +87,8 @@ export default function ProjectPage() {
   const loadVideos = useCallback(() => {
     if (jobId) listCompilations(jobId).then(setVideos).catch(() => {});
   }, [jobId]);
+  // The AI is looking through the live for sequences and compilations to propose (it does once the live is analysed, half a minute)
+  const [looking, setLooking] = useState(false);
 
   useEffect(() => {
     if (!jobId) return;
@@ -104,6 +107,12 @@ export default function ProjectPage() {
     // The AI has just read the live into its memory: it may have a correction to propose for a note (NoteProposals)
     if (data.type === "memory") {
       window.dispatchEvent(new Event(MEMORY_READ));
+      return;
+    }
+    // The AI starts looking through the live for videos to propose, or is done (whatever it found)
+    if (data.type === "looking") {
+      setLooking(!!data.looking);
+      if (!data.looking) loadVideos();
       return;
     }
     // The AI looked through the live once analysed: the videos it proposes join the list
@@ -147,6 +156,33 @@ export default function ProjectPage() {
     // Done: the final clips (cuts and key moments on each clip's clock), as saved
     if (data.status === "DONE" && jobId) getJobStatus(jobId).then(setJob).catch(() => {});
   });
+
+  // Opened (or just analysed) while the AI looks: said too. Only the server's word that it is over ends it:
+  // an event may be missed, so it is asked now and then while it looks
+  const analysed = job?.status === "DONE";
+  useEffect(() => {
+    if (!jobId || !analysed) return;
+    let cancelled = false;
+    getSuggestions(jobId)
+      .then((now) => !cancelled && now.looking && setLooking(true))
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [jobId, analysed]);
+  useEffect(() => {
+    if (!jobId || !looking) return;
+    const timer = window.setInterval(() => {
+      getSuggestions(jobId)
+        .then((now) => {
+          if (now.looking) return;
+          setLooking(false);
+          loadVideos();
+        })
+        .catch(() => {});
+    }, 8000);
+    return () => window.clearInterval(timer);
+  }, [jobId, looking, loadVideos]);
 
   const moments = useMemo(() => buildMoments(job?.hot_points ?? [], job?.selection ?? {}), [job]);
   // One list for everything the live gives: clips, sequences, compilations
@@ -629,6 +665,7 @@ export default function ProjectPage() {
                 onAdd={(source) => navigate(`/${jobId}/montage?new=1&kind=${source}`)}
                 storyboard={storyboard}
                 building={buildingIds}
+                looking={looking}
                 categoryLabel={categoryLabel}
                 clipAction={
                   !freed && (

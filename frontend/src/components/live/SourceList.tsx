@@ -155,10 +155,16 @@ export default function SourceList({ jobId, entries, selected, onSelect, open, o
                     </span>
                   </Tooltip>
                 )}
-                {looking && source !== "clip" && <AssistantMark size={20} busy className="flex-none" />}
                 <span className="flex-1" />
                 {source === "clip" && clipAction}
               </header>
+              {/* The AI is looking through the live: said where what it finds will come */}
+              {looking && source !== "clip" && (
+                <p role="status" className="flex items-center gap-2 min-h-9 px-1.5 py-1 text-[12.5px] leading-snug text-ink-2">
+                  <AssistantMark size={20} busy className="flex-none" />
+                  {t(`live.lookingFor.${source}`)}
+                </p>
+              )}
               <div className="flex flex-col gap-0.5">{(whole ? list : list.slice(0, SHOWN)).map(row)}</div>
               {list.length > SHOWN && (
                 <button onClick={() => onToggle(source)} className="mt-0.5 w-full h-8 rounded-[9px] text-[12.5px] text-ink-2 hover:text-white hover:bg-white/[0.06] transition-colors">

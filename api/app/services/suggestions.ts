@@ -114,6 +114,12 @@ const running = new Map<string, Promise<Suggested>>()
 export const isLooking = (jobId: string): boolean => running.has(jobId)
 
 /**
+ * Whoever has this live on screen learns that the AI starts looking through it, and that it is
+ * done, whatever it found (nothing, or an error: no other event would say so).
+ */
+const said = (jobId: string, looking: boolean) => transmit.broadcast(`jobs/${jobId}`, { job_id: jobId, type: 'looking', looking })
+
+/**
  * Has the AI look through an analysed live and keeps what it proposes as compilations that
  * wait to be built. Asked again, the same live answers from the worker's disk and nothing is
  * proposed twice. Throws what the worker throws (engine away, no transcript, no credits).
@@ -121,8 +127,12 @@ export const isLooking = (jobId: string): boolean => running.has(jobId)
 export function suggestCompilations(jobId: string): Promise<Suggested> {
   const already = running.get(jobId)
   if (already) return already
-  const run = look(jobId).finally(() => running.delete(jobId))
+  const run = look(jobId).finally(() => {
+    running.delete(jobId)
+    said(jobId, false)
+  })
   running.set(jobId, run)
+  said(jobId, true)
   return run
 }
 

@@ -28,6 +28,7 @@ import SourceName from "../components/live/SourceName";
 import ConfirmModal from "../components/ConfirmModal";
 import { useAssistantPlace } from "../lib/AssistantContext";
 import { useToast } from "../components/Toast";
+import AssistantMark from "../components/assistant/Mark";
 
 type Standing = "all" | "draft" | "exported";
 
@@ -99,7 +100,8 @@ export default function CompilationsPage() {
     () =>
       (lives ?? [])
         .map((live) => ({ live, ...keptOf(live) }))
-        .filter((group) => group.ideas.length + group.videos.length + group.clips.length > 0)
+        // (a live the AI is looking through is listed before it has anything: its ideas are about to come)
+        .filter((group) => group.ideas.length + group.videos.length + group.clips.length > 0 || (group.live.looking && standing !== "exported" && kind !== "clip"))
         .sort((a, b) => Date.parse(liveWhen(b.live) ?? "") - Date.parse(liveWhen(a.live) ?? "")),
     [keptOf, lives],
   );
@@ -148,6 +150,13 @@ export default function CompilationsPage() {
       setBusy(null);
     }
   };
+  // While the AI looks through a live for videos to propose, the list is read again now and then: its ideas come by themselves
+  const someLooking = (lives ?? []).some((live) => live.looking);
+  useEffect(() => {
+    if (!someLooking) return;
+    const timer = window.setInterval(() => load().catch(() => {}), 8000);
+    return () => window.clearInterval(timer);
+  }, [load, someLooking]);
   // A build ended while this page is on screen: the list is read again, and its outcome said
   useEffect(
     () =>
@@ -294,6 +303,12 @@ export default function CompilationsPage() {
                   {t("compilations.openLive")} <ArrowRight className="w-3.5 h-3.5" />
                 </Link>
               </div>
+              {live.looking && standing !== "exported" && kind !== "clip" && (
+                <p role="status" className="ai-ideas mb-4 flex items-center gap-2.5 rounded-[14px] px-3.5 py-3 text-[13.5px] text-ink-2">
+                  <AssistantMark size={22} busy className="flex-none" />
+                  {t("videos.looking")}
+                </p>
+              )}
               {/* What the AI proposes for this live, before what is kept of it: an idea chosen is built behind the page and joins the videos below */}
               {ideas.length > 0 && (
                 <div className={`grid gap-4 grid-cols-[repeat(auto-fill,minmax(310px,1fr))] ${videos.length + clips.length > 0 ? "mb-4" : ""}`}>

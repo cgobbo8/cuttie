@@ -1,5 +1,5 @@
 import { deletePiece, movedTo, withoutLive } from '#services/compilations'
-import { waitingCount } from '#services/suggestions'
+import { isLooking, waitingCount } from '#services/suggestions'
 import type { HttpContext } from '@adonisjs/core/http'
 import { randomUUID } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
@@ -221,8 +221,9 @@ export default class JobsController {
     if (!job || job.userId !== user.id) return response.notFound({ error: 'job not found' })
 
     const data = job.serialize()
-    // Videos the AI proposed for this live that nobody has opened yet
+    // Videos the AI proposed for this live that nobody has opened yet, and whether it is looking for some right now
     data.suggested = waitingCount(job.compilations)
+    data.looking = isLooking(job.id)
 
     // Enrich hotPoints with chatMessageCount per clip
     if (data.hotPoints?.length) {

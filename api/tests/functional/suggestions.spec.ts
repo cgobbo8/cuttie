@@ -3,6 +3,7 @@ import testUtils from '@adonisjs/core/services/test_utils'
 import { randomUUID } from 'node:crypto'
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
+import transmit from '@adonisjs/transmit/services/main'
 import env from '#start/env'
 import User from '#models/user'
 import Job from '#models/job'
@@ -33,13 +34,16 @@ test.group('Compilations proposed by the AI', (group) => {
   // What it chooses for the opening of a video
   let sound: { intro: string | null; look: string | null } = { intro: 'news', look: null }
   const asked: { url: string; body: any }[] = []
+  // A test may hold its answer about a live's ideas back, to look at the app while the AI « looks »
+  let held: Promise<void> | null = null
   group.setup(async () => {
     server = createServer((req, res) => {
       let raw = ''
       req.on('data', (chunk) => (raw += chunk))
-      req.on('end', () => {
+      req.on('end', async () => {
         asked.push({ url: req.url ?? '', body: raw ? JSON.parse(raw) : null })
         res.setHeader('Content-Type', 'application/json')
+        if (req.url?.endsWith('/ideas')) await held
         if (req.url?.endsWith('/ideas')) res.end(JSON.stringify({ ideas, note: 'Un running gag et une histoire.', cost: 0.006, cached: false }))
         else if (req.url?.endsWith('/plan')) res.end(JSON.stringify({ title: 'Calme', sections: [], note: '' }))
         else if (req.url?.endsWith('/search')) res.end(JSON.stringify({ hits: [], total: 0, transcript: true, cached: false, cost: 0.002 }))
@@ -54,6 +58,7 @@ test.group('Compilations proposed by the AI', (group) => {
   group.each.setup(() => {
     asked.length = 0
     ideas = []
+    held = null
     engine(true)
     return () => engine(false)
   })
@@ -283,6 +288,44 @@ test.group('Compilations proposed by the AI', (group) => {
     assert.deepEqual((kept.body() as any).compilation.intro, { style: 'news', by: 'ai' })
     const picked = await client.put(url).loginAs(user).json({ ...video('deciding11', { style: 'slam', by: 'someone' }, ''), name: 'Calme' })
     assert.deepEqual((picked.body() as any).compilation.intro, { style: 'slam' })
+  })
+
+  test('whoever has the live on screen is told when the AI starts looking through it, and when it is done whatever it found', async ({ client, assert }) => {
+    const { user, job } = await setup()
+    const said: any[] = []
+    const real = transmit.broadcast
+    transmit.broadcast = ((channel: string, payload: any) => {
+      if (channel === `jobs/${job.id}`) said.push(payload)
+    }) as typeof transmit.broadcast
+    try {
+      // While the engine works on it: said to the page that listens, and to the one that asks
+      let answer = () => {}
+      held = new Promise<void>((resolve) => (answer = resolve))
+      const look = suggestCompilations(job.id)
+      assert.deepEqual(said, [{ job_id: job.id, type: 'looking', looking: true }])
+      assert.isTrue(((await client.get(`/api/jobs/${job.id}`).loginAs(user)).body() as any).looking)
+      assert.isTrue(((await client.get(`/api/jobs/${job.id}/suggestions`).loginAs(user)).body() as any).looking)
+      // Nothing found: no video to announce, and the page still learns the look is over
+      answer()
+      assert.lengthOf((await look).created, 0)
+      assert.deepEqual(said.map((one) => [one.type, one.looking]), [['looking', true], ['looking', false]])
+      assert.isFalse(((await client.get(`/api/jobs/${job.id}`).loginAs(user)).body() as any).looking)
+
+      // Videos found: they are announced, then the look is said over
+      said.length = 0
+      held = null
+      ideas = [idea('aaaaaaaaaaaa')]
+      await suggestCompilations(job.id)
+      assert.deepEqual(said.map((one) => [one.type, one.looking ?? one.count]), [['looking', true], ['suggestions', 1], ['looking', false]])
+
+      // The engine away: the look ends all the same
+      said.length = 0
+      engine(false)
+      await assert.rejects(() => suggestCompilations(job.id))
+      assert.deepEqual(said.map((one) => [one.type, one.looking]), [['looking', true], ['looking', false]])
+    } finally {
+      transmit.broadcast = real
+    }
   })
 
   test('the end of an analysis has the AI look through the live, once', async ({ assert }) => {

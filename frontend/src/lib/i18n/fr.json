@@ -2312,7 +2312,8 @@
     "noneKept": "Rien à montrer ici",
     "noneKeptHint": "Ouvre un live : ce que tu y gardes (clips, séquences, compilations) arrive ici.",
     "pickLiveHint": "Un live : tu choisis ce que tu en gardes. Plusieurs : une compilation qui prend dans tous.",
-    "openLive": "Ouvrir ce live"
+    "openLive": "Ouvrir ce live",
+    "looking": "L'IA parcourt ce live pour te proposer des séquences et des compilations…"
   },
   "assistant": {
     "title": "Assistant",
@@ -2490,7 +2491,11 @@
     "buildWaiting": "Attend son tour…",
     "buildCutting": "Découpe les passages dans le live…",
     "buildStarted": "L'IA construit « {{name}} » en arrière-plan.",
-    "built": "« {{name}} » est prête dans Monter."
+    "built": "« {{name}} » est prête dans Monter.",
+    "lookingFor": {
+      "sequence": "L'IA cherche des séquences dans ce live…",
+      "compilation": "L'IA cherche des idées de compilations…"
+    }
   },
   "describe": {
     "title": {

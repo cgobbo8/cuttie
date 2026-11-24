@@ -24,6 +24,9 @@ import {
   type TimelineCandidate,
 } from "../lib/api";
 import { MEMORY_READ } from "../lib/aiMemory";
+import { building, dropBuild, onBuildEnd, startBuild, useBuilds } from "../lib/backgroundBuild";
+import { stepText } from "../lib/compilation";
+import { useMusics } from "../lib/music/library";
 import { useAssistantChanged, useAssistantPlace } from "../lib/AssistantContext";
 import { splitVodTitle } from "../lib/format";
 import { useBackdrop } from "../lib/BackdropContext";
@@ -57,7 +60,7 @@ function isTyping(target: EventTarget | null): boolean {
 }
 
 export default function ProjectPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const toast = useToast();
   const navigate = useNavigate();
   const { jobId } = useParams<{ jobId: string }>();
@@ -253,7 +256,32 @@ export default function ProjectPage() {
   }, [entries, moments.length, openVideo]);
 
   /** An idea of the AI is kept by having it built: on to its montage, where it is */
-  const keepIdea = useCallback((video: Compilation) => navigate(`/${jobId}/montage?v=${video.id}&build=1`), [jobId, navigate]);
+  const builds = useBuilds();
+  const musics = useMusics();
+  const keepIdea = useCallback(
+    (video: Compilation) => {
+      if (!jobId || !job) return;
+      // (behind the page: the streamer stays here and goes on sorting; the video joins the kept ones when it is ready)
+      startBuild(jobId, video, { duration: job.vod_duration_seconds ?? 0, language: i18n.language.slice(0, 2), tracks: musics.map((track) => track.id) });
+      toast.info(t("live.buildStarted", { name: video.name }));
+    },
+    [i18n.language, job, jobId, musics, t, toast],
+  );
+  // A build ended: the list is read again, and its outcome said
+  useEffect(
+    () =>
+      onBuildEnd((build) => {
+        if (build.job !== jobId) return;
+        loadVideos();
+        if (build.state === "done") toast.success(t("live.built", { name: build.name }));
+        else toast.error(build.why === "empty" ? t("compilation.planEmpty") : t(`compilation.failure.${build.why ?? "failed"}`));
+        dropBuild(build.job, build.id);
+      }),
+    [jobId, loadVideos, t, toast],
+  );
+  /** What a build is doing, in a few words (null: this video is not being built) */
+  const buildLine = (build: ReturnType<typeof building>) => (!build ? null : build.state === "waiting" ? t("live.buildWaiting") : build.state === "cutting" ? t("live.buildCutting") : stepText(t, build.step));
+  const buildingIds = useMemo(() => new Set(builds.filter((one) => one.job === jobId && one.state !== "done" && one.state !== "failed").map((one) => one.id)), [builds, jobId]);
   /** ...or passed on (and taken back): it stays in the list, dimmed */
   const passIdea = useCallback(
     async (video: Compilation) => {
@@ -523,6 +551,7 @@ export default function ProjectPage() {
                   entry={videoEntry}
                   storyboard={storyboard}
                   busy={videoBusy}
+                  building={buildLine(jobId ? building(builds, jobId, videoEntry.video.id) : undefined)}
                   onKeep={() => keepIdea(videoEntry.video)}
                   onPass={() => passIdea(videoEntry.video)}
                   onOpen={() => navigate(`/${jobId}/montage?v=${videoEntry.video.id}`)}
@@ -597,6 +626,7 @@ export default function ProjectPage() {
                 // A new one starts in its montage, where it is described to the AI or put together by hand
                 onAdd={(source) => navigate(`/${jobId}/montage?new=1&kind=${source}`)}
                 storyboard={storyboard}
+                building={buildingIds}
                 categoryLabel={categoryLabel}
                 clipAction={
                   !freed && (

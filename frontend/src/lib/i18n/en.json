@@ -1916,7 +1916,8 @@
         "motion": "Motion",
         "sound": "Opening and sound"
       },
-      "aiShort": "AI's pick"
+      "aiShort": "AI's pick",
+      "back": "Back to the look"
     },
     "ownLooks_one": "{{count}} passage has its own",
     "ownLooks_other": "{{count}} passages have their own",
@@ -1928,7 +1929,8 @@
     "briefFor": {
       "clip": "E.g. around 3 h in, I step out of the seaplane and die in the propeller.",
       "sequence": "E.g. the yacht mission, from the jet-ski arrival to the airboat escape."
-    }
+    },
+    "addWithAi": "Add with the AI"
   },
   "compilations": {
     "title": "Compilations",
@@ -2321,6 +2323,22 @@
       "toExport_other": "{{count}} videos to export",
       "lastLive": "Latest live: {{name}}",
       "notAnalysed": "not analysed yet"
+    },
+    "compose": {
+      "passages": {
+        "title": "Add passages",
+        "lead": "The moments where",
+        "placeholder": "I shout for help, he misses his jump…",
+        "count": "How many at most",
+        "all": "All",
+        "into": "Into the part",
+        "send": "Find and add",
+        "say": "Find the moments where {{what}} and add them to this video",
+        "sayCount_one": "(only the best one)",
+        "sayCount_other": "({{count}} at most, the best ones)",
+        "sayPart": "in the part “{{part}}”.",
+        "sayEnd": "at the end."
+      }
     }
   },
   "sources": {
@@ -2367,7 +2385,13 @@
     "keptVideos": "Videos kept from this live",
     "exported": "Exported",
     "nothingKept": "No video kept yet",
-    "nothingKeptHint": "Keep a clip, a sequence or a compilation of this live: it comes here to be edited."
+    "nothingKeptHint": "Keep a clip, a sequence or a compilation of this live: it comes here to be edited.",
+    "building": "The AI is building the video",
+    "buildingHint": "You can go on sorting.",
+    "buildWaiting": "Waiting its turn…",
+    "buildCutting": "Cutting the passages from the live…",
+    "buildStarted": "The AI is building “{{name}}” in the background.",
+    "built": "“{{name}}” is ready in Edit."
   },
   "describe": {
     "title": {

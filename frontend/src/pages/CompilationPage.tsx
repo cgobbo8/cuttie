@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { useAssistant, useAssistantActions, useAssistantPlace, type AssistantRun } from "../lib/AssistantContext";
 import { applyLook, lookOf } from "../lib/assistantLook";
+import { building, dropBuild, onBuildEnd, useBuilds } from "../lib/backgroundBuild";
 import { useTranslation } from "react-i18next";
 import { Player, type PlayerRef } from "@remotion/player";
 import { ArrowLeft, ArrowLeftToLine, ArrowRightToLine, Check, Loader2, Plus, Scissors, Sparkles, Undo2, X } from "lucide-react";
@@ -1051,7 +1052,7 @@ export default function CompilationPage() {
   const describe = async (id: string, brief: string, target: number, leads: number[] = [], fresh = false) => {
     const video = compilationsRef.current?.find((c) => c.id === id);
     if (!jobId || !video) return { error: "no such video in this live" };
-    if (working) return { error: "a video is already being built" };
+    if (working || (jobId && building(builds, jobId, id))) return { error: "a video is already being built" };
     setWorking({ id, lines: [] });
     setFailure(null);
     try {
@@ -1285,11 +1286,27 @@ export default function CompilationPage() {
       : null,
   );
 
+  // A video kept from the live's page is built behind the pages: seen here while it is, taken as it is once done
+  const builds = useBuilds();
+  const behind = jobId && compilation ? building(builds, jobId, compilation.id) : undefined;
+  useEffect(
+    () =>
+      onBuildEnd((build) => {
+        const built = build.video;
+        if (build.job !== jobId || !built) return;
+        setCompilations((prev) => prev?.map((c) => (c.id === built.id ? built : c)) ?? prev);
+        remember([built]);
+        if (build.state === "done") ensure(allItems(built));
+        dropBuild(build.job, build.id);
+      }),
+    [ensure, jobId, remember],
+  );
+
   // A video the AI proposed, opened to be built (?build=1): built once, as soon as the live is known
   useEffect(() => {
     if (!compilation || buildFor.current !== compilation.id || !info) return;
     buildFor.current = null;
-    if (!isWaiting(compilation) || !compilation.brief) return;
+    if (!isWaiting(compilation) || !compilation.brief || behind) return;
     describe(compilation.id, compilation.brief, compilation.target ?? 45, compilation.suggestion?.moments ?? []);
   }, [compilation?.id, info]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -1527,6 +1544,8 @@ export default function CompilationPage() {
     exporting,
     onDelete: () => setToDelete(true),
     onSearch: () => setSearching(true),
+    // Passages asked of the assistant: its panel opens on a field made for that (what to look for, where they go)
+    onAskAi: () => assistant.compose({ kind: "passages", parts: compilation.sections.map((section) => section.title.trim()).filter(Boolean) }),
     templateName,
     looking,
     looksNote: looksNote?.id === compilation.id ? looksNote.note : "",
@@ -1714,7 +1733,7 @@ export default function CompilationPage() {
               source={source}
               idea={compilation.suggestion && isWaiting(compilation) ? { pitch: compilation.suggestion.pitch, tags: compilation.suggestion.tags, score: compilation.suggestion.score, brief: compilation.brief ?? "", target: compilation.target ?? 45 } : null}
               cost={planCost}
-              working={working?.id === compilation.id ? working.lines : null}
+              working={working?.id === compilation.id ? working.lines : behind ? [behind.state === "cutting" ? t("live.buildCutting") : behind.state === "waiting" ? t("live.buildWaiting") : stepText(t, behind.step)] : null}
               unreadable={!!info && !info.transcript}
               onBuild={(brief, target) => describe(compilation.id, brief, target, compilation.suggestion?.moments ?? [])}
               onSearch={() => setSearching(true)}

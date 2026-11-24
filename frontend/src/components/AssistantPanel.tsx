@@ -6,6 +6,7 @@ import type { AssistantMessage, AssistantPlace } from "../lib/api";
 import { ASSISTANT_WIDTH, useAssistant } from "../lib/AssistantContext";
 import { suggestionsFor, type Suggestion, type SuggestionIcon } from "../lib/assistantSuggestions";
 import { clock } from "../lib/format";
+import Composer from "./assistant/Composer";
 import AssistantMark from "./assistant/Mark";
 import Widget from "./assistant/Widgets";
 
@@ -66,7 +67,7 @@ const Step = ({ children, done = true }: { children: ReactNode; done?: boolean }
 
 export default function AssistantPanel() {
   const { t, i18n } = useTranslation();
-  const { open, setOpen, messages, busy, doing, pending, send, approve, reset, place } = useAssistant();
+  const { open, setOpen, messages, busy, doing, pending, send, approve, reset, place, composer, compose } = useAssistant();
   const [draft, setDraft] = useState("");
   const list = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLTextAreaElement>(null);
@@ -288,8 +289,10 @@ export default function AssistantPanel() {
       </div>
 
       <div className="relative flex-none px-3 pb-3 flex flex-col gap-2">
+        {/* A request the panel helps to write (passages to add): its own fields, in place of what it offers */}
+        {composer && !waitsForYes && <Composer key={composer.kind} composer={composer} busy={busy} onSend={say} onClose={() => compose(null)} />}
         {/* What it offers to do from here: one tap, or a sentence to finish */}
-        {!busy && !waitsForYes && suggestions.length > 0 && (
+        {!composer && !busy && !waitsForYes && suggestions.length > 0 && (
           <div className="flex flex-col gap-[5px]">
             {suggestions.map((suggestion) => {
               const Icon = ICONS[suggestion.icon];

@@ -68,6 +68,8 @@ interface Props {
   onDelete: () => void;
   /** Passages looked for in the live by hand (the passages give their place to the search) */
   onSearch?: () => void;
+  /** Passages asked of the assistant (its panel opens, ready for what to look for) */
+  onAskAi?: () => void;
   /** A template's name, by key */
   templateName: (key: string) => string;
   /** The AI is looking at the passages to choose their templates */
@@ -206,6 +208,7 @@ export default function CompilationPanel({
   exporting,
   onDelete,
   onSearch,
+  onAskAi,
   templateName,
   looking,
   looksNote,
@@ -582,8 +585,13 @@ export default function CompilationPanel({
         );
       })}
 
-      {(!single || onSearch) && (
+      {(!single || onSearch || onAskAi) && (
         <div className="flex flex-wrap gap-1.5">
+          {onAskAi && (
+            <button onClick={onAskAi} className="btn btn-sm bg-accent-soft text-accent hover:bg-accent/25 transition-colors">
+              <Sparkles className="w-[15px] h-[15px]" /> {t("compilation.addWithAi")}
+            </button>
+          )}
           {onSearch && (
             <button onClick={onSearch} className="btn btn-ghost btn-sm">
               <Search className="w-[15px] h-[15px]" /> {t("compilation.search")}
@@ -861,6 +869,12 @@ export default function CompilationPanel({
         )}
 
         <div className="mt-1 flex flex-col gap-1.5">
+          {picker ? (
+            // In a setting's choices, what is done next is going back to the look: the export waits there
+            <button type="button" onClick={() => setMenu(null)} className="btn btn-glass btn-lg w-full h-[48px]">
+              <ArrowLeft className="w-4 h-4" strokeWidth={2.2} /> {t("compilation.dress.back")}
+            </button>
+          ) : (
           <button onClick={onExport} disabled={count === 0 || exporting || editing || cutting.size > 0} className="btn btn-primary btn-lg w-full h-[48px]">
             {exporting ? (
               <Loader2 className="w-4 h-4 spinner" />
@@ -874,6 +888,7 @@ export default function CompilationPanel({
               </>
             )}
           </button>
+          )}
           {/* Or the whole video as one clip in the layer editor, where everything can be moved */}
           {onEdit && !picker && (
             <button onClick={onEdit} disabled={count === 0 || exporting || editing || cutting.size > 0} title={`${t("compilation.editorHint")}${own > 0 || !!compilation.transition || ownLooks > 0 || !!compilation.intro || !!compilation.music ? ` ${t("compilation.editorLoses")}` : ""}`} className="btn btn-ghost btn-sm w-full">

@@ -41,6 +41,12 @@ const BESIDE = "(min-width: 1024px)";
 /** How long a page may take to open before what it was to do is given up, ms */
 const PAGE_WAIT = 25_000;
 
+/**
+ * A request the panel helps to write, with a field made for it instead of the bare box:
+ * passages to add to the video on screen (what to look for, how many, in which part)
+ */
+export type AssistantComposer = { kind: "passages"; parts: string[] };
+
 /** What a page does for the assistant: the action's answer (`{ error }` when it could not), as the assistant reads it */
 export type AssistantRun = (name: string, args: Record<string, any>) => Promise<unknown>; // eslint-disable-line @typescript-eslint/no-explicit-any
 
@@ -59,6 +65,9 @@ interface AssistantValue {
   pending: string | null;
   /** The streamer says something (the panel opens) */
   send: (text: string) => void;
+  /** The panel opens on a request to finish, with its own fields (null: back to the bare box) */
+  composer: AssistantComposer | null;
+  compose: (composer: AssistantComposer | null) => void;
   /** Yes or no to what its last message asks the go-ahead for */
   approve: (yes: boolean) => void;
   /** A new conversation */
@@ -87,6 +96,8 @@ const AssistantContext = createContext<AssistantValue>({
   doing: [],
   pending: null,
   send: nothing,
+  composer: null,
+  compose: nothing,
   approve: nothing,
   reset: nothing,
   act: async () => ({ error: "no assistant" }),
@@ -138,6 +149,7 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
   const [busy, setBusy] = useState(false);
   const [doing, setDoing] = useState<string[]>([]);
   const [pending, setPending] = useState<string | null>(null);
+  const [composer, setComposer] = useState<AssistantComposer | null>(null);
   const [place, setPlaceState] = useState<AssistantPlace | null>(null);
 
   const setOpen = useCallback((next: boolean) => {
@@ -412,9 +424,17 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
       if (!said) return;
       setOpen(true);
       if (running.current) return toast.info(t("assistant.busy"));
+      setComposer(null);
       run({ text: said });
     },
     [run, setOpen, t, toast],
+  );
+  const compose = useCallback(
+    (next: AssistantComposer | null) => {
+      setComposer(next);
+      if (next) setOpen(true);
+    },
+    [setOpen],
   );
   const messagesRef = useRef(messages);
   messagesRef.current = messages;
@@ -436,8 +456,8 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
   const act = useCallback((name: string, args: Record<string, any>) => perform({ call: "", name, args, needs: "app" }), [perform]); // eslint-disable-line @typescript-eslint/no-explicit-any
 
   const value = useMemo(
-    () => ({ open, pushes, setOpen, toggle, messages, busy, doing, pending, send, approve, reset, act, place, setPlace, register, onChanged, notify }),
-    [open, pushes, setOpen, toggle, messages, busy, doing, pending, send, approve, reset, act, place, setPlace, register, onChanged, notify],
+    () => ({ open, pushes, setOpen, toggle, messages, busy, doing, pending, send, composer, compose, approve, reset, act, place, setPlace, register, onChanged, notify }),
+    [open, pushes, setOpen, toggle, messages, busy, doing, pending, send, composer, compose, approve, reset, act, place, setPlace, register, onChanged, notify],
   );
   return <AssistantContext.Provider value={value}>{children}</AssistantContext.Provider>;
 }

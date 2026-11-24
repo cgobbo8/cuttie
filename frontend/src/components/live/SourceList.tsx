@@ -26,6 +26,8 @@ interface Props {
   categoryLabel: (category: string | undefined) => string | null;
   /** The AI is looking through the live for videos to propose */
   looking?: boolean;
+  /** Ideas the AI is building right now (their ids) */
+  building?: Set<string>;
   /** Beside « Clips » (a file of one's own) */
   clipAction?: ReactNode;
   footer?: ReactNode;
@@ -61,7 +63,7 @@ function StateIcon({ state, idea }: { state: EntryState; idea?: boolean }) {
  * of each first; a long section shows its first ones and the rest a click away. Each section
  * ends on a way to add one, so an empty section is never a dead end.
  */
-export default function SourceList({ jobId, entries, selected, onSelect, open, onToggle, onAdd, storyboard, categoryLabel, looking = false, clipAction, footer }: Props) {
+export default function SourceList({ jobId, entries, selected, onSelect, open, onToggle, onAdd, storyboard, categoryLabel, looking = false, clipAction, footer, building }: Props) {
   const { t } = useTranslation();
   const selectedRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
@@ -118,7 +120,7 @@ export default function SourceList({ jobId, entries, selected, onSelect, open, o
           </span>
         </span>
         {entry.score != null && <span className="mono text-[13px] font-semibold text-ink-2">{entry.score}</span>}
-        <StateIcon state={entry.state} idea={entry.idea} />
+        {building?.has(video.id) ? <Loader2 aria-label={t("live.building")} className="w-[18px] h-[18px] mx-0.5 flex-none spinner text-accent" /> : <StateIcon state={entry.state} idea={entry.idea} />}
       </button>
     );
   };

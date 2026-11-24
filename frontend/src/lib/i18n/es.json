@@ -1916,7 +1916,8 @@
         "motion": "Movimiento",
         "sound": "Inicio y sonido"
       },
-      "aiShort": "Elige la IA"
+      "aiShort": "Elige la IA",
+      "back": "Volver al estilo"
     },
     "ownLooks_one": "{{count}} pasaje tiene el suyo",
     "ownLooks_other": "{{count}} pasajes tienen el suyo",
@@ -1928,7 +1929,8 @@
     "briefFor": {
       "clip": "Ej.: hacia las 3 h, salgo del hidroavión y muero en la hélice.",
       "sequence": "Ej.: la misión del yate, desde la llegada en moto de agua hasta la huida en aerodeslizador."
-    }
+    },
+    "addWithAi": "Añadir con la IA"
   },
   "compilations": {
     "title": "Compilaciones",
@@ -2321,6 +2323,22 @@
       "toExport_other": "{{count}} vídeos por exportar",
       "lastLive": "Último directo: {{name}}",
       "notAnalysed": "aún sin analizar"
+    },
+    "compose": {
+      "passages": {
+        "title": "Añadir pasajes",
+        "lead": "Los momentos en que",
+        "placeholder": "pido ayuda, falla el salto…",
+        "count": "Cuántos como máximo",
+        "all": "Todos",
+        "into": "En la parte",
+        "send": "Buscar y añadir",
+        "say": "Busca los momentos en que {{what}} y añádelos a este vídeo",
+        "sayCount_one": "(solo el mejor)",
+        "sayCount_other": "({{count}} como máximo, los mejores)",
+        "sayPart": "en la parte «{{part}}».",
+        "sayEnd": "al final."
+      }
     }
   },
   "sources": {
@@ -2367,7 +2385,13 @@
     "keptVideos": "Vídeos guardados de este directo",
     "exported": "Exportado",
     "nothingKept": "Ningún vídeo guardado",
-    "nothingKeptHint": "Guarda un clip, una secuencia o una compilación de este directo: llega aquí para montarlo."
+    "nothingKeptHint": "Guarda un clip, una secuencia o una compilación de este directo: llega aquí para montarlo.",
+    "building": "La IA está montando el vídeo",
+    "buildingHint": "Puedes seguir ordenando.",
+    "buildWaiting": "Esperando su turno…",
+    "buildCutting": "Cortando los pasajes del directo…",
+    "buildStarted": "La IA está montando «{{name}}» en segundo plano.",
+    "built": "«{{name}}» está lista en Montar."
   },
   "describe": {
     "title": {

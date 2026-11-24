@@ -1916,7 +1916,8 @@
         "motion": "Mouvement",
         "sound": "Début et son"
       },
-      "aiShort": "L'IA choisit"
+      "aiShort": "L'IA choisit",
+      "back": "Retour à l'habillage"
     },
     "ownLooks_one": "{{count}} passage a le sien",
     "ownLooks_other": "{{count}} passages ont le leur",
@@ -1928,7 +1929,8 @@
     "briefFor": {
       "clip": "Ex. : vers 3 h, je sors de l'hydravion et je meurs dans l'hélice.",
       "sequence": "Ex. : la mission du yacht, de l'arrivée en jet-ski jusqu'à la fuite en hydroglisseur."
-    }
+    },
+    "addWithAi": "Ajouter avec l'IA"
   },
   "compilations": {
     "title": "Compilations",
@@ -2321,6 +2323,22 @@
       "toExport_other": "{{count}} vidéos à exporter",
       "lastLive": "Dernier live : {{name}}",
       "notAnalysed": "pas encore analysé"
+    },
+    "compose": {
+      "passages": {
+        "title": "Ajouter des passages",
+        "lead": "Les moments où",
+        "placeholder": "je crie à l'aide, il rate son saut…",
+        "count": "Combien au plus",
+        "all": "Tous",
+        "into": "Dans la partie",
+        "send": "Chercher et ajouter",
+        "say": "Cherche les moments où {{what}} et ajoute-les à cette vidéo",
+        "sayCount_one": "(le meilleur seulement)",
+        "sayCount_other": "({{count}} au plus, les meilleurs)",
+        "sayPart": "dans la partie « {{part}} ».",
+        "sayEnd": "à la fin."
+      }
     }
   },
   "sources": {
@@ -2367,7 +2385,13 @@
     "keptVideos": "Vidéos gardées de ce live",
     "exported": "Exportée",
     "nothingKept": "Aucune vidéo gardée",
-    "nothingKeptHint": "Garde un clip, une séquence ou une compilation de ce live : il arrive ici pour être monté."
+    "nothingKeptHint": "Garde un clip, une séquence ou une compilation de ce live : il arrive ici pour être monté.",
+    "building": "L'IA construit la vidéo",
+    "buildingHint": "Tu peux continuer à trier.",
+    "buildWaiting": "Attend son tour…",
+    "buildCutting": "Découpe les passages dans le live…",
+    "buildStarted": "L'IA construit « {{name}} » en arrière-plan.",
+    "built": "« {{name}} » est prête dans Monter."
   },
   "describe": {
     "title": {

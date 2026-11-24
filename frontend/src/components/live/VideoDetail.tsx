@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { ArrowRight, Check, Sparkles, Trash2, X } from "lucide-react";
+import { ArrowRight, Check, Sparkles, Trash2, X, Loader2 } from "lucide-react";
 import { clipThumbUrl, type TwitchStoryboard } from "../../lib/api";
 import { allItems, liveClock } from "../../lib/compilation";
 import { PLAN_COST, aboutCost, clock } from "../../lib/format";
@@ -20,6 +20,8 @@ interface Props {
   onOpen: () => void;
   onRemove: () => void;
   busy?: boolean;
+  /** The AI is building it behind the page: what it is doing right now ("" : nothing said yet) */
+  building?: string | null;
 }
 
 /**
@@ -27,7 +29,7 @@ interface Props {
  * is in the live (a few pictures), what it is, and the same two decisions under it. An idea of
  * the AI is kept by having it built; a video already made goes on to its montage.
  */
-export default function VideoDetail({ jobId, entry, storyboard, onKeep, onPass, onOpen, onRemove, busy = false }: Props) {
+export default function VideoDetail({ jobId, entry, storyboard, onKeep, onPass, onOpen, onRemove, busy = false, building = null }: Props) {
   const { t, i18n } = useTranslation();
   const video = entry.video;
   const facts = videoFacts(video);
@@ -72,7 +74,16 @@ export default function VideoDetail({ jobId, entry, storyboard, onKeep, onPass, 
           </div>
         </div>
         <div className="flex items-center gap-2.5 ml-auto">
-          {entry.idea ? (
+          {building !== null ? (
+            // Kept: the AI builds it while the streamer goes on sorting
+            <div role="status" aria-live="polite" className="h-12 max-w-[360px] pl-3.5 pr-4 rounded-[14px] bg-accent-soft border border-accent-line flex items-center gap-2.5">
+              <Loader2 className="w-4 h-4 flex-none spinner text-accent" />
+              <span className="min-w-0">
+                <b className="block text-[13px] font-[600] leading-tight text-white">{t("live.building")}</b>
+                <span className="block truncate text-[11.5px] leading-tight text-ink-2">{building || t("live.buildingHint")}</span>
+              </span>
+            </div>
+          ) : entry.idea ? (
             <>
               <button onClick={onPass} disabled={busy} className={`btn btn-lg pr-3 ${entry.state === "passed" ? "bg-white/[0.18] text-white border border-white/20" : "btn-glass"}`}>
                 <X className="w-[15px] h-[15px]" strokeWidth={2.4} />

@@ -365,7 +365,10 @@
       "start": 35.1,
       "lufs": -17.3,
       "about": "Classic rock: a drum build-up, then the famous guitar riff comes in. For a video that builds up to a payoff, a win, a big entrance.",
-      "build": true
+      "build": true,
+      "universes": [
+        "gta"
+      ]
     },
     {
       "id": "u99598061",

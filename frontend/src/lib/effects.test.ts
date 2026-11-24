@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cleanEffects, effectAt, EFFECTS_APART, isEffectLevel, placeEffects, type SegmentEffect } from "./effects";
+import { cleanEffects, effectAt, EFFECTS_APART, flashAt, isEffectLevel, placeEffects, type SegmentEffect } from "./effects";
 
 const word = (text: string, start: number, length = 0.3) => ({ word: text, start, end: start + length });
 /** "Oh mais y'a des portes de chaque côté! Oh putain! Nathan!" said from `at` */
@@ -197,5 +197,50 @@ describe("effects as the renderer takes them", () => {
     ]);
     expect(cleanEffects(undefined)).toEqual([]);
     expect(cleanEffects(Array.from({ length: 200 }, () => ({ kind: "zoom", at: 0, for: 1, amount: 1.05 })))).toHaveLength(80);
+    // The ones only a hand puts down
+    const byHand = [{ kind: "pulse", at: 1, for: 0.8, amount: 1.08 }, { kind: "gray", at: 2, for: 2.5, amount: 1 }, { kind: "flash", at: 3, for: 0.35, amount: 1 }];
+    expect(cleanEffects(byHand)).toEqual(byHand);
+  });
+});
+
+describe("the effects only a hand puts down", () => {
+  const fps = 30;
+
+  it("bounces the picture twice, the second time less, and leaves it as it was", () => {
+    const pulse: SegmentEffect[] = [{ kind: "pulse", at: 2, for: 0.8, amount: 1.08 }];
+    expect(effectAt(pulse, 59, fps)).toBeNull();
+    expect(scaleOf(effectAt(pulse, 60, fps)!.transform)).toBe(1);
+    expect(scaleOf(effectAt(pulse, 66, fps)!.transform)).toBe(1.06);
+    expect(scaleOf(effectAt(pulse, 72, fps)!.transform)).toBe(1);
+    expect(scaleOf(effectAt(pulse, 78, fps)!.transform)).toBe(1.02);
+    expect(effectAt(pulse, 84, fps)).toBeNull();
+  });
+
+  it("takes the colours away for a moment, and brings them back", () => {
+    const gray: SegmentEffect[] = [{ kind: "gray", at: 1, for: 2.5, amount: 1 }];
+    // (nothing is moved: the picture stays where it is)
+    expect(effectAt(gray, 30, fps)).toEqual({ transform: "translate(0%, 0%) scale(1)" });
+    expect(effectAt(gray, 45, fps)).toEqual({ transform: "translate(0%, 0%) scale(1)", filter: "grayscale(1)" });
+    const leaving = Number(/grayscale\(([\d.]+)\)/.exec(effectAt(gray, 99, fps)!.filter!)![1]);
+    expect(leaving).toBeGreaterThan(0.3);
+    expect(leaving).toBeLessThan(0.6);
+    expect(effectAt(gray, 105, fps)).toBeNull();
+  });
+
+  it("lays a flash over the whole frame, at once and gone by its end, without moving any picture", () => {
+    const flash: SegmentEffect[] = [{ kind: "flash", at: 4, for: 0.4, amount: 1 }];
+    expect([119, 120, 126, 132].map((frame) => flashAt(flash, frame, fps))).toEqual([0, 0.85, 0.2125, 0]);
+    expect(effectAt(flash, 123, fps)).toBeNull();
+    expect(flashAt(undefined, 10, fps)).toBe(0);
+  });
+
+  it("cuts a zoom in and out when it is told for how long: on the webcam, the game is left alone", () => {
+    // « Net »: no way in nor out, the picture is at that size from one frame to the next
+    const sharp: SegmentEffect[] = [{ kind: "zoom", at: 5, for: 2, amount: 1.3, on: "cam" }];
+    expect(effectAt(sharp, 149, fps, "cam")).toBeNull();
+    expect(scaleOf(effectAt(sharp, 150, fps, "cam")!.transform)).toBe(1.3);
+    expect(scaleOf(effectAt(sharp, 209, fps, "cam")!.transform)).toBe(1.3);
+    expect(effectAt(sharp, 210, fps, "cam")).toBeNull();
+    expect(effectAt(sharp, 180, fps, "game")).toBeNull();
   });
 });

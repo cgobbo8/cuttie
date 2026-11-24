@@ -118,7 +118,7 @@ import LiveHeader from "../components/live/LiveHeader";
 import VideoRail from "../components/live/VideoRail";
 import CamSheet from "../components/montage/CamSheet";
 import LiveBrowser from "../components/compilation/LiveBrowser";
-import { seenMoves, videoMoves } from "../lib/effectMoves";
+import { changedMove, CUSTOM_EFFECTS, effectiveMoves, isMoveType, laneMoves, MOVE_TYPES, newMove, STRENGTHS, strengthOf, withMoves, type ItemMove, type MovePatch, type MoveType, type Strength } from "../lib/effectMoves";
 import { spanText } from "../lib/liveBrowse";
 import TemplateSketch from "../components/montage/TemplateSketch";
 import VideoTimeline from "../components/montage/VideoTimeline";
@@ -414,7 +414,7 @@ export default function CompilationPage() {
       // (a "hook" intro: the moment it plays is written on the video, the library counts its length with it)
       const next = withHook(changed);
       const before = compilationsRef.current?.find((c) => c.id === next.id);
-      const passagesOf = (c: Compilation) => JSON.stringify(c.sections.map((sec) => sec.items.map((item) => [item.id, item.start, item.end])));
+      const passagesOf = (c: Compilation) => JSON.stringify([c.effects === CUSTOM_EFFECTS, c.sections.map((sec) => sec.items.map((item) => [item.id, item.start, item.end, item.moves, item.musicLevel]))]);
       if (!back && before && passagesOf(before) !== passagesOf(next)) {
         const kept = history.current.get(next.id) ?? { stack: [], at: 0 };
         // (a handle being dragged changes the cut many times a second: one step back for the whole move)
@@ -566,6 +566,125 @@ export default function CompilationPage() {
     change(withTitle);
     ensure(allItems(withTitle));
     toast.success(t("compilation.addedCount", { count: added }));
+  };
+
+  /* ── The moves of the picture, by hand ──────────────────── */
+
+  /** The video's moves changed: from then on they are its passages' own (what was placed for it is kept as it was, then changed) */
+  const editMoves = (edit: (moves: Record<string, ItemMove[]>) => Record<string, ItemMove[]>) => {
+    if (compilation) change(withMoves(compilation, edit(itemMoves)));
+  };
+  /** A move put down on a passage at a time of its live: on the webcam when the passage shows one, unless a kind is asked for */
+  const addMove = (itemId: string, at: number, kind?: MoveType, more?: MovePatch): string | null => {
+    const item = compilation ? allItems(compilation).find((one) => one.id === itemId) : undefined;
+    if (!item) return null;
+    const piece = piecesRef.current[item.id];
+    const cam = !!(piece && envsRef.current[pieceVersion(piece)]?.facecam);
+    const made = changedMove(newMove(kind ?? (cam ? "cam" : "zoom"), at, item), more ?? {}, item);
+    editMoves((all) => ({ ...all, [itemId]: [...(all[itemId] ?? []), made] }));
+    return made.id;
+  };
+  const changeMove = (itemId: string, id: string, patch: MovePatch) => {
+    const item = compilation ? allItems(compilation).find((one) => one.id === itemId) : undefined;
+    if (item) editMoves((all) => ({ ...all, [itemId]: (all[itemId] ?? []).map((move) => (move.id === id ? changedMove(move, patch, item) : move)) }));
+  };
+  const removeMove = (itemId: string, id: string) => editMoves((all) => ({ ...all, [itemId]: (all[itemId] ?? []).filter((move) => move.id !== id) }));
+  /** How loud the music plays under a passage, as it is heard (null: back to what the app does by itself) */
+  const setMusicLevel = (itemId: string, level: number | null) => {
+    if (!compilation) return;
+    // (the level kept is the passage's own, before the video's « présence » is applied to everything)
+    const own = level === null ? undefined : Math.round(Math.min(1, Math.max(0, level / (compilation.music?.volume ?? 1))) * 100) / 100;
+    change(updateItem(compilation, itemId, { musicLevel: own }));
+  };
+
+  /**
+   * What the assistant does with the video's moves: `add` puts some down (a passage, seconds from
+   * its start, a kind), `change` and `remove` name moves by their id, `clear` takes them all
+   * out. It always answers the moves as they are now: asked nothing, it lists them.
+   */
+  const editEffects = (args: Record<string, unknown>) => {
+    if (!compilation) return { error: "no video open" };
+    const all = allItems(compilation);
+    let next: Record<string, ItemMove[]> = Object.fromEntries(Object.entries(itemMoves).map(([id, list]) => [id, [...list]]));
+    const refused: string[] = [];
+    const more = (raw: Record<string, unknown>): MovePatch => ({
+      ...(typeof raw.sharp === "boolean" ? { sharp: raw.sharp } : {}),
+      ...(STRENGTHS.includes(raw.strength as Strength) ? { strength: raw.strength as Strength } : {}),
+      ...(Number.isFinite(Number(raw.seconds)) && Number(raw.seconds) > 0 ? { for: Number(raw.seconds) } : {}),
+    });
+    let changed = false;
+    if (args.clear === true) {
+      next = Object.fromEntries(all.map((item) => [item.id, []]));
+      changed = true;
+    }
+    for (const id of Array.isArray(args.remove) ? args.remove : []) {
+      const owner = Object.keys(next).find((item) => next[item].some((move) => move.id === id));
+      if (!owner) refused.push(`${id}: no such effect`);
+      else {
+        next[owner] = next[owner].filter((move) => move.id !== id);
+        changed = true;
+      }
+    }
+    for (const raw of (Array.isArray(args.change) ? args.change : []) as Record<string, unknown>[]) {
+      const owner = Object.keys(next).find((item) => next[item].some((move) => move.id === raw?.id));
+      const item = all.find((one) => one.id === owner);
+      if (!owner || !item) {
+        refused.push(`${String(raw?.id)}: no such effect`);
+        continue;
+      }
+      if (raw.kind !== undefined && !isMoveType(raw.kind)) {
+        refused.push(`${String(raw.id)}: unknown kind « ${String(raw.kind)} » (${MOVE_TYPES.join(", ")})`);
+        continue;
+      }
+      const patch: MovePatch = { ...more(raw), ...(isMoveType(raw.kind) ? { kind: raw.kind } : {}), ...(Number.isFinite(Number(raw.at)) ? { at: item.start + Number(raw.at) } : {}) };
+      next[owner] = next[owner].map((move) => (move.id === raw.id ? changedMove(move, patch, item) : move));
+      changed = true;
+    }
+    for (const raw of (Array.isArray(args.add) ? args.add : []) as Record<string, unknown>[]) {
+      const item = all.find((one) => one.id === raw?.passage);
+      if (!item) {
+        refused.push(`${String(raw?.passage)}: no such passage in this video`);
+        continue;
+      }
+      if (!isMoveType(raw.kind)) {
+        refused.push(`unknown kind « ${String(raw.kind)} » (${MOVE_TYPES.join(", ")})`);
+        continue;
+      }
+      const at = Number(raw.at);
+      if (!Number.isFinite(at) || at < 0 || at > item.end - item.start) {
+        refused.push(`${item.id}: \`at\` is seconds from the passage's start, 0 to ${(item.end - item.start).toFixed(1)}`);
+        continue;
+      }
+      next[item.id] = [...(next[item.id] ?? []), changedMove(newMove(raw.kind, item.start + at, item), more(raw), item)];
+      changed = true;
+    }
+    if (changed) change(withMoves(compilation, next));
+    return {
+      ...(changed ? { changed: true } : {}),
+      ...(refused.length > 0 ? { refused } : {}),
+      effects: all.flatMap((item) => (next[item.id] ?? []).map((move) => ({ id: move.id, passage: item.id, kind: move.kind, at: Math.round((move.at - item.start) * 10) / 10, seconds: move.for, ...(move.sharp ? { sharp: true } : {}), ...(strengthOf(move) ? { strength: strengthOf(move) } : {}) }))),
+      by_hand: changed || compilation.effects === CUSTOM_EFFECTS,
+    };
+  };
+  /** The assistant sets how loud the music plays under passages (`percent`: 0 to 100; null: by itself again) */
+  const setMusicLevels = (levels: unknown) => {
+    if (!compilation) return { error: "no video open" };
+    if (!compilation.music) return { error: "this video has no music: choose one first (set_look)" };
+    let next = compilation;
+    const set: Record<string, number | null> = {};
+    const refused: string[] = [];
+    for (const raw of (Array.isArray(levels) ? levels : []) as Record<string, unknown>[]) {
+      const item = allItems(next).find((one) => one.id === raw?.passage);
+      const percent = raw?.percent === null ? null : Number(raw?.percent);
+      if (!item) refused.push(`${String(raw?.passage)}: no such passage in this video`);
+      else if (percent !== null && (!Number.isFinite(percent) || percent < 0 || percent > 100)) refused.push(`${item.id}: \`percent\` is 0 to 100, or null`);
+      else {
+        next = updateItem(next, item.id, { musicLevel: percent === null ? undefined : Math.round(percent) / 100 });
+        set[item.id] = percent === null ? null : Math.round(percent);
+      }
+    }
+    if (Object.keys(set).length > 0) change(next);
+    return { set, ...(refused.length > 0 ? { refused } : {}) };
   };
 
   /** Where a video of the media library ends, seconds (its file's end) */
@@ -944,8 +1063,50 @@ export default function CompilationPage() {
   }, [preview]);
   const marksRef = useRef(marks);
   marksRef.current = marks;
-  // Where the picture moves in the video (its effects), for the timeline to show and the look panel to count
-  const moves = useMemo(() => videoMoves(preview?.montage.segments ?? [], marks, FPS), [marks, preview]);
+  // Where the picture moves in the video: each passage's own moves once they were set by hand, else what was placed for it
+  const itemMoves = useMemo(() => {
+    const all = compilation ? allItems(compilation) : [];
+    const placed = all.map((item) => {
+      const index = preview?.ids.indexOf(item.id) ?? -1;
+      return index >= 0 ? preview!.montage.segments[index].effects : undefined;
+    });
+    return effectiveMoves(compilation?.effects === CUSTOM_EFFECTS, all, placed);
+  }, [compilation, preview]);
+  const moves = useMemo(() => laneMoves(compilation ? allItems(compilation) : [], marks, itemMoves, FPS), [compilation, itemMoves, marks]);
+  // How loud the live is under each passage (its clip's sound, as the server measured it), on the video's clock
+  const sound = useMemo(() => {
+    const points: [number, number][] = [];
+    for (const mark of marks) {
+      const item = compilation ? allItems(compilation).find((one) => one.id === mark.id) : undefined;
+      const piece = item ? pieces[item.id] : undefined;
+      const heard = piece ? envs[pieceVersion(piece)]?.sound : undefined;
+      if (!item || !piece || !heard?.curve.length || piece.file_start == null) continue;
+      const from = item.start - piece.file_start;
+      const length = Math.max(0.1, item.end - item.start);
+      const span = mark.to - mark.from;
+      points.push([mark.from, 0]);
+      for (let k = Math.max(0, Math.floor(from / heard.step)); k < heard.curve.length && k * heard.step <= from + length; k++) {
+        points.push([mark.from + (Math.min(length, Math.max(0, k * heard.step - from)) / length) * span, heard.curve[k]]);
+      }
+      points.push([mark.to, 0]);
+    }
+    return points;
+  }, [compilation, envs, marks, pieces]);
+  // The chat's messages a passage writes on the video (the ones its layout shows), on the video's clock; undefined: no passage shows the chat
+  const chatMarks = useMemo(() => {
+    const out: { frame: number; author: string; text: string }[] = [];
+    let shown = false;
+    (preview?.montage.segments ?? []).forEach((segment, i) => {
+      const chat = segment.layers.find((placed) => placed.layer.type === "chat")?.layer.chat;
+      const mark = marks[i];
+      if (!chat || !mark) return;
+      shown = true;
+      for (const message of chat.messages) {
+        if (message.timestamp >= segment.from && message.timestamp <= segment.from + segment.duration) out.push({ frame: mark.from + Math.round((message.timestamp - segment.from) * FPS), author: message.author, text: message.text });
+      }
+    });
+    return shown ? out : undefined;
+  }, [marks, preview]);
   // In the page the intro's sound and the music are files the player plays (the export mixes them in afterwards)
   const playerProps = useMemo(() => (preview ? playable(preview.montage, musics, liveLufs) : undefined), [liveLufs, musics, preview]);
   // The same passages in the same order: the same player, which keeps its place when a cut or a template changes
@@ -1375,8 +1536,8 @@ export default function CompilationPage() {
   };
 
   // What the assistant calls after it waited (another video put on screen first): as this page is now
-  const actions = useRef({ compilation, applyPlan, applyChange, aiCut, addPassages, addImported, setLook });
-  actions.current = { compilation, applyPlan, applyChange, aiCut, addPassages, addImported, setLook };
+  const actions = useRef({ compilation, applyPlan, applyChange, aiCut, addPassages, addImported, setLook, editEffects, setMusicLevels });
+  actions.current = { compilation, applyPlan, applyChange, aiCut, addPassages, addImported, setLook, editEffects, setMusicLevels };
 
   // Who waits for a video to be the one on screen
   const awaited = useRef<{ id: string; done: () => void }[]>([]);
@@ -1459,6 +1620,8 @@ export default function CompilationPage() {
       if (name === "add_passages") return actions.current.addPassages(args.passages, typeof args.part === "string" ? args.part : "");
       if (name === "add_media") return actions.current.addImported(args.media, typeof args.part === "string" ? args.part : "");
       if (name === "set_look") return actions.current.setLook(args.look);
+      if (name === "edit_effects") return actions.current.editEffects(args);
+      if (name === "set_music_levels") return actions.current.setMusicLevels(args.levels);
       return { error: `the editor can't do this: ${name}` };
     } catch (err) {
       return { error: err instanceof Error ? err.message : "failed" };
@@ -1818,7 +1981,9 @@ export default function CompilationPage() {
     scope: lookScope,
     onScope: setLookScope,
     // (how many times the picture moves, once the video is built: said on the « Effets » row)
-    moves: preview ? seenMoves(moves) : null,
+    moves: preview ? moves.length : null,
+    // « À la main »: what was placed for the video becomes its passages' own moves, to be changed one by one on the timeline
+    onCustomEffects: () => editMoves((all) => all),
     // Passages asked of the assistant: its panel opens on a field made for that (what to look for, where they go)
     onAskAi: () => assistant.compose({ kind: "passages", parts: compilation.sections.map((section) => section.title.trim()).filter(Boolean) }),
     templateName,
@@ -2061,6 +2226,13 @@ export default function CompilationPage() {
           playerKey={playerKey}
           playing={videoPlaying}
           moves={moves}
+          onMoveAdd={addMove}
+          onMoveChange={changeMove}
+          onMoveRemove={removeMove}
+          sound={sound}
+          chat={chatMarks}
+          musicSet={new Set(items.filter((item) => typeof item.musicLevel === "number").map((item) => item.id))}
+          onMusicLevel={setMusicLevel}
           selected={inCompilation ? (shownItem?.id ?? null) : null}
           onSelect={(id) => {
             // (a plain click is on that passage alone: the ones picked together are let go)

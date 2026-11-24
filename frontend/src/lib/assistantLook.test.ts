@@ -118,7 +118,22 @@ describe("what the assistant changes in a video's look", () => {
 
   it("tells the assistant how the video looks now", () => {
     const dressed = video({ universe: "gta", template: "gta", titleStyle: "viceplate", effects: "light", intro: { style: "hook", look: "sunset" }, music: { track: "u1" } });
-    expect(lookOf(dressed, choices)).toEqual({ universe: "gta", template: "GTA", title_style: "viceplate", effects: "light", transition: "cut", opening: "hook", intro: "sunset", music: "Money for Nothing" });
-    expect(lookOf(video(), choices)).toEqual({ universe: "channel", template: "default", title_style: "template", effects: "none", transition: "cut", opening: "none", intro: null, music: "none" });
+    expect(lookOf(dressed, choices)).toEqual({ universe: "gta", template: "GTA", title_style: "viceplate", effects: "light", chat: "template", transition: "cut", opening: "hook", intro: "sunset", music: "Money for Nothing" });
+    expect(lookOf(video(), choices)).toEqual({ universe: "channel", template: "default", title_style: "template", effects: "none", chat: "template", transition: "cut", opening: "none", intro: null, music: "none" });
+  });
+
+  it("shows the chat on every passage, on none, or as each layout does", () => {
+    const shown = applyLook(video(), { chat: "on" }, choices);
+    expect(shown.video.chat).toBe("on");
+    expect(shown.set).toEqual({ chat: "on" });
+    expect(applyLook(shown.video, { chat: "off" }, choices).video.chat).toBe("off");
+    // Back to what each layout does
+    const back = applyLook(shown.video, { chat: "template" }, choices);
+    expect("chat" in back.video).toBe(false);
+    expect(back.set).toEqual({ chat: "template" });
+    // Something it has no such thing for is said, and nothing changes
+    const odd = applyLook(shown.video, { chat: "sometimes" }, choices);
+    expect(odd.video.chat).toBe("on");
+    expect(odd.unknown.chat).toContain("template");
   });
 });

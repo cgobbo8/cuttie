@@ -7,7 +7,7 @@ import type { AddressInfo } from 'node:net'
 import env from '#start/env'
 import User from '#models/user'
 import Job from '#models/job'
-import { assistantDir } from '#services/assistant'
+import { assistantDir, assistantTool } from '#services/assistant'
 import { readSettings, writeSettings } from '#services/user_settings'
 
 const SECRET = 'a-secret-for-tests'
@@ -281,6 +281,45 @@ test.group('The assistant', (group) => {
     assert.deepInclude(job.suggestions, { note: 'Deux idées.' })
     // The page learns which lives changed under it
     assert.deepEqual(body.changed, [job.id])
+  })
+
+  test('tells the assistant what was set by hand on a passage: its effects, the music under it', async ({ assert }) => {
+    const user = await makeUser()
+    const byHand: any = video('hhhhhhhhhh', 'À la main', { effects: 'custom', chat: 'on' })
+    byHand.sections[0].items[0] = {
+      ...byHand.sections[0].items[0],
+      moves: [
+        { id: 'move0001', kind: 'cam', at: 101.5, for: 1.7, sharp: true, amount: 1.3 },
+        { id: 'move0002', kind: 'flash', at: 103, for: 0.35 },
+      ],
+      musicLevel: 0.4,
+    }
+    // (a video whose effects follow a level again: what a passage had of its own is not what plays)
+    const byLevel: any = video('llllllllll', 'Par niveau', { effects: 'light' })
+    byLevel.sections[0].items[0] = { ...byLevel.sections[0].items[0], moves: [{ id: 'move0003', kind: 'zoom', at: 101, for: 1.3 }] }
+    const job = await live(user, 'Le yacht', '2026-11-20', { compilations: [byHand, byLevel] })
+
+    const told = (await assistantTool(user.id, 'video', { job: job.id, id: 'hhhhhhhhhh' })) as any
+    // Each effect by its id, dated from its passage's start as `edit_effects` wants it
+    assert.deepEqual(told.parts[0].passages, [
+      {
+        id: 'hhhhhhhhha',
+        start: 100,
+        end: 104,
+        text: 'On y va',
+        effects: [
+          { id: 'move0001', kind: 'cam', at: 1.5, seconds: 1.7, sharp: true },
+          { id: 'move0002', kind: 'flash', at: 3, seconds: 0.35 },
+        ],
+        music_percent: 40,
+      },
+      { id: 'hhhhhhhhhb', start: 200, end: 206, text: 'Cours !' },
+    ])
+    assert.deepInclude(told.look, { effects: 'custom', chat: 'on' })
+
+    const level = (await assistantTool(user.id, 'video', { job: job.id, id: 'llllllllll' })) as any
+    assert.deepEqual(level.parts[0].passages[0], { id: 'llllllllla', start: 100, end: 104, text: 'On y va' })
+    assert.deepInclude(level.look, { effects: 'light', chat: 'template' })
   })
 
   test('starts the analysis of a live once asked to, never twice', async ({ client, assert }) => {

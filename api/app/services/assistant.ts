@@ -6,7 +6,7 @@ import db from '@adonisjs/lucid/services/db'
 import transmit from '@adonisjs/transmit/services/main'
 import Job from '#models/job'
 import { getBrandKit } from '#services/brand_kit'
-import { MAX_COMPILATIONS, compilationLength, introSeconds, isWaiting, pieceFile, pieceState, preferredIntro, sourceOf, itemJob, type Compilation } from '#services/compilations'
+import { CUSTOM_EFFECTS, MAX_COMPILATIONS, compilationLength, introSeconds, isWaiting, pieceFile, pieceState, preferredIntro, sourceOf, itemJob, type Compilation, type CompilationItem } from '#services/compilations'
 import { DATA_DIR } from '#services/data_paths'
 import { dbTime } from '#services/db_time'
 import { findMusic } from '#services/musics'
@@ -169,6 +169,21 @@ const clipRow = (job: Job, hp: any) => {
 }
 
 /**
+ * What a passage has of its own, that the assistant can change: the effects put on it one by one (`edit_effects`: only
+ * once the video's effects are « by hand »; `at` is in seconds from the passage's start) and the music's level under it
+ * when it was set (`set_music_levels`).
+ */
+function setByHand(c: Compilation, item: CompilationItem) {
+  const moves = c.effects === CUSTOM_EFFECTS ? (item.moves ?? []) : []
+  return {
+    ...(moves.length > 0
+      ? { effects: moves.map((move) => ({ id: move.id, kind: move.kind, at: Math.round((move.at - item.start) * 10) / 10, seconds: move.for, ...(move.sharp ? { sharp: true } : {}) })) }
+      : {}),
+    ...(typeof item.musicLevel === 'number' ? { music_percent: Math.round(item.musicLevel * 100) } : {}),
+  }
+}
+
+/**
  * One thing the assistant asks of the app, answered as data. An `{ error }` says why it can't
  * be had (the assistant reads it and says so). `userId`: whose lives these are.
  */
@@ -255,8 +270,8 @@ export async function assistantTool(userId: number, tool: string, args: Record<s
         passages: s.items.map((item) =>
           item.media
             ? // A video of the streamer's own, not a moment of a live: no hour of a live to give, its name and how long it plays
-              { id: item.id, imported: findMedia(item.media)?.name ?? (item.why || 'imported video'), seconds: Math.round((item.end - item.start) * 10) / 10, text: item.text }
-            : { id: item.id, start: item.start, end: item.end, text: item.text, ...(item.job ? { job: item.job } : {}) }
+              { id: item.id, imported: findMedia(item.media)?.name ?? (item.why || 'imported video'), seconds: Math.round((item.end - item.start) * 10) / 10, text: item.text, ...setByHand(c, item) }
+            : { id: item.id, start: item.start, end: item.end, text: item.text, ...(item.job ? { job: item.job } : {}), ...setByHand(c, item) }
         ),
       })),
       look: {
@@ -264,6 +279,7 @@ export async function assistantTool(userId: number, tool: string, args: Record<s
         template: c.template,
         title_style: c.titleStyle ?? null,
         effects: c.effects ?? 'none',
+        chat: c.chat ?? 'template',
         transition: c.transition ?? 'cut',
         opening: !c.intro ? 'none' : c.intro.style === 'hook' ? 'hook' : 'intro',
         intro: c.intro ? (c.intro.style === 'hook' ? (c.intro.look ?? null) : c.intro.style) : null,

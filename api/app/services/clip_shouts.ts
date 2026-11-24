@@ -6,7 +6,8 @@
  * instant counts when the sound stays for a while both far above the clip's usual level and
  * among its loudest moments. A game's explosion does that too: the app only keeps the instants
  * where a word is being said. Measured once for each clip and kept beside it
- * (`<clip>_shouts.json`).
+ * (`<clip>_shouts.json`), with how loud the clip is over its whole length (five readings a
+ * second, 0 to 100): the montage's timeline draws it under each passage.
  */
 
 import { execFile } from 'node:child_process'
@@ -26,6 +27,23 @@ const NEAR_TOP = 6
 /** ...for at least this long, and two of them are at least this far apart (readings) */
 const LASTS = 3
 const APART = 15
+
+/** How often the curve of a clip's sound is kept, seconds, and the levels its two ends stand for (dB) */
+export const CURVE_STEP = 0.2
+const CURVE_FLOOR = -60
+const CURVE_TOP = -6
+
+/** A clip's sound over its length, as it is drawn: one value every `CURVE_STEP` seconds, 0 (nothing heard) to 100 */
+export function curveOf(levels: number[]): number[] {
+  const each = Math.round(CURVE_STEP / SHOUT_STEP)
+  const curve: number[] = []
+  for (let i = 0; i < levels.length; i += each) {
+    // (the loudest of the readings it stands for: a short burst is not smoothed away)
+    const loud = Math.max(...levels.slice(i, i + each))
+    curve.push(Math.round(Math.min(1, Math.max(0, (loud - CURVE_FLOOR) / (CURVE_TOP - CURVE_FLOOR))) * 100))
+  }
+  return curve
+}
 
 export interface Shout {
   /** Seconds from the clip's start */
@@ -83,28 +101,35 @@ export function shoutsIn(levels: number[], step = SHOUT_STEP): Shout[] {
   return shouts.map(({ at, over }) => ({ at, over }))
 }
 
-/**
- * The shouts of a clip file, measured once and kept beside it. A clip that is not there (its
- * project's clips were freed) or that cannot be read has none.
- */
+/** The shouts of a clip file (see `clipSound`) */
 export async function clipShouts(file: string): Promise<Shout[]> {
-  if (!existsSync(file)) return []
+  return (await clipSound(file)).shouts
+}
+
+/**
+ * The sound of a clip file: its shouts and its curve, measured once and kept beside it. A clip
+ * that is not there (its project's clips were freed) or that cannot be read has neither.
+ */
+export async function clipSound(file: string): Promise<{ shouts: Shout[]; curve: number[] }> {
+  const none = { shouts: [], curve: [] }
+  if (!existsSync(file)) return none
   const kept = path.join(path.dirname(file), `${path.basename(file, path.extname(file))}_shouts.json`)
   const { size, mtimeMs } = statSync(file)
   // (a clip made longer or cut again is another file: measured again)
   const stamp = `${size}-${Math.round(mtimeMs)}`
   try {
     const known = JSON.parse(readFileSync(kept, 'utf-8'))
-    if (known?.stamp === stamp && Array.isArray(known.shouts)) return known.shouts
+    if (known?.stamp === stamp && Array.isArray(known.shouts) && Array.isArray(known.curve)) return { shouts: known.shouts, curve: known.curve }
   } catch {}
   try {
     const { stdout } = await execFileAsync('ffmpeg', levelArgs(file), { timeout: 120_000, maxBuffer: 64 * 1024 * 1024 })
-    const shouts = shoutsIn(parseLevels(stdout))
+    const levels = parseLevels(stdout)
+    const sound = { shouts: shoutsIn(levels), curve: curveOf(levels) }
     try {
-      writeFileSync(kept, JSON.stringify({ stamp, shouts }))
+      writeFileSync(kept, JSON.stringify({ stamp, ...sound }))
     } catch {}
-    return shouts
+    return sound
   } catch {
-    return []
+    return none
   }
 }

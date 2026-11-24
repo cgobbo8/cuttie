@@ -2,7 +2,7 @@ import { AbsoluteFill, Audio, Freeze, Img, Sequence, Series, useCurrentFrame, us
 import IntroCard, { INTRO_W } from "../../lib/intro/IntroCard";
 import { between, easeOut, introFade, introRate, introSpan, introVolume, isIntro } from "../../lib/intro/intros";
 import { framesOf, playsIntro, type MontageIntro, type MontageProps, type MontageSegment } from "../../lib/montage";
-import { effectAt } from "../../lib/effects";
+import { effectAt, flashAt } from "../../lib/effects";
 import { gainAt } from "../../lib/music/curve";
 import { isTransition, lookStyle, transitionAt } from "../../lib/transitions";
 import { audibleLayerId, LayerBox } from "./CuttieComposition";
@@ -13,7 +13,8 @@ const FILL = { position: "absolute", inset: 0, isolation: "isolate" } as const;
 const BARE = { display: "contents" } as const;
 
 /** What an effect does right now to a piece's webcam and to its other pictures (a move can be the webcam's alone) */
-type Moved = { cam?: string; game?: string };
+type Moved = { cam?: Look; game?: Look };
+type Look = { transform: string; filter?: string };
 
 /** A layer an effect moves: a picture of the live (the game, the webcam, the blurred backdrop), set straight */
 const isPicture = (layer: MontageSegment["layers"][number]["layer"]) => (layer.type === "gameplay" || layer.type === "facecam") && !layer.transform.rotation;
@@ -35,12 +36,12 @@ function Layers({ segment, silent = false, moved }: { segment: MontageSegment; s
       {segment.layers.map(({ layer, z }) => {
         const box = layer.transform;
         // (a move made for the webcam, the face, leaves the game alone: each picture has its own)
-        const transform = isPicture(layer) ? (layer.type === "facecam" ? moved?.cam : moved?.game) : undefined;
-        const on = !!transform;
+        const look = isPicture(layer) ? (layer.type === "facecam" ? moved?.cam : moved?.game) : undefined;
+        const on = !!look;
         const clip = `inset(${box.y}px ${width - box.x - box.width}px ${height - box.y - box.height}px ${box.x}px round ${layer.style?.borderRadius ?? 0}px)`;
         return (
           <div key={layer.id} style={on ? { position: "absolute", inset: 0, zIndex: z + 1, clipPath: clip } : BARE}>
-            <div style={on ? { position: "absolute", inset: 0, transform, transformOrigin: `${box.x + box.width / 2}px ${box.y + box.height * (layer.type === "facecam" ? 0.42 : 0.5)}px` } : BARE}>
+            <div style={on ? { position: "absolute", inset: 0, ...look, transformOrigin: `${box.x + box.width / 2}px ${box.y + box.height * (layer.type === "facecam" ? 0.42 : 0.5)}px` } : BARE}>
               <LayerBox layer={layer} z={z + 1} audible={layer.id === audible} />
             </div>
           </div>
@@ -63,7 +64,9 @@ function Piece({ segment, before, next }: { segment: MontageSegment; before?: Mo
   const now = coming ?? going;
   // What moves its picture while it plays (a transition has the picture to itself)
   const hasCam = segment.layers.some(({ layer }) => layer.type === "facecam" && isPicture(layer));
-  const moved: Moved | undefined = now ? undefined : { cam: effectAt(segment.effects, frame, fps, "cam")?.transform, game: effectAt(segment.effects, frame, fps, hasCam ? "game" : "all")?.transform };
+  const moved: Moved | undefined = now ? undefined : { cam: effectAt(segment.effects, frame, fps, "cam") ?? undefined, game: effectAt(segment.effects, frame, fps, hasCam ? "game" : "all") ?? undefined };
+  // A flash asked for on this piece: white over the whole frame, what is written on it included
+  const white = now ? 0 : flashAt(segment.effects, frame, fps);
   return (
     <>
       {coming?.held && before && (
@@ -77,6 +80,7 @@ function Piece({ segment, before, next }: { segment: MontageSegment; before?: Mo
         <Layers segment={segment} moved={moved} />
       </div>
       {now && now.flash > 0 && <div style={{ ...FILL, background: "#fff", opacity: now.flash }} />}
+      {white > 0 && <div style={{ ...FILL, zIndex: 90000, background: "#fff", opacity: white, pointerEvents: "none" }} />}
     </>
   );
 }

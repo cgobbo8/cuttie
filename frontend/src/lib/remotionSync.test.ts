@@ -72,7 +72,9 @@ describe("editor and server renderer stay in sync", () => {
     for (const file of ["api/remotion/MontageComposition.tsx", "frontend/src/components/remotion-editor/MontageComposition.tsx"]) {
       expect(read(file), file).toContain('{ position: "absolute", inset: 0, zIndex: z + 1, clipPath: clip }');
       // (the webcam and the game are each asked what moves them: a move made for the face leaves the game alone)
-      expect(read(file), file).toContain('const transform = isPicture(layer) ? (layer.type === "facecam" ? moved?.cam : moved?.game) : undefined;');
+      expect(read(file), file).toContain('const look = isPicture(layer) ? (layer.type === "facecam" ? moved?.cam : moved?.game) : undefined;');
+      // (and a flash is laid over the whole frame on both sides)
+      expect(read(file), file).toContain("const white = now ? 0 : flashAt(segment.effects, frame, fps);");
       expect(read(file), file).toContain('effectAt(segment.effects, frame, fps, hasCam ? "game" : "all")');
       expect(read(file), file).toContain("moved={moved}");
     }

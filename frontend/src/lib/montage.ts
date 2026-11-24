@@ -371,7 +371,12 @@ export function buildMontage(
  * shouts in it, on its own clock, say where the picture moves; `beats[i]`: the instants of piece `i`
  * that someone named (clip seconds).
  */
-export function withEffects(montage: MontageProps, cuts: MontageCut[], level: EffectLevel | null | undefined, beats: (number[] | undefined)[] = []): MontageProps {
+export function withEffects(montage: MontageProps, cuts: MontageCut[], level: EffectLevel | null | undefined, beats: (number[] | undefined)[] = [], manual?: SegmentEffect[][]): MontageProps {
+  // Moves made by hand: each piece plays its own, nothing is placed for it (every other piece still plays a little closer, so that a cut reads as a cut)
+  if (manual) {
+    const closer = (duration: number, i: number): SegmentEffect[] => (montage.segments.length > 1 && i % 2 === 1 ? [{ kind: "zoom", at: 0, for: Math.round(duration * 10000) / 10000, amount: 1.05 }] : []);
+    return { ...montage, segments: montage.segments.map(({ effects: _before, ...segment }, i) => ({ ...segment, ...([...closer(segment.duration, i), ...(manual[i] ?? [])].length ? { effects: [...closer(segment.duration, i), ...(manual[i] ?? [])] } : {}) })) };
+  }
   const placed = placeEffects(
     montage.segments.map((segment, i) => ({
       duration: segment.duration,

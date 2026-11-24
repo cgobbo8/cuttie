@@ -38,6 +38,8 @@ export interface SoundPiece {
   end: number;
   /** It has a text although its clip has no dated words (never transcribed): people talk in it */
   said?: boolean;
+  /** How loud the music plays under it, 0 to 1, when the streamer set it by hand (absent: by what is said in it) */
+  level?: number;
 }
 
 /**
@@ -56,7 +58,7 @@ export function montageMusic(
   hook?: { seconds: number; piece: SoundPiece },
   track?: Pick<MusicTrack, "start" | "build"> | null,
 ): MontageMusic {
-  const level = (piece: SoundPiece) => passageLevel(speechShare(piece.words, piece.start, piece.end), piece.words.length === 0 && !!piece.said);
+  const level = (piece: SoundPiece) => (typeof piece.level === "number" ? Math.min(1, Math.max(0, piece.level)) : passageLevel(speechShare(piece.words, piece.start, piece.end), piece.words.length === 0 && !!piece.said));
   const levels = pieces.map(level);
   const passages = segments.map((segment, i) => ({ seconds: segment.duration, level: levels[i] ?? levels[0] ?? 0 }));
   const opening = hook ? hook.seconds : intro;

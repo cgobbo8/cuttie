@@ -50,8 +50,12 @@ SOURCES = ("clip", "sequence", "compilation")
 PAGES = ("live", "edit", "export", "videos", "lives")
 SHOWN = ("passages", "videos", "clips", "lives")
 EFFECTS = ("none", "light", "strong")
+# The effects that can be put on a passage one by one (frontend/src/lib/effectMoves.ts: MOVE_TYPES), and how strong one is
+EFFECT_KINDS = ("cam", "zoom", "slow", "shake", "pulse", "flash", "gray")
+STRENGTHS = ("soft", "normal", "strong")
+CHAT = ("template", "on", "off")
 OPENINGS = ("none", "intro", "hook")
-LOOK_KEYS = ("universe", "template", "title_style", "effects", "transition", "opening", "intro", "music", "presence")
+LOOK_KEYS = ("universe", "template", "title_style", "effects", "transition", "opening", "intro", "music", "presence", "chat")
 CLIP_STATES = ("kept", "passed", "none")
 
 _JOB = re.compile(r"^[A-Za-z0-9_-]{6,64}$")
@@ -172,6 +176,7 @@ _DOING = {
         "list_videos": "Regarde tes vidéos", "get_video": "Regarde la vidéo", "keep_clip": "Range le clip", "analyse_live": "Prépare l'analyse du live",
         "ask_approval": "Te demande ton accord", "open": "Ouvre la page", "build_video": "Construit la vidéo", "change_video": "Modifie la vidéo",
         "add_passages": "Ajoute les passages à la vidéo", "cut_clip": "Découpe le clip", "set_look": "Change l'habillage", "export_videos": "Lance l'export",
+        "edit_effects": "Règle les effets de la vidéo", "set_music_levels": "Règle le niveau de la musique",
         "list_imported_videos": "Regarde ta médiathèque", "add_imported_videos": "Ajoute ta vidéo au montage",
         "hearing": "Écoute tout le live une première fois (quelques minutes)",
     },
@@ -184,6 +189,7 @@ _DOING = {
         "list_videos": "Looks at your videos", "get_video": "Looks at the video", "keep_clip": "Sorts the clip", "analyse_live": "Gets the live's analysis ready",
         "ask_approval": "Asks for your go-ahead", "open": "Opens the page", "build_video": "Builds the video", "change_video": "Changes the video",
         "add_passages": "Adds the passages to the video", "cut_clip": "Cuts the clip", "set_look": "Changes the look", "export_videos": "Starts the export",
+        "edit_effects": "Sets the video's effects", "set_music_levels": "Sets the music's level",
         "list_imported_videos": "Looks at your media library", "add_imported_videos": "Adds your video to the montage",
         "hearing": "Listens to the whole live once (a few minutes)",
     },
@@ -195,7 +201,7 @@ _DOING = {
         "find_video_ideas": "Recorre el directo en busca de vídeos que hacer", "list_lives": "Mira tus directos", "list_clips": "Mira los clips del directo",
         "list_videos": "Mira tus vídeos", "get_video": "Mira el vídeo", "keep_clip": "Ordena el clip", "analyse_live": "Prepara el análisis del directo",
         "ask_approval": "Te pide permiso", "open": "Abre la página", "build_video": "Construye el vídeo", "change_video": "Cambia el vídeo",
-        "add_passages": "Añade los pasajes al vídeo", "cut_clip": "Corta el clip", "set_look": "Cambia el estilo", "export_videos": "Lanza la exportación",
+        "add_passages": "Añade los pasajes al vídeo", "cut_clip": "Corta el clip", "set_look": "Cambia el estilo", "edit_effects": "Ajusta los efectos del vídeo", "set_music_levels": "Ajusta el nivel de la música", "export_videos": "Lanza la exportación",
         "list_imported_videos": "Mira tu mediateca", "add_imported_videos": "Añade tu vídeo al montaje",
         "hearing": "Escucha todo el directo una primera vez (unos minutos)",
     },
@@ -623,7 +629,53 @@ class Turn:
             raise Refused(f"`effects` is one of: {', '.join(EFFECTS)}")
         if wanted.get("opening") not in (None, *OPENINGS):
             raise Refused(f"`opening` is one of: {', '.join(OPENINGS)}")
+        if wanted.get("chat") not in (None, *CHAT):
+            raise Refused(f"`chat` is one of: {', '.join(CHAT)}")
         return self.app("set_look", {"job": self.job(live), "video": self.video_id(video), "look": wanted})
+
+    def edit_effects(self, add=None, change=None, remove=None, clear: bool = False, video=None, live=None) -> dict:
+        def one(raw, needs: tuple[str, ...]) -> dict:
+            if not isinstance(raw, dict) or any(not raw.get(key) and raw.get(key) != 0 for key in needs):
+                raise Refused(f"each one is an object with: {', '.join(needs)}")
+            if raw.get("kind") is not None and raw["kind"] not in EFFECT_KINDS:
+                raise Refused(f"`kind` is one of: {', '.join(EFFECT_KINDS)}")
+            if raw.get("strength") is not None and raw["strength"] not in STRENGTHS:
+                raise Refused(f"`strength` is one of: {', '.join(STRENGTHS)}")
+            out = {key: _text(raw[key], 40) for key in ("id", "passage", "kind", "strength") if raw.get(key) is not None}
+            for key in ("at", "seconds"):
+                if raw.get(key) is not None:
+                    try:
+                        out[key] = round(float(raw[key]), 2)
+                    except (TypeError, ValueError):
+                        raise Refused(f"`{key}` is a number of seconds") from None
+            if isinstance(raw.get("sharp"), bool):
+                out["sharp"] = raw["sharp"]
+            return out
+
+        asked = {
+            "add": [one(raw, ("passage", "kind", "at")) for raw in (add if isinstance(add, list) else [])][:40],
+            "change": [one(raw, ("id",)) for raw in (change if isinstance(change, list) else [])][:40],
+            "remove": [_text(ref, 40) for ref in (remove if isinstance(remove, list) else []) if ref][:60],
+        }
+        return self.app("edit_effects", {"job": self.job(live), "video": self.video_id(video), **{key: value for key, value in asked.items() if value}, **({"clear": True} if clear else {})})
+
+    def set_music_levels(self, levels, video=None, live=None) -> dict:
+        if not isinstance(levels, list) or not levels:
+            raise Refused("`levels` is a list of {passage, percent}")
+        out = []
+        for raw in levels[:60]:
+            if not isinstance(raw, dict) or not raw.get("passage"):
+                raise Refused("each one is {passage: its id, percent: 0 to 100, or null to give it back to the app}")
+            percent = raw.get("percent")
+            if percent is not None:
+                try:
+                    percent = float(percent)
+                except (TypeError, ValueError):
+                    raise Refused("`percent` is a number from 0 to 100, or null") from None
+                if not 0 <= percent <= 100:
+                    raise Refused("`percent` is a number from 0 to 100, or null")
+            out.append({"passage": _text(raw["passage"], 40), "percent": percent})
+        return self.app("set_music_levels", {"job": self.job(live), "video": self.video_id(video), "levels": out})
 
     def export_videos(self, videos=None) -> dict:
         refs = videos if isinstance(videos, list) and videos else [self.context.get("video")]
@@ -792,7 +844,9 @@ def build(turn: Turn) -> list[StructuredTool]:
         _tool(
             "get_video",
             "One video in full: its parts, each passage (id, times, what is said) and its look. A passage marked `imported` is a video of the streamer's own "
-            "(an outro, a meme), not a moment of a live: it has no hour, and it stays where it is when the video is changed.",
+            "(an outro, a meme), not a moment of a live: it has no hour, and it stays where it is when the video is changed. "
+            "A passage also says what was set by hand on it: `effects` (once the look's effects are \"custom\"; change them with `edit_effects`) "
+            "and `music_percent` (`set_music_levels`).",
             _schema({"video": _VIDEO, "live": _LIVE}),
             turn.get_video,
         ),
@@ -877,11 +931,40 @@ def build(turn: Turn) -> list[StructuredTool]:
         _tool(
             "set_look",
             "Change how a video looks or sounds. `look` holds only what changes: universe (the look of a game, or \"channel\"), template (the layout), title_style, "
-            f"effects ({' | '.join(EFFECTS)}), transition, opening ({' | '.join(OPENINGS)}), intro (its style), music (a track's name, or \"none\"), presence (how loud the music is). "
+            f"effects ({' | '.join(EFFECTS)}: how much the picture moves by itself; for one effect at a precise place, `edit_effects`), transition, opening ({' | '.join(OPENINGS)}), "
+            f"intro (its style), music (a track's name, or \"none\"), presence (how loud the music is), chat ({' | '.join(CHAT)}: the Twitch chat written on the video). "
             "Name things as the streamer does or by the app's ids; for a music described rather than named (« something calmer »), ask for any name: "
             "the app answers the tracks there are with what each is, then choose one. The app answers what it set, and what it has no such thing for (`unknown`, with what there is).",
             _schema({"look": {"type": "object", "properties": {key: {"type": "string"} for key in LOOK_KEYS}}, "video": _VIDEO, "live": _LIVE}, ["look"]),
             turn.set_look,
+        ),
+        _tool(
+            "edit_effects",
+            "The effects of a video, one by one: what moves or changes its picture at a precise moment. Called with nothing, it lists them (each with its id). "
+            f"`add`: put some down, each {{passage: the passage's id (get_video), at: seconds from that passage's start, kind: {' | '.join(EFFECT_KINDS)}}} "
+            "(cam: the webcam comes closer, on the face; zoom: the whole picture comes closer; slow: a slow close-up; shake: a short tremor; pulse: a bounce; flash: a white flash; gray: black and white for a moment), "
+            f"with if wanted `seconds` (how long), `sharp` (true: cut in and out instead of smoothly; cam, zoom, slow) and `strength` ({' | '.join(STRENGTHS)}). "
+            "`change`: the same fields for effects named by `id`. `remove`: ids to take out. `clear`: take them all out. "
+            "The first change makes the video's effects its own (« à la main »): what the app had placed is kept, then changed. Keep them rare: one every ten seconds at most reads well. "
+            "The app answers the effects as they are now, and what it refused.",
+            _schema(
+                {
+                    "add": {"type": "array", "items": {"type": "object", "properties": {"passage": {"type": "string"}, "at": {"type": "number"}, "kind": {"type": "string"}, "seconds": {"type": "number"}, "sharp": {"type": "boolean"}, "strength": {"type": "string"}}, "required": ["passage", "at", "kind"]}},
+                    "change": {"type": "array", "items": {"type": "object", "properties": {"id": {"type": "string"}, "at": {"type": "number"}, "kind": {"type": "string"}, "seconds": {"type": "number"}, "sharp": {"type": "boolean"}, "strength": {"type": "string"}}, "required": ["id"]}},
+                    "remove": {"type": "array", "items": {"type": "string"}},
+                    "clear": {"type": "boolean"},
+                    "video": _VIDEO,
+                    "live": _LIVE,
+                }
+            ),
+            turn.edit_effects,
+        ),
+        _tool(
+            "set_music_levels",
+            "How loud the music plays under passages of a video: `levels` is a list of {passage: its id (get_video), percent: 0 to 100, or null to give that passage back to the app, which keeps the music low where people talk}. "
+            "For the whole video at once, `set_look` with `presence`.",
+            _schema({"levels": {"type": "array", "items": {"type": "object", "properties": {"passage": {"type": "string"}, "percent": {"type": ["number", "null"]}}, "required": ["passage"]}}, "video": _VIDEO, "live": _LIVE}, ["levels"]),
+            turn.set_music_levels,
         ),
         _tool(
             "export_videos",

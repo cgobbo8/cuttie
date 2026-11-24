@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { clipShouts, levelArgs, parseLevels, shoutsIn } from '#services/clip_shouts'
+import { clipShouts, clipSound, curveOf, levelArgs, parseLevels, shoutsIn } from '#services/clip_shouts'
 
 function hasFfmpeg(): boolean {
   try {
@@ -67,6 +67,13 @@ test.group('Where someone shouts in a clip', () => {
     assert.deepEqual(found.map((shout) => shout.at), [12, 25])
   })
 
+  test('keeps how loud the clip is over its length, five values a second, 0 to 100', ({ assert }) => {
+    // Two readings make one value (the loudest of the two): silence, quiet talk, a burst, the loudest there is
+    assert.deepEqual(curveOf([-120, -120, -33, -60, -6, -40, 0, -3]), [0, 50, 100, 100])
+    assert.deepEqual(curveOf([-33]), [50])
+    assert.deepEqual(curveOf([]), [])
+  })
+
   test('measures a real clip once and keeps what it found beside it', async ({ assert }) => {
     if (!hasFfmpeg()) return
     const dir = mkdtempSync(path.join(tmpdir(), 'cuttie-shouts-'))
@@ -89,6 +96,10 @@ test.group('Where someone shouts in a clip', () => {
       assert.isTrue(existsSync(kept))
       assert.deepEqual(JSON.parse(readFileSync(kept, 'utf-8')).shouts, found)
       assert.deepEqual(await clipShouts(clip), found)
+      // Its curve: 12 s at five values a second, low all along and high during the loud second
+      const { curve } = await clipSound(clip)
+      assert.closeTo(curve.length, 60, 2)
+      assert.isAbove(curve[32], curve[10] + 30)
       // A clip that is not there has none
       assert.deepEqual(await clipShouts(path.join(dir, 'gone.mp4')), [])
     } finally {

@@ -24,7 +24,7 @@ import {
   type SeenPerson,
 } from '#services/facecam_resolver'
 
-import { clipShouts, type Shout } from '#services/clip_shouts'
+import { clipSound, CURVE_STEP, type Shout } from '#services/clip_shouts'
 
 const execFileAsync = promisify(execFile)
 
@@ -40,6 +40,8 @@ export interface EditEnvironment {
   chat_messages: ChatLine[]
   /** Where the clip's sound jumps well above its usual level (see clip_shouts.ts): the montage's effects come closer there */
   shouts: Shout[]
+  /** How loud the clip is over its length: one value every `step` seconds, 0 to 100 (drawn on the montage's timeline) */
+  sound: { step: number; curve: number[] }
 }
 
 /** A chat message; `emotes` lists the emote names in its text (chats downloaded since they're kept) */
@@ -265,7 +267,9 @@ export async function resolveEditEnv(
 ): Promise<EditEnvironment> {
   const base = path.basename(clipFilename, path.extname(clipFilename))
   // Where someone shouts in it (measured once, kept beside the clip)
-  const shouts = await clipShouts(path.join(CLIPS_BASE, jobId, clipFilename))
+  const heard = await clipSound(path.join(CLIPS_BASE, jobId, clipFilename))
+  const shouts = heard.shouts
+  const sound = { step: CURVE_STEP, curve: heard.curve }
 
   // Words (per-clip)
   const wordsPath = path.join(CLIPS_BASE, jobId, `${base}_words.json`)
@@ -317,6 +321,7 @@ export async function resolveEditEnv(
       words,
       chat_messages: [],
       shouts,
+      sound,
     }
   }
 
@@ -333,5 +338,6 @@ export async function resolveEditEnv(
     words,
     chat_messages: chatMessages,
     shouts,
+    sound,
   }
 }

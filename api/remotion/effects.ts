@@ -8,7 +8,10 @@
  *   goes back as smoothly. When the streamer shouts it is their webcam that comes closer (the
  *   face); on a line that lands ("!" or "?"), the whole picture, less;
  * - "ease": a slow close-up over a few lines of plain talk, so that a calm stretch moves too;
- * - "shake": a small tremor that dies down, with a shout, at the strong level only.
+ * - "shake": a small tremor that dies down, with a shout, at the strong level only;
+ * - "pulse", "gray", "flash": a bounce (two quick bumps that die down), the picture gone black
+ *   and white for a moment, a white flash over the whole frame. Never placed on their own: the
+ *   streamer (or the assistant) puts them where they want, on the timeline.
  *
  * Never more than one move every ten seconds, pieces put end to end: more than that and the
  * eye is told nothing by them.
@@ -29,13 +32,14 @@ export type EffectLevel = "light" | "strong";
 export const EFFECT_LEVELS: EffectLevel[] = ["light", "strong"];
 export const isEffectLevel = (value: unknown): value is EffectLevel => value === "light" || value === "strong";
 
-export type EffectKind = "zoom" | "punch" | "ease" | "shake";
-export const EFFECT_KINDS: EffectKind[] = ["zoom", "punch", "ease", "shake"];
+export type EffectKind = "zoom" | "punch" | "ease" | "shake" | "pulse" | "gray" | "flash";
+export const EFFECT_KINDS: EffectKind[] = ["zoom", "punch", "ease", "shake", "pulse", "gray", "flash"];
 
 /**
  * One move of a piece's picture: `at` and `for` in seconds from the piece's start; `amount`: a
- * scale (zoom, punch, ease) or a share of the picture (shake). `on: "cam"`: it moves the webcam
- * only (the face), when the piece shows one; else every picture of the piece.
+ * scale (zoom, punch, ease, pulse), a share of the picture (shake), or 1 (gray, flash: nothing
+ * to measure). `on: "cam"`: it moves the webcam only (the face), when the piece shows one; else
+ * every picture of the piece.
  */
 export interface SegmentEffect {
   kind: EffectKind;
@@ -61,15 +65,17 @@ const PACE: Record<"punch" | "ease", { rise: number; fall: number }> = { punch: 
  * nothing, it plays as it is). `part`: the picture asked for; a move made for the webcam
  * leaves the game alone.
  */
-export function effectAt(effects: SegmentEffect[] | undefined, frame: number, fps: number, part: EffectPart = "all"): { transform: string } | null {
+export function effectAt(effects: SegmentEffect[] | undefined, frame: number, fps: number, part: EffectPart = "all"): { transform: string; filter?: string } | null {
   if (!effects?.length) return null;
   const t = frame / fps;
   let scale = 1;
   let x = 0;
   let y = 0;
+  let gray = 0;
   let moved = false;
   for (const effect of effects) {
-    if (effect.on === "cam" && part === "game") continue;
+    // (a flash is laid over the whole frame, not on a picture: see flashAt)
+    if (effect.kind === "flash" || (effect.on === "cam" && part === "game")) continue;
     const into = t - effect.at;
     const left = effect.at + effect.for - t;
     if (into < 0 || left <= 0) continue;
@@ -81,6 +87,13 @@ export function effectAt(effects: SegmentEffect[] | undefined, frame: number, fp
       const rise = Math.min(pace.rise, effect.for / 3);
       const fall = Math.min(pace.fall, effect.for / 3);
       scale *= 1 + (effect.amount - 1) * smooth(into / rise) * smooth(left / fall);
+    } else if (effect.kind === "pulse") {
+      // Two quick bumps, the second smaller: the picture bounces and settles
+      const done = into / effect.for;
+      scale *= 1 + (effect.amount - 1) * Math.abs(Math.sin(Math.PI * 2 * done)) * (1 - done);
+    } else if (effect.kind === "gray") {
+      // The colours go, stay away, and come back
+      gray = Math.max(gray, smooth(into / Math.min(0.3, effect.for / 3)) * smooth(left / Math.min(0.45, effect.for / 3)));
     } else {
       // A tremor that dies down; the picture comes a little closer so that its edges never show
       const strength = effect.amount * (left / effect.for);
@@ -89,7 +102,20 @@ export function effectAt(effects: SegmentEffect[] | undefined, frame: number, fp
       y += 100 * strength * Math.cos(t * 97);
     }
   }
-  return moved ? { transform: `translate(${round(x)}%, ${round(y)}%) scale(${round(scale)})` } : null;
+  return moved ? { transform: `translate(${round(x)}%, ${round(y)}%) scale(${round(scale)})`, ...(gray > 0 ? { filter: `grayscale(${round(gray)})` } : {}) } : null;
+}
+
+/** How white the whole frame is `frame` frames into a piece (0: no flash): full at once, gone by the end of the flash */
+export function flashAt(effects: SegmentEffect[] | undefined, frame: number, fps: number): number {
+  const t = frame / fps;
+  let white = 0;
+  for (const effect of effects ?? []) {
+    if (effect.kind !== "flash") continue;
+    const into = t - effect.at;
+    if (into < 0 || into >= effect.for) continue;
+    white = Math.max(white, 0.85 * (1 - into / effect.for) ** 2);
+  }
+  return round(white);
 }
 
 /** How much each level moves the picture */
@@ -231,7 +257,12 @@ export function placeEffects(pieces: EffectPiece[], level: EffectLevel | null | 
     }
   });
 
-  return placed.map((effects) => effects.sort((a, b) => a.at - b.at || EFFECT_KINDS.indexOf(a.kind) - EFFECT_KINDS.indexOf(b.kind)));
+  return placed.map(inOrder);
+}
+
+/** A piece's effects in the order they play (two at the same instant: in the order of their kinds) */
+export function inOrder(effects: SegmentEffect[]): SegmentEffect[] {
+  return [...effects].sort((a, b) => a.at - b.at || EFFECT_KINDS.indexOf(a.kind) - EFFECT_KINDS.indexOf(b.kind));
 }
 
 /** Effects as the renderer takes them: known kinds, sane numbers, a few dozen per piece at most (anything else is dropped) */

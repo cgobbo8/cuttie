@@ -667,3 +667,48 @@ async def test_the_endpoints(client, model, app_calls, monkeypatch):
     # A development command can't call tools
     monkeypatch.setenv("CUTTIE_LLM_CMD", "cat")
     assert (await client.post("/assistant/turn", json={"thread": "t3", "text": "salut"}, headers=SECRET)).status_code == 501
+
+
+def test_the_effects_the_music_and_the_chat_of_a_video_are_within_its_reach(model, app_calls):
+    """What the streamer does on the timeline, the assistant can be asked to do in their place."""
+    model.script = [
+        # Asked nothing, the app lists the effects there are
+        call("edit_effects", {}),
+        call(
+            "edit_effects",
+            {
+                "add": [{"passage": "p-helice", "at": 4.26, "kind": "cam", "sharp": True, "strength": "strong"}, {"passage": "p-helice", "at": 9, "kind": "flash", "seconds": "0.3"}],
+                "change": [{"id": "m1", "kind": "slow", "sharp": False}],
+                "remove": ["m2"],
+            },
+            "c2",
+        ),
+        # A kind that does not exist is refused to the model, not handed to the app
+        call("edit_effects", {"add": [{"passage": "p-helice", "at": 2, "kind": "spin"}]}, "c3"),
+        call("set_music_levels", {"levels": [{"passage": "p-helice", "percent": 45}, {"passage": "p-ponton", "percent": None}]}, "c4"),
+        call("set_music_levels", {"levels": [{"passage": "p-helice", "percent": 140}]}, "c5"),
+        call("set_look", {"look": {"chat": "on"}}, "c6"),
+        call("set_look", {"look": {"chat": "sometimes"}}, "c7"),
+        "Fait.",
+    ]
+    answer = assistant.turn("t1", text="règle les effets", context=HERE, language="fr")
+    given = []
+    while answer["status"] == "action":
+        given.append((answer["action"]["name"], answer["action"]["args"]))
+        answer = assistant.turn("t1", resume={"call": answer["action"]["call"], "result": {"ok": True}}, context=HERE, language="fr")
+    assert given == [
+        ("edit_effects", {"job": "job-miami", "video": "v-yacht"}),
+        (
+            "edit_effects",
+            {
+                "job": "job-miami",
+                "video": "v-yacht",
+                "add": [{"passage": "p-helice", "kind": "cam", "strength": "strong", "at": 4.26, "sharp": True}, {"passage": "p-helice", "kind": "flash", "at": 9.0, "seconds": 0.3}],
+                "change": [{"id": "m1", "kind": "slow", "sharp": False}],
+                "remove": ["m2"],
+            },
+        ),
+        ("set_music_levels", {"job": "job-miami", "video": "v-yacht", "levels": [{"passage": "p-helice", "percent": 45.0}, {"passage": "p-ponton", "percent": None}]}),
+        ("set_look", {"job": "job-miami", "video": "v-yacht", "look": {"chat": "on"}}),
+    ]
+    assert answer["status"] == "done"

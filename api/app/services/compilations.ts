@@ -42,6 +42,10 @@ export interface CompilationItem {
   transition?: string
   /** The AI named it as the moment the video can open on, as a teaser of what is coming */
   opening?: boolean
+  /** Moves of the picture made by hand on it, on the live's clock (they play when the video's effects are "custom") */
+  moves?: { id: string; kind: string; at: number; for: number; sharp?: boolean; amount?: number }[]
+  /** How loud the music plays under it, 0 to 1, when set by hand */
+  musicLevel?: number
   /**
    * A video of the streamer's media library (services/media_library.ts), not a moment of a live:
    * its times are that video's own seconds, its clip is that video's file. Never with `job`.
@@ -127,6 +131,28 @@ export const isVideoSource = (value: unknown): value is VideoSource => typeof va
 export const sourceOf = (c: Pick<Compilation, 'source' | 'suggestion'>): VideoSource => c.source ?? (c.suggestion?.span ? 'sequence' : 'compilation')
 /** How much a video's picture moves on what is said (frontend/src/lib/effects.ts: EFFECT_LEVELS); absent: it plays plain */
 export const EFFECT_LEVELS = ['light', 'strong']
+/** ...or "custom": the moves written on its passages are the ones that play (frontend/src/lib/effectMoves.ts) */
+export const CUSTOM_EFFECTS = 'custom'
+/** The moves that can be written on a passage, and the most of them */
+export const MOVE_TYPES = ['cam', 'zoom', 'slow', 'shake', 'pulse', 'flash', 'gray']
+const MAX_MOVES = 60
+
+/** A passage's moves as the app sends them: known kinds, dated inside the passage (a little slack: it is being cut), a sane length */
+function parseMoves(raw: unknown, start: number, end: number): NonNullable<CompilationItem['moves']> {
+  const moves: NonNullable<CompilationItem['moves']> = []
+  for (const one of Array.isArray(raw) ? raw.slice(0, MAX_MOVES * 2) : []) {
+    const at = Number(one?.at)
+    const length = Number(one?.for)
+    if (typeof one?.id !== 'string' || !/^[a-z0-9]{4,16}$/.test(one.id) || !MOVE_TYPES.includes(one?.kind)) continue
+    if (!Number.isFinite(at) || !Number.isFinite(length) || length < 0.1 || length > 20) continue
+    if (at < start - 30 || at > end + 30) continue
+    // Its own settings: cut in and out, and how far it goes (a scale, or a share of the picture for a tremor)
+    const amount = Number(one?.amount)
+    const within = one.kind === 'shake' ? amount >= 0.002 && amount <= 0.012 : amount >= 1.03 && amount <= 1.3
+    moves.push({ id: one.id, kind: one.kind, at: hundredth(at), for: hundredth(length), ...(one?.sharp === true ? { sharp: true } : {}), ...(Number.isFinite(amount) && within ? { amount: Math.round(amount * 1000) / 1000 } : {}) })
+  }
+  return moves.slice(0, MAX_MOVES)
+}
 /** The ways a title can be written (frontend/src/lib/templateSpec.ts: HOOK_STYLES) */
 export const TITLE_STYLES = ['outline', 'box', 'brand', 'vice', 'viceplate']
 /** What a video says of the Twitch chat over its passages (frontend/src/lib/templateSpec.ts: CHAT_CHOICES); absent: as each template does */
@@ -381,6 +407,10 @@ function parseItem(raw: any, liveDuration: number, others?: Map<string, number>)
     ...(isTransition(raw.transition) || raw.transition === 'cut' ? { transition: raw.transition } : {}),
     // The AI named it as the moment the video can open on (what a "hook" intro plays unless the streamer chose another)
     ...(raw.opening === true ? { opening: true } : {}),
+    // Moves made by hand on it (an empty list is kept: the video's effects are then « à la main », and it has none)
+    ...(Array.isArray(raw.moves) ? { moves: parseMoves(raw.moves, start, end) } : {}),
+    // How loud the music plays under it, when set by hand
+    ...(typeof raw.musicLevel === 'number' && raw.musicLevel >= 0 && raw.musicLevel <= 1 ? { musicLevel: Math.round(raw.musicLevel * 100) / 100 } : {}),
   }
 }
 
@@ -432,7 +462,7 @@ export function parseCompilation(raw: any, liveDuration: number, others?: Map<st
     ...(lives.length > 0 ? { lives } : {}),
     ...(isUniverse(raw.universe) ? { universe: raw.universe } : {}),
     ...(TITLE_STYLES.includes(raw.titleStyle) ? { titleStyle: raw.titleStyle } : {}),
-    ...(EFFECT_LEVELS.includes(raw.effects) ? { effects: raw.effects } : {}),
+    ...(EFFECT_LEVELS.includes(raw.effects) || raw.effects === CUSTOM_EFFECTS ? { effects: raw.effects } : {}),
     ...(CHAT_CHOICES.includes(raw.chat) ? { chat: raw.chat } : {}),
     ...(isVideoSource(raw.source) && raw.source !== 'compilation' ? { source: raw.source } : {}),
     ...(typeof raw.clip === 'string' && /^[\w.-]{1,120}\.mp4$/.test(raw.clip) ? { clip: raw.clip } : {}),

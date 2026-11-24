@@ -148,6 +148,8 @@ export default class ClipsController {
       chat_messages: env.chat_messages,
       // Where someone shouts in it: the montage's effects bring the webcam closer there
       shouts: env.shouts,
+      // How loud it is over its length (the timeline of the montage draws it under each passage)
+      sound: env.sound,
     })
   }
 

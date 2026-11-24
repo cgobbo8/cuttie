@@ -1025,12 +1025,30 @@
     "aiCutMany_other": "Montage IA : {{count}} passages recoupés",
     "moves": {
       "label": "Mouvements de l'image",
-      "shout": "Zoom sur la cam : ça crie",
-      "line": "Zoom sur une réplique",
-      "calm": "Gros plan lent",
-      "closer": "Ce passage joue un peu plus près",
-      "shake": ", avec un tremblement"
-    }
+      "shake": "Tremblement",
+      "cam": "Zoom sur la cam",
+      "zoom": "Zoom",
+      "slow": "Gros plan lent",
+      "pulse": "Rebond",
+      "flash": "Flash",
+      "gray": "Noir et blanc",
+      "empty": "Clique ici pour ajouter un effet",
+      "see": "Voir",
+      "remove": "Retirer cet effet",
+      "coming": "Comment il arrive",
+      "smooth": "Fluide",
+      "sharp": "Net",
+      "strength": "Force",
+      "soft": "Léger",
+      "normal": "Normal",
+      "strong": "Fort"
+    },
+    "soundLane": "Le son du live",
+    "chatLane": "Messages du chat écrits sur la vidéo",
+    "musicLevelLabel": "Niveau de la musique sous ce passage",
+    "musicLevel": "Musique à {{percent}} %",
+    "musicLevelSet": "réglé à la main",
+    "musicLevelHint": "glisse vers le haut ou le bas ; double-clic pour revenir à l'automatique"
   },
   "exportStep": {
     "title": "Tes clips sont prêts",
@@ -1589,7 +1607,11 @@
       "strong": "Marqués",
       "count_one": "{{count}} mouvement, marqué sur la timeline",
       "count_other": "{{count}} mouvements, marqués sur la timeline",
-      "nothing": "Rien à souligner dans cette vidéo (ni cri, ni réplique, trop courte)"
+      "nothing": "Rien à souligner dans cette vidéo (ni cri, ni réplique, trop courte)",
+      "custom": "À la main",
+      "customHint": "Les effets deviennent les tiens : tu les déplaces, les changes et en ajoutes sur la timeline",
+      "customCount_one": "{{count}} effet, réglé sur la timeline",
+      "customCount_other": "{{count}} effets, réglés sur la timeline"
     },
     "titleStyle": {
       "label": "Style des titres",

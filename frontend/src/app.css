@@ -632,6 +632,12 @@ body::after {
 .seg > button:hover {
   color: var(--color-ink);
 }
+/* (in a small menu: the same control, tighter) */
+.seg.seg-sm > button {
+  height: 24px;
+  padding: 0 8px;
+  font-size: 11.5px;
+}
 .seg > button[aria-pressed="true"],
 .seg > button[aria-selected="true"] {
   color: #ffffff;

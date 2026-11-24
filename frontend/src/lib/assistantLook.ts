@@ -110,6 +110,19 @@ export function applyLook(video: Compilation, look: Record<string, string | null
     }
   }
 
+  if (has("chat")) {
+    // The Twitch chat written on the video: on every passage, on none, or as each layout does
+    const said = (look.chat ?? "").trim().toLowerCase();
+    const { chat: _before, ...rest } = next;
+    if (said === "on" || said === "off") {
+      next = { ...rest, chat: said };
+      set.chat = said;
+    } else if (none(look.chat) || said === "template" || said === "auto") {
+      next = rest;
+      set.chat = "template";
+    } else unknown.chat = "chat is one of: template (as each layout does), on, off";
+  }
+
   if (has("effects")) {
     const said = look.effects;
     const { effects: _before, ...rest } = next;
@@ -205,6 +218,7 @@ export function lookOf(video: Compilation, choices: LookChoices): Record<string,
     template: choices.templates.find((one) => one.key === video.template)?.name ?? "default",
     title_style: video.titleStyle ?? "template",
     effects: video.effects ?? "none",
+    chat: video.chat ?? "template",
     transition: video.transition ?? "cut",
     opening: !video.intro ? "none" : video.intro.style === "hook" ? "hook" : "intro",
     intro: video.intro ? (video.intro.style === "hook" ? (video.intro.look ?? DEFAULT_HOOK_LOOK) : video.intro.style) : null,

@@ -1151,6 +1151,8 @@ export interface EditEnvironment {
   chat_messages: { author: string; text: string; timestamp: number; emotes?: string[] }[];
   /** Where the clip's sound jumps well above its usual level (seconds), and by how much (dB): someone shouts */
   shouts?: { at: number; over: number }[];
+  /** How loud the clip is over its length: one value every `step` seconds, 0 to 100 (drawn under each passage of the timeline) */
+  sound?: { step: number; curve: number[] };
 }
 
 /** Webcam framing for one live: a rectangle, false (no cam on this live) or null (automatic) */
@@ -1739,6 +1741,10 @@ export interface CompilationItem extends Partial<PieceState> {
   transition?: string;
   /** The AI named it as the moment the video can open on (what a "hook" intro plays first unless the streamer chose another) */
   opening?: boolean;
+  /** The moves of the picture made by hand (or by the assistant) on this passage, on the live's clock (see lib/effectMoves.ts); they play once the video's effects are "custom" */
+  moves?: { id: string; kind: "cam" | "zoom" | "slow" | "shake" | "pulse" | "flash" | "gray"; at: number; for: number; sharp?: boolean; amount?: number }[];
+  /** How loud the music plays under this passage, 0 to 1 (absent: by itself, lower where people talk) */
+  musicLevel?: number;
   /** The passage it was made out of (cut in two, its silences taken out): that one's clip does for it until it has its own (not kept by the server) */
   like?: string;
   /**
@@ -1825,7 +1831,7 @@ export interface Compilation {
   asks?: { ask: string; note: string; added?: number; removed?: number; recut?: number; remembered?: string[] }[];
   /** Other lives it takes passages from, besides the one it is kept with (job ids) */
   lives?: string[];
-  /** How much its picture moves on what is said: "light" or "strong" (see lib/effects.ts; absent: it plays plain) */
+  /** How much its picture moves on what is said: "light" or "strong" (see lib/effects.ts), or "custom": the moves written on its passages (see lib/effectMoves.ts); absent: it plays plain */
   effects?: string;
   /** The Twitch chat written over its passages: "on" (every passage), "off" (none); absent: as each template does */
   chat?: string;

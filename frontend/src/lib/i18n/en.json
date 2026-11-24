@@ -1025,12 +1025,30 @@
     "aiCutMany_other": "AI cut: {{count}} passages cut again",
     "moves": {
       "label": "Moves of the picture",
-      "shout": "Zoom on the cam: a shout",
-      "line": "Zoom on a line",
-      "calm": "Slow close-up",
-      "closer": "This passage plays a little closer",
-      "shake": ", with a tremor"
-    }
+      "shake": "Shake",
+      "cam": "Zoom on the cam",
+      "zoom": "Zoom",
+      "slow": "Slow close-up",
+      "pulse": "Bounce",
+      "flash": "Flash",
+      "gray": "Black and white",
+      "empty": "Click here to add an effect",
+      "see": "See it",
+      "remove": "Take this effect out",
+      "coming": "How it comes",
+      "smooth": "Smooth",
+      "sharp": "Sharp",
+      "strength": "Strength",
+      "soft": "Gentle",
+      "normal": "Normal",
+      "strong": "Strong"
+    },
+    "soundLane": "The live's sound",
+    "chatLane": "Chat messages written on the video",
+    "musicLevelLabel": "Music level under this passage",
+    "musicLevel": "Music at {{percent}}%",
+    "musicLevelSet": "set by hand",
+    "musicLevelHint": "drag up or down; double-click to go back to automatic"
   },
   "exportStep": {
     "title": "Your clips are ready",
@@ -1589,7 +1607,11 @@
       "strong": "Strong",
       "count_one": "{{count}} move, marked on the timeline",
       "count_other": "{{count}} moves, marked on the timeline",
-      "nothing": "Nothing to underline in this video (no shout, no line, too short)"
+      "nothing": "Nothing to underline in this video (no shout, no line, too short)",
+      "custom": "By hand",
+      "customHint": "The effects become yours: you move them, change them and add some on the timeline",
+      "customCount_one": "{{count}} effect, set on the timeline",
+      "customCount_other": "{{count}} effects, set on the timeline"
     },
     "titleStyle": {
       "label": "Title style",

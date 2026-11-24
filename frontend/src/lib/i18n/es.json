@@ -1025,12 +1025,30 @@
     "aiCutMany_other": "Montaje IA: {{count}} pasajes recortados",
     "moves": {
       "label": "Movimientos de la imagen",
-      "shout": "Zoom a la cámara: un grito",
-      "line": "Zoom en una frase",
-      "calm": "Primer plano lento",
-      "closer": "Este pasaje se ve un poco más cerca",
-      "shake": ", con un temblor"
-    }
+      "shake": "Temblor",
+      "cam": "Zoom a la cámara",
+      "zoom": "Zoom",
+      "slow": "Primer plano lento",
+      "pulse": "Rebote",
+      "flash": "Flash",
+      "gray": "Blanco y negro",
+      "empty": "Haz clic aquí para añadir un efecto",
+      "see": "Ver",
+      "remove": "Quitar este efecto",
+      "coming": "Cómo llega",
+      "smooth": "Fluido",
+      "sharp": "Seco",
+      "strength": "Fuerza",
+      "soft": "Suave",
+      "normal": "Normal",
+      "strong": "Fuerte"
+    },
+    "soundLane": "El sonido del directo",
+    "chatLane": "Mensajes del chat escritos en el vídeo",
+    "musicLevelLabel": "Nivel de la música bajo este pasaje",
+    "musicLevel": "Música al {{percent}} %",
+    "musicLevelSet": "ajustado a mano",
+    "musicLevelHint": "arrastra hacia arriba o hacia abajo; doble clic para volver al automático"
   },
   "exportStep": {
     "title": "Tus clips están listos",
@@ -1589,7 +1607,11 @@
       "strong": "Marcados",
       "count_one": "{{count}} movimiento, marcado en la línea de tiempo",
       "count_other": "{{count}} movimientos, marcados en la línea de tiempo",
-      "nothing": "Nada que subrayar en este vídeo (ni grito, ni frase, demasiado corto)"
+      "nothing": "Nada que subrayar en este vídeo (ni grito, ni frase, demasiado corto)",
+      "custom": "A mano",
+      "customHint": "Los efectos pasan a ser tuyos: los mueves, los cambias y añades otros en la línea de tiempo",
+      "customCount_one": "{{count}} efecto, ajustado en la línea de tiempo",
+      "customCount_other": "{{count}} efectos, ajustados en la línea de tiempo"
     },
     "titleStyle": {
       "label": "Estilo de los títulos",

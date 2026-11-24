@@ -1,6 +1,7 @@
 import type { TFunction } from "i18next";
 import type { BrandKit, Compilation, CompilationItem, EditEnvironment, PieceState, TwitchChannel } from "./api";
 import { allItems, hookMoment, hookStart, sectionStarts, transitionsOf } from "./compilation";
+import { CUSTOM_EFFECTS, effectsFromMoves } from "./effectMoves";
 import { isEffectLevel } from "./effects";
 import { fontFamily } from "./fonts";
 import { buildMontage, renderIntro, renderPieces, withEffects, type MontageCut, type MontageProps, type MontageSegment } from "./montage";
@@ -129,7 +130,8 @@ export function buildVideo({ jobId, kit, channel, customs, game, musics, t }: Bu
           : [],
     );
     // What moves the picture on what is said (a zoom from one passage to the next, a punch on a line that lands), when the video asks for it
-    montage.segments = withEffects(montage, cuts, isEffectLevel(all.effects) ? all.effects : null).segments;
+    // (« à la main »: the moves written on each passage are the only ones that play)
+    montage.segments = withEffects(montage, cuts, isEffectLevel(all.effects) ? all.effects : null, [], all.effects === CUSTOM_EFFECTS ? items.map((item) => effectsFromMoves(item.moves, item)) : undefined).segments;
     // A "hook" intro plays a moment of the video first: built like a piece, in that passage's own template, the
     // video's title written on it as the template writes its hook (where it puts it: never on the face)
     const moment = hookMoment(all);
@@ -175,7 +177,8 @@ export function buildVideo({ jobId, kit, channel, customs, game, musics, t }: Bu
     const track = trackOf(musics, all.music?.track);
     if (track && all.music) {
       // A clip that was never transcribed has no words: what is said in it counts as talk, not as silence
-      const pieces = cuts.map((cut, i) => ({ words: cut.ctx.words, start: cut.start, end: cut.end, said: !!items[i].text.trim() }));
+      // (a passage whose music level was set by hand keeps it)
+      const pieces = cuts.map((cut, i) => ({ words: cut.ctx.words, start: cut.start, end: cut.end, said: !!items[i].text.trim(), ...(typeof items[i].musicLevel === "number" ? { level: items[i].musicLevel } : {}) }));
       montage.music = montageMusic(montage.segments, pieces, all.music, introOf(montage), intro?.hook && opener ? { seconds: intro.hook.duration, piece: opener.sound } : undefined, track);
     }
     return { montage, files, jobs, ids: items.map((item) => item.id), ...(intro?.hook && opener ? { opener: { file: opener.file, job: opener.job } } : {}) };

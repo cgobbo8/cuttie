@@ -37,6 +37,7 @@ import MusicPicker, { useListen } from "./MusicPicker";
 import { dressAs, UNIVERSES, universeOf } from "../../lib/universes";
 import { CHAT_CHOICES, HOOK_STYLES, isChatChoice, isHookStyle, type HookStyle } from "../../lib/templateSpec";
 import { EFFECT_LEVELS, isEffectLevel } from "../../lib/effects";
+import { CUSTOM_EFFECTS, withLevel } from "../../lib/effectMoves";
 import type { VideoSource } from "../../lib/videoSources";
 import TransitionPicker from "./TransitionPicker";
 import AssistantMark from "../assistant/Mark";
@@ -80,6 +81,8 @@ interface Props {
   onBrowse?: () => void;
   /** How many times the picture moves in the video as it is (its effects); null: not known yet */
   moves?: number | null;
+  /** The video's moves become its passages' own, to be changed one by one on the timeline */
+  onCustomEffects?: () => void;
   /** One more live for the video to take passages from (absent: none can be added) */
   onOtherLive?: () => void;
   /** The passages picked in the whole montage (the timeline shows and changes the same ones); without it, the list keeps its own */
@@ -231,6 +234,7 @@ export default function CompilationPanel({
   onBrowse,
   onOtherLive,
   moves = null,
+  onCustomEffects,
   selection,
   scope,
   onScope,
@@ -346,6 +350,8 @@ export default function CompilationPanel({
   ];
   const titleStyle = isHookStyle(compilation.titleStyle) ? compilation.titleStyle : null;
   const effects = isEffectLevel(compilation.effects) ? compilation.effects : null;
+  // Its moves were set by hand (on the timeline, or by the assistant): no level then
+  const custom = compilation.effects === CUSTOM_EFFECTS;
   const chat = isChatChoice(compilation.chat) ? compilation.chat : null;
   // The intro is part of the video: it counts in its length
   const opening = openingSeconds(compilation, trackOf(musics, compilation.music?.track)?.bpm);
@@ -933,22 +939,25 @@ export default function CompilationPanel({
                 icon={Zap}
                 label={t("compilation.effects.label")}
                 // (what the level gave on this video: each move is marked on the timeline)
-                apart={effects && moves !== null ? { text: moves > 0 ? t("compilation.effects.count", { count: moves }) : t("compilation.effects.nothing") } : undefined}
+                apart={(effects || custom) && moves !== null ? { text: custom ? t("compilation.effects.customCount", { count: moves }) : moves > 0 ? t("compilation.effects.count", { count: moves }) : t("compilation.effects.nothing") } : undefined}
               >
                 <span role="group" aria-label={t("compilation.effects.label")} className="seg">
                   {[null, ...EFFECT_LEVELS].map((level) => (
                     <button
                       key={level ?? "none"}
                       type="button"
-                      aria-pressed={effects === level}
-                      onClick={() => {
-                        const { effects: _before, ...rest } = compilation;
-                        onChange(level ? { ...rest, effects: level } : rest);
-                      }}
+                      aria-pressed={!custom && effects === level}
+                      // (a level again: the moves made by hand are let go, what the app places takes over)
+                      onClick={() => onChange(withLevel(compilation, level))}
                     >
                       {t(`compilation.effects.${level ?? "none"}`)}
                     </button>
                   ))}
+                  {onCustomEffects && (
+                    <button type="button" aria-pressed={custom} title={t("compilation.effects.customHint")} onClick={() => !custom && onCustomEffects()}>
+                      {t("compilation.effects.custom")}
+                    </button>
+                  )}
                 </span>
               </LookRow>
               {/* How every passage comes in; one passage can do otherwise. A video of one passage has no cut to dress */}

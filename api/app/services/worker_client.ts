@@ -441,6 +441,14 @@ export async function musicMoment(body: { path: string; at: number }): Promise<{
   return call('POST', '/musics/moment', { body, timeoutMs: 2 * 60_000 })
 }
 
+/**
+ * Where a live's video is watched from at a time (worker: clip_tools.watch_from): its playlist in a small
+ * rendition, and the time playing really starts at. 410 when the live is gone.
+ */
+export async function watchLive(url: string, at: number): Promise<{ url: string; from: number }> {
+  return call('POST', '/live/watch', { body: { url, at }, timeoutMs: 60_000 })
+}
+
 /** The words said in a video of the media library (its own seconds); an empty list: nobody speaks in it (worker: media_library.py) */
 export async function mediaWordsOf(file: string): Promise<{ words: { word: string; start: number; end: number }[] }> {
   return call('POST', '/media/words', { body: { path: file }, timeoutMs: 5 * 60_000 })

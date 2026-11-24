@@ -168,3 +168,30 @@ def test_a_clip_starts_on_its_first_picture_and_its_moment_is_cut_on_its_words(m
     monkeypatch.setattr(clip_tools, "_live", no_seek)
     again = clip_tools.extract_pieces("job", "https://www.twitch.tv/videos/1", [{"id": "seg1piece0", "start": 5.0, "end": 6.2, "fit": [5.0, 6.2]}])
     assert again["pieces"][0]["tight"] == [5.22, 6.06]
+
+
+def test_a_live_is_watched_from_the_head_of_the_segment_that_holds_the_time_asked(monkeypatch):
+    asked = []
+
+    def url_of(vod_url, max_height=None):
+        asked.append((vod_url, max_height))
+        return "https://vod/480p/index.m3u8"
+
+    monkeypatch.setattr(clip_tools, "_live_url", url_of)
+    monkeypatch.setattr(clip_tools, "_live_segments", lambda direct: SEGMENTS)
+    monkeypatch.setattr(clip_tools, "_watched", {})
+    # 3 h 20 falls in the segment that starts at 11997.5: only there is there a key picture for sure
+    live = [(0.0, 7.5, "0.ts")] + [(7.5 + 10.0 * i, 10.0, f"{i + 1}.ts") for i in range(1300)]
+    monkeypatch.setattr(clip_tools, "_live_segments", lambda direct: live)
+    assert clip_tools.watch_from("https://twitch.tv/videos/1", 12000.0) == {"url": "https://vod/480p/index.m3u8", "from": 11997.5}
+    # In a small rendition, asked of Twitch once: going to another time costs nothing more
+    assert clip_tools.watch_from("https://twitch.tv/videos/1", 3.0)["from"] == 0.0
+    assert clip_tools.watch_from("https://twitch.tv/videos/1", 7.5)["from"] == 7.5
+    assert asked == [("https://twitch.tv/videos/1", clip_tools.WATCH_HEIGHT)]
+    # Past the end: the last segment; before the start: the first
+    assert clip_tools.watch_from("https://twitch.tv/videos/1", 99999.0)["from"] == live[-1][0]
+    assert clip_tools.watch_from("https://twitch.tv/videos/1", -5.0)["from"] == 0.0
+    # A playlist that is not a plain list of segments: the time as asked (the player's clock is then approximate)
+    monkeypatch.setattr(clip_tools, "_watched", {})
+    monkeypatch.setattr(clip_tools, "_live_segments", lambda direct: None)
+    assert clip_tools.watch_from("https://twitch.tv/videos/2", 12000.0) == {"url": "https://vod/480p/index.m3u8", "from": 12000.0}

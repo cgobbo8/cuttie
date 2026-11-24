@@ -511,12 +511,40 @@ def _piece_ready(clip_dir: str, piece: dict) -> bool:
     )
 
 
-def _live_url(vod_url: str) -> str:
-    """Where the live's video is read from; LiveGone when Twitch no longer has it."""
+# The rendition a live is watched in while the streamer goes through it to pick a passage by hand:
+# small on purpose (it starts sooner, and the passage itself is cut from the full one afterwards)
+WATCH_HEIGHT = 480
+_watched: dict[str, tuple[float, str, list[tuple[float, float, str]] | None]] = {}
+
+
+def watch_from(vod_url: str, at: float, height: int = WATCH_HEIGHT) -> dict:
+    """Where a live's video is watched from at a given time: {"url": its playlist in a small rendition,
+    "from": the time playing can really start at}. A playlist is made of segments, each starting on a key
+    picture: playing starts at the head of the one that holds `at` (up to ten seconds before it), and
+    saying so lets the app's clock stay exact. LiveGone when Twitch no longer has the live."""
+    import time
+
+    key = f"{height}:{vod_url}"
+    known = _watched.get(key)
+    if not known or time.time() - known[0] >= _LIVE_TTL:
+        direct = _live_url(vod_url, height)
+        known = _watched[key] = (time.time(), direct, _live_segments(direct))
+    _, direct, segments = known
+    at = max(0.0, float(at))
+    if not segments:
+        return {"url": direct, "from": round(at, 3)}
+    # (past the end: the last segment)
+    start = next((s for s, length, _ in segments if s <= at < s + length), segments[-1][0] if at >= segments[-1][0] else 0.0)
+    return {"url": direct, "from": round(start, 3)}
+
+
+def _live_url(vod_url: str, max_height: int | None = None) -> str:
+    """Where the live's video is read from (in a rendition no taller than `max_height`, when one is
+    given); LiveGone when Twitch no longer has it."""
     from app.services.frame_extractor import get_vod_direct_url
 
     try:
-        return get_vod_direct_url(vod_url)
+        return get_vod_direct_url(vod_url, max_height=max_height) if max_height else get_vod_direct_url(vod_url)
     except subprocess.CalledProcessError as e:
         said = f"{e.stderr or ''} {e.stdout or ''}".lower()
         if any(word in said for word in _GONE):

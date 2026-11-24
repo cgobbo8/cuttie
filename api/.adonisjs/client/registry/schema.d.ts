@@ -703,6 +703,30 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/musics_controller').default['level']>>>
     }
   }
+  'live_watch.at': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/jobs/:id/watch/at'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { id: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/live_watch_controller').default['at']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/live_watch_controller').default['at']>>>
+    }
+  }
+  'live_watch.stream': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/jobs/:id/watch'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { id: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/live_watch_controller').default['stream']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/live_watch_controller').default['stream']>>>
+    }
+  }
   'media.index': {
     methods: ["GET","HEAD"]
     pattern: '/api/media'

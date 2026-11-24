@@ -354,6 +354,18 @@ const routes = {
     tokens: [{"old":"/api/jobs/:id/loudness","type":0,"val":"api","end":""},{"old":"/api/jobs/:id/loudness","type":0,"val":"jobs","end":""},{"old":"/api/jobs/:id/loudness","type":1,"val":"id","end":""},{"old":"/api/jobs/:id/loudness","type":0,"val":"loudness","end":""}],
     types: placeholder as Registry['musics.level']['types'],
   },
+  'live_watch.at': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/jobs/:id/watch/at',
+    tokens: [{"old":"/api/jobs/:id/watch/at","type":0,"val":"api","end":""},{"old":"/api/jobs/:id/watch/at","type":0,"val":"jobs","end":""},{"old":"/api/jobs/:id/watch/at","type":1,"val":"id","end":""},{"old":"/api/jobs/:id/watch/at","type":0,"val":"watch","end":""},{"old":"/api/jobs/:id/watch/at","type":0,"val":"at","end":""}],
+    types: placeholder as Registry['live_watch.at']['types'],
+  },
+  'live_watch.stream': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/jobs/:id/watch',
+    tokens: [{"old":"/api/jobs/:id/watch","type":0,"val":"api","end":""},{"old":"/api/jobs/:id/watch","type":0,"val":"jobs","end":""},{"old":"/api/jobs/:id/watch","type":1,"val":"id","end":""},{"old":"/api/jobs/:id/watch","type":0,"val":"watch","end":""}],
+    types: placeholder as Registry['live_watch.stream']['types'],
+  },
   'media.index': {
     methods: ["GET","HEAD"],
     pattern: '/api/media',

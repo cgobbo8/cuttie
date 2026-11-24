@@ -1949,7 +1949,6 @@
       "clip": "Ej.: hacia las 3 h, salgo del hidroavión y muero en la hélice.",
       "sequence": "Ej.: la misión del yate, desde la llegada en moto de agua hasta la huida en aerodeslizador."
     },
-    "addWithAi": "Añadir con la IA",
     "shorten": "Acortar a…",
     "shortenHint": "Reduce el vídeo a esa duración: los pasajes largos se acortan y luego salen los más flojos.",
     "shortened": "Vídeo reducido a {{length}}",
@@ -1976,7 +1975,24 @@
       "reset": "Volver a lo del vídeo",
       "rest": "Títulos, chat, efectos, apertura y música se ajustan para todo el vídeo.",
       "open": "Abre los ajustes de este pasaje solo, junto al vídeo"
-    }
+    },
+    "addPassages": "Añadir pasajes",
+    "addFrom": {
+      "live": "Del directo",
+      "own": "De tus archivos"
+    },
+    "addInto": "Irán a «{{part}}»",
+    "addWay": {
+      "ai": "Pedir al asistente",
+      "aiHint": "Describes los momentos y los encuentra",
+      "words": "Buscar palabras",
+      "wordsHint": "Lo que se dice o se escribe en el chat",
+      "browse": "Recorrer el directo",
+      "browseHint": "Ve a una hora y toma el pasaje a mano",
+      "import": "Importar un vídeo",
+      "importHint": "Un archivo o tu mediateca"
+    },
+    "handPicked": "Pasaje elegido a mano"
   },
   "compilations": {
     "title": "Compilaciones",
@@ -2457,8 +2473,6 @@
     "hint": "Tus propios vídeos (una outro, un meme, una reacción grabada con el móvil), para poner en cualquier vídeo como un pasaje.",
     "count_one": "{{count}} vídeo",
     "count_other": "{{count}} vídeos",
-    "import": "Importar un vídeo",
-    "importHint": "Un vídeo tuyo, de tu mediateca o de un archivo, añadido como pasaje",
     "importFile": "Importar vídeos",
     "importAndAdd": "Importar un archivo y añadirlo",
     "importing": "Importando {{done}}/{{of}}…",
@@ -2495,5 +2509,29 @@
     "moreBefore": "5 s más al principio",
     "moreAfter": "5 s más al final",
     "whole": "El vídeo importado ya está entero por ese lado."
+  },
+  "browse": {
+    "title": "Recorrer el directo",
+    "live": "Directo que recorrer",
+    "added_one": "{{count}} pasaje añadido",
+    "added_other": "{{count}} pasajes añadidos",
+    "addedToast": "Pasaje de {{length}} añadido ({{at}})",
+    "retry": "Reintentar",
+    "mute": "Silenciar",
+    "unmute": "Activar el sonido",
+    "goTo": "Ir a",
+    "goToHint": "Una hora del directo: 3:20:00, 3h20, 95m…",
+    "strip": "Todo el directo",
+    "start": "Empieza aquí",
+    "startHint": "El pasaje empieza donde está la reproducción",
+    "end": "Termina aquí",
+    "endHint": "El pasaje termina donde está la reproducción",
+    "how": "Ve adonde quieras del directo y marca dónde empieza y termina el pasaje.",
+    "needEnd": "Avanza hasta el final del pasaje y pulsa «Termina aquí».",
+    "needStart": "Vuelve al principio del pasaje y pulsa «Empieza aquí».",
+    "tooShort": "El principio y el final están en el mismo sitio.",
+    "picked": "Pasaje de {{length}}",
+    "pickedCapped": "{{longest}} min como máximo por pasaje: se detiene en {{length}}",
+    "add": "Añadir al vídeo"
   }
 }

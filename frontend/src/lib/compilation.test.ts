@@ -15,6 +15,7 @@ import {
   addItems,
   insertItems,
   itemFromMedia,
+  itemFromRange,
   pieceAsk,
   saidAlready,
   addSection,
@@ -834,5 +835,21 @@ describe("what belongs to one passage, not to the whole video", () => {
     // The others are left as they are, and the video's template is not touched
     expect(setTemplate(own, ["bbbbbbbbbb"], "sanscam").template).toBe("empile");
     expect(allItems(setTemplate(own, ["bbbbbbbbbb"], "sanscam")).map((i) => i.template)).toEqual(["plein", "sanscam", "plein"]);
+  });
+});
+
+describe("itemFromRange", () => {
+  it("makes a passage of exactly what was picked by hand, with nothing to find again in its words", () => {
+    const item = itemFromRange(12000.004, 12012.337);
+    expect(item).toMatchObject({ start: 12000, end: 12012.34, text: "", why: "", sources: ["manual"] });
+    expect(item.fit).toBeUndefined();
+    expect(item.job).toBeUndefined();
+    expect(item.id).toMatch(/^[a-z0-9]{10}$/);
+  });
+
+  it("says its live when it isn't the video's own, puts its two ends in order and stops at the longest passage", () => {
+    expect(itemFromRange(50, 20, "other-live")).toMatchObject({ start: 20, end: 50, job: "other-live" });
+    expect(itemFromRange(100, 900).end).toBe(280);
+    expect(itemFromRange(-4, 6).start).toBe(0);
   });
 });

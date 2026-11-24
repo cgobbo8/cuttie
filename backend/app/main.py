@@ -270,6 +270,12 @@ class MusicMomentRequest(BaseModel):
     at: float
 
 
+class WatchRequest(BaseModel):
+    # A live (its Twitch address) and the time the streamer wants to watch it from, seconds
+    url: str
+    at: float = 0.0
+
+
 class MediaWordsRequest(BaseModel):
     # A video of the streamer's media library (in <data dir>/media)
     path: str
@@ -734,6 +740,19 @@ def music_moment(req: MusicMomentRequest) -> dict:
         return music_library.moment(path, req.at)
     except Exception as e:
         raise HTTPException(status_code=422, detail="this track could not be read") from e
+
+
+@app.post("/live/watch", dependencies=[Depends(require_secret)])
+def live_watch(req: WatchRequest) -> dict:
+    """Where a live's video is watched from at a given time, to go through it and pick a passage by hand."""
+    from app.services.clip_tools import LiveGone, watch_from
+
+    try:
+        return watch_from(req.url, req.at)
+    except LiveGone:
+        raise HTTPException(status_code=410, detail="the live is no longer on Twitch")
+    except RuntimeError as e:
+        raise HTTPException(status_code=502, detail=str(e)) from e
 
 
 @app.post("/media/words", dependencies=[Depends(require_secret)])

@@ -1949,7 +1949,6 @@
       "clip": "Ex. : vers 3 h, je sors de l'hydravion et je meurs dans l'hélice.",
       "sequence": "Ex. : la mission du yacht, de l'arrivée en jet-ski jusqu'à la fuite en hydroglisseur."
     },
-    "addWithAi": "Ajouter avec l'IA",
     "shorten": "Raccourcir à…",
     "shortenHint": "Ramène la vidéo à cette durée : ses longs passages raccourcissent, puis les moins forts sortent.",
     "shortened": "Vidéo ramenée à {{length}}",
@@ -1976,7 +1975,24 @@
       "reset": "Remettre comme la vidéo",
       "rest": "Titres, chat, effets, ouverture et musique se règlent pour toute la vidéo.",
       "open": "Ouvre les réglages de ce passage seul, à côté de la vidéo"
-    }
+    },
+    "addPassages": "Ajouter des passages",
+    "addFrom": {
+      "live": "Dans le live",
+      "own": "Dans tes fichiers"
+    },
+    "addInto": "Ils iront dans « {{part}} »",
+    "addWay": {
+      "ai": "Demander à l'assistant",
+      "aiHint": "Tu décris les moments, il les trouve",
+      "words": "Chercher des mots",
+      "wordsHint": "Ce qui est dit, ou écrit dans le chat",
+      "browse": "Parcourir le live",
+      "browseHint": "Va à une heure, prends le passage toi-même",
+      "import": "Importer une vidéo",
+      "importHint": "Un fichier, ou ta médiathèque"
+    },
+    "handPicked": "Passage choisi à la main"
   },
   "compilations": {
     "title": "Compilations",
@@ -2457,8 +2473,6 @@
     "hint": "Tes vidéos à toi (une outro, un mème, une réaction filmée au téléphone), à poser dans n'importe quelle vidéo comme un passage.",
     "count_one": "{{count}} vidéo",
     "count_other": "{{count}} vidéos",
-    "import": "Importer une vidéo",
-    "importHint": "Une vidéo à toi, de ta médiathèque ou d'un fichier, ajoutée comme passage",
     "importFile": "Importer des vidéos",
     "importAndAdd": "Importer un fichier et l'ajouter",
     "importing": "Import {{done}}/{{of}}…",
@@ -2495,5 +2509,29 @@
     "moreBefore": "5 s de plus au début",
     "moreAfter": "5 s de plus à la fin",
     "whole": "La vidéo importée est déjà entière de ce côté."
+  },
+  "browse": {
+    "title": "Parcourir le live",
+    "live": "Live à parcourir",
+    "added_one": "{{count}} passage ajouté",
+    "added_other": "{{count}} passages ajoutés",
+    "addedToast": "Passage de {{length}} ajouté ({{at}})",
+    "retry": "Réessayer",
+    "mute": "Couper le son",
+    "unmute": "Remettre le son",
+    "goTo": "Aller à",
+    "goToHint": "Une heure du live : 3:20:00, 3h20, 95m…",
+    "strip": "Tout le live",
+    "start": "Début ici",
+    "startHint": "Le passage commence là où en est la lecture",
+    "end": "Fin ici",
+    "endHint": "Le passage finit là où en est la lecture",
+    "how": "Va où tu veux dans le live, puis marque le début et la fin du passage.",
+    "needEnd": "Avance jusqu'à la fin du passage, puis « Fin ici ».",
+    "needStart": "Reviens au début du passage, puis « Début ici ».",
+    "tooShort": "Le début et la fin sont au même endroit.",
+    "picked": "Passage de {{length}}",
+    "pickedCapped": "{{longest}} min au plus par passage : il s'arrête à {{length}}",
+    "add": "Ajouter à la vidéo"
   }
 }

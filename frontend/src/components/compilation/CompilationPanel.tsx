@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from "react";
+import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Blend, Check, ScanFace, ChevronDown, ChevronRight, Clapperboard, Eye, EyeOff, Film, FolderInput, Layers, Loader2, MessagesSquare, Music2, Palette, Pause, Play, Plus, Search, Sparkles, Trash2, Type, X, Zap, LayoutTemplate, type LucideIcon } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Blend, Check, ScanFace, ChevronDown, ChevronRight, Clapperboard, Eye, EyeOff, Film, FolderInput, FolderPlus, Layers, Loader2, MessagesSquare, MonitorPlay, Music2, Palette, Pause, Play, Plus, Sparkles, TextSearch, Trash2, Type, X, Zap, LayoutTemplate, type LucideIcon } from "lucide-react";
 import { mediaThumbUrl, type Compilation, type CompilationItem, type CompilationSection, type TwitchStoryboard } from "../../lib/api";
 import {
   PLAIN_CUT,
@@ -38,6 +39,7 @@ import { CHAT_CHOICES, HOOK_STYLES, isChatChoice, isHookStyle, type HookStyle } 
 import { EFFECT_LEVELS, isEffectLevel } from "../../lib/effects";
 import type { VideoSource } from "../../lib/videoSources";
 import TransitionPicker from "./TransitionPicker";
+import AssistantMark from "../assistant/Mark";
 
 /** What the look panel sets: the whole video's look, or what belongs to one passage alone */
 export type LookScope = "video" | "passage";
@@ -74,6 +76,8 @@ interface Props {
   onSearch?: () => void;
   /** A video of the streamer's own is added as a passage (from their media library, or a file) */
   onImport?: () => void;
+  /** The live gone through by hand, to pick a stretch of it as a passage */
+  onBrowse?: () => void;
   /** The passages picked in the whole montage (the timeline shows and changes the same ones); without it, the list keeps its own */
   selection?: Picked;
   /** What the look panel sets: the whole video's look, or what belongs to the passage open (or picked) alone */
@@ -220,6 +224,7 @@ export default function CompilationPanel({
   onDelete,
   onSearch,
   onImport,
+  onBrowse,
   selection,
   scope,
   onScope,
@@ -258,7 +263,7 @@ export default function CompilationPanel({
   const ids = allItems(compilation).map((item) => item.id);
 
   // What is open: the list of parts to move the picked passages to, or the transitions (of the video, of the picked ones, of one passage)
-  const [menu, setMenu] = useState<"move" | "video" | "picked" | "intro" | "music" | "template" | "universe" | "titles" | "effects" | "shorten" | "passageTemplate" | "passageTransition" | { item: string } | null>(null);
+  const [menu, setMenu] = useState<"move" | "video" | "picked" | "intro" | "music" | "template" | "universe" | "titles" | "effects" | "shorten" | "add" | "passageTemplate" | "passageTransition" | { item: string } | null>(null);
   // Two kinds of settings, never mixed: the whole video's look, and what belongs to one passage alone
   const [ownScope, setOwnScope] = useState<LookScope>("video");
   const lookScope = scope ?? ownScope;
@@ -324,6 +329,14 @@ export default function CompilationPanel({
   const universe = universeOf(compilation.universe);
   // A clip: one moment, so no parts and no part titles
   const single = source === "clip";
+  // The ways to put passages in the video that this screen offers (their menu opens over this bar)
+  const addBar = useRef<HTMLDivElement>(null);
+  const ways: AddWay[] = [
+    ...(onAskAi ? [{ id: "ai", icon: "assistant" as const, name: t("compilation.addWay.ai"), hint: t("compilation.addWay.aiHint"), from: "live" as const, run: onAskAi }] : []),
+    ...(onSearch ? [{ id: "words", icon: TextSearch, name: t("compilation.addWay.words"), hint: t("compilation.addWay.wordsHint"), from: "live" as const, run: onSearch }] : []),
+    ...(onBrowse ? [{ id: "browse", icon: MonitorPlay, name: t("compilation.addWay.browse"), hint: t("compilation.addWay.browseHint"), from: "live" as const, run: onBrowse }] : []),
+    ...(onImport ? [{ id: "import", icon: Film, name: t("compilation.addWay.import"), hint: t("compilation.addWay.importHint"), from: "own" as const, run: onImport }] : []),
+  ];
   const titleStyle = isHookStyle(compilation.titleStyle) ? compilation.titleStyle : null;
   const effects = isEffectLevel(compilation.effects) ? compilation.effects : null;
   const chat = isChatChoice(compilation.chat) ? compilation.chat : null;
@@ -633,35 +646,29 @@ export default function CompilationPanel({
         );
       })}
 
-      {(!single || onSearch || onAskAi || onImport) && (
-        <div className="flex flex-wrap gap-1.5">
-          {onAskAi && (
-            <button onClick={onAskAi} className="btn btn-sm bg-accent-soft text-accent hover:bg-accent/25 transition-colors">
-              <Sparkles className="w-[15px] h-[15px]" /> {t("compilation.addWithAi")}
-            </button>
-          )}
-          {onSearch && (
-            <button onClick={onSearch} className="btn btn-ghost btn-sm">
-              <Search className="w-[15px] h-[15px]" /> {t("compilation.search")}
-            </button>
-          )}
-          {onImport && (
-            <button onClick={onImport} title={t("media.importHint")} className="btn btn-ghost btn-sm">
-              <Film className="w-[15px] h-[15px]" /> {t("media.import")}
+      {/* Where passages come from: one button, the four ways behind it; a new part is another matter and stays apart */}
+      {(!single || ways.length > 0) && (
+        <div ref={addBar} className="flex flex-wrap gap-1.5">
+          {ways.length > 0 && (
+            <button type="button" onClick={() => setMenu(menu === "add" ? null : "add")} aria-haspopup="menu" aria-expanded={menu === "add"} className="btn btn-sm flex-1 min-w-[168px] bg-accent-soft text-accent hover:bg-accent/25 transition-colors">
+              <Plus className="w-[15px] h-[15px]" strokeWidth={2.4} /> {t("compilation.addPassages")}
             </button>
           )}
           {!single && (
             <button
+              type="button"
               onClick={() => {
                 const { compilation: next, id } = addSection(compilation);
                 onChange(next);
                 onActivate(id);
               }}
+              title={t("compilation.addSection")}
               className="btn btn-ghost btn-sm"
             >
-              <Plus className="w-[15px] h-[15px]" /> {t("compilation.addSection")}
+              <FolderPlus className="w-[15px] h-[15px]" /> {t("compilation.newSection")}
             </button>
           )}
+          {menu === "add" && <AddMenu anchor={addBar} ways={ways} into={compilation.sections.length > 1 ? partName(compilation.sections.find((section) => section.id === activeSection) ?? compilation.sections[compilation.sections.length - 1]) : null} onClose={() => setMenu(null)} />}
         </div>
       )}
 
@@ -1181,7 +1188,7 @@ function PassageRow({ item, fresh, shown, playing, picked, picking, dragged, dro
             )}
           </span>
           <span className="flex-1 min-w-0">
-            <span className="block text-[12.5px] leading-snug text-white truncate">{item.text || item.why || liveClock(item.start)}</span>
+            <span className="block text-[12.5px] leading-snug text-white truncate">{item.text || item.why || (item.sources.includes("manual") ? t("compilation.handPicked") : liveClock(item.start))}</span>
             <span className="mono flex items-center gap-1.5 text-[11px] text-ink-3 min-w-0">
               {/* Shown in a template of its own: seen at a glance down the list */}
               {ownLook && (
@@ -1230,6 +1237,110 @@ function PassageRow({ item, fresh, shown, playing, picked, picking, dragged, dro
         {picker}
       </li>
     </>
+  );
+}
+
+/** One way to put passages in the video */
+interface AddWay {
+  id: string;
+  /** Its picture; the assistant's own mark for what is asked of it */
+  icon: LucideIcon | "assistant";
+  name: string;
+  hint: string;
+  /** Where it takes them: in the live, or among the streamer's own videos */
+  from: "live" | "own";
+  run: () => void;
+}
+
+/**
+ * The ways to add passages, said by where they take them: in the live (asked of the AI, looked
+ * for by their words, or picked by going through it) and among the streamer's own videos. It
+ * opens above its button, or under it when there is no room above.
+ */
+function AddMenu({ ways, into, anchor, onClose }: { ways: AddWay[]; into: string | null; anchor: RefObject<HTMLElement | null>; onClose: () => void }) {
+  const { t } = useTranslation();
+  const box = useRef<HTMLDivElement>(null);
+  // Where it sits in the window (the passages scroll in their panel, which would cut it: it is set over the page)
+  const [place, setPlace] = useState<{ left: number; top: number; width: number } | null>(null);
+  useLayoutEffect(() => {
+    const set = () => {
+      const host = anchor.current?.getBoundingClientRect();
+      const tall = box.current?.offsetHeight ?? 0;
+      if (!host) return;
+      const width = Math.min(Math.max(host.width, 272), window.innerWidth - 16);
+      // (the bar that floats over the page takes the top of the window)
+      const above = host.top - tall - 8 >= 84 || window.innerHeight - host.bottom < tall + 16;
+      setPlace({ left: Math.max(8, Math.min(host.left, window.innerWidth - width - 8)), top: Math.max(8, above ? host.top - tall - 8 : host.bottom + 8), width });
+    };
+    set();
+    window.addEventListener("resize", set);
+    window.addEventListener("scroll", set, true);
+    return () => {
+      window.removeEventListener("resize", set);
+      window.removeEventListener("scroll", set, true);
+    };
+  }, [anchor]);
+  useEffect(() => {
+    const outside = (e: PointerEvent) => !box.current?.contains(e.target as Node) && !anchor.current?.contains(e.target as Node) && onClose();
+    const escape = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    document.addEventListener("pointerdown", outside, true);
+    document.addEventListener("keydown", escape);
+    box.current?.querySelector<HTMLButtonElement>("button")?.focus({ preventScroll: true });
+    return () => {
+      document.removeEventListener("pointerdown", outside, true);
+      document.removeEventListener("keydown", escape);
+    };
+  }, [anchor, onClose]);
+  // The arrows go from one way to the next
+  const step = (e: React.KeyboardEvent) => {
+    if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+    e.preventDefault();
+    const rows = [...(box.current?.querySelectorAll<HTMLButtonElement>("button") ?? [])];
+    const at = rows.indexOf(document.activeElement as HTMLButtonElement);
+    rows[(at + (e.key === "ArrowDown" ? 1 : -1) + rows.length) % rows.length]?.focus();
+  };
+  const groups = (["live", "own"] as const).map((from) => ({ from, ways: ways.filter((way) => way.from === from) })).filter((group) => group.ways.length > 0);
+  return createPortal(
+    <div
+      ref={box}
+      role="menu"
+      aria-label={t("compilation.addPassages")}
+      onKeyDown={step}
+      className="fixed z-50 p-1.5 rounded-[14px] bg-[#171a18]/[0.98] border border-white/[0.12] shadow-[0_24px_60px_-18px_rgba(0,0,0,0.9)] animate-fade-in"
+      style={place ? { left: place.left, top: place.top, width: place.width } : { left: 0, top: 0, visibility: "hidden" }}
+    >
+      {groups.map((group, n) => (
+        <div key={group.from} className={n > 0 ? "mt-1 pt-1 border-t border-white/[0.08]" : ""}>
+          <p className="px-2.5 pt-1.5 pb-1 text-[11.5px] text-ink-3">{t(`compilation.addFrom.${group.from}`)}</p>
+          {group.ways.map((way) => (
+            <button
+              key={way.id}
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                onClose();
+                way.run();
+              }}
+              className="group w-full flex items-center gap-2.5 px-2 py-1.5 rounded-[9px] text-left hover:bg-white/[0.08] focus-visible:bg-white/[0.08] outline-none"
+            >
+              {way.icon === "assistant" ? (
+                <AssistantMark size={32} className="flex-none" />
+              ) : (
+                <span className="w-8 h-8 flex-none grid place-items-center rounded-[9px] bg-white/[0.07] text-ink-2 group-hover:bg-accent-soft group-hover:text-accent group-focus-visible:bg-accent-soft group-focus-visible:text-accent transition-colors">
+                  <way.icon className="w-[15px] h-[15px]" />
+                </span>
+              )}
+              <span className="flex-1 min-w-0">
+                <span className="block text-[13px] leading-tight text-white">{way.name}</span>
+                <span className="block mt-0.5 text-[11.5px] leading-snug text-ink-3">{way.hint}</span>
+              </span>
+            </button>
+          ))}
+        </div>
+      ))}
+      {into && <p className="mt-1 px-2.5 pt-2 pb-1 border-t border-white/[0.08] text-[11.5px] text-ink-3 truncate">{t("compilation.addInto", { part: into })}</p>}
+    </div>,
+    document.body,
   );
 }
 

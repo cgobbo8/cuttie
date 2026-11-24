@@ -55,6 +55,7 @@ import {
   addItems,
   insertItems,
   itemFromMedia,
+  itemFromRange,
   pieceAsk,
   placeItems,
   cutItems,
@@ -87,6 +88,7 @@ import {
   tightened,
   updateItem,
   withHook,
+  liveClock,
 } from "../lib/compilation";
 import { liveWhen, plainDate } from "../lib/compilationLibrary";
 import { clock, splitVodTitle } from "../lib/format";
@@ -114,6 +116,8 @@ import { isWaiting } from "../lib/suggestions";
 import LiveHeader from "../components/live/LiveHeader";
 import VideoRail from "../components/live/VideoRail";
 import CamSheet from "../components/montage/CamSheet";
+import LiveBrowser from "../components/compilation/LiveBrowser";
+import { spanText } from "../lib/liveBrowse";
 import TemplateSketch from "../components/montage/TemplateSketch";
 import VideoTimeline from "../components/montage/VideoTimeline";
 import AiCutButton from "../components/project/AiCutButton";
@@ -186,6 +190,10 @@ export default function CompilationPage() {
   const [searching, setSearching] = useState(false);
   // The media library takes the place of the passages while a video of the streamer's own is picked there
   const [importing, setImporting] = useState(false);
+  // The live gone through by hand to pick a passage: which one it opens on, and where
+  const [browsing, setBrowsing] = useState<{ job: string; at: number | null; near: number | null } | null>(null);
+  // The last passage picked there since it opened: the next one comes after it, and it is the one shown once the live is left
+  const browseTail = useRef<string | null>(null);
   // What the look panel sets: the whole video's look, or what belongs to the passage open (or picked) alone
   const [lookScope, setLookScope] = useState<LookScope>("video");
   const { media: ownVideos } = useMedia();
@@ -573,6 +581,37 @@ export default function CompilationPage() {
     ensure(made);
     light(made.map((item) => item.id));
     toast.success(t("media.added", { count: made.length }));
+  };
+
+  /**
+   * A stretch of a live picked by hand becomes a passage of the video on screen, as picked: right
+   * after the passage open in the part being filled, else at its end. Once its clip is cut, what
+   * is said in it is written on it.
+   */
+  const addRange = (live: string, start: number, end: number): boolean => {
+    if (!compilation || !jobId) return false;
+    const section = compilation.sections.find((s) => s.id === activeSection) ?? compilation.sections[compilation.sections.length - 1];
+    if (!section) return false;
+    const item = itemFromRange(start, end, live === jobId ? undefined : live);
+    // (several picked in a row stay in the order they were picked in)
+    const after = [browseTail.current, shown?.id].find((id) => id && section.items.some((one) => one.id === id)) ?? null;
+    change(insertItems(compilation, section.id, [item], after));
+    browseTail.current = item.id;
+    light([item.id]);
+    toast.success(t("browse.addedToast", { at: liveClock(item.start), length: spanText(item.end - item.start, i18n.language) }));
+    const video = compilation.id;
+    ensure([item]).then(async (known) => {
+      const piece = known[item.id];
+      if (!covers(piece, item)) return;
+      const said = await wordsOf(piece);
+      const text = wordsIn(said, item.start - piece.file_start, item.end - piece.file_start).map((w) => w.word).join(" ").trim().slice(0, 300);
+      const now = compilationsRef.current?.find((c) => c.id === video);
+      // (still there, and nobody wrote on it meanwhile)
+      if (!text || !now || !allItems(now).some((one) => one.id === item.id && !one.text)) return;
+      change(updateItem(now, item.id, { text }), true);
+      setShown((open) => (open?.id === item.id && !open.text ? { ...open, text } : open));
+    });
+    return true;
   };
 
   /** The AI changed the video as asked: what it kept stays as it was, what it added gets its clip */
@@ -1483,6 +1522,8 @@ export default function CompilationPage() {
     const onKey = (e: KeyboardEvent) => {
       const el = e.target as HTMLElement | null;
       if (!el || el.closest("input, textarea, select, [contenteditable=true], [role=dialog]") || e.altKey) return;
+      // (a sheet open over the page: the keys are its own, wherever the focus is)
+      if (document.querySelector("[role=dialog][aria-modal=true]")) return;
       const key = e.key.toLowerCase();
       if (e.metaKey || e.ctrlKey) {
         if (key === "z" && !e.shiftKey) {
@@ -1730,6 +1771,18 @@ export default function CompilationPage() {
       setImporting(true);
       setSearching(false);
       setSide("passages");
+    },
+    // The live gone through by hand, nothing else playing: it opens on the passage open underneath, else where the
+    // live was left the last time, else on the passage the video is on
+    onBrowse: () => {
+      const all = allItems(compilation);
+      const ofLive = (item?: CompilationItem | null) => (item && !item.media && all.some((one) => one.id === item.id) ? item : null);
+      const open = ofLive(shown);
+      const on = ofLive(all.find((item) => item.id === onItemRef.current));
+      playerRef.current?.pause();
+      setHush((n) => n + 1);
+      browseTail.current = null;
+      setBrowsing(open ? { job: open.job ?? jobId, at: open.start, near: null } : { job: on?.job ?? jobId, at: null, near: on?.start ?? null });
     },
     selection,
     scope: lookScope,
@@ -2075,7 +2128,7 @@ export default function CompilationPage() {
           />
           <div className="flex items-start gap-3 px-1.5 pt-3 pb-1">
             <p className="flex-1 min-w-0 text-[13px] leading-snug text-ink-2">
-              {shownItem.text || shownItem.why}
+              {shownItem.text || shownItem.why || (shownItem.sources.includes("manual") ? t("compilation.handPicked") : "")}
               {shownItem.text && shownItem.why && <span className="block mt-1 text-[12px] text-accent">{shownItem.why}</span>}
             </p>
             {inCompilation ? (
@@ -2108,6 +2161,27 @@ export default function CompilationPage() {
         </section>
       )}
 
+      {browsing && (
+        <LiveBrowser
+          lives={liveIds.map((id, n) => ({
+            job: id,
+            label: [several ? `${n + 1}` : "", liveDay(id), liveTitle(id)].filter(Boolean).join(" · "),
+            duration: lengthOf(id),
+            storyboard: storyboards[id],
+            taken: items.filter((item) => !item.media && (item.job ?? jobId) === id).map((item) => [item.start, item.end] as [number, number]),
+          }))}
+          initial={browsing}
+          onAdd={addRange}
+          onClose={() => {
+            setBrowsing(null);
+            // The passage just picked: the video goes to it, and it opens underneath, where its two ends are set finely
+            const last = allItems(compilation).find((item) => item.id === browseTail.current);
+            if (!last) return;
+            setShown(last);
+            jumpTo(last.id);
+          }}
+        />
+      )}
       {camSheet && camEnv && camPiece && (
         <CamSheet
           frameUrl={clipThumbUrl(camPiece.job, camPiece.file, { width: 1280 })}

@@ -88,6 +88,10 @@ export interface ApiDefinition {
     destroy: typeof routes['musics.destroy']
     level: typeof routes['musics.level']
   }
+  liveWatch: {
+    at: typeof routes['live_watch.at']
+    stream: typeof routes['live_watch.stream']
+  }
   media: {
     index: typeof routes['media.index']
     store: typeof routes['media.store']

@@ -1661,6 +1661,17 @@ export async function getLiveSearchProgress(jobId: string): Promise<LiveSearchSt
   }
 }
 
+/**
+ * Where a live really starts playing when a time is asked for: the head of the piece of the live
+ * that holds it, a few seconds before at most. The player's clock is `from` plus what it has played.
+ */
+export async function liveWatchAt(jobId: string, seconds: number): Promise<{ from: number; duration: number }> {
+  return liveJson(await fetch(`${BASE}/jobs/${jobId}/watch/at?t=${Math.max(0, seconds).toFixed(3)}`));
+}
+
+/** The live's video from a time on (one `liveWatchAt` gave), as a stream a player takes as it comes */
+export const liveWatchUrl = (jobId: string, from: number) => `${BASE}/jobs/${jobId}/watch?t=${Math.max(0, from).toFixed(3)}`;
+
 /** Moments of the live that match: "words" looks for what is said or written (free), "ai" has the AI search the live and check what it finds */
 export async function searchLive(jobId: string, query: string, mode: "words" | "ai", fresh = false): Promise<LiveSearchResult> {
   // `fresh`: asked again on purpose, the AI searches anew instead of giving the answer it kept

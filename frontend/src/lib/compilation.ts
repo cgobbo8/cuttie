@@ -113,6 +113,17 @@ export function itemFromMedia(media: Pick<MediaItem, "id" | "name" | "seconds"> 
   return { id: newId(), start: 0, end: hundredth(Math.min(media.seconds, LONGEST_ITEM)), text: "", why: media.name, sources: [], media: media.id, ...(upright ? { template: UPRIGHT_TEMPLATE } : {}) };
 }
 
+/**
+ * A stretch of a live picked by hand (the streamer went there and set its two ends) as a passage:
+ * exactly what was picked, no air added and nothing to find again in its words. What is said in
+ * it is written on it once its clip is cut. `job`: its live, when it isn't the video's own.
+ */
+export function itemFromRange(start: number, end: number, job?: string): CompilationItem {
+  const from = hundredth(Math.max(0, Math.min(start, end)));
+  const to = hundredth(Math.min(Math.max(start, end), from + LONGEST_ITEM));
+  return { id: newId(), start: from, end: to, text: "", why: "", sources: ["manual"], ...(job ? { job } : {}) };
+}
+
 /** What a passage's clip is asked with: its moment (wider while it waits for its words), the passage it was made out of, the imported video it is */
 export function pieceAsk({ id, start, end, fit, like, media }: CompilationItem): { id: string; start: number; end: number; fit?: [number, number]; like?: string; media?: string } {
   // A passage still on the transcript's rough times: its clip holds those lines whole, and tells where they are really said

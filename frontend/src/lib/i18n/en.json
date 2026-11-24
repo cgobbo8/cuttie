@@ -1949,7 +1949,6 @@
       "clip": "E.g. around 3 h in, I step out of the seaplane and die in the propeller.",
       "sequence": "E.g. the yacht mission, from the jet-ski arrival to the airboat escape."
     },
-    "addWithAi": "Add with the AI",
     "shorten": "Shorten to…",
     "shortenHint": "Brings the video down to that length: its long passages get shorter, then the weakest go.",
     "shortened": "Video brought down to {{length}}",
@@ -1976,7 +1975,24 @@
       "reset": "Back to the video's",
       "rest": "Titles, chat, effects, opening and music are set for the whole video.",
       "open": "Opens the settings of this passage alone, beside the video"
-    }
+    },
+    "addPassages": "Add passages",
+    "addFrom": {
+      "live": "From the live",
+      "own": "From your files"
+    },
+    "addInto": "They go into “{{part}}”",
+    "addWay": {
+      "ai": "Ask the assistant",
+      "aiHint": "You describe the moments, it finds them",
+      "words": "Search for words",
+      "wordsHint": "What is said, or written in the chat",
+      "browse": "Browse the live",
+      "browseHint": "Go to a time, take the passage yourself",
+      "import": "Import a video",
+      "importHint": "A file, or your media library"
+    },
+    "handPicked": "Passage picked by hand"
   },
   "compilations": {
     "title": "Compilations",
@@ -2457,8 +2473,6 @@
     "hint": "Videos of your own (an outro, a meme, a reaction filmed on a phone), to drop into any video as a passage.",
     "count_one": "{{count}} video",
     "count_other": "{{count}} videos",
-    "import": "Import a video",
-    "importHint": "A video of your own, from your media library or a file, added as a passage",
     "importFile": "Import videos",
     "importAndAdd": "Import a file and add it",
     "importing": "Importing {{done}}/{{of}}…",
@@ -2495,5 +2509,29 @@
     "moreBefore": "5 s more at the start",
     "moreAfter": "5 s more at the end",
     "whole": "The imported video is already whole on that side."
+  },
+  "browse": {
+    "title": "Browse the live",
+    "live": "Live to browse",
+    "added_one": "{{count}} passage added",
+    "added_other": "{{count}} passages added",
+    "addedToast": "{{length}} passage added ({{at}})",
+    "retry": "Try again",
+    "mute": "Mute",
+    "unmute": "Unmute",
+    "goTo": "Go to",
+    "goToHint": "A time of the live: 3:20:00, 3h20, 95m…",
+    "strip": "The whole live",
+    "start": "Start here",
+    "startHint": "The passage starts where the player is",
+    "end": "End here",
+    "endHint": "The passage ends where the player is",
+    "how": "Go anywhere in the live, then mark where the passage starts and ends.",
+    "needEnd": "Move on to where the passage ends, then “End here”.",
+    "needStart": "Go back to where the passage starts, then “Start here”.",
+    "tooShort": "The start and the end are at the same place.",
+    "picked": "A {{length}} passage",
+    "pickedCapped": "{{longest}} min at most per passage: it stops at {{length}}",
+    "add": "Add to the video"
   }
 }

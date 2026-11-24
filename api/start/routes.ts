@@ -103,6 +103,9 @@ router
         router.put('/musics/:id', [() => import('#controllers/musics_controller'), 'update'])
         router.delete('/musics/:id', [() => import('#controllers/musics_controller'), 'destroy'])
         router.get('/jobs/:id/loudness', [() => import('#controllers/musics_controller'), 'level'])
+        // A live gone through by hand, to pick a passage: where playing starts at a time, and the video from there
+        router.get('/jobs/:id/watch/at', [() => import('#controllers/live_watch_controller'), 'at'])
+        router.get('/jobs/:id/watch', [() => import('#controllers/live_watch_controller'), 'stream'])
         // The media library: videos of the streamer's own, to use as passages
         router.get('/media', [() => import('#controllers/media_controller'), 'index'])
         router.post('/media', [() => import('#controllers/media_controller'), 'store'])
